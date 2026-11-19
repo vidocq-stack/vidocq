@@ -1,0 +1,380 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.error;
+
+import io.vidocq.foy.internal.TestSecurity;
+import io.vidocq.chappe.api.Server;
+import io.vidocq.foy.internal.TestServerLauncherAccess;
+import io.vidocq.foy.internal.bridge.ChappeServletBridge;
+import io.vidocq.foy.internal.container.VidocqServletContext;
+import io.vidocq.foy.internal.dispatcher.FilterRegistry;
+import io.vidocq.foy.internal.dispatcher.ServletDispatcher;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+/** End-to-end error-page dispatch (Servlet 6.1 section 10.9). */
+class ErrorPageDispatchTest {
+
+    static class TestException extends Exception {
+        TestException() { super("test-exception-message"); }
+    }
+
+    private Server server;
+    private int port;
+    private final ErrorPageRegistry pages = new ErrorPageRegistry();
+
+    @AfterEach
+    void tearDown() { if (server != null) server.stop(); }
+
+    @FunctionalInterface
+    interface Thrower { void run(HttpServletRequest req, HttpServletResponse res) throws Exception; }
+
+    private static HttpServlet thrower(Thrower t) {
+        return new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res)
+                    throws ServletException, IOException {
+                try { t.run(req, res); }
+                catch (IOException | ServletException | RuntimeException e) { throw e; }
+                catch (Exception e) { throw new ServletException(e); }
+            }
+        };
+    }
+
+    private static HttpServlet reporter() {
+        return new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+                var type = (Class<?>) req.getAttribute("jakarta.servlet.error.exception_type");
+                res.getWriter().print("type=" + (type == null ? null : type.getSimpleName())
+                        + ";msg=" + req.getAttribute("jakarta.servlet.error.message")
+                        + ";qs=" + req.getAttribute("jakarta.servlet.error.query_string")
+                        + ";code=" + req.getAttribute("jakarta.servlet.error.status_code"));
+            }
+        };
+    }
+
+    private void start(HttpServlet errorServlet, HttpServlet thrown) {
+        var ctx = new VidocqServletContext("/");
+        ctx.setErrorPages(pages);
+        var bridge = new ChappeServletBridge(new ServletDispatcher(List.of(
+                new ServletDispatcher.Mapping(io.vidocq.foy.internal.dispatcher.UrlPatternMatcher.of("/t"),
+                        thrown, "T", true),
+                new ServletDispatcher.Mapping(io.vidocq.foy.internal.dispatcher.UrlPatternMatcher.of("/err"),
+                        errorServlet, "ERR", true))),
+                new FilterRegistry(List.of()), TestSecurity.permitAll(ctx), null, "/");
+        var r = TestServerLauncherAccess.start(bridge);
+        this.server = r.server();
+        this.port = r.port();
+    }
+
+    private HttpResponse<String> get(String p) throws Exception {
+        return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
+                .send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + p))
+                        .timeout(Duration.ofSeconds(5)).GET().build(),
+                        HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpServlet pathsReporter() {
+        return new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+                res.getWriter().print(req.getServletPath() + "|" + req.getRequestURI() + "|"
+                        + req.getAttribute("jakarta.servlet.error.request_uri"));
+            }
+        };
+    }
+
+    @Test
+    void anErrorPageSeesTheLocationsServletPath() throws Exception {
+        pages.register(500, "/err");
+        start(pathsReporter(), thrower((q, r) -> r.sendError(500)));
+        assertEquals("/err|/err|/t", get("/t").body());
+    }
+
+    private static final String ASYNC_REFUSED = "startAsync() in an error page";
+
+    private static HttpServlet asyncStarter(boolean twoArgs) {
+        return new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+                try {
+                    if (twoArgs) req.startAsync(req, res); else req.startAsync();
+                    res.getWriter().print("started");
+                } catch (IllegalStateException e) {
+                    res.getWriter().print(e.getMessage());
+                }
+            }
+        };
+    }
+
+    @Test
+    void startAsyncInAnErrorPageThrowsIse() throws Exception {
+        pages.register(500, "/err");
+        start(asyncStarter(false), thrower((q, r) -> r.sendError(500)));
+        assertEquals(ASYNC_REFUSED, get("/t").body());
+    }
+
+    @Test
+    void startAsyncWithRequestAndResponseInAnErrorPageThrowsIse() throws Exception {
+        pages.register(500, "/err");
+        start(asyncStarter(true), thrower((q, r) -> r.sendError(500)));
+        assertEquals(ASYNC_REFUSED, get("/t").body());
+    }
+
+    @Test
+    void startAsyncInAnErrorPageAfterAnExceptionThrowsIse() throws Exception {
+        pages.register(ServletException.class, "/err");
+        start(asyncStarter(false), thrower((q, r) -> { throw new ServletException("boom"); }));
+        assertEquals(ASYNC_REFUSED, get("/t").body());
+    }
+
+    @Test
+    void anErrorPageAfterAnExceptionSeesTheLocationsPaths() throws Exception {
+        pages.register(ServletException.class, "/err");
+        start(pathsReporter(), thrower((q, r) -> { throw new ServletException("boom"); }));
+        assertEquals("/err|/err|/t", get("/t").body());
+    }
+
+    @Test
+    void theHttpServletMappingOfAnErrorPageIsTheLocations() throws Exception {
+        pages.register(500, "/err");
+        start(new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+                res.getWriter().print(req.getHttpServletMapping().getPattern());
+            }
+        }, thrower((q, r) -> r.sendError(500)));
+        assertEquals("/err", get("/t").body());
+    }
+
+    private void startMapped(String errPattern, HttpServlet errorServlet, String[] otherPatterns,
+                             HttpServlet... others) {
+        var ctx = new VidocqServletContext("/");
+        ctx.setErrorPages(pages);
+        var mappings = new java.util.ArrayList<ServletDispatcher.Mapping>();
+        mappings.add(new ServletDispatcher.Mapping(
+                io.vidocq.foy.internal.dispatcher.UrlPatternMatcher.of(errPattern), errorServlet, "ERR", true));
+        for (int i = 0; i < others.length; i++) {
+            mappings.add(new ServletDispatcher.Mapping(
+                    io.vidocq.foy.internal.dispatcher.UrlPatternMatcher.of(otherPatterns[i]),
+                    others[i], "S" + i, true));
+        }
+        var bridge = new ChappeServletBridge(new ServletDispatcher(mappings),
+                new FilterRegistry(List.of()), TestSecurity.permitAll(ctx), null, "/");
+        var r = TestServerLauncherAccess.start(bridge);
+        this.server = r.server();
+        this.port = r.port();
+    }
+
+    @Test
+    void aPathMappedErrorPageSeesTheServletPathAndPathInfoOfItsLocation() throws Exception {
+        pages.register(500, "/err/x");
+        startMapped("/err/*", new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+                res.getWriter().print(req.getServletPath() + "|" + req.getPathInfo());
+            }
+        }, new String[] {"/t"}, thrower((q, r) -> r.sendError(500)));
+        assertEquals("/err|/x", get("/t").body());
+    }
+
+    @Test
+    void anErrorPageRequestUrlEndsWithItsLocationPath() throws Exception {
+        pages.register(500, "/err");
+        startMapped("/err", new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+                res.getWriter().print(req.getRequestURL());
+            }
+        }, new String[] {"/t"}, thrower((q, r) -> r.sendError(500)));
+        var body = get("/t").body();
+        assertTrue(body.endsWith(":" + port + "/err"), body);
+    }
+
+    @Test
+    void anErrorInsideAForwardGivesTheErrorPageItsLocationButTheOriginalErrorUri() throws Exception {
+        pages.register(RuntimeException.class, "/err");
+        startMapped("/err", pathsReporter(), new String[] {"/t", "/f"},
+                thrower((q, r) -> q.getRequestDispatcher("/f").forward(q, r)),
+                thrower((q, r) -> { throw new IllegalStateException("fwd"); }));
+        assertEquals("/err|/err|/t", get("/t").body());
+    }
+
+    @Test
+    void statusErrorPageGetsTheMessage() throws Exception {
+        pages.register(411, "/err");
+        start(reporter(), thrower((q, r) -> r.sendError(411, "my msg")));
+        var res = get("/t");
+        assertEquals(411, res.statusCode());
+        assertTrue(res.body().contains("msg=my msg"), res.body());
+    }
+
+    @Test
+    void statusErrorPageWithoutMessageGetsEmptyString() throws Exception {
+        pages.register(411, "/err");
+        start(reporter(), thrower((q, r) -> r.sendError(411)));
+        assertTrue(get("/t").body().contains("msg=;"));
+    }
+
+    @Test
+    void wrappedExceptionMatchesTheRootCause() throws Exception {
+        pages.register(TestException.class, "/err");
+        start(reporter(), thrower((q, r) -> { throw new ServletException(new TestException()); }));
+        var body = get("/t").body();
+        assertTrue(body.contains("type=TestException"), body);
+        assertTrue(body.contains("msg=test-exception-message"), body);
+    }
+
+    @Test
+    void hierarchyMatch() throws Exception {
+        pages.register(RuntimeException.class, "/err");
+        start(reporter(), thrower((q, r) -> { throw new IllegalThreadStateException("x"); }));
+        assertTrue(get("/t").body().contains("type=IllegalThreadStateException"));
+    }
+
+    @Test
+    void nonServletExceptionCauseIsNotUnwrapped() throws Exception {
+        pages.register(500, "/err");
+        pages.register(TestException.class, "/never");
+        start(reporter(), thrower((q, r) -> { throw new RuntimeException("outer", new TestException()); }));
+        var body = get("/t").body();
+        assertTrue(body.contains("type=RuntimeException;msg=outer"), body);
+    }
+
+    @Test
+    void unmatchedExceptionGoesToStatus500PageWithOriginal() throws Exception {
+        pages.register(500, "/err");
+        start(reporter(), thrower((q, r) -> { throw new ServletException("wrapper", new TestException()); }));
+        var body = get("/t").body();
+        assertTrue(body.contains("type=ServletException;msg=wrapper;"), body);
+    }
+
+    @Test
+    void queryStringAttribute() throws Exception {
+        pages.register(404, "/err");
+        start(reporter(), thrower((q, r) -> r.sendError(404)));
+        assertTrue(get("/t?a=b").body().contains("qs=a=b"));
+        assertTrue(get("/t").body().contains("qs=null"));
+    }
+
+    @Test
+    void throwingErrorPageGivesPlain500() throws Exception {
+        pages.register(404, "/err");
+        start(thrower((q, r) -> { throw new IllegalStateException("page boom"); }),
+                thrower((q, r) -> r.sendError(404)));
+        var res = get("/t");
+        assertEquals(500, res.statusCode());
+        assertTrue(!res.body().contains("type="), res.body());
+    }
+
+    @Test
+    void exceptionAfterCommitKeepsCommittedContentDispatchesNoPageAndAbortsTheBody() throws Exception {
+        pages.register(500, "/err");
+        pages.register(RuntimeException.class, "/err");
+        start(reporter(), thrower((q, r) -> {
+            r.getWriter().print("committed-content");
+            r.flushBuffer();
+            throw new IllegalStateException("late");
+        }));
+        // The committed head and content reached the client; the body then ends abnormally (the
+        // connection is dropped), since a normal end would pass a partial body off as a whole one.
+        var res = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
+                .send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/t"))
+                        .timeout(Duration.ofSeconds(5)).GET().build(),
+                        HttpResponse.BodyHandlers.ofInputStream());
+        assertEquals(200, res.statusCode());
+        var received = new ByteArrayOutputStream();
+        try (var in = res.body()) {
+            byte[] buf = new byte[256];
+            int n;
+            while ((n = in.read(buf)) != -1) received.write(buf, 0, n);
+            fail("the body must not end normally, got: " + received);
+        } catch (IOException _) {
+            // truncated chunked body
+        }
+        assertEquals("committed-content", received.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void setStatusDoesNotDispatchTheErrorPage() throws Exception {
+        pages.register(404, "/err");
+        start(reporter(), thrower((q, r) -> { r.setStatus(404); r.getWriter().print("plain"); }));
+        var res = get("/t");
+        assertEquals(404, res.statusCode());
+        assertEquals("plain", res.body());
+    }
+
+    @Test
+    void exceptionInsideForwardReportsOriginalRequestUriAndServletName() throws Exception {
+        pages.register(RuntimeException.class, "/err");
+        var ctx = new VidocqServletContext("/");
+        ctx.setErrorPages(pages);
+        HttpServlet boom = thrower((q, r) -> { throw new IllegalStateException("fwd"); });
+        HttpServlet fwd = thrower((q, r) -> q.getRequestDispatcher("/boom").forward(q, r));
+        HttpServlet err = new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+                res.getWriter().print(req.getAttribute("jakarta.servlet.error.request_uri") + "|"
+                        + req.getAttribute("jakarta.servlet.error.servlet_name"));
+            }
+        };
+        var bridge = new ChappeServletBridge(new ServletDispatcher(List.of(
+                new ServletDispatcher.Mapping(io.vidocq.foy.internal.dispatcher.UrlPatternMatcher.of("/t"),
+                        fwd, "FWD", true),
+                new ServletDispatcher.Mapping(io.vidocq.foy.internal.dispatcher.UrlPatternMatcher.of("/boom"),
+                        boom, "BOOM", true),
+                new ServletDispatcher.Mapping(io.vidocq.foy.internal.dispatcher.UrlPatternMatcher.of("/err"),
+                        err, "ERR", true))),
+                new FilterRegistry(List.of()), TestSecurity.permitAll(ctx), null, "/");
+        var r = TestServerLauncherAccess.start(bridge);
+        this.server = r.server();
+        this.port = r.port();
+        assertEquals("/t|FWD", get("/t").body());
+    }
+
+    @Test
+    void aRelativeIncludeFromAnErrorPageResolvesAgainstTheLocation() throws Exception {
+        pages.register(500, "/err/page");
+        startMapped("/err/*", new HttpServlet() {
+            @Override protected void doGet(HttpServletRequest req, HttpServletResponse res)
+                    throws IOException, ServletException {
+                req.getRequestDispatcher("footer").include(req, res);
+            }
+        }, new String[] {"/t", "/err/footer"}, thrower((q, r) -> r.sendError(500)),
+                new HttpServlet() {
+                    @Override protected void doGet(HttpServletRequest req, HttpServletResponse res)
+                            throws IOException {
+                        res.getWriter().print("footer-marker");
+                    }
+                });
+        assertEquals("footer-marker", get("/t").body());
+    }
+}

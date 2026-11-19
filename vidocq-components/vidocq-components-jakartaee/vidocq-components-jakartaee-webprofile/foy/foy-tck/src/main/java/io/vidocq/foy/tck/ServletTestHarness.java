@@ -1,0 +1,362 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.tck;
+
+import io.vidocq.foy.internal.boot.ComponentFactory;
+import io.vidocq.foy.internal.boot.DeployOptions;
+import io.vidocq.foy.internal.boot.HandlesTypesResolver;
+import io.vidocq.foy.internal.boot.Deployment;
+import io.vidocq.foy.internal.boot.WebAppDeployer;
+import io.vidocq.foy.internal.boot.WebAppModel;
+import io.vidocq.foy.internal.boot.WebAppModel.FilterDecl;
+import io.vidocq.foy.internal.boot.WebAppModel.FilterMappingDecl;
+import io.vidocq.foy.internal.boot.WebAppModel.ListenerDecl;
+import io.vidocq.foy.internal.boot.WebAppModel.ServletDecl;
+import io.vidocq.foy.internal.container.VidocqServletContext;
+import io.vidocq.foy.internal.gen.RegistryComponentFactory;
+import io.vidocq.foy.internal.gen.WebComponentRegistry;
+import io.vidocq.foy.spi.jsp.JspEngine;
+import io.vidocq.foy.spi.security.IdentityStore;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.Filter;
+import jakarta.servlet.Servlet;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.EventListener;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+
+/**
+ * Servlet 6.1 conformance harness: deploys the configured application with
+ * {@link WebAppDeployer}, serves it from a local Chappe {@link Server}, and exposes
+ * an {@link HttpClient} so tests can issue real HTTP requests.
+ *
+ * <p>This harness acts as a servlet container for conformance test suites.
+ * Official TCK integration (Arquillian DeployableContainer) builds on the
+ * same integration point.</p>
+ *
+ * <h2>Example</h2>
+ * <pre>{@code
+ * var harness = ServletTestHarness.builder()
+ *         .servlet("/hello", new HelloServlet())
+ *         .filter("/*", new LoggingFilter())
+ *         .start();
+ * try (harness) {
+ *     HttpResponse<String> r = harness.get("/hello");
+ *     assertEquals(200, r.statusCode());
+ * }
+ * }</pre>
+ */
+public final class ServletTestHarness implements AutoCloseable {
+
+    private static final System.Logger LOG = System.getLogger(ServletTestHarness.class.getName());
+
+    private final ServletTestHost host;
+    /** True when the harness created {@link #host} itself and must stop it on close. */
+    private final boolean ownsHost;
+    private final int port;
+    private final HttpClient client;
+    private final String contextPath;
+    private final Deployment deployment;
+    private final WebAppModel model;
+    private final AtomicBoolean closed = new AtomicBoolean();
+
+    private ServletTestHarness(ServletTestHost host, boolean ownsHost, int port, String contextPath,
+                               Deployment deployment, WebAppModel model) {
+        this.host = host;
+        this.ownsHost = ownsHost;
+        this.model = model;
+        this.port = port;
+        this.contextPath = contextPath;
+        this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+        this.deployment = deployment;
+    }
+
+    public int port() { return port; }
+    public String baseUrl() { return host.scheme() + "://127.0.0.1:" + port + (contextPath.equals("/") ? "" : contextPath); }
+    public HttpClient client() { return client; }
+    /** The deployed model. */
+    public WebAppModel model() { return model; }
+
+    public HttpResponse<String> get(String path) throws Exception {
+        return send(HttpRequest.newBuilder(URI.create(baseUrl() + path))
+                .timeout(Duration.ofSeconds(5)).GET().build());
+    }
+
+    public HttpResponse<String> send(HttpRequest request) throws Exception {
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    public HttpRequest.Builder request(String path) {
+        return HttpRequest.newBuilder(URI.create(baseUrl() + path))
+                .timeout(Duration.ofSeconds(5));
+    }
+
+    /**
+     * Undeploys the application, then unmounts it and stops the server when the harness started it. The
+     * undeploy comes first, while the server still serves, as Foy documents it: it closes the application's
+     * upgraded connections, so a WebSocket peer gets its 1001 Close frame; a server stopped first cuts them
+     * with none (BUG-20261115-05). A request in between gets 503 from the undeployed application. A second
+     * call does nothing.
+     */
+    @Override public void close() {
+        if (!closed.compareAndSet(false, true)) return;
+        try {
+            deployment.close();
+        } finally {
+            host.unmount(contextPath);
+            if (ownsHost) host.close();
+        }
+    }
+
+    public static Builder builder() { return new Builder(); }
+
+    /** Fluid builder that configures a servlet application then starts Chappe. */
+    public static final class Builder {
+
+        /** A servlet being declared: one instance, every URL pattern registered under its name. */
+        private record PendingServlet(Servlet instance, List<String> patterns,
+                                      Map<String, String> initParams, boolean asyncSupported) {}
+
+        /** A filter being declared: one instance under its name. */
+        private record PendingFilter(Filter instance, Map<String, String> initParams) {}
+
+        private final Map<String, PendingServlet> servlets = new LinkedHashMap<>();
+        private final Map<String, PendingFilter> filters = new LinkedHashMap<>();
+        private final List<FilterMappingDecl> filterMappings = new ArrayList<>();
+        private final List<EventListener> listeners = new ArrayList<>();
+        private String contextPath = "/";
+        private IdentityStore identityStore;
+        private WebAppModel.Builder model;
+        private ComponentFactory componentFactory;
+        private Set<String> reservedServletNames = Set.of();
+        private Set<String> reservedFilterNames = Set.of();
+        private Set<String> reservedUrlPatterns = Set.of();
+
+        /**
+         * Deploys {@code merged}, a model already filled by the product descriptor merge
+         * ({@code DescriptorMerger}: web.xml, web fragments, annotations, initializers); its
+         * context path replaces {@link #contextPath}. Components registered programmatically on
+         * this builder are appended to it.
+         */
+        public Builder model(WebAppModel.Builder merged) {
+            this.model = merged;
+            return this;
+        }
+
+        /**
+         * The factory that loaded the merged model's classes, also used for dynamic registrations
+         * (its visibility decides which classes a by-name registration may use); by default a
+         * {@link RegistryComponentFactory} over the registry, every class visible.
+         */
+        public Builder componentFactory(ComponentFactory factory) {
+            this.componentFactory = factory;
+            return this;
+        }
+
+        /**
+         * Names and URL patterns a dynamic registration must not take (Servlet 6.1 §4.4: those of
+         * the deployment descriptor).
+         */
+        public Builder reserved(Set<String> servletNames, Set<String> filterNames, Set<String> urlPatterns) {
+            this.reservedServletNames = Set.copyOf(servletNames);
+            this.reservedFilterNames = Set.copyOf(filterNames);
+            this.reservedUrlPatterns = Set.copyOf(urlPatterns);
+            return this;
+        }
+
+        public Builder servlet(String urlPattern, Servlet servlet) {
+            return servlet(urlPattern, servlet, Map.of());
+        }
+
+        public Builder servlet(String urlPattern, Servlet servlet, Map<String, String> servletInitParams) {
+            String name = defaultName(servlet, servlets, PendingServlet::instance);
+            return servlet(urlPattern, servlet, name, servletInitParams);
+        }
+
+        public Builder servlet(String urlPattern, Servlet servlet, String servletName,
+                               Map<String, String> servletInitParams) {
+            return servlet(urlPattern, servlet, servletName, servletInitParams, true);
+        }
+
+        /**
+         * Maps {@code urlPattern} to the servlet named {@code servletName}. Registering the same
+         * name again appends the pattern; when an explicit name comes back with another instance,
+         * the first registration wins (instance, init parameters and async support) and a
+         * warning is logged.
+         */
+        public Builder servlet(String urlPattern, Servlet servlet, String servletName,
+                               Map<String, String> servletInitParams, boolean asyncSupported) {
+            PendingServlet existing = servlets.get(servletName);
+            if (existing == null) {
+                var patterns = new ArrayList<String>();
+                patterns.add(urlPattern);
+                servlets.put(servletName, new PendingServlet(servlet, patterns,
+                        Map.copyOf(servletInitParams), asyncSupported));
+            } else {
+                if (existing.instance() != servlet) {
+                    LOG.log(System.Logger.Level.WARNING, "servlet name '" + servletName
+                            + "' registered with another instance; keeping the first one");
+                }
+                existing.patterns().add(urlPattern);
+            }
+            return this;
+        }
+
+        public Builder filter(String urlPattern, Filter filter) {
+            return filter(urlPattern, filter, Map.of());
+        }
+
+        public Builder filter(String urlPattern, Filter filter, Map<String, String> filterInitParams) {
+            return filter(urlPattern, filter, defaultName(filter, filters, PendingFilter::instance), filterInitParams);
+        }
+
+        /**
+         * The name of a component registered without one: its simple class name, made unique
+         * with a {@code #n} suffix when another instance already holds it (anonymous classes
+         * all share the empty simple name). Re-registering the same instance reuses its name.
+         */
+        private static <P> String defaultName(Object instance, Map<String, P> declared,
+                                              Function<P, Object> instanceOf) {
+            String base = instance.getClass().getSimpleName();
+            String name = base;
+            for (int n = 2; declared.containsKey(name); n++) {
+                if (instanceOf.apply(declared.get(name)) == instance) return name;
+                name = base + "#" + n;
+            }
+            return name;
+        }
+
+        public Builder filter(String urlPattern, Filter filter, String filterName,
+                              Map<String, String> filterInitParams) {
+            return filter(urlPattern, filter, filterName, filterInitParams, EnumSet.of(DispatcherType.REQUEST));
+        }
+
+        /**
+         * Maps {@code urlPattern} to the filter named {@code filterName}; each call adds one
+         * mapping, in call order. When an explicit name comes back with another instance, the
+         * first registration wins and a warning is logged.
+         */
+        public Builder filter(String urlPattern, Filter filter, String filterName,
+                              Map<String, String> filterInitParams, Set<DispatcherType> dispatcherTypes) {
+            PendingFilter existing = filters.get(filterName);
+            if (existing == null) {
+                filters.put(filterName, new PendingFilter(filter, Map.copyOf(filterInitParams)));
+            } else if (existing.instance() != filter) {
+                LOG.log(System.Logger.Level.WARNING, "filter name '" + filterName
+                        + "' registered with another instance; keeping the first one");
+            }
+            filterMappings.add(new FilterMappingDecl(filterName, urlPattern, null, dispatcherTypes));
+            return this;
+        }
+
+        public Builder listener(EventListener listener) { listeners.add(listener); return this; }
+
+        public Builder contextPath(String path) { this.contextPath = path; return this; }
+        public Builder identityStore(IdentityStore s) { this.identityStore = s; return this; }
+
+        private VidocqServletContext.ResourceProvider resourceProvider;
+        public Builder resourceProvider(VidocqServletContext.ResourceProvider provider) {
+            this.resourceProvider = provider; return this;
+        }
+
+        private ServletTestHost host;
+        /**
+         * Mounts the deployment on a shared {@link ServletTestHost} (under its context path)
+         * instead of starting a server of its own; closing the harness then only unmounts it.
+         */
+        public Builder host(ServletTestHost h) { this.host = h; return this; }
+
+        private WebComponentRegistry registry;
+        /** The registry resolving every component of the deployment; a fresh one by default. */
+        public Builder registry(WebComponentRegistry r) { this.registry = r; return this; }
+
+        private HandlesTypesResolver handlesTypes;
+        /** Overrides the class-index {@code @HandlesTypes} resolution (TCK wars carry no index). */
+        public Builder handlesTypes(HandlesTypesResolver r) { this.handlesTypes = r; return this; }
+
+        private ModuleLayer pagesLayer = ModuleLayer.boot();
+        private JspEngine jspEngine;
+        /**
+         * The JSP engine, and the layer its precompiled pages are found in; none by default. The
+         * harness runs on the class path, where {@link WebAppDeployer} looks up no engine.
+         */
+        public Builder jsp(ModuleLayer layer, JspEngine engine) {
+            this.pagesLayer = java.util.Objects.requireNonNull(layer, "layer");
+            this.jspEngine = java.util.Objects.requireNonNull(engine, "engine");
+            return this;
+        }
+
+        public ServletTestHarness start() {
+            var cl = Thread.currentThread().getContextClassLoader();
+            var reg = registry != null ? registry : WebComponentRegistry.forClassLoader(cl);
+            var factory = componentFactory != null ? componentFactory : new RegistryComponentFactory(reg, cl);
+            var target = model != null ? model : WebAppModel.builder(contextPath);
+            addProgrammatic(target, reg);
+            WebAppModel built = target.build();
+            var options = DeployOptions.defaults(cl, reg)
+                    .withComponentFactory(factory)
+                    .withIdentityStore(identityStore)
+                    .withResourceProvider(resourceProvider)
+                    .withReserved(reservedServletNames, reservedFilterNames, reservedUrlPatterns);
+            if (handlesTypes != null) options = options.withHandlesTypes(handlesTypes);
+            Deployment d = WebAppDeployer.deploy(built, options, pagesLayer, jspEngine);
+            boolean owned = host == null;
+            ServletTestHost mountHost = owned ? new ServletTestHost() : host;
+            try {
+                mountHost.mount(built.contextPath(), d.handler());
+            } catch (RuntimeException e) {
+                // The deployment first, then the server, as close() does.
+                try {
+                    d.close();
+                } finally {
+                    if (owned) mountHost.close();
+                }
+                throw e;
+            }
+            return new ServletTestHarness(mountHost, owned, mountHost.port(), built.contextPath(), d, built);
+        }
+
+        /** Appends the pre-built instances registered on this builder (conformance tests). */
+        private void addProgrammatic(WebAppModel.Builder b, WebComponentRegistry reg) {
+            // @ServletSecurity comes from the class's descriptor (§13.4.1), never from reflection.
+            servlets.forEach((name, s) -> b.servlet(new ServletDecl(name,
+                    s.instance().getClass(), s::instance, s.patterns(), s.initParams(),
+                    Integer.MIN_VALUE, s.asyncSupported(),
+                    reg.lookup(s.instance().getClass()).descriptor().servletSecurity())));
+            filters.forEach((name, f) -> b.filter(new FilterDecl(name,
+                    f.instance().getClass(), f::instance, f.initParams(), true)));
+            filterMappings.forEach(b::filterMapping);
+            for (EventListener l : listeners) {
+                b.listener(new ListenerDecl(l.getClass(), () -> l));
+            }
+        }
+    }
+}

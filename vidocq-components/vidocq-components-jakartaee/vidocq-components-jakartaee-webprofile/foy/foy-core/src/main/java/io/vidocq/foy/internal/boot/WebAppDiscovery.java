@@ -1,0 +1,180 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.boot;
+
+import io.vidocq.foy.internal.boot.DescriptorMerger.AnnotatedComponents;
+import io.vidocq.foy.internal.gen.WebComponentRegistry;
+import io.vidocq.foy.spi.cdi.CdiWebComponents;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.util.AnnotationLiteral;
+import jakarta.servlet.Filter;
+import jakarta.servlet.Servlet;
+
+import java.util.ArrayList;
+import java.util.EventListener;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Supplier;
+
+/**
+ * Finds the CDI-managed web components ({@code @WebServlet}, {@code @WebFilter},
+ * {@code @WebListener}) of a {@link BeanManager} and returns them as {@link AnnotatedComponents},
+ * to be merged with {@code web.xml} by {@link DescriptorMerger}.
+ *
+ * <p>The component classes come from the {@link CdiWebComponents} beans registered at build time
+ * by foy-cdi-vauban (one per archive, merged; each class is matched to the bean of that exact
+ * class, and a listed class without one is skipped with a warning). The {@code Servlet},
+ * {@code Filter} and {@code EventListener} beans are walked too: without any index (another CDI
+ * container) they are the only source; with one, a web-annotated bean the indexes miss (an archive
+ * built without foy-cdi-vauban) is added after the indexed classes, with one warning each. Metadata (names, URL patterns, init params,
+ * load-on-startup, async support, filter dispatcher types and servlet names, security) always
+ * comes from {@link WebComponentRegistry#lookup(Class)}, never from runtime annotation reflection.
+ * Instances come from {@link BeanManager#getReference}, so CDI injection applies; the deployer
+ * calls each factory once, so servlets and filters are singletons (Servlet 6.1 §2.2).</p>
+ */
+public final class WebAppDiscovery {
+
+    private static final System.Logger LOG = System.getLogger(WebAppDiscovery.class.getName());
+    private static final AnnotationLiteral<Any> ANY = new AnnotationLiteral<Any>() {};
+
+    /**
+     * Collects the servlets, filters and listeners among the beans of {@code bm}.
+     *
+     * @param bm the CDI bean manager
+     * @param registry the registry giving each class its descriptor
+     * @return the annotated components, in discovery order
+     * @throws IllegalArgumentException when a component misuses the Servlet annotations
+     */
+    public static AnnotatedComponents discover(BeanManager bm, WebComponentRegistry registry) {
+        Objects.requireNonNull(bm, "bm");
+        Objects.requireNonNull(registry, "registry");
+        var beans = new LinkedHashMap<Class<?>, Bean<?>>();
+        for (Candidate c : candidates(bm, registry)) beans.put(c.type(), c.bean());
+        return AnnotatedComponents.fromDescriptors(beans.keySet(), cls -> registry.lookup(cls).descriptor(),
+                (cls, base) -> reference(bm, beans.get(cls), base));
+    }
+
+    private record Candidate(Class<?> type, Bean<?> bean) {}
+
+    /**
+     * The CDI-managed component classes, each with its bean, without duplicates: the classes of
+     * every {@link CdiWebComponents} index first, then the web-annotated {@code Servlet},
+     * {@code Filter} and {@code EventListener} beans the indexes miss (an archive built without
+     * foy-cdi-vauban), each with one warning. Without any index, the walk alone is used.
+     */
+    private static List<Candidate> candidates(BeanManager bm, WebComponentRegistry registry) {
+        var seen = new LinkedHashSet<Class<?>>();
+        var result = new ArrayList<Candidate>();
+        Set<Bean<?>> index = bm.getBeans(CdiWebComponents.class, ANY);
+        boolean indexed = !index.isEmpty();
+        // One index bean per archive built with foy-cdi-vauban: merge them all, in bean then list order.
+        for (Bean<?> indexBean : index) {
+            addIndexed(bm, reference(bm, indexBean, CdiWebComponents.class).get(), seen, result);
+        }
+        if (!indexed) {
+            LOG.log(System.Logger.Level.INFO, "foy: no " + CdiWebComponents.class.getSimpleName()
+                    + " bean (CDI container other than Vauban); walking the Servlet, Filter and EventListener beans");
+        }
+        for (Class<?> base : List.of(Servlet.class, Filter.class, EventListener.class)) {
+            addWalked(bm, registry, base, indexed, seen, result);
+        }
+        return result;
+    }
+
+    /** Adds the classes {@code components} lists and {@code seen} does not hold yet to {@code result}. */
+    private static void addIndexed(BeanManager bm, CdiWebComponents components, Set<Class<?>> seen,
+                                   List<Candidate> result) {
+        for (Class<?> cls : components.componentClasses()) {
+            if (!seen.add(cls)) continue;
+            Candidate candidate = indexedCandidate(bm, cls);
+            if (candidate != null) result.add(candidate);
+        }
+    }
+
+    /**
+     * Adds the {@code base} beans whose class {@code seen} does not hold yet to {@code result}; with
+     * class indexes ({@code indexed}), only the web components they missed.
+     */
+    private static void addWalked(BeanManager bm, WebComponentRegistry registry, Class<?> base, boolean indexed,
+                                  Set<Class<?>> seen, List<Candidate> result) {
+        for (Bean<?> bean : bm.getBeans(base, ANY)) {
+            Class<?> cls = bean.getBeanClass();
+            if (seen.add(cls) && (!indexed || missedByTheIndexes(registry, cls))) {
+                result.add(new Candidate(cls, bean));
+            }
+        }
+    }
+
+    /**
+     * The class {@code cls} listed by an index with its own bean: a lookup by type also matches the
+     * beans of subclasses. {@code null}, with a warning, when the class has no bean of its own.
+     */
+    private static Candidate indexedCandidate(BeanManager bm, Class<?> cls) {
+        Set<Bean<?>> own = new LinkedHashSet<>();
+        for (Bean<?> bean : bm.getBeans(cls, ANY)) {
+            if (bean.getBeanClass() == cls) own.add(bean);
+        }
+        if (own.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "foy: " + cls.getName() + " is listed by "
+                    + CdiWebComponents.class.getSimpleName() + " but has no bean of that class"
+                    + " (vetoed, or loaded by another class loader); skipped");
+            return null;
+        }
+        return new Candidate(cls, own.size() == 1 ? own.iterator().next() : bm.resolve(own));
+    }
+
+    /**
+     * Whether the bean class {@code cls}, which no index lists, is a web component: discovered
+     * anyway, with a warning naming the archive's missing build step.
+     */
+    private static boolean missedByTheIndexes(WebComponentRegistry registry, Class<?> cls) {
+        if (!isWebComponent(registry, cls)) return false;
+        LOG.log(System.Logger.Level.WARNING, "foy: " + cls.getName() + " is a web component bean"
+                + " missing from every " + CdiWebComponents.class.getSimpleName() + " index; its"
+                + " archive was built without foy-cdi-vauban on the annotation processor path."
+                + " Discovered anyway; build that archive with foy-cdi-vauban on the processor path");
+        return true;
+    }
+
+    private static boolean isWebComponent(WebComponentRegistry registry, Class<?> cls) {
+        return switch (registry.lookup(cls).descriptor().kind()) {
+            case SERVLET, FILTER, LISTENER -> true;
+            default -> false;
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> Supplier<T> reference(BeanManager bm, Bean<?> bean, Class<T> type) {
+        Bean<Object> b = (Bean<Object>) bean;
+        return () -> type.cast(bm.getReference(b, type, bm.createCreationalContext(b)));
+    }
+
+    public static BeanManager lookupBeanManager() {
+        return CDI.current().getBeanManager();
+    }
+
+    private WebAppDiscovery() {}
+}

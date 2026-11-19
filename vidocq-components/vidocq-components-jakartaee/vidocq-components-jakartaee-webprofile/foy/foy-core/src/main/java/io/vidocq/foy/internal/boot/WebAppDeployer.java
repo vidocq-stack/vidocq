@@ -1,0 +1,724 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.boot;
+
+import io.vidocq.foy.internal.boot.WebAppModel.FilterDecl;
+import io.vidocq.foy.internal.boot.WebAppModel.FilterMappingDecl;
+import io.vidocq.foy.internal.boot.WebAppModel.ServletDecl;
+import io.vidocq.foy.internal.bridge.ChappeServletBridge;
+import io.vidocq.foy.internal.container.ContextLoaderScope;
+import io.vidocq.foy.internal.container.CrossContextRegistry;
+import io.vidocq.foy.internal.container.DefaultServlet;
+import io.vidocq.foy.internal.container.DynamicFilterRegistration;
+import io.vidocq.foy.internal.container.DynamicServletRegistration;
+import io.vidocq.foy.internal.container.FilterConfigImpl;
+import io.vidocq.foy.internal.container.ServletConfigImpl;
+import io.vidocq.foy.internal.container.VidocqServletContext;
+import io.vidocq.foy.internal.dispatcher.FilterMapping;
+import io.vidocq.foy.internal.dispatcher.FilterRegistry;
+import io.vidocq.foy.internal.dispatcher.ServletDispatcher;
+import io.vidocq.foy.internal.dispatcher.UrlPatternMatcher;
+import io.vidocq.foy.internal.gen.ContextComponentInstantiator;
+import io.vidocq.foy.internal.listener.ListenerRegistry;
+import io.vidocq.foy.internal.security.ConstraintTable;
+import io.vidocq.foy.internal.security.SecuritySettings;
+import io.vidocq.foy.internal.security.WebSecurity;
+import io.vidocq.foy.internal.session.InMemorySessionStore;
+import io.vidocq.foy.internal.session.SessionManager;
+import io.vidocq.foy.spi.gen.ComponentInstantiator;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.Filter;
+import jakarta.servlet.Servlet;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletSecurityElement;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.Comparator;
+import java.util.EventListener;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Deploys a {@link WebAppModel}: the Servlet 6.1 deployment lifecycle — static and dynamic
+ * registrations, initializers, {@code contextInitialized}, load-on-startup ordered
+ * {@code init()}, and the end of the configuration phase (§4.4).
+ */
+public final class WebAppDeployer {
+
+    private static final System.Logger LOG = System.getLogger(WebAppDeployer.class.getName());
+    /** The name of the JSP engine's servlet. */
+    private static final String JSP = "jsp";
+
+    /** A servlet instance with its mapping data, from the model or from the context API. */
+    private record ServletUnit(String name, Class<? extends Servlet> type, Servlet instance, List<String> patterns,
+                               Map<String, String> initParams, int loadOnStartup, boolean asyncSupported,
+                               ServletSecurityElement security) {}
+
+    /** A filter instance with its init parameters and declared async support. */
+    private record FilterUnit(String name, Class<? extends Filter> type, Filter instance, Map<String, String> initParams,
+                              boolean asyncSupported) {}
+
+    private WebAppDeployer() {}
+
+    /**
+     * Deploys {@code model}. When anything escapes (a listener, an initializer, a component
+     * factory), what was already set up is torn down — destroy in reverse init order,
+     * {@code contextDestroyed} if {@code contextInitialized} was fired, temp dir removed —
+     * before the exception propagates.
+     */
+    public static Deployment deploy(WebAppModel model, DeployOptions options) {
+        return deploy(model, options, ModuleLayer.boot());
+    }
+
+    /**
+     * Deploys with optional page engines and application pages visible in the supplied layer.
+     * The engine is looked up with {@link #jspEngine(ModuleLayer)}.
+     */
+    public static Deployment deploy(WebAppModel model, DeployOptions options, ModuleLayer applicationLayer) {
+        return deploy(model, options, applicationLayer, jspEngine(applicationLayer).orElse(null));
+    }
+
+    /**
+     * The JSP engine visible in {@code applicationLayer}, its named modules and their ancestors
+     * ({@link java.util.ServiceLoader#load(ModuleLayer, Class)}: a provider on the class path is never found);
+     * empty when there is none. The provider is instantiated once per call.
+     *
+     * @throws IllegalStateException when more than one engine is visible
+     */
+    public static java.util.Optional<io.vidocq.foy.spi.jsp.JspEngine> jspEngine(ModuleLayer applicationLayer) {
+        var it = java.util.ServiceLoader.load(applicationLayer, io.vidocq.foy.spi.jsp.JspEngine.class).iterator();
+        if (!it.hasNext()) return java.util.Optional.empty();
+        io.vidocq.foy.spi.jsp.JspEngine engine = it.next();
+        if (it.hasNext()) throw new IllegalStateException("Multiple JSP engines are visible in the application layer");
+        return java.util.Optional.of(engine);
+    }
+
+    /**
+     * Deploys with {@code engine}, already looked up in {@code applicationLayer} ({@code null} for none); the layer is
+     * handed to {@code JspEngine.deploy}. The whole deployment (initializers, listeners, component instantiation,
+     * {@code init}, and the tear-down of a failed deployment) runs with the application class loader of
+     * {@code options} as context class loader; the calling thread gets its own back (BUG-20261022-06).
+     */
+    public static Deployment deploy(WebAppModel model, DeployOptions options, ModuleLayer applicationLayer,
+            io.vidocq.foy.spi.jsp.JspEngine engine) {
+        Objects.requireNonNull(model, "model");
+        Objects.requireNonNull(options, "options");
+        try (var _ = ContextLoaderScope.enter(options.applicationLoader())) {
+            return deployWithinScope(model, options, applicationLayer, engine);
+        }
+    }
+
+    private static Deployment deployWithinScope(WebAppModel model, DeployOptions options, ModuleLayer applicationLayer,
+            io.vidocq.foy.spi.jsp.JspEngine engine) {
+        ComponentFactory factory = options.componentFactory();
+        VidocqServletContext ctx = newContext(model, options);
+        try (var rollback = new Rollback(ctx)) {
+            var servlets = new ArrayList<ServletUnit>();
+            var filters = new ArrayList<FilterUnit>();
+            model.contextParams().forEach(ctx::setInitParameter);
+            rollback.tempDir = createTempDir(ctx, options.tempDirRoot());
+            if (engine != null) deployJspApplication(ctx, engine, applicationLayer);
+            instantiateStatic(model, ctx, servlets, filters);
+            // Expose the servlets/filters declared in web.xml/@WebServlet through
+            // ServletContext.getServletRegistrations() — visibility required by the TCK
+            // (RegistrationTests.servletRegistrationsTest).
+            registerStatic(ctx, model, servlets, filters);
+            registerDisabledServlets(ctx, model);
+            // <context-param> init params (web.xml) — must be set before markInitialized.
+            if (engine != null) registerJspServlet(ctx);
+            ListenerRegistry registry = listenerRegistry(ctx, model, engine != null);
+            // The container's own listeners (the CDI contexts) ahead of the application's, before any initializer
+            // or contextInitialized.
+            options.containerListeners().accept(registry);
+            // The component factory must be there before the initializers run (foy-websocket's reads it),
+            // and set before the listener registry: the application's attribute listeners never hear
+            // this container attribute.
+            ctx.setAttribute(ComponentInstantiator.ATTRIBUTE, new ContextComponentInstantiator(ctx));
+            ctx.setListenerRegistry(registry);
+            // A container ServletContextListener hears the context before the initializers, so what it sets up
+            // (the ServletContext bean of foy-cdi-vauban) is there for onStartup; it is told last that it ended.
+            rollback.containerInitializedListeners = registry;
+            registry.fireContainerContextInitialized(ctx);
+            runInitializers(model, options, ctx);
+            rollback.contextInitializedListeners = registry;
+            registry.fireContextInitialized(ctx);
+
+            // Materialise the dynamic registrations (SCI + listener-initialized) before init().
+            var dynamicMappings = new DynamicMappings();
+            materializeDynamic(model, ctx, factory, servlets, filters, dynamicMappings);
+            List<FilterMapping> filterMappings = buildFilterMappings(model, filters, dynamicMappings);
+
+            ServletDispatcher liveServlets = initServlets(ctx, servlets, rollback.initializedServlets);
+            var liveFilters = initFilters(ctx, filters, filterMappings, rollback.initializedFilters);
+
+            // End of the initialisation phase (Servlet 6.1 §4.4) — from now on the dynamic
+            // configuration methods must throw IllegalStateException.
+            ctx.markInitialized();
+            // Constraints are compiled once the configuration is final (setServletSecurity, declareRoles).
+            ctx.setRoleMapping(ctx.roleMapping().withDeclaredRoles(ctx.programmaticDeclaredRoles()));
+            ctx.setSecurity(buildSecurity(model, ctx, servlets));
+            // The session timeout is read once the initializers and the context listeners ran:
+            // ServletContext.setSessionTimeout is honoured from both (section 4.4.1).
+            SessionManager sessions = new SessionManager(new InMemorySessionStore(), ctx, sessionTimeoutSeconds(ctx));
+            rollback.sessions = sessions;
+            sessions.setListenerRegistry(registry);
+            sessions.start();
+            var bridge = new ChappeServletBridge(liveServlets,
+                    new FilterRegistry(liveFilters), ctx, sessions, model.contextPath());
+            // Register the context for cross-context lookups (§4.8 / cross-context async dispatch).
+            CrossContextRegistry.register(ctx);
+            return rollback.deployed(new Deployment(bridge, ctx, registry, rollback.initializedServlets,
+                    rollback.initializedFilters, rollback.tempDir, sessions));
+        }
+    }
+
+    /**
+     * What a deployment set up so far, torn down by {@link #close} unless the deployment
+     * completed ({@link #deployed}): destroy in reverse init order, {@code contextDestroyed} if
+     * {@code contextInitialized} was fired (to the container's context listeners alone if only they
+     * heard it), temp dir removed. As the resource of a
+     * try-with-resources statement, whatever escapes the deployment (a listener, an initializer,
+     * a component factory) propagates once that is done, with a cleanup failure suppressed.
+     */
+    private static final class Rollback implements AutoCloseable {
+        private final VidocqServletContext ctx;
+        private final List<Servlet> initializedServlets = new ArrayList<>();
+        private final List<Filter> initializedFilters = new ArrayList<>();
+        private Path tempDir;
+        private ListenerRegistry contextInitializedListeners;
+        private ListenerRegistry containerInitializedListeners;
+        private SessionManager sessions;
+        private boolean complete;
+
+        private Rollback(VidocqServletContext ctx) {
+            this.ctx = ctx;
+        }
+
+        /** Marks the deployment as complete, so nothing is torn down; returns {@code deployment}. */
+        private Deployment deployed(Deployment deployment) {
+            complete = true;
+            return deployment;
+        }
+
+        @Override
+        public void close() {
+            if (complete) {
+                return;
+            }
+            Deployment.undeploy(ctx, contextInitializedListeners, initializedServlets, initializedFilters,
+                    tempDir, sessions);
+            if (contextInitializedListeners == null && containerInitializedListeners != null) {
+                containerInitializedListeners.fireContainerContextDestroyed(ctx);
+            }
+        }
+    }
+
+    /** Deploys the JSP application of {@code engine} into {@code ctx}. */
+    private static void deployJspApplication(VidocqServletContext ctx, io.vidocq.foy.spi.jsp.JspEngine engine,
+                                             ModuleLayer applicationLayer) {
+        try {
+            ctx.setJspEngineApplication(engine.deploy(ctx, applicationLayer));
+        } catch (ServletException failure) {
+            throw new IllegalStateException("JSP application deployment failed", failure);
+        }
+    }
+
+    /** Declares the disabled servlets: a disabled servlet is never served, so its multipart-config is not carried here. */
+    private static void registerDisabledServlets(VidocqServletContext ctx, WebAppModel model) {
+        for (ServletDecl d : model.servlets()) {
+            if (d.enabled() || d.type() == null) continue;
+            var reg = ctx.registerStaticServlet(d.name(), d.type(), d.urlPatterns(), d.initParams(),
+                    d.asyncSupported());
+            String runAs = model.runAsRoles().get(d.name());
+            if (runAs != null) reg.setRunAsRole(runAs);
+        }
+    }
+
+    /** Registers the JSP engine's servlet on {@code *.jsp} and {@code *.jspx}, unless that name is taken. */
+    private static void registerJspServlet(VidocqServletContext ctx) {
+        var registration = ctx.addServlet(JSP, ctx.jspEngineApplication().servlet());
+        if (registration != null) {
+            ctx.markJspRegistration(JSP);
+            registration.setLoadOnStartup(1);
+            registration.addMapping("*.jsp");
+            registration.addMapping("*.jspx");
+        }
+    }
+
+    /**
+     * The model's listeners, instantiated, then those of the JSP application ({@code jsp}) whose
+     * type is not already registered.
+     */
+    private static ListenerRegistry listenerRegistry(VidocqServletContext ctx, WebAppModel model, boolean jsp) {
+        var listeners = new ArrayList<EventListener>();
+        for (var l : model.listeners()) listeners.add(l.factory().get());
+        ListenerRegistry registry = new ListenerRegistry();
+        registry.registerAll(listeners);
+        if (jsp) {
+            var registeredTypes = new java.util.HashSet<Class<?>>();
+            for (var listener : listeners) registeredTypes.add(listener.getClass());
+            for (var descriptor : ctx.jspEngineApplication().listeners()) {
+                if (registeredTypes.add(descriptor.type())) registry.register(descriptor.createListener(), true);
+            }
+        }
+        return registry;
+    }
+
+    /**
+     * The default session timeout in seconds: the context's value in minutes (descriptor, then
+     * {@code setSessionTimeout} from an initializer or a listener); zero or less means that
+     * sessions never time out.
+     */
+    static int sessionTimeoutSeconds(VidocqServletContext ctx) {
+        int minutes = ctx.getSessionTimeout();
+        return minutes <= 0 ? -1 : Math.multiplyExact(minutes, 60);
+    }
+
+    /**
+     * Compiles the application's constraints: the descriptor's first, then each servlet's
+     * {@code ServletSecurityElement} ({@code setServletSecurity} on its registration, static or
+     * dynamic, else its annotation) on its patterns (section 13.4.1). {@code *} names every declared role:
+     * {@code security-role}, {@code @DeclareRoles} and {@code ServletContext.declareRoles}, all
+     * gathered in the context's role mapping. Without {@code <deny-uncovered-http-methods/>},
+     * every uncovered method is reported at WARNING (section 13.8.4).
+     */
+    private static WebSecurity buildSecurity(WebAppModel model, VidocqServletContext ctx, List<ServletUnit> servlets) {
+        var table = ConstraintTable.builder()
+                .declaredRoles(ctx.roleMapping().declaredRoles())
+                .denyUncoveredHttpMethods(model.denyUncoveredHttpMethods());
+        model.securityConstraints().forEach(table::descriptor);
+        for (ServletUnit s : servlets) {
+            // setServletSecurity (on a static or a dynamic registration) overrides @ServletSecurity.
+            ServletSecurityElement element = ctx.registeredServletSecurity(s.name());
+            if (element == null) element = s.security();
+            if (element != null) table.servlet(s.patterns(), element);
+        }
+        ConstraintTable built = table.build();
+        if (!model.denyUncoveredHttpMethods()) {
+            for (String w : built.uncoveredMethodWarnings()) {
+                LOG.log(System.Logger.Level.WARNING, "{0}; these methods are not protected "
+                        + "(<deny-uncovered-http-methods/> would deny them)", w);
+            }
+        }
+        SecuritySettings settings = ctx.securitySettings();
+        return new WebSecurity(built, WebSecurity.authenticatorFor(model.loginConfig(), settings.identityStore()), settings);
+    }
+
+    /** Servlet 6.1 §4.8.1: the "jakarta.servlet.context.tempdir" attribute is required. */
+    private static Path createTempDir(VidocqServletContext ctx, Path root) {
+        try {
+            Path tmp = root == null ? Files.createTempDirectory("vidocq-servlet-")
+                    : Files.createTempDirectory(root, "vidocq-servlet-");
+            ctx.setAttribute(ServletContext.TEMPDIR, tmp.toFile());
+            return tmp;
+        } catch (IOException _) {
+            // No temp dir available: the attribute stays absent.
+            return null;
+        }
+    }
+
+    private static VidocqServletContext newContext(WebAppModel model, DeployOptions options) {
+        VidocqServletContext ctx = new VidocqServletContext(model.contextPath());
+        ctx.setErrorPages(model.errorPages());
+        ctx.setLocaleEncodingMappings(model.localeEncodingMappings());
+        ctx.setMimeMappings(model.mimeMappings());
+        ctx.setWelcomeFiles(model.welcomeFiles());
+        if (model.requestCharacterEncoding() != null) ctx.setRequestCharacterEncoding(model.requestCharacterEncoding());
+        if (model.responseCharacterEncoding() != null) ctx.setResponseCharacterEncoding(model.responseCharacterEncoding());
+        ctx.applyCookieConfig(model.cookieConfig());
+        if (!model.trackingModes().isEmpty()) ctx.setDescriptorTrackingModes(model.trackingModes());
+        ctx.setEffectiveVersion(model.effectiveMajorVersion(), model.effectiveMinorVersion());
+        ctx.setJspConfigDescriptor(model.jspConfigDescriptor());
+        if (options.resourceProvider() != null) ctx.setResourceProvider(options.resourceProvider());
+        ctx.setVirtualServerName(options.virtualServerName());
+        String name = options.servletContextName() != null ? options.servletContextName() : model.displayName();
+        if (name != null) ctx.setServletContextName(name);
+        // -1 = not configured (container default, 30 minutes); zero or less otherwise = never expire.
+        if (model.sessionTimeoutMinutes() != -1) ctx.setSessionTimeoutInternal(model.sessionTimeoutMinutes());
+        options.reservedServletNames().forEach(ctx::reserveServletName);
+        options.reservedFilterNames().forEach(ctx::reserveFilterName);
+        options.reservedUrlPatterns().forEach(ctx::reserveUrlPattern);
+        ctx.setSecuritySettings(options.security());
+        ctx.setRequestLimits(options.requestLimits());
+        // setServletSecurity reports, and leaves alone, the patterns a descriptor constraint targets (section 13.4.2).
+        Set<String> constrained = new LinkedHashSet<>();
+        for (var c : model.securityConstraints()) for (var col : c.collections()) constrained.addAll(col.urlPatterns());
+        ctx.setDescriptorConstrainedPatterns(constrained);
+        ctx.setRoleMapping(new io.vidocq.foy.internal.security.RoleMapping(
+                Set.copyOf(model.securityRoles()), model.securityRoleRefs()));
+        ctx.setComponentFactory(options.componentFactory());
+        ctx.setApplicationClassLoader(options.applicationLoader());
+        return ctx;
+    }
+
+    /**
+     * One instance per declaration. Static declarations are never filtered by
+     * {@link ComponentFactory#isVisible}: their classes are already resolved, and the
+     * visibility restriction (TCK war isolation) applies to dynamic registrations only.
+     */
+    private static void instantiateStatic(WebAppModel model, VidocqServletContext context, List<ServletUnit> servlets, List<FilterUnit> filters) {
+        for (ServletDecl d : model.servlets()) {
+            // A disabled servlet is declared (registerDisabled) but never instantiated nor mapped,
+            // a JSP file without a JSP engine neither.
+            if (!d.enabled() || (d.jspFile() != null && context.jspEngineApplication() == null)) continue;
+            Servlet instance = d.jspFile() == null ? d.factory().get() : context.jspEngineApplication().servletFor(d.jspFile());
+            servlets.add(new ServletUnit(d.name(), d.jspFile() == null ? d.type() : instance.getClass(), instance, d.urlPatterns(), d.initParams(),
+                    d.loadOnStartup(), d.asyncSupported(), d.servletSecurity()));
+        }
+        for (FilterDecl d : model.filters()) {
+            filters.add(new FilterUnit(d.name(), d.type(), d.factory().get(), d.initParams(), d.asyncSupported()));
+        }
+    }
+
+    /**
+     * Static registrations also reserve their URL patterns, so a dynamic addMapping cannot override them.
+     * A filter registration exposes its model mappings ({@code getUrlPatternMappings},
+     * {@code getServletNameMappings}); routing still comes from the model ({@link #buildFilterMappings}).
+     */
+    private static void registerStatic(VidocqServletContext ctx, WebAppModel model, List<ServletUnit> servlets,
+                                       List<FilterUnit> filters) {
+        var multipart = new java.util.HashMap<String, jakarta.servlet.MultipartConfigElement>();
+        for (ServletDecl d : model.servlets()) if (d.multipartConfig() != null) multipart.put(d.name(), d.multipartConfig());
+        for (ServletUnit s : servlets) {
+            var reg = ctx.registerStaticServlet(s.name(), s.type(), s.patterns(), s.initParams(),
+                    s.asyncSupported());
+            String runAs = model.runAsRoles().get(s.name());
+            if (runAs != null) reg.setRunAsRole(runAs);
+            // The descriptor's <multipart-config> already won over @MultipartConfig in the model (section 8.2.3).
+            var config = multipart.get(s.name());
+            if (config != null) reg.setMultipartConfig(config);
+        }
+        for (FilterUnit f : filters) registerStaticFilter(ctx, model, f);
+    }
+
+    /** Registers the static filter {@code f} with its model mappings. */
+    private static void registerStaticFilter(VidocqServletContext ctx, WebAppModel model, FilterUnit f) {
+        var registration = ctx.registerStaticFilter(f.name(), f.type(), f.initParams(), f.asyncSupported());
+        for (FilterMappingDecl m : model.filterMappings()) {
+            if (!m.filterName().equals(f.name())) continue;
+            EnumSet<DispatcherType> types = EnumSet.copyOf(m.dispatcherTypes());
+            if (m.urlPattern() != null) registration.addMappingForUrlPatterns(types, true, m.urlPattern());
+            else registration.addMappingForServletNames(types, true, m.servletName());
+        }
+    }
+
+    /**
+     * Servlet 6.1 §4.4: SCI onStartup() runs before the listeners' contextInitialized. During
+     * onStartup the dynamic APIs (addListener etc.) are allowed (the context is not yet
+     * "initialized" in the §4.4 sense).
+     */
+    private static void runInitializers(WebAppModel model, DeployOptions options, VidocqServletContext ctx) {
+        for (var sci : model.initializers()) {
+            try {
+                sci.onStartup(options.handlesTypes().resolve(sci), ctx);
+            } catch (ServletException e) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "SCI.onStartup failed (" + sci.getClass().getName() + ")", e);
+            }
+        }
+    }
+
+    /**
+     * Transfers ServletRegistration.Dynamic / FilterRegistration.Dynamic from the context to
+     * the servlet/filter lists, without overriding names declared statically (web.xml has
+     * precedence on duplicates).
+     */
+    private static void materializeDynamic(WebAppModel model, VidocqServletContext ctx, ComponentFactory factory,
+                                           List<ServletUnit> servlets, List<FilterUnit> filters,
+                                           DynamicMappings dynamicMappings) {
+        var staticServletNames = new HashSet<String>();
+        for (ServletDecl d : model.servlets()) staticServletNames.add(d.name());
+        for (var e : ctx.dynamicServletRegistrations().entrySet()) {
+            if (staticServletNames.contains(e.getKey())) continue;
+            ServletUnit unit = dynamicServlet(ctx, factory, e.getKey(), e.getValue());
+            if (unit != null) servlets.add(unit);
+        }
+
+        var staticFilterNames = new HashSet<String>();
+        for (FilterDecl d : model.filters()) staticFilterNames.add(d.name());
+        for (var e : ctx.dynamicFilterRegistrations().entrySet()) {
+            if (staticFilterNames.contains(e.getKey())) continue;
+            FilterUnit unit = dynamicFilter(factory, e.getKey(), e.getValue(), dynamicMappings);
+            if (unit != null) filters.add(unit);
+        }
+    }
+
+    /** The dynamic servlet {@code name}; {@code null} when it must be skipped. */
+    private static ServletUnit dynamicServlet(VidocqServletContext ctx, ComponentFactory factory, String name,
+                                              DynamicServletRegistration reg) {
+        boolean jsp = ctx.isJspRegistration(name);
+        Servlet instance = jsp ? reg.instance() : instantiate("servlet", name, reg.instance(), reg.klass(), reg.getClassName(),
+                Servlet.class, factory);
+        // An unmapped dynamic servlet is still initialised and reachable by name (section 9.1.2).
+        if (instance == null) return null;
+        // setServletSecurity wins; otherwise the class's @ServletSecurity applies (§13.4.1).
+        // setMultipartConfig wins; otherwise the class's @MultipartConfig applies (section 3.2).
+        // Deliberately, both annotations of an addServlet(Class) class are read even under metadata-complete.
+        ServletSecurityElement security = reg.getServletSecurity();
+        if (!jsp && (security == null || reg.getMultipartConfig() == null)) {
+            io.vidocq.foy.spi.gen.WebComponentDescriptor descriptor = dynamicDescriptor(factory, name, instance);
+            if (descriptor == null) return null;
+            if (security == null) security = descriptor.servletSecurity();
+            if (reg.getMultipartConfig() == null && descriptor.multipartConfig() != null) {
+                reg.setMultipartConfig(descriptor.multipartConfig());
+            }
+        }
+        // Dynamic registrations are not async unless setAsyncSupported(true) was called.
+        return new ServletUnit(name, instance.getClass(), instance, List.copyOf(reg.getMappings()),
+                Map.copyOf(reg.getInitParameters()), reg.getLoadOnStartup(), reg.isAsyncSupported(), security);
+    }
+
+    /**
+     * The static metadata of the dynamic servlet {@code name}'s class; {@code null}, reported,
+     * when the class misuses the Servlet annotations.
+     */
+    private static io.vidocq.foy.spi.gen.WebComponentDescriptor dynamicDescriptor(ComponentFactory factory,
+                                                                                  String name, Servlet instance) {
+        try {
+            return factory.descriptor(instance.getClass());
+        } catch (IllegalArgumentException misuse) {
+            // addServlet declares no checked exception: the misuse is reported here and
+            // only this component is left out, like an instantiation failure.
+            LOG.log(System.Logger.Level.WARNING, "cannot register dynamic servlet " + name,
+                    new ServletException(misuse.getMessage(), misuse));
+            return null;
+        }
+    }
+
+    /**
+     * The dynamic filter {@code name}, its mappings added to {@code dynamicMappings}; {@code null}
+     * when it must be skipped.
+     */
+    private static FilterUnit dynamicFilter(ComponentFactory factory, String name, DynamicFilterRegistration reg,
+                                            DynamicMappings dynamicMappings) {
+        Filter instance = instantiate("filter", name, reg.instance(), reg.klass(), reg.getClassName(),
+                Filter.class, factory);
+        if (instance == null) return null;
+        boolean async = reg.isAsyncSupported();
+        for (var mapping : reg.allMappings()) {
+            for (String pattern : mapping.urlPatterns()) {
+                dynamicMappings.add(mapping.isMatchAfter(),
+                        filterMapping(pattern, instance, name, mapping.dispatchers(), async));
+            }
+            // Section 6.2.4: servlet-name mappings stay servlet-name mappings (never expanded).
+            for (String servletName : mapping.servletNames()) {
+                dynamicMappings.add(mapping.isMatchAfter(), FilterMapping.forServletName(servletName, instance,
+                        name, dispatcherTypes(mapping.dispatchers()), async));
+            }
+        }
+        // Like a declared filter, an unmapped dynamic filter is initialised (and destroyed) but
+        // never invoked. The spec leaves this open; initialising every registered filter is
+        // container practice (Tomcat filterStart, Jetty FilterHolder start).
+        return new FilterUnit(name, instance.getClass(), instance, Map.copyOf(reg.getInitParameters()),
+                async);
+    }
+
+    /** Returns the registered instance, or a new one; {@code null} when the component must be skipped. */
+    @SuppressWarnings("unchecked")
+    private static <T> T instantiate(String kind, String name, T instance, Class<? extends T> klass,
+                                     String className, Class<T> base, ComponentFactory factory) {
+        if (instance != null) return factory.isVisible(instance.getClass()) ? instance : null;
+        try {
+            Class<? extends T> c = klass;
+            if (c == null && className != null) {
+                Class<?> loaded = factory.load(className);
+                if (!base.isAssignableFrom(loaded)) {
+                    LOG.log(System.Logger.Level.WARNING, "dynamic " + kind + " '" + name + "' skipped: class "
+                            + className + " is not a " + base.getName());
+                    return null;
+                }
+                c = loaded.asSubclass(base);
+            }
+            if (c == null) return null; // addJspFile without a real implementation
+            // Class loader isolation: ignore classes absent from the WAR.
+            if (!factory.isVisible(c)) return null;
+            return factory.newInstance(c);
+        } catch (ClassNotFoundException | ServletException | RuntimeException ex) {
+            // RuntimeException: a factory that does not wrap what the constructor throws.
+            LOG.log(System.Logger.Level.WARNING, "cannot instantiate dynamic " + kind + " " + name, ex);
+            return null;
+        }
+    }
+
+    /** Dynamic filter mappings, split by {@code isMatchAfter}, each part in call order. */
+    private record DynamicMappings(List<FilterMapping> before, List<FilterMapping> after) {
+        DynamicMappings() {
+            this(new ArrayList<>(), new ArrayList<>());
+        }
+
+        void add(boolean matchAfter, FilterMapping mapping) {
+            (matchAfter ? after : before).add(mapping);
+        }
+    }
+
+    /**
+     * Dynamic mappings with {@code isMatchAfter=false}, then the model mappings in declaration order, then
+     * the dynamic mappings with {@code isMatchAfter=true} (Servlet 6.1 {@code FilterRegistration}).
+     */
+    private static List<FilterMapping> buildFilterMappings(WebAppModel model,
+                                                           List<FilterUnit> filters,
+                                                           DynamicMappings dynamicMappings) {
+        var result = new ArrayList<FilterMapping>(dynamicMappings.before());
+        for (FilterMappingDecl m : model.filterMappings()) {
+            FilterUnit f = filters.stream().filter(u -> u.name().equals(m.filterName())).findFirst().orElseThrow();
+            result.add(m.urlPattern() != null
+                    ? filterMapping(m.urlPattern(), f.instance(), f.name(), m.dispatcherTypes(), f.asyncSupported())
+                    : FilterMapping.forServletName(m.servletName(), f.instance(), f.name(),
+                            dispatcherTypes(m.dispatcherTypes()), f.asyncSupported()));
+        }
+        result.addAll(dynamicMappings.after());
+        return result;
+    }
+
+    private static Set<DispatcherType> dispatcherTypes(Set<DispatcherType> types) {
+        return types == null ? Set.of(DispatcherType.REQUEST) : types;
+    }
+
+    private static FilterMapping filterMapping(String pattern, Filter filter, String name, Set<DispatcherType> types,
+                                               boolean asyncSupported) {
+        return new FilterMapping(UrlPatternMatcher.of(pattern), filter, name, dispatcherTypes(types), asyncSupported);
+    }
+
+    /**
+     * Servlet 6.1 §2.3: init() before the first request — load-on-startup servlets first,
+     * ascending (stable on declaration order), then the others in declaration order (eager
+     * init of the rest is allowed by §2.3.1). Returns the dispatcher: the URL mappings in declaration
+     * order and every servlet by name, mapped or not (section 9.1.2 named dispatch).
+     */
+    private static ServletDispatcher initServlets(VidocqServletContext ctx, List<ServletUnit> servlets,
+                                                                List<Servlet> initialized) {
+        var order = new ArrayList<ServletUnit>();
+        servlets.stream().filter(s -> s.loadOnStartup() >= 0)
+                .sorted(Comparator.comparingInt(ServletUnit::loadOnStartup)).forEach(order::add);
+        servlets.stream().filter(s -> s.loadOnStartup() < 0).forEach(order::add);
+
+        var failures = new IdentityHashMap<Servlet, Servlet>();
+        // One instance registered under several names is initialised (and destroyed) once.
+        var seen = java.util.Collections.newSetFromMap(new IdentityHashMap<Servlet, Boolean>());
+        for (ServletUnit s : order) {
+            if (!seen.add(s.instance())) continue;
+            try {
+                s.instance().init(new ServletConfigImpl(s.name(), ctx, s.initParams()));
+                initialized.add(s.instance());
+            } catch (ServletException | RuntimeException e) {
+                // Servlet 6.1 §2.3.3: a servlet whose init() failed must answer 500 (or 503)
+                // to every later request, not 404 — a stub stands in for it. A runtime
+                // exception is an init failure too: one bad servlet must not kill the app.
+                LOG.log(System.Logger.Level.WARNING, "init failed for servlet " + s.name(), e);
+                failures.put(s.instance(), new InitFailureServlet(
+                        e instanceof ServletException se ? se : new ServletException(e)));
+            }
+        }
+        return dispatcher(ctx, servlets, failures);
+    }
+
+    /**
+     * The dispatcher of {@code servlets}: the URL mappings in declaration order and every servlet by
+     * name, a servlet whose init() failed being replaced by its stub ({@code failures}).
+     */
+    private static ServletDispatcher dispatcher(VidocqServletContext ctx, List<ServletUnit> servlets,
+                                                Map<Servlet, Servlet> failures) {
+        var live = new ArrayList<ServletDispatcher.Mapping>();
+        var named = new ArrayList<ServletDispatcher.NamedServlet>();
+        addJspPropertyGroupMappings(ctx, servlets, failures, live);
+        for (ServletUnit s : servlets) {
+            Servlet stub = failures.get(s.instance());
+            named.add(stub != null ? new ServletDispatcher.NamedServlet(s.name(), stub, true)
+                    : new ServletDispatcher.NamedServlet(s.name(), s.instance(), s.asyncSupported()));
+            for (String p : s.patterns()) {
+                live.add(stub != null
+                        ? new ServletDispatcher.Mapping(UrlPatternMatcher.of(p), stub, s.name())
+                        : new ServletDispatcher.Mapping(UrlPatternMatcher.of(p), s.instance(), s.name(),
+                                s.asyncSupported()));
+            }
+        }
+        appendContainerDefault(ctx, live);
+        return new ServletDispatcher(live, named);
+    }
+
+    /**
+     * Pages 4.0 section 3.3: the most-specific JSP property-group pattern takes precedence over
+     * a servlet mapping; an identical pattern also selects the JSP engine. Add those routes first
+     * so the dispatcher's stable sort preserves that tie-breaker.
+     */
+    private static void addJspPropertyGroupMappings(VidocqServletContext ctx, List<ServletUnit> servlets,
+                                                     Map<Servlet, Servlet> failures,
+                                                     List<ServletDispatcher.Mapping> live) {
+        if (!ctx.isJspRegistration(JSP)) return;
+        ServletUnit jsp = servlets.stream().filter(s -> s.name().equals(JSP)).findFirst().orElse(null);
+        var config = ctx.getJspConfigDescriptor();
+        if (jsp == null || config == null) return;
+
+        Servlet stub = failures.get(jsp.instance());
+        for (var group : config.getJspPropertyGroups()) {
+            for (String pattern : group.getUrlPatterns()) {
+                live.add(stub != null
+                        ? new ServletDispatcher.Mapping(UrlPatternMatcher.of(pattern), stub, jsp.name())
+                        : new ServletDispatcher.Mapping(UrlPatternMatcher.of(pattern), jsp.instance(), jsp.name(),
+                                jsp.asyncSupported()));
+            }
+        }
+    }
+
+    /**
+     * Servlet 6.1 section 12.2: when no application servlet maps {@code /}, the container default
+     * servlet serves the static resources under that mapping. It is not an application servlet:
+     * absent from {@code getServletRegistrations} and from the deployment's initialised servlets
+     * (it holds no resource, so it needs no {@code destroy}).
+     */
+    private static void appendContainerDefault(VidocqServletContext ctx, List<ServletDispatcher.Mapping> live) {
+        if (live.stream().anyMatch(m -> m.matcher().kind() == UrlPatternMatcher.Kind.DEFAULT)) return;
+        var servlet = new DefaultServlet();
+        try {
+            servlet.init(new ServletConfigImpl(DefaultServlet.NAME, ctx, Map.of()));
+        } catch (ServletException e) {
+            throw new IllegalStateException("container default servlet failed to initialise", e);
+        }
+        live.add(new ServletDispatcher.Mapping(UrlPatternMatcher.of("/"), servlet, DefaultServlet.NAME, true));
+    }
+
+    /** init() filters in declaration order; a failing filter is logged and left out of the chain. */
+    private static List<FilterMapping> initFilters(VidocqServletContext ctx, List<FilterUnit> filters,
+                                                   List<FilterMapping> mappings, List<Filter> initialized) {
+        var failed = new IdentityHashMap<Filter, Boolean>();
+        var seen = java.util.Collections.newSetFromMap(new IdentityHashMap<Filter, Boolean>());
+        for (FilterUnit f : filters) {
+            if (!seen.add(f.instance())) continue;
+            try {
+                f.instance().init(new FilterConfigImpl(f.name(), ctx, f.initParams()));
+                initialized.add(f.instance());
+            } catch (ServletException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "init failed for filter " + f.name(), e);
+                failed.put(f.instance(), Boolean.TRUE);
+            }
+        }
+        return mappings.stream().filter(m -> !failed.containsKey(m.filter())).toList();
+    }
+}

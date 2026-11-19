@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.foy</groupId>
+        <artifactId>foy-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>foy-api</artifactId>
+    <name>Foy :: API + SPI HTTP</name>
+    <description>Public interfaces and SPI: SessionStore, IdentityStore (no dependency beyond jakarta.servlet-api)</description>
+
+    <properties>
+        <japicmp.skip>false</japicmp.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- The API compatibility report (quality profile): the packages module-info.java exports. -->
+                <plugin>
+                    <groupId>com.github.siom79.japicmp</groupId>
+                    <artifactId>japicmp-maven-plugin</artifactId>
+                    <configuration>
+                        <parameter>
+                            <includes>
+                                <include>io.vidocq.foy.spi.session</include>
+                                <include>io.vidocq.foy.spi.security</include>
+                                <include>io.vidocq.foy.spi.gen</include>
+                                <include>io.vidocq.foy.spi.cdi</include>
+                                <include>io.vidocq.foy.spi.jsp</include>
+                            </includes>
+                        </parameter>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

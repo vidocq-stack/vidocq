@@ -1,0 +1,745 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.boot;
+
+import io.vidocq.chappe.api.Server;
+import io.vidocq.foy.internal.boot.WebAppModel.*;
+import io.vidocq.foy.spi.jsp.JspEngine;
+import jakarta.servlet.*;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class WebAppDeployerEndToEndTest {
+
+    static final List<String> EVENTS = new CopyOnWriteArrayList<>();
+
+    private static List<String> events() {
+        return List.copyOf(EVENTS);
+    }
+
+    private Server server;
+    private int port;
+    private Deployment deployment;
+
+    @AfterEach
+    void tearDown() {
+        // The deployment first, while the server still serves, as Foy documents it.
+        if (deployment != null) deployment.close();
+        if (server != null) server.stop();
+        EVENTS.clear();
+    }
+
+    private void deploy(WebAppModel model) {
+        deploy(model, DeployOptions.defaults(getClass().getClassLoader()));
+    }
+
+    private void deploy(WebAppModel model, DeployOptions options) {
+        deployment = WebAppDeployer.deploy(model, options);
+        var r = io.vidocq.foy.internal.TestServerLauncherAccess.start(deployment.handler());
+        server = r.server();
+        port = r.port();
+    }
+
+    private void deploy(WebAppModel model, JspEngine engine) {
+        deployment = WebAppDeployer.deploy(model, DeployOptions.defaults(getClass().getClassLoader()),
+                ModuleLayer.boot(), engine);
+        var r = io.vidocq.foy.internal.TestServerLauncherAccess.start(deployment.handler());
+        server = r.server();
+        port = r.port();
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    public static class Recording extends HttpServlet {
+        final String id;
+        public Recording() { this("default"); }
+        Recording(String id) { this.id = id; }
+        @Override public void init() { EVENTS.add("init:" + id); }
+        @Override public void destroy() { EVENTS.add("destroy:" + id); }
+        @Override protected void doGet(HttpServletRequest q, HttpServletResponse r) throws IOException {
+            r.getWriter().write(id + ":" + getServletConfig().getInitParameter("k"));
+        }
+    }
+
+    static ServletDecl decl(String id, int los, String... patterns) {
+        return new ServletDecl(id, Recording.class, () -> new Recording(id), List.of(patterns),
+                Map.of("k", "v-" + id), los, true);
+    }
+
+    @Test
+    void oneInstancePerDeclaration() throws Exception {
+        deploy(WebAppModel.builder("/").servlet(decl("a", Integer.MIN_VALUE, "/x", "/y")).build());
+        assertEquals("a:v-a", get("/x").body());
+        assertEquals("a:v-a", get("/y").body());
+        assertEquals(List.of("init:a"), events());
+    }
+
+    @Test
+    void jspPropertyGroupMappingsTakePrecedenceOverServletMappings() throws Exception {
+        var jspConfig = io.vidocq.foy.internal.webxml.WebXmlParser.parse(new ByteArrayInputStream("""
+                <web-app>
+                  <jsp-config>
+                    <jsp-property-group><url-pattern>/specific/svr/page/*</url-pattern></jsp-property-group>
+                    <jsp-property-group><url-pattern>/identical/willSee.jsp</url-pattern></jsp-property-group>
+                  </jsp-config>
+                </web-app>
+                """.getBytes(StandardCharsets.UTF_8))).jspConfigDescriptor();
+        JspEngine engine = (context, layer) -> new JspEngine.Application() {
+            @Override public Servlet servlet() { return new Recording("jsp"); }
+            @Override public Servlet servletFor(String jspFile) { return new Recording("jsp-file"); }
+            @Override public void close() { /* nothing to release */ }
+        };
+
+        deploy(WebAppModel.builder("/")
+                .servlet(decl("mapped", Integer.MIN_VALUE, "/specific/svr/*", "/identical/willSee.jsp"))
+                .jspConfigDescriptor(jspConfig)
+                .build(), engine);
+
+        assertEquals("jsp:null", get("/specific/svr/page/willSee.jsp").body());
+        assertEquals("jsp:null", get("/identical/willSee.jsp").body());
+    }
+
+    public static class Pass implements Filter {
+        @Override public void doFilter(ServletRequest q, ServletResponse r, FilterChain c)
+                throws IOException, ServletException {
+            c.doFilter(q, r);
+        }
+    }
+
+    @Test
+    void declaredRegistrationsExposeTheirMappings() {
+        deploy(WebAppModel.builder("/")
+                .servlet(decl("a", Integer.MIN_VALUE, "/x", "/y"))
+                .filter(new FilterDecl("f", Pass.class, Pass::new, Map.of(), false))
+                .filterMapping(new FilterMappingDecl("f", "/x", null, Set.of(DispatcherType.REQUEST)))
+                .filterMapping(new FilterMappingDecl("f", null, "a", Set.of(DispatcherType.FORWARD)))
+                .build());
+        var ctx = deployment.servletContext();
+        assertEquals(List.of("/x"), List.copyOf(ctx.getFilterRegistration("f").getUrlPatternMappings()));
+        assertEquals(List.of("a"), List.copyOf(ctx.getFilterRegistration("f").getServletNameMappings()));
+        assertEquals(Set.of("/x", "/y"), Set.copyOf(ctx.getServletRegistration("a").getMappings()));
+    }
+
+    public static class Counting implements Filter {
+        @Override public void doFilter(ServletRequest q, ServletResponse r, FilterChain c)
+                throws IOException, ServletException {
+            EVENTS.add("filter");
+            c.doFilter(q, r);
+        }
+    }
+
+    /** BUG-20261008-02: a filter mapped by URL pattern and by servlet name runs once. */
+    @Test
+    void filterMappedByUrlAndServletNameRunsOnce() throws Exception {
+        deploy(WebAppModel.builder("/")
+                .servlet(decl("a", Integer.MIN_VALUE, "/x"))
+                .filter(new FilterDecl("f", Counting.class, Counting::new, Map.of(), false))
+                .filterMapping(new FilterMappingDecl("f", "/x", null, Set.of(DispatcherType.REQUEST)))
+                .filterMapping(new FilterMappingDecl("f", null, "a", Set.of(DispatcherType.REQUEST)))
+                .build());
+        EVENTS.clear();
+        assertEquals("a:v-a", get("/x").body());
+        assertEquals(List.of("filter"), events());
+    }
+
+    /** Section 6.2.4: a servlet-name mapping applies only when that servlet serves the request. */
+    @Test
+    void servletNameFilterSkippedWhenAnotherServletWinsThePattern() throws Exception {
+        deploy(WebAppModel.builder("/")
+                .servlet(decl("a", Integer.MIN_VALUE, "/x/*"))
+                .servlet(decl("b", Integer.MIN_VALUE, "/x/y"))
+                .filter(new FilterDecl("f", Counting.class, Counting::new, Map.of(), false))
+                .filterMapping(new FilterMappingDecl("f", null, "a", Set.of(DispatcherType.REQUEST)))
+                .build());
+        EVENTS.clear();
+        assertEquals("b:v-b", get("/x/y").body());
+        assertEquals(List.of(), events());
+        assertEquals("a:v-a", get("/x/z").body());
+        assertEquals(List.of("filter"), events());
+    }
+
+    @Test
+    void starServletNameFilterAppliesToEveryServlet() throws Exception {
+        deploy(WebAppModel.builder("/")
+                .servlet(decl("a", Integer.MIN_VALUE, "/a"))
+                .servlet(decl("b", Integer.MIN_VALUE, "/b"))
+                .filter(new FilterDecl("f", Counting.class, Counting::new, Map.of(), false))
+                .filterMapping(new FilterMappingDecl("f", null, "*", Set.of(DispatcherType.REQUEST)))
+                .build());
+        EVENTS.clear();
+        get("/a");
+        get("/b");
+        assertEquals(List.of("filter", "filter"), events());
+    }
+
+    /** Dispatches to the servlet named by the {@code target} query parameter, by named include or forward. */
+    public static class NamedCaller extends HttpServlet {
+        @Override protected void doGet(HttpServletRequest q, HttpServletResponse r) throws IOException, ServletException {
+            var rd = q.getServletContext().getNamedDispatcher(q.getParameter("target"));
+            if (rd == null) { r.getWriter().write("no-dispatcher"); return; }
+            if ("include".equals(q.getParameter("mode"))) {
+                r.getWriter().write("caller+");
+                rd.include(q, r);
+            } else {
+                rd.forward(q, r);
+            }
+        }
+    }
+
+    /** Section 9.1.2: a servlet without URL mapping, declared or dynamic, is reachable by name. */
+    @Test
+    void namedDispatchReachesServletsWithoutUrlMapping() throws Exception {
+        ServletContainerInitializer sci = (classes, ctx) -> ctx.addServlet("dynHidden", new Recording("dynHidden"));
+        deploy(WebAppModel.builder("/")
+                .servlet(new ServletDecl("caller", NamedCaller.class, NamedCaller::new, List.of("/call"), Map.of(),
+                        Integer.MIN_VALUE, true))
+                .servlet(decl("hidden", Integer.MIN_VALUE))
+                .initializer(sci)
+                .build());
+        assertEquals("hidden:v-hidden", get("/call?target=hidden").body());
+        assertEquals("caller+hidden:v-hidden", get("/call?target=hidden&mode=include").body());
+        assertEquals("dynHidden:null", get("/call?target=dynHidden").body());
+        assertEquals("caller+dynHidden:null", get("/call?target=dynHidden&mode=include").body());
+        assertEquals("no-dispatcher", get("/call?target=ghost").body());
+    }
+
+    @Test
+    void namedDispatchToAnUnmappedServletRunsItsServletNameFilters() throws Exception {
+        deploy(WebAppModel.builder("/")
+                .servlet(new ServletDecl("caller", NamedCaller.class, NamedCaller::new, List.of("/call"), Map.of(),
+                        Integer.MIN_VALUE, true))
+                .servlet(decl("hidden", Integer.MIN_VALUE))
+                .filter(new FilterDecl("f", Counting.class, Counting::new, Map.of(), false))
+                .filterMapping(new FilterMappingDecl("f", null, "hidden", Set.of(DispatcherType.FORWARD)))
+                .build());
+        EVENTS.clear();
+        assertEquals("hidden:v-hidden", get("/call?target=hidden").body());
+        assertEquals(List.of("filter"), events());
+    }
+
+    @Test
+    void loadOnStartupOrdersInitThenDeclarationOrder() {
+        deploy(WebAppModel.builder("/")
+                .servlet(decl("lazy", Integer.MIN_VALUE, "/l"))
+                .servlet(decl("two", 2, "/2"))
+                .servlet(decl("zero", 0, "/0"))
+                .servlet(decl("alsoTwo", 2, "/22"))
+                .build());
+        assertEquals(List.of("init:zero", "init:two", "init:alsoTwo", "init:lazy"), events());
+    }
+
+    public static class FailingInit extends HttpServlet {
+        final ServletException failure;
+        FailingInit(ServletException failure) { this.failure = failure; }
+        @Override public void init() throws ServletException { throw failure; }
+    }
+
+    static ServletDecl failing(String name, String pattern, ServletException e) {
+        return new ServletDecl(name, FailingInit.class, () -> new FailingInit(e), List.of(pattern),
+                Map.of(), Integer.MIN_VALUE, true);
+    }
+
+    @Test
+    void initFailuresAnswer500Or404Or503() throws Exception {
+        deploy(WebAppModel.builder("/")
+                .servlet(failing("plain", "/plain", new ServletException("x")))
+                .servlet(failing("perm", "/perm", new UnavailableException("gone")))
+                .servlet(failing("temp", "/temp", new UnavailableException("later", 30)))
+                .build());
+        assertEquals(500, get("/plain").statusCode());
+        assertEquals(404, get("/perm").statusCode());
+        assertEquals(503, get("/temp").statusCode());
+    }
+
+    @Test
+    void sciDynamicServletIsServedAndListenerSeesContextInitialized() throws Exception {
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            EVENTS.add("sci:" + classes);
+            ctx.addServlet("dyn", new Recording("dyn")).addMapping("/dyn");
+            ctx.addListener(new ServletContextListener() {
+                @Override public void contextInitialized(ServletContextEvent e) { EVENTS.add("ctxInit"); }
+                @Override public void contextDestroyed(ServletContextEvent e) { EVENTS.add("ctxDestroyed"); }
+            });
+        };
+        deploy(WebAppModel.builder("/").initializer(sci).build());
+        assertEquals("dyn:null", get("/dyn").body());
+        assertEquals(List.of("sci:null", "ctxInit", "init:dyn"), events());
+    }
+
+    @Test
+    void addServletAfterDeployThrows() {
+        deploy(WebAppModel.builder("/").build());
+        var context = deployment.servletContext();
+        var late = new Recording("late");
+        assertThrows(IllegalStateException.class, () -> context.addServlet("late", late));
+    }
+
+    public static class ThrowingDestroy extends Recording {
+        public ThrowingDestroy() { super("throwing"); }
+        @Override public void destroy() { EVENTS.add("destroy:throwing"); throw new IllegalStateException(); }
+    }
+
+    @Test
+    void closeDestroysInReverseOrder() {
+        ServletContainerInitializer sci = (c, ctx) -> ctx.addListener(new ServletContextListener() {
+            @Override public void contextDestroyed(ServletContextEvent e) { EVENTS.add("ctxDestroyed"); }
+        });
+        deploy(WebAppModel.builder("/")
+                .servlet(decl("first", 1, "/1"))
+                .servlet(new ServletDecl("throwing", ThrowingDestroy.class, ThrowingDestroy::new,
+                        List.of("/t"), Map.of(), 2, true))
+                .initializer(sci)
+                .build());
+        EVENTS.clear();
+        deployment.close();
+        deployment.close();
+        assertEquals(List.of("destroy:throwing", "destroy:first", "ctxDestroyed"), events());
+    }
+
+    @Test
+    void visibilityRestrictsDynamicRegistrationsOnly() throws Exception {
+        ServletContainerInitializer sci = (c, ctx) -> ctx.addServlet("byClass", Recording.class).addMapping("/dyn");
+        var cl = getClass().getClassLoader();
+        deploy(WebAppModel.builder("/").servlet(decl("static", Integer.MIN_VALUE, "/s")).initializer(sci).build(),
+                DeployOptions.defaults(cl).withComponentFactory(ComponentFactory.reflective(cl, Set.of())));
+        assertEquals("static:v-static", get("/s").body());
+        assertEquals(404, get("/dyn").statusCode());
+    }
+
+    @Test
+    void tempDirAttributeIsSet() {
+        deploy(WebAppModel.builder("/").build());
+        assertInstanceOf(java.io.File.class,
+                deployment.servletContext().getAttribute(ServletContext.TEMPDIR));
+    }
+
+    public static class SessionProbe extends HttpServlet {
+        @Override protected void doGet(HttpServletRequest q, HttpServletResponse r) throws IOException {
+            r.getWriter().write(String.valueOf(q.getSession(true).getMaxInactiveInterval()));
+        }
+    }
+
+    static ServletDecl sessionProbe() {
+        return new ServletDecl("probe", SessionProbe.class, SessionProbe::new, List.of("/session"),
+                Map.of(), Integer.MIN_VALUE, true);
+    }
+
+    @Test
+    void configuredSessionTimeoutReachesCreatedSessions() throws Exception {
+        deploy(WebAppModel.builder("/").servlet(sessionProbe()).sessionTimeoutMinutes(5).build());
+        assertEquals("300", get("/session").body());
+    }
+
+    @Test
+    void sessionTimeoutDefaultsTo1800Seconds() throws Exception {
+        deploy(WebAppModel.builder("/").servlet(sessionProbe()).build());
+        assertEquals("1800", get("/session").body());
+    }
+
+    public static class RuntimeFailingInit extends HttpServlet {
+        @Override public void init() { throw new IllegalStateException("boom"); }
+    }
+
+    public static class RuntimeFailingFilter implements Filter {
+        @Override public void init(FilterConfig c) { throw new IllegalStateException("boom"); }
+        @Override public void doFilter(ServletRequest q, ServletResponse r, FilterChain chain) throws IOException {
+            r.getWriter().write("filtered");
+        }
+    }
+
+    @Test
+    void runtimeExceptionFromInitIsAnInitFailure() throws Exception {
+        deploy(WebAppModel.builder("/")
+                .servlet(new ServletDecl("bad", RuntimeFailingInit.class, RuntimeFailingInit::new,
+                        List.of("/bad"), Map.of(), 1, true))
+                .servlet(decl("good", 2, "/good"))
+                .filter(new FilterDecl("badFilter", RuntimeFailingFilter.class, RuntimeFailingFilter::new, Map.of(), true))
+                .filterMapping(new FilterMappingDecl("badFilter", "/good", null, Set.of(DispatcherType.REQUEST)))
+                .build());
+        assertEquals(500, get("/bad").statusCode());
+        var good = get("/good");
+        assertEquals(200, good.statusCode());
+        assertEquals("good:v-good", good.body());
+        assertEquals(List.of("good"), deployment.initializedServlets().stream()
+                .map(s -> ((Recording) s).id).toList());
+        assertTrue(deployment.initializedFilters().isEmpty());
+    }
+
+    static ServletContextListener recordingListener(String id) {
+        return new ServletContextListener() {
+            @Override public void contextInitialized(ServletContextEvent e) { EVENTS.add("ctxInit:" + id); }
+            @Override public void contextDestroyed(ServletContextEvent e) { EVENTS.add("ctxDestroyed:" + id); }
+        };
+    }
+
+    @Test
+    void failingContextInitializedCleansUpBeforePropagating() {
+        var tempDir = new java.util.concurrent.atomic.AtomicReference<java.io.File>();
+        ServletContainerInitializer sci = (c, ctx) -> {
+            tempDir.set((java.io.File) ctx.getAttribute(ServletContext.TEMPDIR));
+            ctx.addListener(recordingListener("first"));
+            ctx.addListener(new ServletContextListener() {
+                @Override public void contextInitialized(ServletContextEvent e) {
+                    throw new IllegalStateException("listener boom");
+                }
+            });
+        };
+        var model = WebAppModel.builder("/failing-listener")
+                .servlet(decl("s", 1, "/s")).initializer(sci).build();
+        var options = DeployOptions.defaults(getClass().getClassLoader());
+        var ex = assertThrows(IllegalStateException.class, () -> WebAppDeployer.deploy(model, options));
+        assertEquals("listener boom", ex.getMessage());
+        // contextDestroyed fired because contextInitialized was; no servlet was ever initialised.
+        assertEquals(List.of("ctxInit:first", "ctxDestroyed:first"), events());
+        assertNotRegistered("/failing-listener");
+        assertNotNull(tempDir.get());
+        assertFalse(tempDir.get().exists(), "temp dir must be removed");
+    }
+
+    @Test
+    void failingComponentSupplierLeaksNothing(@TempDir Path tempRoot)
+            throws Exception {
+        var model = WebAppModel.builder("/failing-supplier")
+                .servlet(decl("ok", 1, "/ok"))
+                .listener(new ListenerDecl(ServletContextListener.class, () -> {
+                    throw new IllegalStateException("cannot instantiate");
+                }))
+                .build();
+        var options = DeployOptions.defaults(getClass().getClassLoader()).withTempDirRoot(tempRoot);
+        assertThrows(IllegalStateException.class, () -> WebAppDeployer.deploy(model, options));
+        assertEquals(List.of(), events(), "nothing initialised, nothing destroyed");
+        assertNotRegistered("/failing-supplier");
+        try (var entries = Files.list(tempRoot)) {
+            assertEquals(List.of(), entries.toList(), "no temp dir leaked");
+        }
+    }
+
+    @Test
+    void tempDirIsCreatedUnderTheConfiguredRoot(@TempDir Path tempRoot) {
+        deploy(WebAppModel.builder("/").build(),
+                DeployOptions.defaults(getClass().getClassLoader()).withTempDirRoot(tempRoot));
+        var dir = (java.io.File) deployment.servletContext().getAttribute(ServletContext.TEMPDIR);
+        assertEquals(tempRoot, dir.toPath().getParent());
+    }
+
+    /** Writes the request's context path. */
+    public static class ContextPathServlet extends HttpServlet {
+        @Override protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+            resp.getWriter().write("[" + req.getContextPath() + "|" + req.getServletContext().getContextPath() + "]");
+        }
+    }
+
+    @Test
+    void rootContextPathIsEmptyForTheContextAndTheRequest() throws Exception {
+        deploy(WebAppModel.builder("/").servlet(new ServletDecl("cp", ContextPathServlet.class,
+                ContextPathServlet::new, List.of("/cp"), Map.of(), -1, false)).build());
+        assertEquals("", deployment.servletContext().getContextPath());
+        assertEquals("[|]", get("/cp").body());
+    }
+
+    @Test
+    void virtualServerNameDefaultsToVidocqAndIsConfigurable() {
+        deploy(WebAppModel.builder("/").build());
+        assertEquals("vidocq", deployment.servletContext().getVirtualServerName());
+        deployment.close();
+        server.stop();
+        deploy(WebAppModel.builder("/").build(),
+                DeployOptions.defaults(getClass().getClassLoader()).withVirtualServerName("example.org"));
+        assertEquals("example.org", deployment.servletContext().getVirtualServerName());
+    }
+
+    @Test
+    void closeRemovesTempDir() throws Exception {
+        deploy(WebAppModel.builder("/").build());
+        var dir = (java.io.File) deployment.servletContext().getAttribute(ServletContext.TEMPDIR);
+        var sub = Files.createDirectories(dir.toPath().resolve("sub"));
+        Files.writeString(sub.resolve("file.txt"), "x");
+        deployment.close();
+        assertFalse(dir.exists(), "temp dir must be removed on close");
+    }
+
+    public static class CountingListener implements ServletRequestListener {}
+
+    /** Delegates to the registry-backed factory and records every class it instantiates. */
+    static final class RecordingFactory implements ComponentFactory {
+        final ComponentFactory delegate = io.vidocq.foy.internal.gen.RegistryComponentFactory.forClassLoader(
+                WebAppDeployerEndToEndTest.class.getClassLoader());
+        final List<Class<?>> created = new CopyOnWriteArrayList<>();
+        @Override public Class<?> load(String className) throws ClassNotFoundException, ServletException {
+            return delegate.load(className);
+        }
+        @Override public <T> T newInstance(Class<T> type) throws ServletException {
+            created.add(type);
+            return delegate.newInstance(type);
+        }
+    }
+
+    private static DeployOptions options(ComponentFactory factory) {
+        return new DeployOptions(null, null, null, Set.of(), Set.of(), Set.of(), factory, HandlesTypesResolver.NONE);
+    }
+
+    @Test
+    void dynamicComponentWhoseConstructionThrowsClassCastExceptionIsNotReportedAsAWrongType() throws Exception {
+        // A factory that does not wrap constructor failures, as a CDI-backed one may not.
+        var delegate = new RecordingFactory();
+        ComponentFactory throwing = new ComponentFactory() {
+            @Override public Class<?> load(String className) throws ClassNotFoundException, ServletException {
+                return delegate.load(className);
+            }
+            @Override public <T> T newInstance(Class<T> type) throws ServletException {
+                if (type == Recording.class) throw new ClassCastException("thrown by the constructor");
+                return delegate.newInstance(type);
+            }
+        };
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            ctx.addServlet("ctor", Recording.class).addMapping("/ctor");
+            ctx.addServlet("wrong", "java.lang.Object").addMapping("/wrong");
+        };
+        try (var log = io.vidocq.foy.internal.LogCapture.of(WebAppDeployer.class.getName())) {
+            deploy(WebAppModel.builder("/").initializer(sci).build(), options(throwing));
+            var warnings = log.warnings();
+            assertTrue(warnings.stream().anyMatch(w -> w.contains("cannot instantiate dynamic servlet ctor")),
+                    warnings::toString);
+            assertTrue(warnings.stream().noneMatch(w -> w.contains("'ctor'") || w.contains("class null")),
+                    warnings::toString);
+            assertTrue(warnings.stream().anyMatch(w -> w.contains("'wrong'")
+                    && w.contains("java.lang.Object is not a jakarta.servlet.Servlet")), warnings::toString);
+        }
+        assertEquals(404, get("/ctor").statusCode());
+    }
+
+    @Test
+    void contextCreateAndAddListenerGoThroughTheDeploymentFactory() {
+        var factory = new RecordingFactory();
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            ctx.addServlet("dyn", ctx.createServlet(Recording.class)).addMapping("/dyn");
+            ctx.addListener(CountingListener.class);
+            ctx.addListener(CountingListener.class.getName());
+        };
+        deploy(WebAppModel.builder("/").initializer(sci).build(), options(factory));
+        assertEquals(List.of(Recording.class, CountingListener.class, CountingListener.class), factory.created);
+    }
+
+    @Test
+    void dynamicSetServletSecurityIsEnforced() throws Exception {
+        ServletContainerInitializer sci = (classes, ctx) -> ctx.addServlet("sec", Recording.class)
+                .setServletSecurity(new ServletSecurityElement(
+                        new HttpConstraintElement(jakarta.servlet.annotation.ServletSecurity.EmptyRoleSemantic.DENY)));
+        ServletContainerInitializer mapping = (classes, ctx) ->
+                ctx.getServletRegistration("sec").addMapping("/sec");
+        deploy(WebAppModel.builder("/").initializer(sci).initializer(mapping).build(),
+                options(new RecordingFactory()));
+        assertEquals(403, get("/sec").statusCode());
+    }
+
+    @Test
+    void declaredServletSecurityIsEnforced() throws Exception {
+        var deny = new ServletSecurityElement(
+                new HttpConstraintElement(jakarta.servlet.annotation.ServletSecurity.EmptyRoleSemantic.DENY));
+        deploy(WebAppModel.builder("/")
+                .servlet(new ServletDecl("d", Recording.class, () -> new Recording("d"), List.of("/denied"),
+                        Map.of(), Integer.MIN_VALUE, true, deny))
+                .servlet(decl("open", Integer.MIN_VALUE, "/open"))
+                .build());
+        assertEquals(403, get("/denied").statusCode());
+        assertEquals(200, get("/open").statusCode());
+    }
+
+    /** Reports isAsyncSupported() and whether startAsync() is refused. */
+    public static class AsyncProbe extends HttpServlet {
+        @Override protected void doGet(HttpServletRequest q, HttpServletResponse r) throws IOException {
+            String start;
+            try {
+                q.startAsync().complete();
+                start = "started";
+            } catch (IllegalStateException _) {
+                start = "ISE";
+            }
+            r.getWriter().write(q.isAsyncSupported() + ":" + start);
+        }
+    }
+
+    public static class PassThrough implements Filter {
+        @Override public void doFilter(ServletRequest q, ServletResponse r, FilterChain chain)
+                throws IOException, ServletException {
+            chain.doFilter(q, r);
+        }
+    }
+
+    @Test
+    void dynamicServletAsyncSupportedIsHonoured() throws Exception {
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            var off = ctx.addServlet("off", new AsyncProbe());
+            off.setAsyncSupported(false);
+            off.addMapping("/off");
+            var on = ctx.addServlet("on", new AsyncProbe());
+            on.setAsyncSupported(true);
+            on.addMapping("/on");
+            ctx.addServlet("default", new AsyncProbe()).addMapping("/default");
+        };
+        deploy(WebAppModel.builder("/").initializer(sci).build());
+        assertEquals("false:ISE", get("/off").body());
+        assertEquals("true:started", get("/on").body());
+        assertEquals("false:ISE", get("/default").body(), "a dynamic registration is not async by default");
+    }
+
+    @Test
+    void aNonAsyncFilterMakesTheChainNonAsync() throws Exception {
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            for (String p : List.of("/dyn-plain", "/dyn-async")) {
+                var s = ctx.addServlet(p, new AsyncProbe());
+                s.setAsyncSupported(true);
+                s.addMapping(p);
+            }
+            ctx.addFilter("dynPlain", new PassThrough())
+                    .addMappingForUrlPatterns(null, false, "/dyn-plain");
+            var asyncFilter = ctx.addFilter("dynAsync", new PassThrough());
+            asyncFilter.setAsyncSupported(true);
+            asyncFilter.addMappingForUrlPatterns(null, false, "/dyn-async");
+        };
+        deploy(WebAppModel.builder("/")
+                .servlet(new ServletDecl("sPlain", AsyncProbe.class, AsyncProbe::new, List.of("/static-plain"),
+                        Map.of(), Integer.MIN_VALUE, true))
+                .servlet(new ServletDecl("sAsync", AsyncProbe.class, AsyncProbe::new, List.of("/static-async"),
+                        Map.of(), Integer.MIN_VALUE, true))
+                .filter(new FilterDecl("plain", PassThrough.class, PassThrough::new, Map.of(), false))
+                .filter(new FilterDecl("async", PassThrough.class, PassThrough::new, Map.of(), true))
+                .filterMapping(new FilterMappingDecl("plain", "/static-plain", null, Set.of(DispatcherType.REQUEST)))
+                .filterMapping(new FilterMappingDecl("async", "/static-async", null, Set.of(DispatcherType.REQUEST)))
+                .initializer(sci)
+                .build());
+        assertEquals("false:ISE", get("/static-plain").body(), "§2.3.3.3: every filter must support async");
+        assertEquals("true:started", get("/static-async").body());
+        assertEquals("false:ISE", get("/dyn-plain").body());
+        assertEquals("true:started", get("/dyn-async").body());
+    }
+
+    public static class CountingServlet extends HttpServlet {
+        final java.util.concurrent.atomic.AtomicInteger inits = new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.atomic.AtomicInteger destroys = new java.util.concurrent.atomic.AtomicInteger();
+        @Override public void init() { inits.incrementAndGet(); }
+        @Override public void destroy() { destroys.incrementAndGet(); }
+        @Override protected void doGet(HttpServletRequest q, HttpServletResponse r) throws IOException {
+            r.getWriter().write("counted");
+        }
+    }
+
+    @Test
+    void oneInstanceUnderTwoNamesIsInitialisedAndDestroyedOnce() throws Exception {
+        var shared = new CountingServlet();
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            ctx.addServlet("a", shared).addMapping("/a");
+            ctx.addServlet("b", shared).addMapping("/b");
+        };
+        deploy(WebAppModel.builder("/").initializer(sci).build());
+        assertEquals("counted", get("/a").body());
+        assertEquals("counted", get("/b").body());
+        assertEquals(1, shared.inits.get());
+        deployment.close();
+        assertEquals(1, shared.destroys.get());
+    }
+
+    /** Spec-forbidden: 'value' and 'urlPatterns' together. */
+    @WebServlet(value = "/x", urlPatterns = "/y")
+    public static class BothPatterns extends HttpServlet {}
+
+    /** Spec-forbidden: {@code @WebServlet} on a class that is not a servlet. */
+    @WebServlet("/l")
+    public static class ServletAnnotatedListener implements ServletContextListener {}
+
+    @Test
+    void dynamicAnnotationMisuseFollowsTheServletContextContracts() throws Exception {
+        var createServlet = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var addListener = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            try {
+                ctx.createServlet(BothPatterns.class);
+            } catch (Throwable t) {
+                createServlet.set(t);
+            }
+            try {
+                ctx.addListener(ServletAnnotatedListener.class);
+            } catch (Throwable t) {
+                addListener.set(t);
+            }
+            // addServlet declares no ServletException: the misuse is reported when the
+            // registration is materialised, and only this component is skipped.
+            ctx.addServlet("byInstance", new BothPatterns()).addMapping("/by-instance");
+            ctx.addServlet("byClass", BothPatterns.class).addMapping("/by-class");
+            ctx.addServlet("ok", new Recording("ok")).addMapping("/ok");
+        };
+        try (var log = io.vidocq.foy.internal.LogCapture.of(WebAppDeployer.class.getName())) {
+            deploy(WebAppModel.builder("/").initializer(sci).build());
+            assertEquals(2, log.warnings().size(), log.warnings().toString());
+        }
+        assertInstanceOf(ServletException.class, createServlet.get(), "createServlet declares ServletException");
+        assertInstanceOf(IllegalArgumentException.class, addListener.get(), "addListener declares no checked exception");
+        assertInstanceOf(ServletException.class, addListener.get().getCause());
+        assertEquals(404, get("/by-instance").statusCode());
+        assertEquals(404, get("/by-class").statusCode());
+        assertEquals("ok:null", get("/ok").body());
+    }
+
+    @Test
+    void dynamicRegistrationOfWrongTypeIsSkippedWithOneWarning() throws Exception {
+        ServletContainerInitializer sci = (classes, ctx) -> {
+            ctx.addServlet("bad", "java.lang.Object").addMapping("/bad");
+            ctx.addServlet("good", Recording.class.getName()).addMapping("/good");
+        };
+        try (var log = io.vidocq.foy.internal.LogCapture.of(WebAppDeployer.class.getName())) {
+            deploy(WebAppModel.builder("/").initializer(sci).build());
+            assertEquals(1, log.warnings().size(), log.warnings().toString());
+            var w = log.warnings().get(0);
+            assertTrue(w.contains("bad") && w.contains("java.lang.Object"), w);
+        }
+        assertEquals(200, get("/good").statusCode());
+        assertEquals(404, get("/bad").statusCode());
+    }
+
+    /** No application stays registered under {@code contextPath}; another test may have left the root one. */
+    private static void assertNotRegistered(String contextPath) {
+        var found = io.vidocq.foy.internal.container.CrossContextRegistry.lookup(contextPath);
+        assertTrue(found == null || !contextPath.equals(found.getContextPath()),
+                () -> contextPath + " stayed in the cross-context registry");
+    }
+}

@@ -1,0 +1,1420 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.bridge;
+
+import io.vidocq.chappe.api.Body;
+import io.vidocq.chappe.api.ConnectionUpgrade;
+import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Headers;
+import io.vidocq.chappe.api.HttpMethod;
+import io.vidocq.chappe.api.HttpVersion;
+import io.vidocq.chappe.api.Request;
+import io.vidocq.chappe.api.RequestContext;
+import io.vidocq.chappe.api.Response;
+import io.vidocq.chappe.api.StatusCode;
+import io.vidocq.chappe.api.WebSocketUpgrade;
+import io.vidocq.foy.internal.container.ContextLoaderScope;
+import io.vidocq.foy.spi.security.CurrentRequest;
+import io.vidocq.foy.spi.websocket.WebSocketUpgradeHandler;
+import io.vidocq.foy.internal.container.DefaultServlet;
+import io.vidocq.foy.internal.container.ResourcePaths;
+import io.vidocq.foy.internal.dispatcher.DispatchResolver;
+import io.vidocq.foy.internal.dispatcher.DispatchTarget;
+import io.vidocq.foy.internal.dispatcher.FilterRegistry;
+import io.vidocq.foy.internal.dispatcher.RequestDispatcherImpl;
+import io.vidocq.foy.internal.dispatcher.ServletDispatcher;
+import io.vidocq.foy.internal.async.AsyncContextImpl;
+import io.vidocq.foy.internal.async.AsyncContextImpl.CycleEnd;
+import io.vidocq.foy.internal.dispatcher.VidocqFilterChain;
+import io.vidocq.foy.internal.error.ErrorPageRegistry;
+import io.vidocq.foy.internal.http.CookieCodec;
+import io.vidocq.foy.internal.http.MultipartLimitException;
+import io.vidocq.foy.internal.http.RequestBodyTooLargeException;
+import io.vidocq.foy.internal.http.RequestPaths;
+import io.vidocq.foy.internal.listener.ListenerRegistry;
+import io.vidocq.foy.internal.session.HttpSessionImpl;
+import io.vidocq.foy.internal.session.SessionManager;
+import io.vidocq.foy.internal.session.VidocqSessionCookieConfig;
+import io.vidocq.foy.internal.container.VidocqServletContext;
+import jakarta.servlet.AsyncContext;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.Filter;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletRequestWrapper;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.SessionCookieConfig;
+import jakarta.servlet.SessionTrackingMode;
+import jakarta.servlet.UnavailableException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpUpgradeHandler;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+
+/**
+ * {@link Handler} Chappe which converts a Chappe request into a servlet cycle:
+ * <ol>
+ *   <li>Resolves servlet via {@link ServletDispatcher}</li>
+ *   <li>Constructs the applicable filter chain via {@link FilterRegistry}</li>
+ *   <li>Constructed {@link HttpServletRequestImpl} + {@link HttpServletResponseImpl}</li>
+ *   <li>Delegate to {@link #invoke(DispatchTarget, ServletRequest, ServletResponse, DispatcherType) dispatch interne}
+ *       reused by {@link RequestDispatcherImpl} for forward/include</li>
+ *   <li>Emits {@code Set-Cookie JSESSIONID} if a session has been created</li>
+ *   <li>Materializes the response Immutable Chappe</li>
+ * </ol>
+ */
+public final class ChappeServletBridge implements Handler, RequestDispatcherImpl.Invoker {
+
+    private final ServletDispatcher dispatcher;
+    private static final System.Logger LOG = System.getLogger(ChappeServletBridge.class.getName());
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String TEXT_PLAIN = "text/plain";
+    /** The {@code Retry-After} of a request refused during an undeploy. */
+    private static final String RETRY_AFTER_UNDEPLOY = Long.toString(VidocqServletContext.UNDEPLOY_RETRY_AFTER_SECONDS);
+    /** Request attribute set once the failure of a request was answered (error page or direct status). */
+    private static final String ERROR_HANDLED = "jakarta.servlet.error.handled";
+    private static final String COMMITTED_FAILURE =
+            "unhandled exception after the response was committed; connection aborted";
+    private final FilterRegistry filterRegistry;
+    private final VidocqServletContext servletContext;
+    private final SessionManager sessionManager;
+    private final String contextPath;
+
+    public ChappeServletBridge(ServletDispatcher dispatcher,
+                               FilterRegistry filterRegistry,
+                               VidocqServletContext servletContext,
+                               SessionManager sessionManager,
+                               String contextPath) {
+        this.dispatcher = dispatcher;
+        this.filterRegistry = filterRegistry;
+        this.servletContext = servletContext;
+        this.sessionManager = sessionManager;
+        // The root context path is "" (section 3.5); "/" is accepted as its alias.
+        this.contextPath = contextPath == null || "/".equals(contextPath) ? "" : contextPath;
+        servletContext.setDispatchInfrastructure(new DispatchResolver(dispatcher), this);
+    }
+
+    /** Construction without sessions. */
+    public ChappeServletBridge(ServletDispatcher dispatcher,
+                               FilterRegistry filterRegistry,
+                               VidocqServletContext servletContext,
+                               String contextPath) {
+        this(dispatcher, filterRegistry, servletContext, null, contextPath);
+    }
+
+    /** Minimal construction (compat tests). */
+    public ChappeServletBridge(ServletDispatcher dispatcher,
+                               VidocqServletContext servletContext,
+                               String contextPath) {
+        this(dispatcher, new FilterRegistry(List.of()), servletContext, null, contextPath);
+    }
+
+    /**
+     * Runs the servlet pipeline for {@code request} on its own virtual thread and parks chappe's
+     * thread until the response head is known.
+     *
+     * <p>Thread model: chappe's connection (or HTTP/2 stream) thread creates the response, starts
+     * the pipeline thread {@code foy-request-<n>} with chappe's {@link RequestContext#CURRENT}
+     * re-bound (a {@link ScopedValue} is not inherited by a plain thread) and waits on a
+     * {@link ResponseHead}. The head is settled exactly once:</p>
+     * <ul>
+     *   <li>at the first real commit (buffer overflow, flush), from whichever thread writes
+     *       (the pipeline thread or an async one): chappe gets the head and a body fed by a
+     *       {@link ResponsePipe}, and writes while the servlet keeps producing;</li>
+     *   <li>at the end of a pipeline that never committed: the whole buffered response, as before;</li>
+     *   <li>failed, when the pipeline throws before any commit: chappe answers its plain 500.</li>
+     * </ul>
+     * <p>A committed pipeline ends its body ({@code finishBody}) once the request is over, or
+     * aborts it when an exception escapes after the commit, so chappe drops the connection.</p>
+     */
+    @Override
+    public Response handle(Request request) throws Exception {
+        var head = new ResponseHead();
+        var requests = new ArrayList<HttpServletRequestImpl>(1);
+        var res = new HttpServletResponseImpl();
+        res.setDefaultCharacterEncoding(servletContext.configuredResponseCharacterEncoding());
+        res.bindCommitTarget(r -> commitHead(request, requests, r, head));
+        // The whole pipeline (listeners, filters, servlet, error pages, dispatches, async listeners)
+        // runs with the application's class loader as context loader (BUG-20261022-06).
+        ClassLoader applicationLoader = servletContext.applicationClassLoader();
+        Runnable pipeline = () -> {
+            try (var _ = ContextLoaderScope.enter(applicationLoader)) {
+                runPipeline(request, requests, res, head);
+            }
+        };
+        RequestContext context = RequestContext.CURRENT.isBound() ? RequestContext.CURRENT.get() : null;
+        Thread.ofVirtual().name("foy-request-" + PIPELINE_THREADS.incrementAndGet()).start(context == null
+                ? pipeline
+                : () -> ScopedValue.where(RequestContext.CURRENT, context).run(pipeline));
+        try {
+            return head.await();
+        } catch (ExecutionException e) {
+            // The head failed (the pipeline threw before any commit): chappe gets what it threw.
+            Throwable cause = e.getCause();
+            if (cause instanceof Exception ex) throw ex;
+            if (cause instanceof Error err) throw err;
+            throw e;
+        }
+    }
+
+    private static final AtomicLong PIPELINE_THREADS =
+            new AtomicLong();
+
+    /**
+     * The pipeline thread's body: every way out settles the head or ends the live body. The request is
+     * counted in service by the context while the application has it, so that an undeploy lets it
+     * finish before {@code destroy()}; once the undeploy began, it is refused with 503 before any
+     * listener, filter or servlet sees it (Servlet 6.1 section 2.3.4, BUG-20261115-02).
+     */
+    private void runPipeline(Request request, List<HttpServletRequestImpl> requests,
+                             HttpServletResponseImpl res, ResponseHead head) {
+        if (!servletContext.enterRequest()) {
+            head.complete(plainServiceUnavailable());
+            return;
+        }
+        Response response = null;
+        Throwable failure = null;
+        try {
+            response = CurrentRequest.callWhere(() -> requests.isEmpty() ? null : requests.getLast(),
+                    () -> handle(request, requests, res));
+        } catch (Throwable t) {
+            // The boundary of the application code on this thread: whatever it throws, an Error
+            // included, still settles the head chappe's thread is parked on.
+            failure = t;
+        } finally {
+            try {
+                endRequests(requests);
+            } finally {
+                servletContext.exitRequest();
+            }
+        }
+        try {
+            if (res.isStreaming()) endLiveBody(res, failure);
+            else deliverBuffered(requests, head, response, failure);
+        } finally {
+            // Last guard: chappe's thread must never park on a head nobody settles.
+            if (!head.isDone()) head.fail(new IllegalStateException("the response head was never settled"));
+        }
+    }
+
+    /**
+     * End of request processing (asynchronous processing included, awaited by handle): the
+     * sessions used by the request become idle, and their last-accessed time moves.
+     */
+    private static void endRequests(List<HttpServletRequestImpl> requests) {
+        for (HttpServletRequestImpl r : requests) {
+            // Last guard (idempotent): no ReadListener callback any more, the body pump stops.
+            r.endNonBlockingIo();
+            try { r.endSessionAccess(); }
+            catch (RuntimeException e) { LOG.log(System.Logger.Level.WARNING, "ending the session access failed", e); }
+            // The container's temporary part files go with the request (section 3.2).
+            try { r.releaseParts(); }
+            catch (RuntimeException e) { LOG.log(System.Logger.Level.WARNING, "deleting the multipart files failed", e); }
+        }
+    }
+
+    /**
+     * A response that never committed: the whole response goes out now (or chappe's 500 on
+     * failure). A body pump still blocked on a read (a silent client) must not hold the response
+     * back: chappe waits for it only once the response is delivered.
+     */
+    private static void deliverBuffered(List<HttpServletRequestImpl> requests, ResponseHead head,
+                                        Response response, Throwable failure) {
+        boolean handBack = requests.stream().anyMatch(HttpServletRequestImpl::needsInputHandBack);
+        if (failure != null) {
+            if (handBack) head.complete(handBack(plainInternalServerError(), requests));
+            else head.fail(failure);
+        } else if (response != null) {
+            head.complete(handBack ? handBack(response, requests) : response);
+        }
+    }
+
+    /** A committed response: its live body ends, or is aborted after a failure. */
+    private static void endLiveBody(HttpServletResponseImpl res, Throwable failure) {
+        if (failure != null) {
+            LOG.log(System.Logger.Level.ERROR, COMMITTED_FAILURE, failure);
+            res.abortBody(failure);
+            return;
+        }
+        try {
+            res.finishBody();
+        } catch (IOException e) {
+            // The client is gone while the rest of the body was pushed: nothing left to deliver.
+            res.abortBody(e);
+        }
+    }
+
+    /**
+     * The commit target: runs at the first real commit, on the committing thread. The session
+     * cookie is attached while the headers can still change, then the head is handed to chappe
+     * with a live body, or with none for a response that carries no body on the wire.
+     */
+    private void commitHead(Request request, List<HttpServletRequestImpl> requests,
+                            HttpServletResponseImpl res, ResponseHead head) throws IOException {
+        ResponsePipe pipe = null;
+        Response response;
+        try {
+            if (!requests.isEmpty()) maybeAttachSessionCookie(requests.getLast(), res);
+            Body body;
+            int status = res.getStatus();
+            if (request.method() == HttpMethod.HEAD || status == 204 || status == 304) {
+                res.suppressBody();
+                body = Body.of(InputStream.nullInputStream(), res.declaredContentLength());
+            } else {
+                pipe = res.startStreaming();
+                body = Body.of(pipe.reader(), res.declaredContentLength());
+            }
+            response = toChappeResponse(res, body);
+        } catch (RuntimeException e) {
+            // The head cannot be built: chappe answers its plain 500 instead of waiting forever,
+            // and the servlet's writes fail from now on. An Error reaches the pipeline's boundary
+            // (runPipeline), which settles the head or aborts the live body the same way.
+            var failure = new IOException("committing the response failed", e);
+            head.fail(failure);
+            if (pipe == null) res.startStreaming();
+            res.abortBody(failure);
+            throw failure;
+        }
+        // A ReadListener may still be set after the commit: on HTTP/1.x the body's release waits for
+        // its pump, after the response went out and before chappe drains the request body.
+        if (request.version() != HttpVersion.HTTP_2) response = handBack(response, requests);
+        if (!head.complete(response) && pipe != null) {
+            // chappe stopped waiting (server stop): fail the servlet's next write.
+            try { pipe.reader().close(); } catch (IOException _) { /* best effort: chappe stopped waiting */ }
+        }
+    }
+
+    /**
+     * {@code response}, whose body's release hands the request body back from the pumps of
+     * {@code requests} ({@link HttpServletRequestImpl#handBackInput()}). Chappe releases the body
+     * after the response was written, or on a failed exit, and before it drains the unread request
+     * body or closes the connection: a silent client never holds the response back, chappe never
+     * reads the body concurrently with a pump, and a pump still blocked on a read is interrupted
+     * (the connection closes) so nothing waits without bound. An upgrade response
+     * ({@link ConnectionUpgrade}, {@link WebSocketUpgrade}) is never wrapped: chappe recognises it
+     * by its type. The wrapper hides a {@code FileBody} from chappe's sendfile path; it is applied
+     * at every HTTP/1.x commit (a listener may still be set) and to a buffered response only while
+     * a pump is alive.
+     */
+    private static Response handBack(Response response, List<HttpServletRequestImpl> requests) {
+        if (response instanceof ConnectionUpgrade || response instanceof WebSocketUpgrade) return response;
+        return new InputHandBackResponse(response, () -> {
+            for (HttpServletRequestImpl r : List.copyOf(requests)) r.handBackInput();
+        });
+    }
+
+    /** Chappe's own answer to a failed handler, built here when the response must carry a hand-back. */
+    private static Response plainInternalServerError() {
+        return plainText(StatusCode.INTERNAL_SERVER_ERROR).body(asciiBody("Internal Server Error")).build();
+    }
+
+    /**
+     * The answer to a request that arrives once the application's undeploy began, a WebSocket handshake
+     * included: 503 with a plain-text body, and {@code Retry-After} set to the undeploy's bound in whole seconds
+     * ({@link VidocqServletContext#UNDEPLOY_RETRY_AFTER_SECONDS}), by which the undeploy reached the filters' and
+     * servlets' {@code destroy()}. It is the container's own
+     * answer, never an error page of the application: once the undeploy began, no filter or servlet of the
+     * application may see a new request (Servlet 6.1 section 2.3.4, BUG-20261115-02, BUG-20261115-06).
+     */
+    private static Response plainServiceUnavailable() {
+        return plainText(StatusCode.SERVICE_UNAVAILABLE).header("Retry-After", RETRY_AFTER_UNDEPLOY)
+                .body(asciiBody("Service Unavailable")).build();
+    }
+
+    /** A response builder with {@code status} and a plain-text content type; the body comes next. */
+    private static Response.Builder plainText(StatusCode status) {
+        return Response.builder().status(status).header(CONTENT_TYPE, TEXT_PLAIN);
+    }
+
+    private static Body asciiBody(String text) {
+        return Body.of(text.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    /**
+     * The single exit of {@link #handle(Request, List, HttpServletResponseImpl)}: a response
+     * committed for real already handed its head to chappe ({@code null} is returned and the
+     * pipeline ends the body); otherwise {@code uncommitted} builds the whole response.
+     */
+    private static Response respond(HttpServletResponseImpl res, Supplier<Response> uncommitted) {
+        return res.isStreaming() ? null : uncommitted.get();
+    }
+
+    /** {@link #respond} for a failure: the plain 500, or an aborted connection once committed. */
+    private Response failed(HttpServletResponseImpl res, HttpServletRequestImpl req, Throwable e) {
+        if (res.isStreaming()) {
+            LOG.log(System.Logger.Level.ERROR, COMMITTED_FAILURE, e);
+            res.abortBody(e);
+        }
+        return respond(res, () -> error(req, e));
+    }
+
+    /** The end of a request that reached the application: session cookie, then the response. */
+    private Response completed(HttpServletRequestImpl req, HttpServletResponseImpl res) {
+        return respond(res, () -> {
+            maybeAttachSessionCookie(req, res);
+            return toChappeResponse(res);
+        });
+    }
+
+    /**
+     * What every branch of {@link #handle(Request, List, HttpServletResponseImpl)} needs: chappe's
+     * request, the servlet requests built for it, the response, the canonical path the client asked
+     * for (before any welcome-file substitution: its constraint applies) and the session id the
+     * request URI carried ({@code ;jsessionid=}, section 7.1.3), or {@code null}.
+     */
+    private record Incoming(Request request, List<HttpServletRequestImpl> requests, HttpServletResponseImpl res,
+                            String requestPath, String urlSessionId) {}
+
+    /** A request path without its {@code ;jsessionid=} parameter, and the session id it carried. */
+    private record UrlSession(String path, String sessionId) {
+
+        private static final String PARAMETER = ";jsessionid=";
+
+        /** URL rewriting (section 7.1.3): the inline session id leaves the path used for dispatching. */
+        static UrlSession of(String rawPath) {
+            int start = rawPath.indexOf(PARAMETER);
+            if (start < 0) return new UrlSession(rawPath, null);
+            int idStart = start + PARAMETER.length();
+            int stop = idStart;
+            while (stop < rawPath.length() && rawPath.charAt(stop) != ';'
+                    && rawPath.charAt(stop) != '/' && rawPath.charAt(stop) != '?') {
+                stop++;
+            }
+            return new UrlSession(rawPath.substring(0, start) + rawPath.substring(stop),
+                    rawPath.substring(idStart, stop));
+        }
+    }
+
+    /** The canonical path a request dispatches on, or the status ({@code refusal > 0}) refusing it. */
+    private record Resolution(String path, int refusal) {
+
+        static Resolution refused(int status) {
+            return new Resolution(null, status);
+        }
+    }
+
+    private Response handle(Request request, List<HttpServletRequestImpl> requests, HttpServletResponseImpl res) {
+        var url = UrlSession.of(request.path());
+        String rawPath = url.path();
+        Resolution resolution = resolve(rawPath);
+        if (resolution.refusal() > 0) return rejected(request, requests, res, resolution.refusal());
+        var incoming = new Incoming(request, requests, res, resolution.path(), url.sessionId());
+        String path = resolution.path();
+        Optional<ServletDispatcher.Mapping> match = dispatcher.find(path);
+        if (!"*".equals(rawPath) && isContainerDefault(match)) {
+            // Section 10.10: only the container default servlet resolves welcome files; an exact,
+            // prefix or extension servlet, or an application "/" servlet, handles the path itself.
+            String redirect = welcomeRedirect(rawPath, path, request.query());
+            if (redirect != null) return redirected(incoming, redirect);
+            String welcome = path.endsWith("/") ? welcomeTarget(path) : null;
+            if (welcome != null) {
+                path = welcome;
+                match = dispatcher.find(path);
+            }
+        }
+        // Last-resort fallback: a deployed application always matches (its own "/" servlet or the
+        // container default servlet); only a bridge built without one has no match.
+        return match.isEmpty() ? unmapped(incoming, path) : mapped(incoming, match.get(), path);
+    }
+
+    /** The canonical path of {@code rawPath} (section 3.5.2), or the status refusing it before any mapping. */
+    private Resolution resolve(String rawPath) {
+        // "OPTIONS *" (RFC 9110 section 9.3.7): the asterisk-form target names the server, not
+        // a path; it is dispatched unchanged, as before canonicalisation existed.
+        if ("*".equals(rawPath)) return new Resolution(rawPath, 0);
+        // Strip the context path on a segment boundary; a path outside the context is a 404.
+        String relative = RequestPaths.stripContextPath(rawPath, contextPath);
+        if (relative == null) return Resolution.refused(404);
+        // Section 3.5.2: the canonical (decoded, normalised) path drives every mapping decision.
+        String path = RequestPaths.canonicalize(relative);
+        if (path == null) return Resolution.refused(400);
+        // Section 10.5: WEB-INF/ and META-INF/ are never exposed to a client request, whichever
+        // servlet the path would map to (a "*.jsp" servlet included) and without the directory
+        // redirect; forward, include, error and async dispatches may still target them.
+        if (ResourcePaths.isProtected(path)) return Resolution.refused(404);
+        return new Resolution(path, 0);
+    }
+
+    /** The directory redirect of the container default servlet (section 10.10). */
+    private Response redirected(Incoming incoming, String redirect) {
+        HttpServletResponseImpl res = incoming.res();
+        var redirected = new HttpServletRequestImpl(incoming.request(), servletContext, contextPath, "", null,
+                sessionManager);
+        incoming.requests().add(redirected);
+        redirected.bindResponse(res);
+        // A client tracked by URL keeps its session across the redirect.
+        redirected.setUrlSessionId(incoming.urlSessionId());
+        redirected.accessRequestedSession();
+        // Inside the request listeners: a denial may dispatch an error page or a login page
+        // (BUG-20261011-07).
+        return insideRequestListeners(redirected, () -> {
+            Response refused = gate(redirected, res, incoming.requestPath());
+            if (refused != null) return refused;
+            try { res.sendRedirect(res.encodeRedirectURL(redirect)); }
+            catch (IOException _) { /* buffered: no I/O can fail */ }
+            return completed(redirected, res);
+        });
+    }
+
+    /**
+     * A path no servlet maps (only a bridge built without a default servlet): the denial, the 404
+     * error page and the filters all run inside the request listeners (BUG-20261010-08,
+     * BUG-20261011-07), since the CDI scope listeners unbind in requestDestroyed.
+     */
+    private Response unmapped(Incoming incoming, String path) {
+        HttpServletResponseImpl res = incoming.res();
+        var req = new HttpServletRequestImpl(incoming.request(), servletContext, contextPath, path, null,
+                sessionManager);
+        incoming.requests().add(req);
+        req.setCanonicalPath(path);
+        req.bindResponse(res);
+        req.setUrlSessionId(incoming.urlSessionId());
+        req.accessRequestedSession();
+        String requestPath = incoming.requestPath();
+        try (var listeners = new RequestListeners(req)) {
+            // The original path, then the welcome target it may have resolved to, as in the main branch.
+            Response early = gate(req, res, requestPath);
+            if (early == null && !requestPath.equals(path)) early = gate(req, res, path);
+            List<Filter> filters = early != null ? List.of()
+                    : filterRegistry.chainFor(path, DispatcherType.REQUEST);
+            // No mapping and no filter: 404, through the error page when one is mapped (section 9.9.1).
+            if (early == null && filters.isEmpty()) early = notMapped(req, res);
+            Exception thrown = early == null ? runFilters(filters, req, res) : null;
+            // On every way out the CDI request and session scope listeners unbind in requestDestroyed,
+            // and a listener failure joins a filter failure in flight rather than replacing it.
+            listeners.end(thrown);
+            if (early != null) return early;
+            return thrown != null ? failed(res, req, thrown) : completed(req, res);
+        }
+    }
+
+    /** The 404 of a path neither a servlet nor a filter maps, through its error page when one is mapped. */
+    private Response notMapped(HttpServletRequestImpl req, HttpServletResponseImpl res) {
+        try { res.sendError(404); } catch (IOException _) { /* buffered: no I/O can fail */ }
+        try {
+            maybeHandleError(req, res, null, null);
+        } catch (ServletException e) {
+            return failed(res, req, e);
+        }
+        return errorPageHandled(req) ? respond(res, () -> toChappeResponse(res))
+                : respond(res, ChappeServletBridge::notFound);
+    }
+
+    /** Runs the filters of an unmapped path; returns what they threw, or {@code null}. */
+    private static Exception runFilters(List<Filter> filters, HttpServletRequestImpl req,
+                                        HttpServletResponseImpl res) {
+        try {
+            new VidocqFilterChain(filters, null).doFilter(req, res);
+            return null;
+        } catch (ServletException | IOException | RuntimeException e) {
+            return e;
+        }
+    }
+
+    /** The main branch: a servlet maps {@code path}. */
+    private Response mapped(Incoming incoming, ServletDispatcher.Mapping m, String path) {
+        HttpServletResponseImpl res = incoming.res();
+        String servletPath = DispatchResolver.servletPathFor(m, path);
+        String pathInfo = DispatchResolver.pathInfoFor(m, path, servletPath);
+        DispatchTarget target = new DispatchTarget(m.servlet(), m.servletName(), path, servletPath,
+                pathInfo, incoming.request().query(), m.asyncSupported(),
+                DispatchResolver.mappingFor(m, path, servletPath));
+        var req = new HttpServletRequestImpl(incoming.request(), servletContext, contextPath, servletPath, pathInfo,
+                sessionManager);
+        incoming.requests().add(req);
+        req.setCanonicalPath(path);
+        req.setHttpServletMapping(target.mapping());
+        req.bindResponse(res);
+        // §2.3.3.3: async only when the servlet and every filter of the chain support it. The REQUEST
+        // chain is computed once and shared with the invocation.
+        FilterRegistry.Chain requestChain = filterRegistry.chain(path, DispatcherType.REQUEST, m.servletName());
+        req.setAsyncSupported(m.asyncSupported() && requestChain.asyncSupported());
+        req.setUrlSessionId(incoming.urlSessionId());
+        req.accessRequestedSession();
+
+        // requestDestroyed fires exactly once on every way out, an Error thrown by the application
+        // included (the CDI request and session scope listeners unbind there).
+        try (var listeners = new RequestListeners(req)) {
+            Throwable thrown = null;
+            boolean allowed = false;
+            try {
+                allowed = admitAndInvoke(req, res, incoming.requestPath(), target, requestChain);
+            } catch (ServletException | IOException | RuntimeException e) {
+                // A failing check fails closed: the target never ran, the error handling below answers.
+                thrown = e;
+            }
+            if (!allowed && thrown == null) {
+                // Denied: the mechanism produced the response (401, 403 or a challenge); it goes through
+                // the error pages, as sendError does, still inside the request listeners
+                // (BUG-20261010-08). A listener failure of requestDestroyed is not fired a second time.
+                Response response = denied(req, res, target.servletName());
+                listeners.end(null);
+                return response;
+            }
+            // Section 2.3.3.5: an upgraded request leaves the HTTP lifecycle here (no async or error
+            // machinery). A servlet that threw after upgrade() gets the regular error handling instead.
+            HttpUpgradeHandler upgradeHandler = req.upgradeHandler();
+            if (upgradeHandler != null && thrown == null) return upgraded(req, res, upgradeHandler, listeners);
+            return afterDispatch(req, res, thrown, target.servletName(), listeners);
+        }
+    }
+
+    /**
+     * The security check of the original path, then of the welcome target it resolved to (a
+     * constraint on either applies), then the REQUEST dispatch when both admit the request.
+     *
+     * @return whether the request was admitted (and the target invoked)
+     */
+    private boolean admitAndInvoke(HttpServletRequestImpl req, HttpServletResponseImpl res, String requestPath,
+                                   DispatchTarget target, FilterRegistry.Chain requestChain)
+            throws IOException, ServletException {
+        String path = target.path();
+        boolean allowed = admitted(req, res, requestPath) && (requestPath.equals(path) || admitted(req, res, path));
+        if (allowed) {
+            // The one span where upgrade() is allowed: the handler is read right after.
+            req.upgradable(true);
+            try {
+                invoke(target, req, res, DispatcherType.REQUEST, requestChain);
+            } finally {
+                req.upgradable(false);
+            }
+        }
+        return allowed;
+    }
+
+    /**
+     * The end of a dispatched request: its async cycles, the error handling, {@code onComplete}, then
+     * {@code requestDestroyed}.
+     */
+    private Response afterDispatch(HttpServletRequestImpl req, HttpServletResponseImpl res, Throwable dispatchFailure,
+                                   String servletName, RequestListeners listeners) {
+        // An async cycle started by the servlet (even one that then threw) ends in runAsyncCycles.
+        AsyncEnd end = runAsyncCycles(req, res, dispatchFailure);
+        Throwable thrown = dispatchFailure;
+        AsyncContextImpl lastCycle = null;
+        if (end != null) {
+            // No ReadListener callback after the async processing; the body pump stops (chappe gets
+            // the body back once the response is delivered, see handBack).
+            req.endNonBlockingIo();
+            thrown = end.thrown();
+            lastCycle = end.lastCycle();
+        }
+        Throwable failure = errorHandlingFailure(req, res, thrown, servletName);
+        // Section 2.3.3.3: onComplete closes the whole async processing, error dispatch included.
+        if (lastCycle != null) lastCycle.endCycle();
+        // requestDestroyed comes last, as in Tomcat: the error page and onComplete run with the
+        // CDI request and session contexts the request listeners bind (BUG-20261010-08,
+        // BUG-20261010-07). A listener failure joins a failure in flight rather than replacing it.
+        listeners.end(failure);
+        return failure != null ? failed(res, req, failure) : completed(req, res);
+    }
+
+    /**
+     * Hands {@code thrown} (or a pending {@code sendError}) to the error pages; returns the failure
+     * left for the plain 500: the error dispatch's own, or {@code thrown} when no error page handled it.
+     */
+    private Throwable errorHandlingFailure(HttpServletRequestImpl req, HttpServletResponseImpl res,
+                                           Throwable thrown, String servletName) {
+        try {
+            maybeHandleError(req, res, thrown, servletName);
+        } catch (ServletException e) {
+            return e;
+        }
+        return thrown != null && !errorPageHandled(req) ? thrown : null;
+    }
+
+    /**
+     * Section 13.8: the constraint of the canonical path, for the original request only, before
+     * any target (the container default servlet and unmapped paths included). {@code OPTIONS *}
+     * names the server, not a resource.
+     */
+    private boolean admitted(HttpServletRequestImpl req, HttpServletResponseImpl res, String path)
+            throws IOException, ServletException {
+        return "*".equals(path) || servletContext.security().admit(req, res, path);
+    }
+
+    /**
+     * {@link #admitted} for a branch where no request listener fired: {@code null} when the request
+     * proceeds, otherwise the response of the denial (a failing check fails closed, with a 500).
+     */
+    private Response gate(HttpServletRequestImpl req, HttpServletResponseImpl res, String path) {
+        try {
+            if (admitted(req, res, path)) return null;
+        } catch (ServletException | IOException | RuntimeException e) {
+            return failed(res, req, e);
+        }
+        return denied(req, res, null);
+    }
+
+    /**
+     * The end of a request the security refused: the 401 or 403 the mechanism sent goes through the
+     * error pages (section 10.9.2), the challenge headers kept, as any {@code sendError} does.
+     */
+    private Response denied(HttpServletRequestImpl req, HttpServletResponseImpl res, String servletName) {
+        try {
+            maybeHandleError(req, res, null, servletName);
+        } catch (ServletException e) {
+            return failed(res, req, e);
+        }
+        return completed(req, res);
+    }
+
+    /**
+     * The span between {@code requestInitialized} (fired when it opens) and {@code requestDestroyed},
+     * which fires exactly once: through {@link #end(Throwable)}, or on {@link #close()} for any
+     * other way out of the try-with-resources block, an Error thrown by the application included.
+     * There a failure of the listeners is suppressed in the exception in flight rather than
+     * replacing it (try-with-resources semantics).
+     */
+    private final class RequestListeners implements AutoCloseable {
+
+        private final ListenerRegistry registry = servletContext.listenerRegistry();
+        private final HttpServletRequestImpl req;
+        private boolean destroyed;
+
+        RequestListeners(HttpServletRequestImpl req) {
+            this.req = req;
+            registry.fireRequestInitialized(servletContext, req);
+        }
+
+        /**
+         * Fires {@code requestDestroyed} now. With a failure in flight, a {@code RuntimeException} of
+         * the listeners is suppressed in it rather than replacing it; without one it propagates.
+         */
+        void end(Throwable inFlight) {
+            destroyed = true;
+            if (inFlight == null) {
+                registry.fireRequestDestroyed(servletContext, req);
+                return;
+            }
+            try {
+                registry.fireRequestDestroyed(servletContext, req);
+            } catch (RuntimeException e) {
+                inFlight.addSuppressed(e);
+            }
+        }
+
+        @Override
+        public void close() {
+            if (destroyed) return;
+            destroyed = true;
+            registry.fireRequestDestroyed(servletContext, req);
+        }
+    }
+
+    /**
+     * The end of an upgraded request (Servlet 6.1 section 2.3.3.5): {@code requestDestroyed} fires,
+     * then chappe gets a {@link ConnectionUpgrade} carrying the status and headers the application
+     * set (chappe drops any {@code Content-Length}/{@code Transfer-Encoding}); the buffered body is
+     * discarded. Once the head is on the wire, chappe calls the handler on the connection thread,
+     * which starts a {@link WebConnectionImpl} ({@code init}). {@code upgrade()} refuses a committed
+     * response and switches the response to discard mode (no write, flush or overflow commits it), so
+     * a streaming response here is a defensive case only: it ends as a regular response.
+     *
+     * <p>The request body goes back to chappe before the upgrade response does: a ReadListener pump
+     * still alive is interrupted and joined ({@link HttpServletRequestImpl#handBackInput()}), so
+     * chappe's drain of the unread body before the takeover never races it. A pump interrupted
+     * mid-read leaves the byte stream position unknown: chappe then closes the connection instead of
+     * upgrading it. ({@code startAsync()} is refused after {@code upgrade()}, so no pump is expected
+     * here; this is a defence in depth.)</p>
+     *
+     * <p>A status or a header chappe cannot put in the upgrade head (a {@link ConnectionUpgrade}
+     * refusing it with {@link IllegalArgumentException}) is logged at WARNING and answered with a
+     * 500; the handler was never initialised, so {@code destroy()} is not called either. A status
+     * other than 101 still upgrades, with a WARNING.</p>
+     */
+    private Response upgraded(HttpServletRequestImpl req, HttpServletResponseImpl res, HttpUpgradeHandler handler,
+                              RequestListeners listeners) {
+        // requestDestroyed fires on the way out of this block, also when the hand-back throws.
+        try (listeners) {
+            req.endNonBlockingIo();
+            req.handBackInput();
+        }
+        if (res.isStreaming()) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "the response was committed before the upgrade could be sent; upgrade not performed");
+            return completed(req, res);
+        }
+        maybeAttachSessionCookie(req, res);
+        var headers = Headers.builder();
+        for (Map.Entry<String, List<String>> e : res.allHeaders().entrySet()) {
+            for (String v : e.getValue()) headers.add(e.getKey(), v);
+        }
+        // The handler belongs to the application that called upgrade() (a cross-context target's own):
+        // its loader, and its context's undeploy closes the connection.
+        ClassLoader loader = req.applicationClassLoader();
+        VidocqServletContext upgradeContext =
+                req.upgradeContext() instanceof VidocqServletContext v ? v : servletContext;
+        if (handler instanceof WebSocketUpgradeHandler ws) {
+            // A WebSocket takeover: chappe speaks RFC 6455 and writes the 101 itself.
+            try {
+                return new WebSocketTakeover(ws, upgradeContext, loader).response(headers.build());
+            } catch (IllegalArgumentException e) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "WebSocket upgrade to {0} not performed, the upgrade response is invalid: {1}",
+                        handler.getClass().getName(), e.getMessage());
+                return plainInternalServerError();
+            }
+        }
+        int status = res.getStatus();
+        if (status != 101) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "HTTP upgrade to {0} answered with status {1} instead of 101 (Switching Protocols)",
+                    handler.getClass().getName(), status);
+        }
+        try {
+            return new ConnectionUpgrade(StatusCode.of(status), headers.build(),
+                    connection -> new WebConnectionImpl(connection, handler, upgradeContext, loader).start());
+        } catch (IllegalArgumentException e) {
+            // The handler was never initialised: no destroy() is due.
+            LOG.log(System.Logger.Level.WARNING,
+                    "HTTP upgrade to {0} not performed, the upgrade response is invalid: {1}",
+                    handler.getClass().getName(), e.getMessage());
+            return plainInternalServerError();
+        }
+    }
+
+    /**
+     * How the async processing of a request ended: the last cycle (whose listeners hear
+     * {@code onComplete}) and the failure to hand the error machinery, or {@code null}.
+     */
+    private record AsyncEnd(AsyncContextImpl lastCycle, Throwable thrown) {}
+
+    private static boolean isContainerDefault(Optional<ServletDispatcher.Mapping> match) {
+        return match.isPresent()
+                && match.get().servlet() instanceof DefaultServlet;
+    }
+
+    /**
+     * The redirect location when the request names a directory without its trailing slash
+     * (section 10.10), keeping the query string; {@code null} otherwise. The context root requested
+     * as {@code /ctx} is such a directory.
+     *
+     * <p>The location is the context path plus the CANONICAL path re-encoded segment by segment
+     * (RFC 3986), so it always starts with a single {@code '/'}: {@code //dir} in a root context
+     * must not become the protocol-relative {@code //dir/}. The caller passes it through
+     * {@code encodeRedirectURL}, so a session tracked by URL is carried over.</p>
+     *
+     * <p>Directory detection uses {@code ServletContext#getResourcePaths}, the only directory probe
+     * the resource-provider SPI offers; it is asked only for a path the default servlet would
+     * otherwise answer 404 or serve as a file, and answers {@code null} at once for a file.</p>
+     */
+    private String welcomeRedirect(String rawPath, String path, String query) {
+        boolean contextRoot = !contextPath.isEmpty() && rawPath.equals(contextPath);
+        if (!contextRoot && (path.endsWith("/") || servletContext.getResourcePaths(path + "/") == null)) {
+            return null;
+        }
+        String location = contextRoot ? contextPath + "/" : contextPath + encodePath(path) + "/";
+        return query == null || query.isEmpty() ? location : location + "?" + query;
+    }
+
+    /**
+     * Percent-encodes (UTF-8) every character of a decoded path other than an RFC 3986 pchar or '/';
+     * {@code ';'} is encoded too, since a literal one would start a path parameter.
+     */
+    private static String encodePath(String decoded) {
+        var out = new StringBuilder(decoded.length() + 8);
+        for (byte b : decoded.getBytes(StandardCharsets.UTF_8)) {
+            int c = b & 0xff;
+            boolean plain = c < 0x80 && (Character.isLetterOrDigit(c) || "-._~!$&'()*+,=:@/".indexOf(c) >= 0);
+            if (plain) out.append((char) c);
+            else out.append('%').append("0123456789ABCDEF".charAt(c >> 4)).append("0123456789ABCDEF".charAt(c & 15));
+        }
+        return out.toString();
+    }
+
+    /**
+     * The first welcome-file path for the directory {@code dir} (ending with a slash) that a
+     * static resource or a servlet serves, or {@code null}. Per welcome file in declaration order a
+     * static resource wins over a servlet mapping (exact, prefix, extension) for the same name.
+     * The caller re-dispatches the request to that path as a REQUEST (not a FORWARD): the servlet
+     * path, path info and mapping describe the welcome target, {@code getRequestURI} stays the
+     * client's, and the REQUEST filters of the new path apply. No {@code forward.*} attributes are
+     * set (Tomcat's internal forward behaves the same).
+     */
+    private String welcomeTarget(String dir) {
+        for (String wf : servletContext.getWelcomeFiles()) {
+            String name = wf.startsWith("/") ? wf.substring(1) : wf;
+            String candidate = dir + name;
+            // Both branches: no dot or empty segment, backslash, NUL or encoded separator, so a
+            // welcome file such as "../x.ts" can never leave the directory.
+            // The welcome re-entry is a client REQUEST: a candidate under WEB-INF/ or META-INF/ is
+            // never resolved, neither as a static resource nor through a servlet (section 10.5).
+            if (!name.isEmpty() && ResourcePaths.isServable(candidate) && servesWelcome(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    /**
+     * Whether a static resource (a file, not a directory) or a servlet other than the container
+     * default serves {@code candidate}.
+     */
+    private boolean servesWelcome(String candidate) {
+        if (servletContext.getResourcePaths(candidate + "/") == null && isReadableResource(candidate)) return true;
+        var m = dispatcher.find(candidate);
+        return m.isPresent() && !(m.get().servlet() instanceof DefaultServlet);
+    }
+
+    private boolean isReadableResource(String path) {
+        try (var in = servletContext.getResourceAsStream(path)) {
+            return in != null;
+        } catch (IOException _) {
+            return false; // unreadable: not a welcome file
+        }
+    }
+
+    /**
+     * Answers {@code status} for a request path refused before mapping: 400 for a path refused by
+     * {@link RequestPaths#canonicalize} (section 3.5.2), 404 for a path outside the context. No
+     * filter or servlet of the application runs and no request listener fires; an error page
+     * registered for the status is honoured through the regular error dispatch.
+     */
+    private Response rejected(Request request, List<HttpServletRequestImpl> requests, HttpServletResponseImpl res,
+                              int status) {
+        var req = new HttpServletRequestImpl(request, servletContext, contextPath, "", null, sessionManager);
+        requests.add(req);
+        req.bindResponse(res);
+        // The error page runs inside the request listeners (BUG-20261010-08).
+        return insideRequestListeners(req, () -> {
+            try { res.sendError(status); } catch (IOException _) { /* buffered: no I/O can fail */ }
+            try { maybeHandleError(req, res, null, null); }
+            catch (ServletException e) { return failed(res, null, e); }
+            if (errorPageHandled(req)) return respond(res, () -> toChappeResponse(res));
+            if (status == 404) return respond(res, ChappeServletBridge::notFound);
+            return respond(res, () -> plainText(StatusCode.of(status)).body(asciiBody("Bad Request")).build());
+        });
+    }
+
+    /**
+     * Runs {@code body} between {@code requestInitialized} and {@code requestDestroyed}, the latter
+     * on every way out: the CDI request and session scope listeners bind there, so a login page, an
+     * error page or a filter run with their contexts.
+     */
+    private Response insideRequestListeners(HttpServletRequestImpl req, Supplier<Response> body) {
+        try (var _ = new RequestListeners(req)) {
+            return body.get();
+        }
+    }
+
+    /**
+     * The request an error dispatch hands its target: an error page sees the path elements, the
+     * request URI and the servlet mapping of its location (Servlet 6.1 section 10.9.1), which is
+     * also how the default servlet finds a static error page.
+     */
+    private static HttpServletRequest errorTargetRequest(HttpServletRequestImpl req, DispatchTarget target) {
+        return new ErrorDispatchRequest(req, target);
+    }
+
+    private boolean errorPageHandled(HttpServletRequestImpl req) {
+        return req.getAttribute(ERROR_HANDLED) != null;
+    }
+
+    /**
+     * Ends every async cycle of the request (Servlet 6.1 section 2.3.3.3) on this pipeline thread,
+     * in one place for the REQUEST dispatch and every ASYNC dispatch. Each cycle is awaited through
+     * {@link AsyncContextImpl#awaitCycleEnd}, which first claims the response output for this thread
+     * (the cycle's threads lose it for good: BUG-20261010-02), then acts on how it ended:
+     * <ul>
+     *   <li>{@code complete()}: done;</li>
+     *   <li>{@code dispatch()}: the target runs under {@link DispatcherType#ASYNC}; when it opens a
+     *       new cycle ({@code startAsync}) that cycle is ended in turn, otherwise done;</li>
+     *   <li>timeout (no listener completed or dispatched): an error dispatch with status 500
+     *       ({@code sendError(500)}, then {@link #maybeHandleError} dispatches the error page, or the
+     *       plain 500 stands); a live body cannot carry an error page and is aborted;</li>
+     *   <li>error ({@link AsyncContextImpl#fail}): the failure is returned for the error machinery
+     *       (an error page or a 500, an aborted body once committed).</li>
+     * </ul>
+     * <p>A dispatch (REQUEST or ASYNC) that throws after its {@code startAsync} fails the cycle it
+     * opened: {@code onError}, then the error path above, and the container completes the cycle.
+     * An exception thrown after the application already completed or dispatched the cycle goes
+     * to the error machinery as is. Non-blocking I/O callbacks ({@code ReadListener}) run only while
+     * a cycle is awaited, never during a dispatch nor once the cycle ended; an active listener does
+     * not end a cycle, only complete, dispatch, timeout or error do. The caller fires {@code onComplete} on
+     * {@link AsyncEnd#lastCycle()} once the error dispatch is over.</p>
+     *
+     * @param dispatchFailure what the REQUEST dispatch threw, or {@code null}
+     * @return {@code null} when the request never started async
+     */
+    private AsyncEnd runAsyncCycles(HttpServletRequestImpl req, HttpServletResponseImpl res,
+                                    Throwable dispatchFailure) {
+        AsyncContextImpl ac = req.asyncContextInternal();
+        if (ac == null) return null;
+        Throwable pending = dispatchFailure;
+        // A redispatched servlet may call startAsync + dispatch again (section 2.3.3.3,
+        // startAsyncAgainTest*); bounded to 16 dispatches against endless loops.
+        for (int i = 0; ; i++) {
+            AsyncEnd end = awaitCycle(req, res, ac, pending);
+            if (end != null) return end;
+            if (i >= 16) {
+                LOG.log(System.Logger.Level.WARNING, "more than 16 async dispatches; request completed");
+                return new AsyncEnd(ac, null);
+            }
+            pending = null;
+            try {
+                if (!dispatchAsync(req, ac)) return new AsyncEnd(ac, null);
+            } catch (ServletException | IOException | RuntimeException e) {
+                pending = e;
+            }
+            // The redispatched target may have opened a new cycle (also when it threw afterwards).
+            AsyncContextImpl next = req.asyncContextInternal();
+            if (next == null) return new AsyncEnd(ac, pending);
+            ac = next;
+        }
+    }
+
+    /**
+     * Awaits the end of {@code cycle}, failed first with {@code pending} when the dispatch that
+     * opened it threw; returns how the async processing ended, or {@code null} when the cycle ended
+     * with a dispatch to run next.
+     */
+    private static AsyncEnd awaitCycle(HttpServletRequestImpl req, HttpServletResponseImpl res,
+                                       AsyncContextImpl cycle, Throwable pending) {
+        if (pending != null) cycle.fail(pending);
+        // The dispatch that opened the cycle returned: non-blocking I/O callbacks may run. Once
+        // the cycle ends they wait again (the one in progress finishes first), so they never
+        // overlap the async listeners, the error dispatch or a new ASYNC dispatch. The output is
+        // claimed before the callbacks are held: a callback still running at the cycle end sees
+        // its later writes fail with an IOException (a write already blocked on a slow client
+        // still delays the hold until it ends).
+        req.releaseCallbacks();
+        CycleEnd outcome = cycle.awaitCycleEnd(() -> {
+            res.claimOutput(cycle.startedThreads());
+            req.holdCallbacks();
+        });
+        // The failure was not routed to the cycle (already completed or dispatched): it goes to
+        // the error machinery as is, and no dispatch follows.
+        if (pending != null && !pending.equals(cycle.error()) && outcome != CycleEnd.TIMEOUT) {
+            return new AsyncEnd(cycle, pending);
+        }
+        return switch (outcome) {
+            case COMPLETE -> new AsyncEnd(cycle, null);
+            case TIMEOUT -> {
+                timeoutErrorDispatch(res);
+                yield new AsyncEnd(cycle, null);
+            }
+            case ERROR -> new AsyncEnd(cycle, cycle.error());
+            case DISPATCH -> null;
+        };
+    }
+
+    /**
+     * Runs the ASYNC dispatch {@code ac} asked for, in this context or in another one (section
+     * 2.3.3.3, section 9.4); {@code false} when its target cannot be resolved (the request completes).
+     */
+    private boolean dispatchAsync(HttpServletRequestImpl req, AsyncContextImpl ac)
+            throws IOException, ServletException {
+        String dispatchPath = ac.dispatchPath();
+        String qs = ac.dispatchQuery();
+        if (ac.dispatchContext() instanceof VidocqServletContext vctx && vctx != servletContext) {
+            // Cross-context async dispatch: routed to the target bridge through its resolver and invoker.
+            // AsyncContext#dispatch(ServletContext, String): the path is relative to the target context.
+            var resolver = vctx.dispatchResolver();
+            var invoker = vctx.dispatchInvoker();
+            var target = resolver == null || invoker == null ? null : resolver.resolve(dispatchPath, qs).orElse(null);
+            if (target == null) return false;
+            setAsyncAttributes(req);
+            var wrapped = new AsyncDispatchRequest(req, target, vctx, vctx.getContextPath());
+            startAsyncDispatch(req);
+            invoker.invoke(target, wrapped, ac.getResponse(), DispatcherType.ASYNC);
+            return true;
+        }
+        // AsyncContext#dispatch(String): the path is relative to this context.
+        var target = new DispatchResolver(dispatcher).resolve(dispatchPath, qs).orElse(null);
+        if (target == null) return false;
+        setAsyncAttributes(req);
+        var wrapped = new AsyncDispatchRequest(req, target);
+        startAsyncDispatch(req);
+        invoke(target, wrapped, ac.getResponse(), DispatcherType.ASYNC);
+        return true;
+    }
+
+    /** Section 2.3.3.3: an async dispatch starts a new cycle. */
+    private static void startAsyncDispatch(HttpServletRequestImpl req) {
+        req.clearAsyncContext();
+        req.setAsyncSupported(true);
+    }
+
+    /**
+     * Section 2.3.3.3: a cycle timed out and no listener completed or dispatched it. The container
+     * performs an error dispatch with status 500 ({@link #maybeHandleError} runs next, without an
+     * exception); without an error page the plain 500 stands. A committed live body can no longer
+     * change: it is aborted, so the client cannot take it for a whole one.
+     */
+    private static void timeoutErrorDispatch(HttpServletResponseImpl res) {
+        if (res.isStreaming()) {
+            LOG.log(System.Logger.Level.WARNING, "async timeout after the response was committed; connection aborted");
+            res.abortBody(new IOException("async timeout"));
+            return;
+        }
+        if (res.isCommitted()) return; // closed by the application (sendError, redirect): it stands
+        try { res.sendError(500); }
+        catch (IOException _) { /* the response is buffered: sendError cannot fail on I/O */ }
+    }
+
+    /**
+     * Servlet 6.1 section 9.4 / {@code AsyncContext.ASYNC_*}: before an async dispatch, the
+     * original request's URI, context path, servlet path, path info, query string and mapping are
+     * published as {@code jakarta.servlet.async.*}. {@code req} is always the original request, so
+     * repeated dispatches keep exposing the first request's values. A {@code null} value (no path
+     * info, no query string) leaves its attribute unset.
+     */
+    private static void setAsyncAttributes(HttpServletRequestImpl req) {
+        req.setAttribute(AsyncContext.ASYNC_REQUEST_URI, req.getRequestURI());
+        req.setAttribute(AsyncContext.ASYNC_CONTEXT_PATH, req.getContextPath());
+        req.setAttribute(AsyncContext.ASYNC_SERVLET_PATH, req.getServletPath());
+        if (req.getPathInfo() != null) req.setAttribute(AsyncContext.ASYNC_PATH_INFO, req.getPathInfo());
+        if (req.getQueryString() != null) req.setAttribute(AsyncContext.ASYNC_QUERY_STRING, req.getQueryString());
+        req.setAttribute(AsyncContext.ASYNC_MAPPING, req.getHttpServletMapping());
+    }
+
+    /**
+     * Whether {@code thrown} (or one of its causes) is a request body or multipart limit: the
+     * container's body cap, or a multipart-config / container multipart limit (answered with 413).
+     */
+    private static boolean bodyTooLarge(Throwable thrown) {
+        int depth = 0;
+        for (Throwable t = thrown; t != null && depth++ < 16; t = t.getCause()) {
+            if (t instanceof RequestBodyTooLargeException || t instanceof MultipartLimitException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The error handling of a request (section 10.9.2): {@code thrown}, or a {@code sendError} the
+     * application triggered, goes to the error page that matches it; without one, the status an
+     * {@code UnavailableException} or a body limit calls for is still applied.
+     */
+    private void maybeHandleError(HttpServletRequestImpl req, HttpServletResponseImpl res,
+                                  Throwable thrown, String servletName) throws ServletException {
+        if (thrown != null && res.isCommitted() && !res.isErrorTriggered()) {
+            failedAfterCommit(req, res, thrown);
+            return;
+        }
+        ErrorPageRegistry pages = servletContext.errorPages();
+        String location = null;
+        int errorStatus = 0;
+        Throwable matched = thrown;
+        if (thrown != null) {
+            var match = pages.match(thrown).orElse(null);
+            if (match != null) {
+                location = match.location();
+                matched = match.matched();
+            }
+            errorStatus = errorStatus(thrown);
+            // §10.9.2: no exception-type page matched, fall back to the status page; the
+            // attributes then describe the original exception.
+            if (location == null) location = pages.findByStatus(errorStatus).orElse(null);
+        } else if (res.isErrorTriggered()) {
+            errorStatus = res.getStatus();
+            location = pages.findByStatus(errorStatus).orElse(null);
+        }
+        if (location == null) {
+            // No error page is mapped: still apply the matching status (404/503 for an
+            // UnavailableException) and bypass the handler's generic error().
+            if (thrown != null) answerWithoutErrorPage(req, res, thrown, errorStatus);
+            return;
+        }
+        var target = new DispatchResolver(dispatcher).resolve(location).orElse(null);
+        if (target == null) return;
+        // Capture the sendError message before clearErrorState() erases it.
+        String statusMessage = res.errorMessage();
+        res.clearErrorState();
+        res.resetBuffer();
+        setErrorAttributes(req, errorStatus, matched, servletName, statusMessage);
+        try {
+            res.setStatus(errorStatus);
+            // §10.9.2: the request the error servlet sees returns DispatcherType.ERROR.
+            DispatcherType previous = req.getDispatcherType();
+            req.setDispatcherType(DispatcherType.ERROR);
+            try { invoke(target, errorTargetRequest(req, target), res, DispatcherType.ERROR); }
+            finally { req.setDispatcherType(previous); }
+        } catch (IOException | ServletException | RuntimeException e) {
+            // The error page itself failed: log and fall through to a plain 500, never recurse.
+            LOG.log(System.Logger.Level.ERROR, "error page " + location + " failed", e);
+            throw new ServletException("error dispatch failed", e);
+        }
+    }
+
+    /**
+     * The response was already committed by the servlet: no error page can be dispatched and the
+     * committed content stands. The exception is logged, not lost.
+     */
+    private static void failedAfterCommit(HttpServletRequestImpl req, HttpServletResponseImpl res, Throwable thrown) {
+        LOG.log(System.Logger.Level.ERROR,
+                "exception after the response was committed; no error page dispatched", thrown);
+        req.setAttribute(ERROR_HANDLED, true);
+        // A live body cannot end normally: the client would take a partial body for a whole
+        // one. Abort it, so chappe drops the connection.
+        if (res.isStreaming()) res.abortBody(thrown);
+    }
+
+    /**
+     * The status answering {@code thrown}: Servlet 6.1 section 2.3.3.2, an
+     * {@code UnavailableException} answers 404 (permanent) or 503 (temporary) instead of the generic
+     * 500; a request body or multipart limit answers 413.
+     */
+    private static int errorStatus(Throwable thrown) {
+        Throwable root = thrown;
+        while (root.getCause() != null && !(root instanceof UnavailableException)) {
+            root = root.getCause();
+        }
+        if (root instanceof UnavailableException ue) return ue.isPermanent() ? 404 : 503;
+        return bodyTooLarge(thrown) ? 413 : 500;
+    }
+
+    /**
+     * No error page matches {@code thrown}: an {@code UnavailableException} still answers its 404
+     * or 503, and a request body limit the application did not handle its 413 (the client's fault);
+     * any other failure is left to the plain 500.
+     */
+    private static void answerWithoutErrorPage(HttpServletRequestImpl req, HttpServletResponseImpl res,
+                                               Throwable thrown, int errorStatus) {
+        if (thrown instanceof UnavailableException || thrown.getCause() instanceof UnavailableException) {
+            res.clearErrorState();
+            res.resetBuffer();
+            try { res.sendError(errorStatus, thrown.getMessage()); }
+            catch (IOException _) { /* the response is buffered: sendError cannot fail on I/O */ }
+            req.setAttribute(ERROR_HANDLED, true);
+        } else if (errorStatus == 413) {
+            LOG.log(System.Logger.Level.DEBUG, "request body limit exceeded", thrown);
+            res.clearErrorState();
+            res.resetBuffer();
+            try { res.sendError(413); }
+            catch (IOException _) { /* the response is buffered: sendError cannot fail on I/O */ }
+            req.setAttribute(ERROR_HANDLED, true);
+        }
+    }
+
+    /** The {@code jakarta.servlet.error.*} attributes an error page reads (section 10.9.1). */
+    private static void setErrorAttributes(HttpServletRequestImpl req, int errorStatus, Throwable matched,
+                                           String servletName, String statusMessage) {
+        req.setAttribute("jakarta.servlet.error.status_code", errorStatus);
+        req.setAttribute("jakarta.servlet.error.request_uri", req.getRequestURI());
+        req.setAttribute("jakarta.servlet.error.servlet_name", servletName);
+        req.setAttribute("jakarta.servlet.error.query_string", req.getQueryString());
+        String message = statusMessage;
+        if (matched != null) {
+            req.setAttribute("jakarta.servlet.error.exception", matched);
+            req.setAttribute("jakarta.servlet.error.exception_type", matched.getClass());
+            if (message == null) message = matched.getMessage();
+        }
+        req.setAttribute("jakarta.servlet.error.message", message == null ? "" : message);
+        req.setAttribute(ERROR_HANDLED, true);
+    }
+
+    /**
+     * Internal dispatch — calculates the filter chain for the given {@link DispatcherType}
+     * then invokes the target servlet. Reused by {@link RequestDispatcherImpl} for
+     * forward/include and by {@link #handle(Request)} for REQUEST.
+     */
+    @Override
+    public void invoke(DispatchTarget target, ServletRequest req, ServletResponse res,
+                       DispatcherType type) throws IOException, ServletException {
+        // Section 6.2.5: a named dispatch matches no URL pattern, only the target's servlet-name mappings.
+        String filterPath = target.named() ? null : target.path();
+        // This bridge is the target context's: a cross-context dispatch (getContext(...) forward or
+        // include, AsyncContext.dispatch(ctx, path)) runs the target application with its own class
+        // loader, and the caller's comes back when it returns (BUG-20261022-06). The request also
+        // learns the context of the dispatch: the async cycles, I/O listeners and upgrade the target
+        // opens belong to the target application and keep its loader after the dispatch returned.
+        HttpServletRequestImpl impl = unwrapImpl(req);
+        // A dispatch from another application enters this one as a request does: refused once this
+        // application's undeploy began, counted in service while it runs (BUG-20261115-04).
+        boolean fromAnotherContext = impl != null && impl.currentContext() != servletContext;
+        if (fromAnotherContext && !servletContext.enterRequest()) throw beingUndeployed();
+        ServletContext previousContext = impl == null ? null : impl.enterContext(servletContext);
+        try (var _ = ContextLoaderScope.enter(servletContext.applicationClassLoader())) {
+            invoke(target, req, res, type, filterRegistry.chain(filterPath, type, target.servletName()));
+        } finally {
+            if (impl != null) impl.leaveContext(previousContext);
+            if (fromAnotherContext) servletContext.exitRequest();
+        }
+    }
+
+    /**
+     * The failure of a cross-context dispatch into this application once its undeploy began: a temporary
+     * {@code UnavailableException} (Servlet 6.1 section 2.3.3.2). The caller of {@code forward},
+     * {@code include} or {@code AsyncContext.dispatch} can catch it, as it would the exception of a
+     * target that threw it (section 9.5); left uncaught, the container answers it with 503, the status of
+     * a request refused at this application's door. A {@code sendError(503)}, as for a servlet whose
+     * {@code init()} failed, would be lost in an include (section 9.3).
+     */
+    private UnavailableException beingUndeployed() {
+        return new UnavailableException("the application at '" + servletContext.getContextPath()
+                + "' is being undeployed", 0);
+    }
+
+    private void invoke(DispatchTarget target, ServletRequest req, ServletResponse res,
+                        DispatcherType type, FilterRegistry.Chain chain) throws IOException, ServletException {
+        List<Filter> filters = chain.filters();
+        // §2.3.3.3 / ServletRequest#isAsyncSupported: async stays enabled only while the request is
+        // within the scope of servlets and filters that support it. It is recomputed for this
+        // dispatch from the incoming value, the target servlet and every filter of this dispatch's
+        // chain, and the previous value comes back once a forward or include returns to its caller.
+        HttpServletRequestImpl impl = unwrapImpl(req);
+        if (impl == null) {
+            // Not provably unreachable: a caller may hand a RequestDispatcher a request that does not
+            // wrap the container's own request (a spec violation, section 9.1). Run the chain, but never silently.
+            LOG.log(System.Logger.Level.WARNING,
+                    "async-supported not recomputed for {0} dispatch to ''{1}'': request type {2} does not wrap the container request",
+                    type, target.servletName(), req.getClass().getName());
+            new VidocqFilterChain(filters, target.servlet()).doFilter(req, res);
+            return;
+        }
+        boolean previous = impl.isAsyncSupported();
+        HttpServletRequestImpl.ServletScope previousServlet = impl.enterServlet(target.servletName());
+        impl.setAsyncSupported(previous && target.asyncSupported() && chain.asyncSupported());
+        try {
+            new VidocqFilterChain(filters, target.servlet()).doFilter(req, res);
+        } finally {
+            impl.setAsyncSupported(previous);
+            impl.leaveServlet(previousServlet);
+        }
+    }
+
+    private static HttpServletRequestImpl unwrapImpl(ServletRequest r) {
+        while (r != null) {
+            if (r instanceof HttpServletRequestImpl i) return i;
+            if (r instanceof ServletRequestWrapper w) r = w.getRequest();
+            else return null;
+        }
+        return null;
+    }
+
+    /**
+     * Emits the session cookie when the request ends bound to a session the client does not know
+     * by that id yet (a new session, or a {@code changeSessionId}). Nothing is emitted when the
+     * effective tracking modes leave out {@code COOKIE} (section 7.1.1). The cookie is
+     * {@code Secure} on a secure request unless the application set the flag explicitly
+     * ({@link SessionCookieConfig#setSecure}, {@code <secure>} in the descriptor), and
+     * {@code SameSite=Lax} unless the application set a {@code SameSite} attribute.
+     */
+    private void maybeAttachSessionCookie(HttpServletRequestImpl req, HttpServletResponseImpl res) {
+        String cookie = sessionCookieHeader(req);
+        if (cookie != null) res.addHeaderInternal("Set-Cookie", cookie);
+    }
+
+    /** The {@code Set-Cookie} value {@link #maybeAttachSessionCookie} emits, or {@code null}. */
+    private String sessionCookieHeader(HttpServletRequestImpl req) {
+        HttpSessionImpl session = req.boundSession();
+        if (session == null || session.isInvalidated()) return null;
+        if (!servletContext.getEffectiveSessionTrackingModes().contains(SessionTrackingMode.COOKIE)) return null;
+        String requested = req.getRequestedSessionId();
+        if (session.getId().equals(requested)) return null;
+        VidocqSessionCookieConfig cfg = servletContext.sessionCookieConfigInternal();
+        Cookie c = new Cookie(cfg.getName(), session.getId());
+        c.setPath(cookiePath(cfg.getPath()));
+        if (cfg.getDomain() != null) c.setDomain(cfg.getDomain());
+        if (cfg.getMaxAge() >= 0) c.setMaxAge(cfg.getMaxAge());
+        c.setSecure(cfg.isSecureExplicit() ? cfg.isSecure() : req.isSecure());
+        c.setHttpOnly(cfg.isHttpOnly());
+        cfg.getAttributes().forEach(c::setAttribute);
+        // SameSite=Lax unless the application chose a value (BUG-20261022-02): the cookie then stays
+        // off cross-site subrequests and POSTs in every browser, not only in those that default to Lax.
+        if (c.getAttribute("SameSite") == null) c.setAttribute("SameSite", "Lax");
+        return CookieCodec.serializeSetCookie(c);
+    }
+
+    /** The session cookie's path: the configured one, otherwise the context path ({@code "/"} for the root). */
+    private String cookiePath(String configured) {
+        if (configured != null && !configured.isEmpty()) return configured;
+        return contextPath.isEmpty() ? "/" : contextPath;
+    }
+
+    /**
+     * A response that never committed: its whole buffered body, sent at once. With trailer fields
+     * and no declared length, the body length stays unknown so chappe chunks it and the trailer
+     * section can follow the last chunk.
+     */
+    static Response toChappeResponse(HttpServletResponseImpl res) {
+        byte[] bytes = res.bodyBytes();
+        Body body = res.getTrailerFields() != null && res.declaredContentLength() < 0
+                ? Body.of(new ByteArrayInputStream(bytes), -1)
+                : Body.of(bytes);
+        return toChappeResponse(res, body);
+    }
+
+    /**
+     * The single place where a servlet response becomes a chappe {@link Response} (buffered at
+     * the end of the request, or live at the first commit). Framing is the container's: an
+     * application {@code Transfer-Encoding} is never passed on (chappe would then send the body
+     * unframed), and a streamed body carries its declared length as the body length rather than as
+     * a {@code Content-Length} header, which chappe would otherwise send next to its own chunking.
+     * Trailer fields are evaluated lazily, once the body is complete ({@link FoyResponse}).
+     */
+    static Response toChappeResponse(HttpServletResponseImpl res, Body body) {
+        var builder = Response.builder()
+                .status(StatusCode.of(res.getStatus()))
+                .body(body);
+        boolean streamed = res.isStreaming();
+        for (Map.Entry<String, List<String>> e : res.allHeaders().entrySet()) {
+            String name = e.getKey();
+            if (passedOn(name, streamed)) {
+                for (String v : e.getValue()) {
+                    builder.header(name, v);
+                }
+            }
+        }
+        Response response = builder.build();
+        var trailerFields = res.getTrailerFields();
+        if (trailerFields == null) return response;
+        // Response.Builder only takes trailers known upfront; the supplier must run after the body.
+        return new FoyResponse(response.status(), response.headers(), response.body(), trailerFields);
+    }
+
+    /**
+     * Whether a header of the servlet response reaches chappe: never an application
+     * {@code Transfer-Encoding}, and no {@code Content-Length} on a streamed body.
+     */
+    private static boolean passedOn(String name, boolean streamed) {
+        return !"Transfer-Encoding".equalsIgnoreCase(name) && !(streamed && "Content-Length".equalsIgnoreCase(name));
+    }
+
+    private static Response notFound() {
+        return plainText(StatusCode.NOT_FOUND).body(asciiBody("Not Found")).build();
+    }
+
+    /**
+     * The plain 500 answered when no error page handled {@code e}. The body is generic: the
+     * exception and its message are logged, never echoed to the client. The session cookie the
+     * request would have emitted is kept.
+     */
+    private Response error(HttpServletRequestImpl req, Throwable e) {
+        LOG.log(System.Logger.Level.ERROR, "unhandled exception while serving the request", e);
+        var builder = plainText(StatusCode.INTERNAL_SERVER_ERROR);
+        String cookie = req == null ? null : sessionCookieHeader(req);
+        if (cookie != null) builder.header("Set-Cookie", cookie);
+        return builder.body(asciiBody("Internal Server Error")).build();
+    }
+}

@@ -1,0 +1,43 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+module io.vidocq.foy.cdi.vauban {
+    requires transitive io.vidocq.foy.api;
+    requires jakarta.cdi;
+    requires io.vidocq.vauban.core;
+    // The provider and the client proxies vauban-processor generates for the Servlet built-in beans name its types,
+    // and Passivation binds the container that a session import at a Vidocq dev swap reads back into.
+    requires io.vidocq.vauban.api;
+    // The session context (foy#21), driven from the servlet container's request and session events.
+    requires io.vidocq.vauban.webcontexts;
+
+    exports io.vidocq.foy.cdi.vauban;
+
+    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+            with io.vidocq.foy.cdi.vauban.FoyWebExtension;
+
+    provides io.vidocq.foy.spi.cdi.CdiContextListeners
+            with io.vidocq.foy.cdi.vauban.VaubanCdiContextListeners;
+
+    // The HttpServletRequest, HttpSession and ServletContext beans (ServletBuiltInBeans): vauban-processor generates
+    // at this module's build their client proxies and the provider that creates them, the producers and their
+    // holders in-module, without reflection and without `opens … to io.vidocq.vauban.core`.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.foy.cdi.vauban._VaubanComponents;
+}

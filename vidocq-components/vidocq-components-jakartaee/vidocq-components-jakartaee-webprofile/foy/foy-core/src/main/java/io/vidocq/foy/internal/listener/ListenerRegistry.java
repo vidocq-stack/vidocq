@@ -1,0 +1,385 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.listener;
+
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletContextAttributeEvent;
+import jakarta.servlet.ServletContextAttributeListener;
+import jakarta.servlet.ServletContextEvent;
+import jakarta.servlet.ServletContextListener;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletRequestAttributeEvent;
+import jakarta.servlet.ServletRequestAttributeListener;
+import jakarta.servlet.ServletRequestEvent;
+import jakarta.servlet.ServletRequestListener;
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSessionAttributeListener;
+import jakarta.servlet.http.HttpSessionBindingEvent;
+import jakarta.servlet.http.HttpSessionEvent;
+import jakarta.servlet.http.HttpSessionIdListener;
+import jakarta.servlet.http.HttpSessionListener;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EventListener;
+import java.util.List;
+
+/**
+ * Typed register of Servlet listeners discovered at startup.
+ * <p>
+ * A listener can implement multiple interfaces; it is recorded in
+ * each corresponding list.
+ * </p>
+ */
+public final class ListenerRegistry {
+
+    private static final System.Logger LOG = System.getLogger(ListenerRegistry.class.getName());
+
+    private final List<ServletContextListener> contextListeners = new ArrayList<>();
+    /** The container's own context listeners ({@link #registerFirst}), apart from the application's. */
+    private final List<ServletContextListener> containerContextListeners = new ArrayList<>();
+    private final List<ServletContextAttributeListener> contextAttrListeners = new ArrayList<>();
+    private final List<ServletRequestListener> requestListeners = new ArrayList<>();
+    private final List<ServletRequestAttributeListener> requestAttrListeners = new ArrayList<>();
+    private final List<HttpSessionListener> sessionListeners = new ArrayList<>();
+    private final List<HttpSessionAttributeListener> sessionAttrListeners = new ArrayList<>();
+    private final List<HttpSessionIdListener> sessionIdListeners = new ArrayList<>();
+
+    /** Tracks listeners added programmatically (ctx.addListener...) —
+     *  Servlet 6.1 §4.4.3: they do not have access to dynamic configuration APIs. */
+    private final java.util.IdentityHashMap<EventListener, Boolean> programmatic =
+            new java.util.IdentityHashMap<>();
+
+    /** Every listener held, in registration order, whatever the interfaces it implements. */
+    private final List<EventListener> all = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * The class names of every registered listener, in registration order (container listeners
+     * registered ahead of the application's come first). Read-only snapshot, safe to call from
+     * any thread.
+     */
+    public List<String> classNames() {
+        return all.stream().map(l -> l.getClass().getName()).toList();
+    }
+
+    public void register(EventListener listener) { register(listener, false); }
+
+    public void register(EventListener listener, boolean isProgrammatic) {
+        all.add(listener);
+        if (listener instanceof ServletContextListener l) contextListeners.add(l);
+        if (listener instanceof ServletContextAttributeListener l) contextAttrListeners.add(l);
+        if (listener instanceof ServletRequestListener l) requestListeners.add(l);
+        if (listener instanceof ServletRequestAttributeListener l) requestAttrListeners.add(l);
+        if (listener instanceof HttpSessionListener l) sessionListeners.add(l);
+        if (listener instanceof HttpSessionAttributeListener l) sessionAttrListeners.add(l);
+        if (listener instanceof HttpSessionIdListener l) sessionIdListeners.add(l);
+        programmatic.put(listener, isProgrammatic);
+    }
+
+    /**
+     * Registers a request listener of the container itself, ahead of the application's: it sees a
+     * request first and is told last that it ended (destroyed events run in reverse order). Used for
+     * the CDI request context ({@link CdiRequestScopeListener}). Call it before the deployment
+     * serves requests.
+     */
+    public void addFirst(ServletRequestListener listener) {
+        all.add(0, listener);
+        requestListeners.add(0, listener);
+        containerRequestListeners.add(0, listener);
+    }
+
+    /**
+     * Registers a context, request and session listener of the container itself, ahead of the
+     * application's: it sees a request or a new session first and is told last that it ended. A
+     * context listener hears {@link #fireContainerContextInitialized} (before the initializers run) and
+     * is told last that the context ended. Used for the listeners that drive CDI contexts
+     * ({@code CdiContextListeners}). Call it before the initializers run.
+     */
+    public void registerFirst(EventListener listener) {
+        all.add(0, listener);
+        if (listener instanceof ServletContextListener l) {
+            containerContextListeners.add(0, l);
+        }
+        if (listener instanceof ServletRequestListener l) {
+            requestListeners.add(0, l);
+            containerRequestListeners.add(0, l);
+        }
+        if (listener instanceof HttpSessionListener l) sessionListeners.add(0, l);
+    }
+
+    /**
+     * The container's own request listeners ({@link #addFirst}, {@link #registerFirst}): the ones
+     * that bind the CDI contexts to the thread serving a request.
+     */
+    private final List<ServletRequestListener> containerRequestListeners =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * {@code task} with the container's context listeners bound around it on the thread that runs
+     * it (BUG-20261010-07): {@code requestInitialized} before, {@code requestDestroyed} after, in
+     * reverse order, with the request {@code threadRequest} supplies as the event's request. That request must not be
+     * the one the serving thread announced, since a listener may key its state by the request. The
+     * application's listeners are not told: for them the request is still the one being served.
+     * A failing listener is logged; the task runs regardless.
+     */
+    public Runnable bindingContainerContexts(ServletContext ctx,
+                                             java.util.function.Supplier<ServletRequest> threadRequest,
+                                             Runnable task) {
+        List<ServletRequestListener> bound = List.copyOf(containerRequestListeners);
+        if (bound.isEmpty()) return task;
+        ServletRequest request = threadRequest.get();
+        if (request == null) return task;
+        return () -> {
+            var event = new ServletRequestEvent(ctx, request);
+            List<ServletRequestListener> initialized = new java.util.ArrayList<>();
+            for (ServletRequestListener l : bound) {
+                try {
+                    l.requestInitialized(event);
+                    initialized.add(l);
+                } catch (RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "container request listener failed on an async thread", e);
+                }
+            }
+            try {
+                task.run();
+            } finally {
+                for (int i = initialized.size() - 1; i >= 0; i--) {
+                    try {
+                        initialized.get(i).requestDestroyed(event);
+                    } catch (RuntimeException e) {
+                        LOG.log(System.Logger.Level.WARNING, "container request listener failed on an async thread", e);
+                    }
+                }
+            }
+        };
+    }
+
+    public boolean isProgrammatic(EventListener l) {
+        return Boolean.TRUE.equals(programmatic.get(l));
+    }
+
+    public void registerAll(List<? extends EventListener> listeners) {
+        listeners.forEach(this::register);
+    }
+
+    // ---- Context lifecycle ----
+
+    /**
+     * Tells the container's context listeners ({@link #registerFirst}) that the context starts, before
+     * the deployment's {@code ServletContainerInitializer}s run: what they set up is there for
+     * {@code onStartup} and for the application's listeners.
+     */
+    public void fireContainerContextInitialized(ServletContext ctx) {
+        var evt = new ServletContextEvent(ctx);
+        for (var l : List.copyOf(containerContextListeners)) {
+            l.contextInitialized(evt);
+        }
+    }
+
+    /**
+     * Tells the container's context listeners alone that the context ended: for a deployment that
+     * failed before the application's {@code contextInitialized}. Same rules as
+     * {@link #fireContextDestroyed}.
+     */
+    public void fireContainerContextDestroyed(ServletContext ctx) {
+        destroyInReverse(containerContextListeners, new ServletContextEvent(ctx));
+    }
+
+    /** The application's context listeners, in declaration order (Servlet 6.1 chapter 11). */
+    public void fireContextInitialized(ServletContext ctx) {
+        if (contextListeners.isEmpty()) return;
+        var evt = new ServletContextEvent(ctx);
+        var vctx = ctx instanceof io.vidocq.foy.internal.container.VidocqServletContext v ? v : null;
+        if (vctx != null) vctx.setContextInitializedPhase(true);
+        try {
+            // Copie défensive : un listener peut ajouter programmatiquement d'autres
+            // listeners pendant son contextInitialized.
+            for (var l : new ArrayList<>(contextListeners)) {
+                boolean prog = isProgrammatic(l);
+                if (prog && vctx != null) {
+                    vctx.setProgrammaticListenerActive(true);
+                    try { l.contextInitialized(evt); }
+                    finally { vctx.setProgrammaticListenerActive(false); }
+                } else {
+                    l.contextInitialized(evt);
+                }
+            }
+        } finally {
+            if (vctx != null) vctx.setContextInitializedPhase(false);
+        }
+    }
+
+    /**
+     * Notifies the application's context listeners in reverse declaration order (Servlet 6.1 chapter
+     * 11), then the container's. A failing listener is logged and does not keep the others from being
+     * notified: each one releases its own resources at undeploy. A {@link VirtualMachineError} is
+     * rethrown at once.
+     */
+    public void fireContextDestroyed(ServletContext ctx) {
+        var evt = new ServletContextEvent(ctx);
+        destroyInReverse(contextListeners, evt);
+        destroyInReverse(containerContextListeners, evt);
+    }
+
+    private static void destroyInReverse(List<ServletContextListener> listeners, ServletContextEvent evt) {
+        for (int i = listeners.size() - 1; i >= 0; i--) {
+            ServletContextListener l = listeners.get(i);
+            try {
+                l.contextDestroyed(evt);
+            } catch (VirtualMachineError e) {
+                throw e;
+            } catch (RuntimeException | Error e) {
+                System.getLogger(ListenerRegistry.class.getName()).log(System.Logger.Level.WARNING,
+                        "contextDestroyed failed for listener " + l.getClass().getName(), e);
+            }
+        }
+    }
+
+    public void fireContextAttributeAdded(ServletContext ctx, String name, Object value) {
+        if (contextAttrListeners.isEmpty()) return;
+        var evt = new ServletContextAttributeEvent(ctx, name, value);
+        for (var l : contextAttrListeners) l.attributeAdded(evt);
+    }
+
+    public void fireContextAttributeReplaced(ServletContext ctx, String name, Object oldValue) {
+        if (contextAttrListeners.isEmpty()) return;
+        var evt = new ServletContextAttributeEvent(ctx, name, oldValue);
+        for (var l : contextAttrListeners) l.attributeReplaced(evt);
+    }
+
+    public void fireContextAttributeRemoved(ServletContext ctx, String name, Object value) {
+        if (contextAttrListeners.isEmpty()) return;
+        var evt = new ServletContextAttributeEvent(ctx, name, value);
+        for (var l : contextAttrListeners) l.attributeRemoved(evt);
+    }
+
+    // ---- Request lifecycle ----
+
+    /**
+     * {@code requestInitialized} in registration order. When a listener throws a
+     * {@code RuntimeException}, the listeners already initialized are destroyed, in reverse order,
+     * before it is rethrown (with the failures of that cleanup suppressed): the listeners registered
+     * first (those that drive CDI contexts, see {@link #registerFirst}) must not stay bound to the thread.
+     */
+    public void fireRequestInitialized(ServletContext ctx, ServletRequest req) {
+        if (requestListeners.isEmpty()) return;
+        var evt = new ServletRequestEvent(ctx, req);
+        for (int i = 0; i < requestListeners.size(); i++) {
+            try {
+                requestListeners.get(i).requestInitialized(evt);
+            } catch (RuntimeException e) {
+                throw destroyRequest(evt, i - 1, e);
+            }
+        }
+    }
+
+    /**
+     * {@code requestDestroyed} in reverse registration order. Every listener runs: the listeners registered
+     * first (those that drive CDI contexts) sit outermost and must still unbind when an
+     * application listener throws. The first {@code RuntimeException} is rethrown at the end with
+     * the later ones suppressed; an {@code Error} propagates at once.
+     */
+    public void fireRequestDestroyed(ServletContext ctx, ServletRequest req) {
+        if (requestListeners.isEmpty()) return;
+        RuntimeException failure = destroyRequest(new ServletRequestEvent(ctx, req), requestListeners.size() - 1, null);
+        if (failure != null) throw failure;
+    }
+
+    /**
+     * Destroys listeners {@code from} down to 0. Returns {@code failure}, or the first failure of
+     * these listeners when it is {@code null}, with every later failure suppressed in it.
+     */
+    private RuntimeException destroyRequest(ServletRequestEvent evt, int from, RuntimeException failure) {
+        for (int i = from; i >= 0; i--) {
+            try {
+                requestListeners.get(i).requestDestroyed(evt);
+            } catch (RuntimeException e) {
+                if (failure == null) failure = e;
+                else failure.addSuppressed(e);
+            }
+        }
+        return failure;
+    }
+
+    public void fireRequestAttributeAdded(ServletContext ctx, ServletRequest req, String n, Object v) {
+        if (requestAttrListeners.isEmpty()) return;
+        var evt = new ServletRequestAttributeEvent(ctx, req, n, v);
+        for (var l : requestAttrListeners) l.attributeAdded(evt);
+    }
+
+    public void fireRequestAttributeReplaced(ServletContext ctx, ServletRequest req, String n, Object oldV) {
+        if (requestAttrListeners.isEmpty()) return;
+        var evt = new ServletRequestAttributeEvent(ctx, req, n, oldV);
+        for (var l : requestAttrListeners) l.attributeReplaced(evt);
+    }
+
+    public void fireRequestAttributeRemoved(ServletContext ctx, ServletRequest req, String n, Object v) {
+        if (requestAttrListeners.isEmpty()) return;
+        var evt = new ServletRequestAttributeEvent(ctx, req, n, v);
+        for (var l : requestAttrListeners) l.attributeRemoved(evt);
+    }
+
+    // ---- Session lifecycle ----
+
+    public void fireSessionCreated(HttpSession session) {
+        if (sessionListeners.isEmpty()) return;
+        var evt = new HttpSessionEvent(session);
+        for (var l : sessionListeners) l.sessionCreated(evt);
+    }
+
+    public void fireSessionDestroyed(HttpSession session) {
+        if (sessionListeners.isEmpty()) return;
+        var evt = new HttpSessionEvent(session);
+        for (int i = sessionListeners.size() - 1; i >= 0; i--) {
+            sessionListeners.get(i).sessionDestroyed(evt);
+        }
+    }
+
+    /** {@code HttpServletRequest.changeSessionId} (Servlet 6.1 section 7.3): fired once per change. */
+    public void fireSessionIdChanged(HttpSession session, String oldSessionId) {
+        if (sessionIdListeners.isEmpty()) return;
+        var evt = new HttpSessionEvent(session);
+        for (var l : sessionIdListeners) l.sessionIdChanged(evt, oldSessionId);
+    }
+
+    public void fireSessionAttributeAdded(HttpSession s, String name, Object value) {
+        if (sessionAttrListeners.isEmpty()) return;
+        var evt = new HttpSessionBindingEvent(s, name, value);
+        for (var l : sessionAttrListeners) l.attributeAdded(evt);
+    }
+
+    public void fireSessionAttributeReplaced(HttpSession s, String name, Object oldValue) {
+        if (sessionAttrListeners.isEmpty()) return;
+        var evt = new HttpSessionBindingEvent(s, name, oldValue);
+        for (var l : sessionAttrListeners) l.attributeReplaced(evt);
+    }
+
+    public void fireSessionAttributeRemoved(HttpSession s, String name, Object value) {
+        if (sessionAttrListeners.isEmpty()) return;
+        var evt = new HttpSessionBindingEvent(s, name, value);
+        for (var l : sessionAttrListeners) l.attributeRemoved(evt);
+    }
+
+    // ---- Accesseurs diagnostic ----
+
+    public List<ServletContextListener> contextListeners() { return Collections.unmodifiableList(contextListeners); }
+    public List<ServletRequestListener> requestListeners() { return Collections.unmodifiableList(requestListeners); }
+    public List<HttpSessionListener> sessionListeners() { return Collections.unmodifiableList(sessionListeners); }
+}

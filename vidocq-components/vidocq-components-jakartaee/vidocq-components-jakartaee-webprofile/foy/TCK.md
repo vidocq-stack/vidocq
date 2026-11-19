@@ -1,0 +1,496 @@
+# TCK Report — Foy : Jakarta Servlet 6.1
+
+First full-suite measurement run. Unlike cassini/champollion/vauban, this is a
+**baseline measurement**, not a conformance claim: Foy M1 was extracted from the
+Vidocq runtime to serve Cassini-style stacks, and several spec chapters are not
+implemented yet. This report quantifies exactly which ones.
+
+## 0. Re-run after the undeploy limits (2026-11-15)
+
+`main` at `995ee3c` (Vidocq/foy#106: one longest-match rule for `getContext`, `Retry-After` on the 503 of an
+undeploy, the deployment closed before the server, the cut of a WebSocket whose Close is held), chappe and vauban
+0.4.0-SNAPSHOT, a fresh local repository, `-Ptck,tck-official -pl foy-tck test` (what
+`./run-official-tck-servlet6.1.sh --all` runs): **1707 passing / 1714 run, 7 skipped**, 0 errors, 0 failures,
+11 min 50 s. Surefire's own summary: `Tests run: 1714, Failures: 0, Errors: 0, Skipped: 7`.
+
+The tally (`foy-tck/tck-tally.sh`) is identical to `foy-tck/tck-baseline.txt`, line for line: no class changed. The
+run was made for the `getContext` change: the `ServletContext` and cross-context dispatch classes pass as before.
+
+## 0.1 JSP exit (2026-10-18)
+
+`tck/ibarra-jsp-engine` (ibarra 0.4.0-SNAPSHOT at `6b68c8e`, chappe 0.4.0-SNAPSHOT),
+`./run-official-tck-servlet6.1.sh --all`: 1714 run, **1707 passing / 1714 run, 7 skipped**
+(99.6 %), 0 errors, 0 failures, 11 min 34 s (CLIENT-CERT exit: 1702 passing, +5). Surefire's own
+summary: `Tests run: 1714, Failures: 0, Errors: 0, Skipped: 7`. Every test that runs passes; the 7
+skips are HTTP/2 server push.
+
+Per family (passing / run, skipped):
+
+| Family | JSP exit | CLIENT-CERT exit |
+|---|---|---|
+| `api.*` | 859 / 859, 0 skipped | 856 / 859 |
+| `pluggability.*` | 646 / 646, 0 skipped | 646 / 646 |
+| `spec.*` | 200 / 207, 7 skipped | 198 / 207 |
+| `compat.*` | 2 / 2, 0 skipped | 2 / 2 |
+
+The tally joined against the CLIENT-CERT `foy-tck/tck-baseline.txt`: zero class regression,
+`join -v` empty on both sides (207 classes each), 2 classes improved:
+`api.jakarta_servlet.servletcontext40.ServletContext40Tests` (3 → 0) and
+`spec.security.secform.SecFormTests` (2 → 0). All 209 `tiers=Stats` lines show `reflection=0`.
+`foy-tck/tck-baseline.txt` is refreshed to this tally.
+
+The JSP pages now run, with Ibarra (Jakarta Pages 4.0) plugged into Foy's JSP-engine service
+(BUG-20261011-04 FIXED). When a war holds a page, a tag file or a tag library descriptor, its own or in
+a `WEB-INF/lib` jar, `foy-tck` compiles the pages at deployment with Ibarra's `PagePrecompiler`
+(`WarPages`) and hands Foy the engine and the module layer of the compiled pages. The harness runs on
+the class path, where Foy finds no engine on its own: the pages module is defined in a layer whose
+class loaders all end at the test class loader, so the pages use the Servlet, Pages and Ibarra classes
+Foy uses. The modules the pages require are resolved from their real descriptors in a parent layer,
+defined to a class loader that defines nothing and delegates to the test class loader. Ibarra
+(`ibarra-foy`, `ibarra-compiler`) is a test dependency of `foy-tck` only; Foy itself still does not
+depend on it.
+
+Remaining 7 skips:
+
+| Count | Classes | Reason |
+|---|---|---|
+| 7 skipped | `spec.serverpush.ServerPushTests` (HTTP/2 push) | accepted gap |
+
+Bugs at this exit: BUG-20261011-04 FIXED.
+
+## 0.2 CLIENT-CERT exit (2026-10-12)
+
+`pr/ybl/foy-client-cert` (chappe 0.4.0-SNAPSHOT, chappe#29: TLS client authentication and
+`Request.tls()`), `./run-official-tck-servlet6.1.sh --all`: 1714 run, **1702 passing / 1714 run,
+7 skipped** (99.3 %), 5 errors, 0 failures, 11 min 32 s (Phase 7: 1700 passing, +2). Surefire's
+own summary: `Tests run: 1714, Failures: 0, Errors: 5, Skipped: 7`.
+
+Per family (passing / run, skipped):
+
+| Family | CLIENT-CERT exit | Phase 7 |
+|---|---|---|
+| `api.*` | 856 / 859, 0 skipped | 856 / 859 |
+| `pluggability.*` | 646 / 646, 0 skipped | 646 / 646 |
+| `spec.*` | 198 / 207, 7 skipped | 196 / 207 |
+| `compat.*` | 2 / 2, 0 skipped | 2 / 2 |
+
+The tally (`foy-tck/tck-tally.sh`) was joined with `LC_ALL=C join` against the Phase 7
+`foy-tck/tck-baseline.txt`: zero class regression, `join -v` empty on both sides (207 classes
+each), 2 classes improved: `spec.security.clientcert.ClientCertTests` and
+`spec.security.clientcertanno.ClientCertAnnoTests`, 1 → 0 each, both now `1 0 0`. Every other
+class equals its baseline line. All 209 `tiers=Stats` lines show `reflection=0` (the two
+`clientcert` wars now deploy). The security family passes 57 of its 59 tests.
+`foy-tck/tck-baseline.txt` is refreshed to this tally.
+
+CLIENT-CERT authenticates the TLS client certificate through `IdentityStore.validate(X509Certificate[])`
+and seeds the §3.10 TLS request attributes. `foy-tck` serves the wars that
+`@TargetsContainer("https")` from a second Arquillian container (`tls=true`, `ClientAuth.WANT`),
+whose key and trust stores the `tck-official` profile generates with the JDK's `keytool`
+(`maven-dependency-plugin` unpacks the TCK's `certificates/**`, `maven-antrun-plugin` runs
+`keytool`; build-time only). The TCK client presents `clientcert.jks` through the `javax.net.ssl.*`
+system properties, and `TckIdentities` maps the CTS subject to `Administrator`.
+
+Remaining 5 errors and 7 skips:
+
+| Count | Classes | Reason |
+|---|---|---|
+| 2 | `spec.security.secform.SecFormTests`: `test2`, `test2_anno` | accepted gap: the failed login forwards to `/error.jsp`; no JSP engine (BUG-20261011-04) |
+| 3 | `ServletContext40Tests` (`addJspTest`, `addJspContextListenerInTLD`, `setSessionTimeoutContextListenerInTLD`) | JSP-engine SPI, plugged by Ibarra (Jakarta Pages 4.0) (BUG-20261011-04 family) |
+| 7 skipped | `spec.serverpush.ServerPushTests` (HTTP/2 push) | accepted gap |
+
+Bugs at this exit: BUG-20261011-03 FIXED.
+
+## 0.3 Phase 7 exit: multipart and request body limits (2026-10-11)
+
+`pr/ybl/servlet-completion-phase7` @ `6ac5daa` (chappe 0.4.0-SNAPSHOT),
+`./run-official-tck-servlet6.1.sh --all`: 1714 run, **1700 passing / 1714 run, 7 skipped**
+(99.2 %), 7 errors, 0 failures, 11 min 31 s (Phase 6: 1692 passing, +8). Surefire's own
+summary: `Tests run: 1714, Failures: 0, Errors: 7, Skipped: 7`.
+
+Per family (passing / run, skipped):
+
+| Family | Phase 7 | Phase 6 |
+|---|---|---|
+| `api.*` | 856 / 859, 0 skipped | 848 / 859 |
+| `pluggability.*` | 646 / 646, 0 skipped | 646 / 646 |
+| `spec.*` | 196 / 207, 7 skipped | 196 / 207 |
+| `compat.*` | 2 / 2, 0 skipped | 2 / 2 |
+
+`--family api` (`--no-install`) also runs `GetServletRegistrationsTest`, which passes:
+`Tests run: 860, Failures: 0, Errors: 3, Skipped: 0`, so `api.*` 857 / 860 in family mode (115
+`tiers=Stats` lines, all `reflection=0`).
+
+The tally (`foy-tck/tck-tally.sh`) was joined with `LC_ALL=C join` against the Phase 6
+`foy-tck/tck-baseline.txt`: zero class regression, `join -v` empty on both sides (207 classes
+each), 2 classes improved (8 tests): `api.jakarta_servlet_http.part.PartTests` 4 → 0 and
+`api.jakarta_servlet_http.part1.Part1Tests` 4 → 0 (failures + errors), both now `7 0 0`. Every
+other class equals its baseline line. All 207 `tiers=Stats` lines show `reflection=0`. The
+`spec.*` family ran in full, `SecFormTests` (FORM login, a multipart POST included) at its
+Phase 6 figure (23 / 25). `foy-tck/tck-baseline.txt` is refreshed to this tally.
+
+Phase 7 streams `multipart/form-data` bodies (RFC 7578 parser, parts above `fileSizeThreshold`
+in owner-only temporary files under the multipart `location`, deleted at the end of the request
+and of the async cycle), carries `@MultipartConfig`, `<multipart-config>` and
+`setMultipartConfig` to the request, exposes form fields as request parameters, and bounds
+request bodies (`maxChunkedRequestBodySize`, `maxFormBodySize`, `maxMultipartParts`,
+`maxMultipartPartHeaderSize`, configurable on `FoyChappeBoot`).
+
+**Signature test** (`sigtest` profile, Task 7.8, re-run at this exit):
+`./mvnw -ntp -Ptck,tck-official,sigtest -pl foy-tck test -Dtest=ServletSigTest -Dsurefire.failIfNoSpecifiedTests=false`
+is GREEN: `Tests run: 1, Failures: 0, Errors: 0, Skipped: 0` in `servlet.tck.signature.ServletSigTest`,
+`BUILD SUCCESS` (no signature diff). Build-time tooling of the profile only: `sigtest-maven-plugin`
+2.5 (test scope) and `maven-dependency-plugin`.
+
+Remaining 7 errors and 7 skips:
+
+| Count | Classes | Reason |
+|---|---|---|
+| 2 | `spec.security.clientcert.ClientCertTests`, `spec.security.clientcertanno.ClientCertAnnoTests` | CLIENT-CERT deferred at this exit (BUG-20261011-03); both pass since the CLIENT-CERT exit (§0.2) |
+| 2 | `spec.security.secform.SecFormTests`: `test2`, `test2_anno` | accepted gap: the failed login forwards to `/error.jsp`; no JSP engine (BUG-20261011-04) |
+| 3 | `ServletContext40Tests` (`addJspTest`, `addJspContextListenerInTLD`, `setSessionTimeoutContextListenerInTLD`) | JSP-engine SPI, plugged by Ibarra (Jakarta Pages 4.0) (BUG-20261011-04 family) |
+| 7 skipped | `spec.serverpush.ServerPushTests` (HTTP/2 push) | accepted gap |
+
+Bugs at this exit: BUG-20261011-10 FIXED (vidocq#222); BUG-20261011-11 opened (chappe drains
+an over-cap chunked body without bound).
+
+## 0.4 Phase 6 exit: security (2026-10-11)
+
+`pr/ybl/servlet-completion-phase6` @ `1100b90` (chappe 0.4.0-SNAPSHOT),
+`./run-official-tck-servlet6.1.sh --all`: 1714 run, **1692 passing / 1714 run, 7 skipped**
+(98.7 %), 15 errors, 0 failures, 11 min 33 s (Phase 5: 1659 passing, +33). Surefire's own
+summary: `Tests run: 1714, Failures: 0, Errors: 15, Skipped: 7`.
+
+Per family (passing / run, skipped):
+
+| Family | Phase 6 | Phase 5 |
+|---|---|---|
+| `api.*` | 848 / 859, 0 skipped | 848 / 859 |
+| `pluggability.*` | 646 / 646, 0 skipped | 646 / 646 |
+| `spec.*` | 196 / 207, 7 skipped | 163 / 207 |
+| `compat.*` | 2 / 2, 0 skipped | 2 / 2 |
+
+`--family api` (`--no-install`) also runs `GetServletRegistrationsTest`, which passes:
+`Tests run: 860, Failures: 0, Errors: 11, Skipped: 0`, so `api.*` 849 / 860 in family mode.
+
+The tally (`foy-tck/tck-tally.sh`) was joined with `LC_ALL=C join` against the Phase 5
+`foy-tck/tck-baseline.txt`: zero class regression (no class with a different run count, more
+failures, more skips or fewer passes), `join -v` empty on both sides (207 classes each), 5
+classes improved (33 tests). All 207 `tiers=Stats` lines show `reflection=0` (and the 115 of
+the family run). `foy-tck/tck-baseline.txt` is refreshed to this tally.
+
+Improved classes (`spec.security.*`, failures + errors before → after): `secform.SecFormTests`
+17 → 2, `secbasic.SecBasicTests` 8 → 0, `denyUncovered.DenyUncoveredTests` 4 → 0,
+`metadatacomplete.MetaDataCompleteTests` 4 → 0, `annotations.AnnotationsTests` 2 → 0. The
+security family now passes 55 of its 59 tests (Phase 5: 22). Phase 6 enforces web.xml and
+annotation constraints per url-pattern, `deny-uncovered-http-methods`, the transport
+guarantee, BASIC and FORM login, `security-role-ref`, `login`/`logout`/`authenticate`,
+`setServletSecurity` and `declareRoles`, over the new `IdentityStore` SPI.
+
+Remaining 15 errors and 7 skips:
+
+| Count | Classes | Reason |
+|---|---|---|
+| 2 | `spec.security.clientcert.ClientCertTests`, `spec.security.clientcertanno.ClientCertAnnoTests` | CLIENT-CERT deferred at this exit: it needed chappe TLS client authentication and peer certificates, plus an `https` Arquillian container (BUG-20261011-03); both pass since the CLIENT-CERT exit (§0.2) |
+| 2 | `spec.security.secform.SecFormTests`: `test2`, `test2_anno` | accepted gap: the failed login forwards to `/error.jsp`, which must be executed; no JSP engine (BUG-20261011-04) |
+| 8 | multipart: `PartTests` 4, `Part1Tests` 4 | Phase 7 |
+| 3 | `ServletContext40Tests` (`addJspTest`, `addJspContextListenerInTLD`, `setSessionTimeoutContextListenerInTLD`) | JSP-engine SPI, plugged by Ibarra (Jakarta Pages 4.0) |
+| 7 skipped | `spec.serverpush.ServerPushTests` (HTTP/2 push) | accepted gap |
+
+Open bugs added at this exit: BUG-20261011-03 (CLIENT-CERT, deferred), -04 (SecForm JSP,
+accepted gap), -05 (case-sensitive constraint matching vs a case-insensitive file system),
+-06 (flaky `CallbackSerializerTest`), -07 (security denial on the redirect and unmapped
+branches outside the request listeners).
+
+## 0.5 Phase 5 exit: streaming, async and non-blocking I/O (2026-10-10)
+
+`pr/ybl/servlet-completion-phase5` @ `3c0aa13` (chappe `pr/ybl/servlet-streaming-upgrade` @
+`3623006`, 0.4.0-SNAPSHOT), `./run-official-tck-servlet6.1.sh --all`: 1714 run,
+**1659 passing / 1714 run, 7 skipped**, 48 errors, 0 failures, 11 min 37 s (Phase 4: 1649
+passing, +10). Surefire's own summary: `Tests run: 1714, Failures: 0, Errors: 48, Skipped: 7`.
+A skipped test is never counted as passing: passing = run - errors - failures - skipped.
+
+Per family (passing / run, skipped):
+
+| Family | Phase 5 | Phase 4 |
+|---|---|---|
+| `api.*` | 848 / 859, 0 skipped | 840 / 859 |
+| `pluggability.*` | 646 / 646, 0 skipped | 646 / 646 |
+| `spec.*` | 163 / 207, 7 skipped | 161 / 207 |
+| `compat.*` | 2 / 2, 0 skipped | 2 / 2 |
+
+Family runs (`--family`) also count `GetServletRegistrationsTest` (`api.*`, 1/1, run
+separately at the exit: `api.*` 849 / 860 in family mode); `--family pluggability`
+gives 646 / 646, 0 skipped, identical to `--all`.
+
+`foy-tck/tck-tally.sh` now prints a fourth column, the skipped count
+(`<class> <run> <failures+errors> <skipped>`). The tally was joined with `LC_ALL=C join`
+against the previous `foy-tck/tck-baseline.txt` (both sides sorted with `LC_ALL=C`): zero
+class regression (no class with more failures or a different run count), `join -v` empty on
+both sides, 6 classes improved (10 tests). `foy-tck/tck-baseline.txt` is refreshed to this tally, with
+the skipped column. All 207 `tiers=Stats` lines show `reflection=0`.
+
+Improved classes: `HttpServletResponse40Tests` (3, response trailers),
+`HttpUpgradeHandlerTests` (1, HTTP Upgrade), `ReadListenerTests` (1),
+`ReadListener1Tests` (2), `WriteListenerTests` (1), `spec.servletresponse.servletResponseTests`
+(2, `flushBuffer` streaming). `spec.serverpush.ServerPushTests` reads `8 0 7`: its 7 errors
+became 7 skips through `servlet.tck.support.http2Push=false` (HTTP/2 push is an accepted gap,
+§3.6); its passing count is unchanged (1 before, 1 now), so this is not a gain.
+
+Remaining 48 errors and 7 skips, by class and by phase:
+
+| Count | Classes | Phase |
+|---|---|---|
+| 37 | `spec.security.*`: `secform` 17, `secbasic` 8, `denyUncovered` 4, `metadatacomplete` 4, `annotations` 2, `clientcert` 1, `clientcertanno` 1 | 6 (security) |
+| 8 | multipart: `PartTests` 4, `Part1Tests` 4 | 7 |
+| 3 | `ServletContext40Tests` (JSP and TLD: `addJsp`, `addJspContextListenerInTLD`, `setSessionTimeoutContextListenerInTLD`) | JSP-engine SPI, plugged by Ibarra (Jakarta Pages 4.0) |
+| 7 skipped | `spec.serverpush.ServerPushTests` (HTTP/2 push) | accepted gap |
+
+**Log noise.** `servlet.tck.api.jakarta_servlet.asynccontext.ACListener2` throws an
+`IOException` from `onComplete` on purpose; Foy logs each such listener failure at
+`WARNING` with its stack trace (`AsyncListener.onComplete threw`). These lines are expected
+and are not failures.
+
+Open bugs: BUG-20261010-02 (PARTIAL: async writes from threads the application manages
+itself), BUG-20261010-03 (kept non-blocking bytes sent blocking at the end of a cycle, bounded
+only by chappe's write timeout), plus the Phase 4 ones still open (-20261009-01, -03, -04,
+-09). Chappe: CHAPPE-008 (ordinary headers), CHAPPE-014 (lingering close skipped after an
+interrupted body read).
+
+## 0.6 Phase 4 exit: request, response and session core (2026-10-09)
+
+`pr/ybl/servlet-completion-phase4` @ `8cc03fd`, `./run-official-tck-servlet6.1.sh --all`:
+1714 run, **1649 pass**, 65 errors, 13 min 32 s (Phase 3: 1587, +62). Per family:
+`api.*` 840/859 (was 821), `pluggability.*` 646/646 (was 639), `spec.*` 161/207
+(was 127), `compat.*` 2/2 (was 0). The per-class tally (`foy-tck/tck-tally.sh`) was
+diffed with `LC_ALL=C join` against the previous `foy-tck/tck-baseline.txt` (both
+sides sorted with `LC_ALL=C`): zero class regression (no class with more failures
+or a different run count), 25 classes improved, `join -v` empty on both sides (no
+class added or removed). `foy-tck/tck-baseline.txt` is refreshed to this tally.
+Family runs (`--family`) also count `GetServletRegistrationsTest`: `api.*` 841/860.
+
+All 207 `tiers=Stats` lines show `reflection=0`.
+
+Improved classes: `spec.requestdispatcher` (13), `spec.httpservletresponse` (5),
+`spec.srlistener` (5), `spec.errorpage` (4), `spec.multifiltermapping` (3, BUG-20261008-02),
+`spec.welcomefiles` (2), `spec.i18n.encoding` (2), `HttpServletRequest40Tests` (9, mapping),
+`FilterRequestDispatcherTests` (2, in `api.*` and `pluggability.*`), the three
+`httpservletresponse*` classes and `sessioncookieconfig` (`api.*` and `pluggability.*`), the
+session classes (`HttpSessionTests`, `HttpSessionIdListenerTests`, `HttpSessionxTests`),
+`HttpServletRequestWrapperTests`, `pluggability.fragment.FragmentTests` and both
+`compat.LeadingSlash` classes.
+
+Remaining 65 errors, by class and by phase:
+
+| Count | Classes | Phase |
+|---|---|---|
+| 37 | `spec.security.*`: `secform` 17, `secbasic` 8, `denyUncovered` 4, `metadatacomplete` 4, `annotations` 2, `clientcert` 1, `clientcertanno` 1 | 6 (security) |
+| 10 | streaming and non-blocking I/O: `ReadListenerTests` 1, `ReadListener1Tests` 2, `WriteListenerTests` 1, `HttpUpgradeHandlerTests` 1, `HttpServletResponse40Tests` 3 (trailers need a streamed response), `servletResponseTests` 2 (`flushBuffer`) | 5 |
+| 8 | multipart: `PartTests` 4, `Part1Tests` 4 | 7 |
+| 7 | `spec.serverpush.ServerPushTests` (HTTP/2 push) | 5 |
+| 3 | `ServletContext40Tests` (JSP and TLD: `addJsp`, `addJspContextListenerInTLD`, `setSessionTimeoutContextListenerInTLD`) | accepted gap (no JSP) |
+
+Open bugs: BUG-20261009-01 (dispatch drops a non-HTTP wrapper), -03 (error dispatch paths),
+-04 (decoded paths in dispatch URIs), -09 (connection and HTTP/2 stream ids, chappe follow-up).
+
+## 0.7 Phase 3 exit: descriptors and pluggability (2026-10-09)
+
+`pr/ybl/servlet-completion-phase3`, `./run-official-tck-servlet6.1.sh --all`:
+1714 run, **1587 pass**, 127 errors, 13 min 52 s (Phase 2: 928). Per family:
+`api.*` 821/859 (unchanged), `pluggability.*` 639/646 (was 5), `spec.*` 127/207
+(was 102), `compat.*` 0/2. The per-class tally (`foy-tck/tck-tally.sh`) was diffed
+against the previous `foy-tck/tck-baseline.txt`: zero class regression, 63 classes
+improved, no new class. `foy-tck/tck-baseline.txt` is refreshed to this tally.
+
+`--all` runs `**/*Tests.class` only, so a `*Test` class seen in family runs
+(for example `GetServletRegistrationsTest`) is not counted.
+
+All 205 `tiers=Stats` lines show `reflection=0`. The harness now deploys through
+the product descriptor and fragment merge, with the `WEB-INF/lib` fragments.
+
+Residual `pluggability.*` failures (7, in 6 classes) are the twins of failures
+that also exist in `api.*` (except the last): `filterrequestdispatcher` (2, filter invoked twice,
+BUG-20261008-02), `httpservletresponse`, `httpservletresponse30`,
+`httpservletresponsewrapper30`, `sessioncookieconfig` (1 each) and
+`fragment.FragmentTests` (1). They belong to the request/response phase (default
+servlet, welcome files) and the security phase.
+
+## 0.8 Phase 2 exit: build-time code generation (2026-10-08)
+
+`pr/ybl/servlet-completion-phase2`, `./run-official-tck-servlet6.1.sh --all`:
+1714 run, **928 pass**, 786 errors, 11 min 19 s (Phase 1: 921). Per family:
+`api.*` 821/859, `pluggability.*` 5/646, `spec.*` 102/207 (was 95), `compat.*` 0/2.
+The per-class tally (`foy-tck/tck-tally.sh`) was diffed against the previous
+`foy-tck/tck-baseline.txt`: zero class regression; three classes improved
+(`spec.annotationservlet.webservlet.WebServletTests`, `webservletapi.WebServletApiTests`,
+`webservletdd.WebServletddTests`: 7 errors fixed). `foy-tck/tck-baseline.txt` is
+refreshed to this tally.
+
+`WebComponentRegistry` tier statistics, one line per deployed archive (207 of
+them): `serviceLoader=0, generatedClass=0, classFile=1..3, reflection=0`. The TCK
+archives are assembled at test time and never go through `foy-processor`, so
+everything resolves through the Class-File tier (decoded from the class bytes),
+and **no component fell back to reflection**.
+
+## 0a. Product bootstrap (Phase 1) (2026-10-07)
+
+`pr/ybl/servlet-completion-phase1`, `./run-official-tck-servlet6.1.sh --all`:
+1714 run, **921 pass**, 793 errors, 11 min 12 s. Per family: `api.*` 821/859,
+`pluggability.*` 5/646, `spec.*` 95/207, `compat.*` 0/2. The per-class tally
+(`foy-tck/tck-tally.sh`) is identical to `foy-tck/tck-baseline.txt`: no
+regression, no improvement.
+
+The lifecycle is now executed by foy-core's `WebAppDeployer`; the harness only
+adapts Arquillian archives. The score is unchanged because Phase 1 moved the
+lifecycle (init/destroy, `web.xml` merge per Servlet 6.1 §8.2.3,
+`metadata-complete`, `load-on-startup`) into the product without altering what
+the suite exercises: the figures now measure the product boot path, not only
+engine + harness.
+
+## 0b. Re-measurement on 0.4.0-SNAPSHOT (2026-10-07)
+
+`main` @ `65b1197`, chappe/vauban 0.4.0-SNAPSHOT, `./run-official-tck-servlet6.1.sh --all`:
+1714 run, **921 pass**, 793 errors, 11 min 12 s — identical to 2026-06-12.
+Per family: `api.*` 821/859, `pluggability.*` 5/646, `spec.*` 95/207,
+`compat.*` 0/2.
+
+**Caveat discovered by the 2026-10-07 audit:** the TCK harness
+(`ServletTestHarness`, `VidocqDeployableContainer`) performs the deployment
+lifecycle itself (init/destroy, web.xml, SCI, dynamic registrations). The
+product boot path does not yet. Scores above measure engine + harness;
+Phase 1 of `docs/superpowers/plans/` moves that lifecycle into foy-core.
+
+## 0c. Re-run after the trailer/idle-timeout fixes (2026-06-12)
+
+Same suite, re-run with the merged fix chain (chappe trailers + 
+`ForwardingRequest` + CHAPPE-005 idle timeout, foy `getTrailerFields()`,
+`foy-tck` version unfrozen — it had been validating stale 0.1.0 jars):
+
+| Metric | Baseline | **Re-run** |
+|---|---:|---:|
+| Tests run | 1714 | 1714 |
+| Passed | 920 | **921** |
+| `api.*` | 95.5 % | **95.6 %** |
+| Wall clock | ~50 min | **11 min** |
+
+`HttpServletRequest40Tests.TrailerTest` (the test that froze the very first
+run — BUG-20260611-01, fixed across four stacked causes, see `BUG.md`) now
+**passes**; the 9 remaining errors in that class are all the
+`httpServletMapping*` family (`getHttpServletMapping`, a separate chantier).
+The 0.1.0→0.2.0 jar refresh changed nothing else — the baseline structure
+below remains valid. The harness 5 s idle timeout cut the wall clock to
+11 min; 2 tests still hit the 120 s JUnit timeout
+(`HttpUpgradeHandlerTests.upgradeTest` — HTTP Upgrade not implemented, §3.6).
+
+## 1. Result (baseline, 2026-06-11)
+
+| Metric | Value |
+|---|---|
+| TCK | `jakarta.tck:servlet-tck-runtime:6.1.0` (official, non-public artifacts) |
+| JDK | Eclipse Temurin 25 |
+| Harness | `foy-tck` (Arquillian, in-reactor behind the `tck` Maven profile), transport chappe, CDI vauban |
+| Command | `./run-official-tck-servlet6.1.sh --all` |
+| Tests run | **1714** |
+| Passed | **920** |
+| Failures / Errors | 0 / 794 |
+| **Raw score** | **53.7 %** |
+
+```
+[ERROR] Tests run: 1714, Failures: 0, Errors: 794, Skipped: 0
+```
+
+## 2. Per-family breakdown — the raw score is misleading
+
+| Family | Run | Pass | Score | Reading |
+|---|---:|---:|---:|---|
+| `api.*` (core engine) | 859 | 820 | **95.5 %** | The Servlet engine itself is solid |
+| `pluggability.*` | 646 | 5 | 0.8 % | **One missing feature** (web fragments), see §3.1 |
+| `spec.*` (behavioral) | 148 | 74 | 50.0 % | Async, error pages, server push… see §3 |
+| `spec.security.*` | 59 | 21 | 35.6 % | Form/basic auth and client-cert incomplete |
+| `compat.*` | 2 | 0 | 0 % | Leading-slash dispatch compat |
+
+The 95.5 % on `api.*` (the largest family) shows the M1 core is much better
+than the raw 53.7 % suggests: **81 % of all errors (641/794) come from a single
+missing feature** — web-fragment scanning.
+
+## 3. Root causes identified (2026-06 diagnosis, kept for history)
+
+This section and §4 are the diagnosis made on the 2026-06-11 baseline (921/1714). They are history: several causes were resolved by Phases 1 to 4 (see §0 for the current tally and the remaining failures).
+
+### 3.1 Web fragments not scanned — 641 errors (81 % of all errors)
+
+**Resolved in Phase 3** (`pluggability.*` 5 → 639/646, overall 1587/1714); the analysis below is the 2026-06 diagnosis, kept for history. The 7 residual errors are tracked in §0.
+
+Every `pluggability.*` war packages its servlets in `WEB-INF/lib/*.jar` with a
+`META-INF/web-fragment.xml` (spec §8.2). Foy deploys those wars with **zero
+servlets registered** at the time (`[VidocqTCK] deploy archive=servlet_plu_servlet_web.war
+… servlets=[]`), so every request 404s. Implementing fragment scanning +
+ordering (`<absolute-ordering>`, `<ordering>`) would mechanically bring the
+overall score to ~91 %. The 10 `pluggability.aordering*` and `fragment` classes
+test the ordering semantics specifically.
+
+### 3.2 HTTP/1.1 trailers — `HttpServletRequest40Tests` 10/11
+
+`request.getTrailerFields()` / chunked request trailers: Foy/chappe never
+answers a chunked request carrying trailers — the raw-socket TCK client blocked
+**forever** in `Socket.read()` (no `SO_TIMEOUT` client-side; see §5). Likely a
+chappe-side transport gap (trailer parsing after the final chunk).
+
+### 3.3 Multipart — `PartTests`/`Part1Tests` 8/14
+
+`jakarta.servlet.http.Part` handling fails on half the cases (upload limits,
+`@MultipartConfig` thresholds…).
+
+### 3.4 Async I/O — `ReadListener`/`WriteListener` (4/4) and `spec.async` (22/39)
+
+Non-blocking I/O listeners (`ServletInputStream.setReadListener`…) and a
+substantial part of the `AsyncContext` behavioral suite (dispatch cycles,
+timeouts, event ordering).
+
+### 3.5 Security — 38/59
+
+`secform` (17/25), `secbasic` (8/14), `clientcert*` (2/2), `denyUncovered`,
+`metadatacomplete`: FORM/BASIC auth flows and TLS client-cert mapping are
+partial in the chappe adapter and the provider SPI of the time. Resolved in
+Phase 6 (§0.4): 55/59, the `IdentityStore` SPI replaced that provider. The CLIENT-CERT exit
+(§0.2) brings it to 57/59 (`clientcert*` 2/2).
+
+### 3.6 Scattered behavioral gaps (2026-06 diagnosis; resolved in Phases 4 and 5, push skipped)
+
+`spec.errorpage` (4/4), `spec.welcomefiles` (2/2), `spec.requestdispatcher`
+(13/20), `spec.srlistener` (5/13), `spec.i18n.encoding` (2/3),
+`compat.LeadingSlash` (2/2) and `HttpUpgradeHandler` (1/1), plus singles visible
+in the per-class log. All were fixed in Phase 4, except `HttpUpgradeHandler`
+(Phase 5).
+
+`spec.serverpush` is an accepted gap: 7 of its 8 tests are skipped through
+`servlet.tck.support.http2Push=false`. Chappe has no h2c Upgrade nor
+PUSH_PROMISE writer, push is deprecated in Servlet 6.1 in favour of 103 Early
+Hints, and `newPushBuilder()` returns `null`.
+
+## 4. What this means for the roadmap (2026-06 diagnosis, kept for history)
+
+By expected score gain:
+
+1. **Web fragments (§8.2)** — +~37 points in one chantier (→ ~91 %).
+2. **Async I/O + AsyncContext behaviors** — ~26 errors.
+3. **Security flows (FORM/BASIC/client-cert)** — ~38 errors.
+4. **Trailers (chappe)** + multipart + error pages + welcome files — ~25 errors.
+
+## 5. Methodology note — hang safety net
+
+Some TCK clients read raw sockets without `SO_TIMEOUT`
+(`HttpServletRequest40Tests.TrailerTest` line 252) and hang forever when the
+implementation never answers: the first measurement attempt froze after 83
+classes. `foy-tck/src/test/resources/junit-platform.properties` now sets a
+global JUnit 120 s timeout in `SEPARATE_THREAD` mode (a thread stuck in
+`Socket.read()` ignores interruption — the watchdog must abandon it). 8 tests
+hit the timeout in this run; they are counted as errors above.
+
+## 6. Reproduce
+
+```sh
+./run-official-tck-servlet6.1.sh --all   # ~30 min, needs the non-public TCK artifacts in the local M2
+```
+
+Per-class tallies parse out of the surefire output
+(`Tests run: …, -- in servlet.tck.…` lines).

@@ -1,0 +1,1922 @@
+# BUG.md — foy
+
+## BUG-20261118-62 — A servlet of `web.xml` whose class is a bean gets no injection
+
+- Date: 2026-11-18 (found by the Jakarta EE 11 Platform TCK for Persistence on the Vidocq runtime, Foy 412ca8b).
+- Symptom: the TCK's `puservlet` vehicle is a servlet `web.xml` declares, with an `@PersistenceUnit
+  EntityManagerFactory emf` field; the runner registers every class of the war as a bean. Its tests fail on
+  `this.emf` being null. Making the class `@Dependent` changed nothing. An `@WebServlet` with the same field is
+  injected.
+- Repro: `WebXmlComponentsThroughCdiTest` (`foy-cdi-vauban`): a `@Dependent` servlet with an `@Inject` field,
+  declared in `WEB-INF/web.xml`, answered `not injected`.
+- Cause: `FoyChappeBoot` creates the annotated components through `BeanManager.getReference` (`WebAppDiscovery`),
+  and every other one, those of `web.xml`, those registered by class and the listeners, upgrade handlers and
+  components of `create*`, through the `ComponentFactory`, which calls the no-argument constructor. Servlet 6.1
+  §15.5 asks a Jakarta EE container to inject them all (§4.4.3.5 for `create*`).
+- Status: FIXED on `fix/web-xml-components-through-cdi`. With a `BeanManager`, the factory is a
+  `CdiComponentFactory`: a class with exactly one bean of its own (not one of a subclass) is created through
+  `getReference`, as an annotated component is, and any other class by the registry factory, as before. A class
+  that is no bean stays without injection: in a build-indexed application a component class becomes a bean through
+  a bean defining annotation, or through `@WebServlet` and its siblings (`FoyWebExtension`).
+- Verification: the repro red before, green after; `CdiComponentFactoryTest` (6); `foy-core`, `foy-chappe`,
+  `foy-cdi-vauban` and the architecture tests (1934 tests) green.
+
+## BUG-20261117-01 — A session class without `serialVersionUID` that gains a method drops its session at a swap
+
+- Date: 2026-11-17 (found by the end-to-end replay of the Vidocq dev swap on vaadin-on-vidocq, Foy 18ff8067, Vauban
+  0e39add0).
+- Symptom: a public method was added to a `@SessionScoped Serializable` bean (`io.vidocq.tools.vaadin.Visits`) and to
+  a Vaadin view, neither of which declares a `serialVersionUID`. At the swap the import logged `Importing the HTTP
+  sessions dropped 1 session(s) that could not be restored, as new ones start instead; first cause: class
+  io.vidocq.tools.vaadin.Visits`, and the user got a new session. Adding a method is the most common reason for a
+  swap, so the session handover failed in its main case. The line did not say why either.
+- Repro: deterministic. Compile a `Serializable` class without `serialVersionUID`, put an instance in a session,
+  export with a loader of that version, then import through a loader of the same class with one public method or
+  constructor added (`SessionDefaultSerialVersionUidTest.aClassWithoutSerialVersionUidThatGainsAPublicMethodKeepsItsSession`;
+  on Vauban, `CdiSessionSwapTest.aSessionBeanWithoutSerialVersionUidThatGainsAMethodMoves`, which logged
+  `first cause: class swap.app.Visits` on main).
+- Cause: the JDK computes a class's default `serialVersionUID` from its name, interfaces, fields and non-private
+  methods and constructors, so the UID moved (-2180439236505541769 to -3816310884943761011 in the replay) and the
+  import's `ObjectInputStream` refused the stream descriptor, although the serialized form (the fields) had not
+  changed. The stream descriptor carries the fields, not whether the class declares its UID or a `writeObject`, so
+  the import could not tell a harmless change from a breaking one.
+- Status: FIXED on `fix/session-default-suid`. Where the stream's UID differs from the local class's, and only there,
+  the import reads the class with the local descriptor when neither version declares a `serialVersionUID` or a
+  `writeObject`, neither is `Externalizable`, the serializable fields (name, type code, type string, in order), the
+  nearest serializable superclass and the interfaces the class itself implements (by name, in declaration order) are
+  the same, and both shapes could be read; otherwise the JDK refuses as before. The export follows each class
+  descriptor with the class's shape (`SerialShape`, export format version 2; version 1 is refused as unknown). Both
+  sides read a shape from the class as it was loaded (`getDeclaredField`/`getDeclaredMethod`, a documented
+  reflective fallback), never from the class file its loader serves, which need not be the bytes it defined: a dev
+  swap compiles in place and the old layer's loader then serves the new class file
+  (`aSerialVersionUidDeclarationRemovedInPlaceDropsTheSession` and `aWriteObjectRemovedInPlaceDropsTheSession` were
+  kept, the second with its `writeObject` data unread, when the export read class files), and a loader may define
+  other bytes than it serves (`aWriteObjectOfTheLoadedClassDropsTheSessionWhateverItsClassFileSays` read the value
+  with the wrong layout and failed on `java.io.EOFException` when the import read class files). A class of the JDK
+  is not looked at, and a class whose members cannot be listed (a `LinkageError`) has an unknown shape. The
+  interfaces catch two anonymous classes whose numbers swapped: same name, same fields
+  (`twoAnonymousClassesWhoseNumbersSwappedDropTheSession` was kept, and read as the other class). The drop line now
+  ends with the reason, `first cause: class <name>: <reason>` (texts in `internals.adoc`, "A session class that
+  changed"). Verified by `SessionDefaultSerialVersionUidTest` (26 tests: kept, dropped with each reason, unknown
+  shapes, unchanged, compiled in place), `SessionTransferTest` (format version 2, version 1 refused, reasons of a
+  missing class, of a failing `readObject` with and without a message and of bytes that are no serialization
+  stream), the CDI test above, the full build with `-Pquality,errorprone`, and the Servlet 6.1 TCK.
+
+## BUG-20261116-02 — A failing session listener logs the whole session id, which is a credential
+
+- Date: 2026-11-16 (found in review while building the session export of a dev swap, branch
+  `feat/session-survives-swap`).
+- Symptom: when `sessionDestroyed` or the unbinding of an attribute (`valueUnbound`, `attributeRemoved`) threw during
+  an invalidation, `HttpSessionImpl.completeInvalidation` logged a WARNING line that carried the whole session id
+  (`sessionDestroyed failed for session <id>`, `unbinding <name> failed for session <id>`). The session was ending,
+  so the window was short, but a session id is a credential and a log line never carries a whole one.
+- Repro: deterministic. A `HttpSessionListener` whose `sessionDestroyed` throws a `RuntimeException`, then
+  `session.invalidate()`: the WARNING line of `io.vidocq.foy.internal.session.HttpSessionImpl` holds the 32 hex
+  characters of the id.
+- Cause: the two log lines concatenated the field `id`.
+- Status: FIXED on `feat/session-survives-swap` (Foy PR 1, "HTTP sessions survive a dev swap"). The lines name the
+  session by the first 8 characters of its id (`HttpSessionImpl.idPrefix`), as every log line of the session export
+  and import does.
+
+## BUG-20261116-01 — An `Error` thrown by a WebSocket listener's `onClose` escapes into Chappe's connection thread
+
+- Date: 2026-11-16 (a flaky CI test: `WebSocketTakeoverEndToEndTest.anErrorFromOnCloseDoesNotStopTheUndeploy`, PR
+  #111, run 888 job 2, line 873: `log.thrown()` was `[]`).
+- Symptom: the listener's `onClose` threw an `Error`; nothing was logged through Foy, and Chappe's thread printed
+  `Exception in thread "" java.lang.ExceptionInInitializerError: onClose failed` on its uncaught exception
+  handler (`WebSocketTakeover.finish` <- `WebSocketTakeover.onClose` <- `WebSocketConnection.notifyClose`). An
+  `Error` from `onOpen` escaped the same way (`WebSocketConnection.run` catches `Exception` from `onOpen`).
+- Repro: deterministic, `WebSocketTakeoverCallbackErrorTest` (`onClose` through `WebSocketTakeover.onClose` as
+  Chappe calls it; `onOpen` through `WebSocketTakeover.onOpen`). Racy: undeploy with an open connection whose peer
+  answers the 1001 before the hook delivers `onClose`.
+- Cause: `finish` ran `listener.onClose` in a `try`/`finally` with no catch. Delivered by the undeploy's hook, the
+  context logged what escaped (`closing an upgraded connection failed`); delivered by Chappe's thread, which
+  catches `Exception` only from `onClose`, the `Error` ended on the uncaught handler. The two paths won in turn
+  when the client's Close answered the undeploy's 1001.
+- Status: fixed by this branch. `finish` catches what `onClose` throws (a `VirtualMachineError` is rethrown) and
+  logs it once at WARNING on the `WebSocketTakeover` logger; `destroy()` still runs. `onOpen` logs an `Error` at
+  WARNING on the same logger, then hands Chappe an `IOException` carrying it (Chappe logs that at DEBUG only; the
+  listener hears no `onError` for the wrapper, the takeover having ended). The frame callbacks and `onError` are
+  caught by Chappe (`readLoop` catches `Throwable`, `safeError` logs it and swallows an `onError` failure). The
+  end-to-end test captures the takeover's logger, so it passes on either path.
+- Seen again in a Foy run of foy#113 (Kerckhoffs JACC slice), green on the rerun: the same race, the same test. Loop check
+  2026-11-17 on `8965bf0` (which holds the fix): `WebSocketTakeoverEndToEndTest#anErrorFromOnCloseDoesNotStopTheUndeploy`
+  30 runs, 30 green, none failed. A second entry with this id ("is intermittent", foy#115) was folded into this one.
+
+## BUG-20261115-08 — A WebSocket close the container initiates reaches `onClose` with its wire code, not 1006
+
+- Date: 2026-11-15 (the maintainer ruled for Jakarta WebSocket 2.2 section 2.1.5 over the design of record,
+  `WEBSOCKET.md` section 5.4 "Close.", which said a local close reports the session's own reason).
+- Symptom: `Endpoint.onClose` heard the code of the Close frame the container sent: 1001 for the undeploy, an
+  idle timeout or a send timeout, 1009 for a message over the limit, 1011 for a failed `onOpen`. Section 2.1.5
+  asks for 1006 (`CLOSED_ABNORMALLY`, never sent on the wire) with a suitable reason whenever the local
+  container initiates the close, so the endpoint can tell a remote close from a local one: an endpoint could
+  not tell the undeploy's 1001 from a peer that closed with 1001. Worse, a close Chappe initiates on a
+  protocol violation of the peer (an invalid UTF-8 text message, closed with 1007) or on an `Error` from a
+  message handler (1011) reached `onClose` as 1005 (`NO_STATUS_CODE`), as if the peer had sent a Close with no
+  code.
+- Repro: deterministic. In `foy-websocket`: `FoySessionTest` (`aMessageOverTheLimitClosesWith1009AndReports1006`,
+  the binary one, `anOnOpenThatThrowsReportsThenClosesWith1011AndReports1006`,
+  `anOnOpenThatThrowsAnErrorClosesWith1011BeforeItPropagates`), `SessionTimerTest`
+  (`theIdleTimeoutClosesWith1001AndReports1006`), `AsyncRemoteTest` (`aSendPastItsTimeoutFailsAndClosesTheSession`) and
+  `SessionEndToEndTest` (the undeploy, the undeploy's cut, the idle timeout, a message too big, `onOpen`
+  failures, `aProtocolErrorOfThePeerClosesWith1007AndReports1006`, which got `CloseReason[1005]`). In
+  `foy-core`, `WebSocketTakeoverEndToEndTest`: 23 tests, among them `aProtocolErrorOfThePeerClosesWith1007AndReports1006`
+  and `anErrorFromACallbackClosesWith1011AndReports1006` (1005 to the listener).
+- Cause: `FoySession` recorded the Close frame it sent as the reason of `onClose`; the takeover handed its
+  listener the undeploy's 1001 and a failed `onOpen`'s 1011, and passed on the 1005 Chappe reports for a close
+  it initiated after an `onError`.
+- Status: FIXED on `fix/websocket-onclose-1006`. A close the container initiates reaches `onClose` as 1006 with
+  a reason naming the cause; the peer still reads the Close frame's own code. `FoySession.closeByContainer`
+  sends the frame and records `CloseReason(CLOSED_ABNORMALLY, reason)` for the idle timeout (`idle timeout`),
+  the send timeout (`send timeout`), a message too big (`text message of N characters, the maximum is M`, or
+  the binary one) and a failed `onOpen` (`onOpen failed`). The takeover's `WebSocketListener.onClose` contract
+  follows the same rule: 1006 for the undeploy (`the application is stopping`, also when it cuts the
+  connection), a failed `onOpen`, and a close Chappe initiates after an `onError` and reports with a code other
+  than 1006 (`protocol error: ` and Chappe's message, or `callback failed: ` and the throwable), every reason
+  cut to 123 bytes on a character boundary. Unchanged: a close of the peer gives the peer's code, a
+  `Session.close(...)` of the application its own code (the rule names the container), a TCP cut with no close
+  first 1006 with no reason, and the side that closed first keeps its reason. Review follow-up, same branch:
+  an `onOpen` that failed once the undeploy closed the connection heard `onOpen failed` (an `Error` on the
+  Jakarta side, any failure at the SPI level) although the peer read the undeploy's 1001 and the 1011 never
+  went out; it now hears the reason of the Close that went out. The undeploy and a failed `onOpen` claim the
+  close once (`WebSocketTakeover.firstClose`), every later Close of the takeover repeats the first, and the
+  session leaves `onClose` to the transport when the transport's Close went out before an `Error` from
+  `onOpen` (`FoySessionTest.anErrorFromOnOpenAfterTheTransportClosedReportsTheTransportsClose`,
+  `SessionEndToEndTest.anErrorFromOnOpenDuringTheUndeployReportsTheUndeploysClose`, and in
+  `WebSocketTakeoverEndToEndTest` the six tests of a failed `onOpen` during the undeploy). The last window, a
+  Close of the peer, or the undeploy's, that goes out between a local close's check and its send, which left the
+  local reason in `onClose`, closed on `fix/websocket-close-known-window` with Chappe's companion branch of the
+  same name: Chappe's `WebSocket.sendClose` and `WebSocketPeer.close` answer whether the call sent the Close frame,
+  and `FoySession` and the undeploy give up their own reason in `onClose` when it answers that another Close
+  came first; a close whose write failed keeps its reason unless the peer's Close was read, and one still under
+  way keeps it only against a cut (a send or idle timeout held behind a send the peer does not read still
+  reports its cause), yielding to the peer's Close or to the undeploy's. `onClose` waits for a close in flight
+  to answer, at most 250 ms, and Chappe writes nothing of the application after its Close frame, only its
+  automatic Pong of a Ping read before the peer's Close (`FoySessionCloseRaceTest`,
+  `WebSocketTakeoverUndeployRaceTest`, Chappe's `WebSocketCloseRaceTest`). Consumers: Vidocq's
+  `FoyWebSocketModulePathTest.anApplicationStopClosesTheConnectionWith1001BeforeTheServerStops` asserts
+  `onClose` codes `[1001]` and must expect `[1006]`; Atmosphere (Vaadin push) treats 1006 as it treated 1001.
+
+## BUG-20261115-07 — During its undeploy, an application's `getContext` no longer finds its own path
+
+- Date: 2026-11-15 (left as is by the undeploy work of Vidocq/foy#104, BUG-20261115-04).
+- Symptom: the undeploy takes the context out of `CrossContextRegistry` at its start (BUG-20261115-04), and
+  `VidocqServletContext.getContext` only asked the registry, so a request the undeploy waits for got `null`
+  from `getServletContext().getContext("/own")` for its own application. And at any time, `getContext` of a URI
+  below an application's own path (`/own/page`) was `null`: the registry matched exact context paths only.
+  Checked: with a root application deployed, the undeploying application's path gave `null`, not the root's
+  context, since the registry does not match on prefixes. The same exact match made every other application
+  findable by its exact context path only (`getContext("/b/x")` in `/a` was `null`), while Servlet 6.1
+  section 4.8 matches the URI against the context roots of the container.
+- Repro: deterministic, `OwnPathLookupEndToEndTest`, a request held in `/own` while it is undeployed:
+  `duringItsUndeployAnApplicationResolvesItsOwnPathToItself` (`none,none,none` for `/own`, `/own/`,
+  `/own/page`), `duringItsUndeployItsOwnPathIsNotTheRootApplications` (`none,none` with `/` deployed),
+  `aContextDeployedUnderALongerPathStillAnswersForItsUris` (`/own/sub,none,none` for `/own/sub`,
+  `/own/sub/page`, `/own/subway` with `/own/sub` deployed). And `GetContextTest`, a table over (root
+  deployed, application undeploying, caller, URI) with `/`, `/a`, `/a/sub`, `/b`: 10 of its first 27 rows
+  failed, every one a URI under another application's root or under the root application's (`none` where
+  `/b`, `/a/sub`, `/a` or `/` was expected).
+- Cause: the registry matched exact context paths, and `getContext` made no difference between the
+  application's own path and another application's.
+- Status: FIXED on `fix/websocket-parked-items`. `getContext` follows one rule whoever asks:
+  `CrossContextRegistry.lookup` returns the context whose path is the longest one the URI lies under, on a
+  segment boundary, and the root context holds every URI no other context does (section 4.8, as in Tomcat and
+  Jetty). The one exception is the undeploy: the application has left the registry, so the other applications
+  no longer find it (BUG-20261115-04) and get what remains, the root application or `null`; it still counts as
+  deployed for its own lookups, so a URI under its own path resolves to itself unless an application deployed
+  under a longer path holds it. Behaviour changes, in the migration notes: another application is found by a
+  URI below its path, and with a root application deployed a URI no other application holds returns the root
+  application from every caller, where both returned `null`.
+
+## BUG-20261115-06 — A request refused during an undeploy is not told when to retry
+
+- Date: 2026-11-15 (left as is by the undeploy work of Vidocq/foy#104, BUG-20261115-02).
+- Symptom: the 503 the bridge answers once an undeploy began (`ChappeServletBridge.plainServiceUnavailable()`)
+  carried no `Retry-After` (RFC 9110 section 15.6.4: the server may send one to say how long the service is
+  expected to be unavailable), so a client had no hint of when to come back.
+- Repro: deterministic, `UndeployRequestsEndToEndTest.aRequestAfterTheUndeployGets503` and
+  `aRequestWhileTheUndeployRunsGets503` (`Retry-After` empty where `3` was expected), and
+  `WebSocketTakeoverEndToEndTest.aHandshakeOnceTheUndeployBeganGets503` (no `Retry-After` in the head of a
+  handshake refused during the undeploy).
+- Cause: the refusal was written as a bare 503.
+- Status: FIXED on `fix/websocket-parked-items`. Every refusal of an undeploy (a plain request, a WebSocket
+  handshake, both through the bridge's one gate) carries `Retry-After` with the undeploy's bound in whole
+  seconds, rounded up: `VidocqServletContext.UNDEPLOY_BOUND`, the later of `REQUESTS_GRACE` and
+  `UPGRADED_CONNECTIONS_GRACE` (3 s today), by which `destroy()` began. The body stays the container's plain
+  text: no error page of the application runs, since none of its filters or servlets may see a new request
+  once the undeploy began (Servlet 6.1 section 2.3.4). A cross-context dispatch refused with
+  `UnavailableException` (BUG-20261115-04) is unchanged: the caller's application answers it.
+
+## BUG-20261115-05 — The test harness and the tests stop the server before they close the deployment
+
+- Date: 2026-11-15 (left as is by the undeploy work of Vidocq/foy#104, BUG-20261115-01 to -04).
+- Symptom: Foy documents the order "close the deployment, then stop the server" (`Deployment`,
+  `FoyChappeBoot.Mounted`, getting-started, reference), but `foy-tck`'s `ServletTestHarness.close()` unmounted
+  the application, stopped the server it owned, then closed the deployment; so did the tests closing with
+  `try (mounted; server)` (the last resource closes first) and the `tearDown`s that stopped the server, then
+  closed the deployment. In that order a WebSocket peer gets no Close frame: the server's stop cuts the
+  connection before the undeploy sends its 1001.
+- Repro: deterministic, `ServletTestHarnessTest.closeSendsAWebSocketPeerItsCloseFrameBeforeTheServerStops`: a
+  raw WebSocket through the harness, then `close()`; the peer read the end of the stream (-1) where a Close
+  frame (`0x88`) was expected.
+- Cause: the harness and the tests were written before the order was documented and kept the old one.
+- Status: FIXED on `fix/websocket-parked-items`. `ServletTestHarness.close()` closes the deployment first,
+  while the server still serves, then unmounts the application and stops the server it owns; the peer now
+  reads the 1001 Close. The tests close the deployment first too: `try (server; mounted)` in
+  `FoyChappeBootTest`, `FoyChappeBootResourcesTest`, `FoyChappeBootFragmentsTest` and `FoyWebExtensionTest`, and
+  the `tearDown` of the `foy-core` end-to-end tests that deploy an application; the three
+  `foy-it-other-containers` tests, which never closed theirs, now close it before the server stops.
+
+## BUG-20261115-04 — A cross-context dispatch reaches an application being undeployed
+
+- Date: 2026-11-15 (found in review of BUG-20261115-02 and -03).
+- Symptom: a `forward`, `include` or `AsyncContext.dispatch` from another application into one being
+  undeployed skipped both the 503 gate and the count of requests in service. It reached servlets the
+  undeploy was destroying, or had destroyed, and the undeploy did not wait for it.
+- Repro: deterministic, `UndeployCrossContextEndToEndTest`, two applications with only the caller served:
+  - `getContextNoLongerFindsAnApplicationOnceItsUndeployBegan`: `getContext` still found the target while
+    its `destroy()` ran (`found`);
+  - `aDispatcherObtainedBeforeTheUndeployIsRefused`: a dispatcher obtained before the undeploy forwarded
+    to the destroyed servlet after it (events `[service, destroy, service]`, 200);
+  - `theUndeployWaitsForACrossContextDispatchInService`: the undeploy returned within 500 ms while a
+    forward was held in the target's servlet.
+- Cause: the gate and the count sat in the bridge's request pipeline only, which a cross-context dispatch
+  does not go through (it enters the target bridge's `invoke`); and the context left the cross-context
+  registry at the end of the undeploy, so `getContext` kept finding it until then.
+- Status: FIXED on `fix/websocket-shutdown-order`.
+  - The undeploy takes the context out of the registry right after `refuseRequests()`: no new
+    cross-context dispatcher reaches it. The application's own `getContext` of its path still finds it
+    since BUG-20261115-07.
+  - `ChappeServletBridge.invoke` treats a dispatch from another application (the request's current
+    context is not the bridge's) as a request: `enterRequest()` before, `exitRequest()` after.
+  - A refused dispatch throws a temporary `UnavailableException` (Servlet 6.1 section 2.3.3.2). The caller
+    can catch it, as it would the exception of a target that threw it (section 9.5); uncaught, Foy answers
+    it with 503, the status of a request refused at the door. Foy's stand-in for a servlet whose `init()`
+    failed answers with `sendError(503)` instead, but an include ignores `sendError` (section 9.3).
+  - Not covered: an async cycle the target starts in a cross-context dispatch outlives the dispatch, and
+    is counted in the caller's application, not the target's.
+
+## BUG-20261115-03 — The undeploy destroys filters and servlets under the requests still in service
+
+- Date: 2026-11-15 (found while fixing BUG-20261115-02, checking the other half of Servlet 6.1 section 2.3.4).
+- Symptom: `Deployment.close()` called `destroy()` on the filters and servlets at once, while requests were
+  still running in their `service` method; Servlet 6.1 section 2.3.4 asks the container to let those finish,
+  or to wait up to a server-defined time limit, before `destroy()`.
+- Repro: deterministic, `UndeployRequestsEndToEndTest.theUndeployLetsARequestInServiceFinishFirst`: a request
+  held in `doGet`, then an undeploy, which returned within 500 ms with `destroy` recorded before the request
+  ended; `theUndeployDoesNotWaitForARequestPastItsGrace` found no WARNING for the request it left running.
+- Cause: nothing counted the requests in service; the undeploy went straight from the upgraded connections
+  to `destroy()`.
+- Status: FIXED on `fix/websocket-shutdown-order`. The context counts the requests in service
+  (`VidocqServletContext.enterRequest`/`exitRequest`, around the bridge's whole pipeline, asynchronous
+  processing included), and the undeploy waits for them after closing the upgraded connections, up to 2 s
+  (`REQUESTS_GRACE`, as Tomcat's default `unloadDelay`), with a WARNING for those still running. An
+  undeploy started from a request of the same application waits for that request too, up to the grace.
+- Review note (round 3): the first fix took the context's lock twice per request. A request now takes no
+  lock: an `AtomicInteger` count, incremented before the request reads a `volatile` refused flag, which the
+  undeploy sets before it reads the count, so a request is refused or waited for, never neither. The lock
+  and its condition serve only the undeploy's wait and the last request's signal once the undeploy began.
+  `RequestsInServiceRaceTest` pins the order: 20,000 rounds of a request against an undeploy; with the
+  flag read before the increment it saw 48, 72 and 98 requests neither refused nor waited for in 3 runs.
+- Review note (round 3): the requests' 2 s and the upgraded connections' 3 s were consecutive, 5 s before
+  `destroy()` in the worst case. Both now count from the start of the undeploy, since the requests keep
+  running while the connections close: 3 s at most.
+  `UndeployRequestsEndToEndTest.aStuckConnectionAndAStuckRequestShareTheUndeploysStart` took 5.006 s
+  before, 3.016 s after.
+
+## BUG-20261115-02 — Requests reach the application while and after it is undeployed
+
+- Date: 2026-11-15 (found in review: the documented order, close the deployment then stop the server, opens
+  that window).
+- Symptom: a request that arrived once `Deployment.close()` had started, or after it returned and before
+  the server stopped, reached the application's listeners, filters and servlets, destroyed or being
+  destroyed; a WebSocket handshake got its 101. Servlet 6.1 section 2.3.4: once `destroy` was called, the
+  container may not route other requests to that servlet.
+- Repro: deterministic, `UndeployRequestsEndToEndTest.aRequestAfterTheUndeployGets503` and
+  `aRequestWhileTheUndeployRunsGets503` (200 from the servlet, its `doGet` called) and
+  `WebSocketTakeoverEndToEndTest.aHandshakeOnceTheUndeployBeganGets503` (101).
+- Cause: the bridge served every request it received; nothing told it the application was going away. The
+  old documented order (stop the server, then close) hid it, since no request could arrive any more.
+- Status: FIXED on `fix/websocket-shutdown-order`. The undeploy's first step makes the context refuse
+  requests (`VidocqServletContext.refuseRequests`); from then on the bridge answers `503 Service Unavailable`
+  before any listener, filter or servlet. A cross-context dispatch from another application into this one
+  does not go through that gate: found in review and fixed under BUG-20261115-04.
+
+## BUG-20261115-01 — A send blocked on a peer that does not read holds an undeploy without limit
+
+- Date: 2026-11-15 (found in review of the BUG-20261114-08 fix, on `fix/websocket-shutdown-order`).
+- Symptom: an undeploy never returned while a WebSocket send of the application was blocked on a peer that
+  does not read: the undeploy's 1001 Close waited for that send, before the 2 s grace of BUG-20261114-08
+  even started.
+- Repro: deterministic, `WebSocketTakeoverEndToEndTest.anUndeployDoesNotWaitForASendBlockedOnThePeer`: the
+  listener's `onOpen` starts a 32 MiB send on a thread of its own to a raw peer that never reads; once that
+  send is parked, the undeploy had not returned after 5 s.
+- Cause: chappe sends every frame, the Close included, under the connection's write lock, which it takes with
+  `lockInterruptibly` and no time limit; the blocked send holds it for as long as the peer does not read.
+  The undeploy hook sent its Close on the undeploy's thread, so it waited for that lock before its grace.
+- Status: FIXED on `fix/websocket-shutdown-order` (the Close on its own thread), then on
+  `fix/websocket-parked-items` (the cut: `WebSocket.abort()`, CHAPPE-060, Vidocq/chappe#85). The hook sends
+  the Close on a virtual thread of its own and waits for it against the same deadline as the rest of the hook
+  (2 s in all); past it, the connection is cut: it closes at once, with no Close frame and without the write
+  lock. The blocked send then fails with an `IOException` that says the
+  connection was cut (chappe's `AsynchronousCloseException` as its cause), the thread of the Close returns
+  without sending it, the peer reads the end of the connection, and the takeover still ends with 1001, once,
+  with no `onError`, within `WebSocketTakeover.CUT_GRACE` (500 ms) more; an `onOpen` that rethrows the
+  `IOException` of a send the cut ended reports the undeploy's 1001 too, with no `onError`, not 1011, while any
+  other failure of `onOpen` during the undeploy ends as outside one: `onError` then 1011, or 1011 alone for an
+  `IOException` once the undeploy closed the connection (BUG-20261114-07). The hook leaves a failed `onOpen` to
+  Chappe's `onError`, which always follows it, and waits for that end with no deadline of its own, within the
+  context's 3 s, whether that `onError` takes the lock of the listener's events before the hook or after it
+  (`anOnOpenThatFailsOnItsOwnDuringTheUndeployKeepsItsErrorAnd1011`,
+  `anOnOpenThatFailsOnItsOwnAfterTheCutKeepsItsErrorAnd1011`,
+  `anIoFailureOfOnOpenDuringTheUndeployIsNotReportedAndEndsWith1011`,
+  `theUndeployTakingTheLockFirstWaitsPastItsGraceForTheOnErrorOfAFailedOnOpen`,
+  `theUndeployWaitsPastItsGraceForAnOnErrorThatHoldsTheLockFirst`). The hook may now
+  last `UNDEPLOY_GRACE` plus `CUT_GRACE`, which `WebSocketTakeoverGraceTest` keeps below the context's
+  `UPGRADED_CONNECTIONS_GRACE`. Until then the Close went out once that send ended, and
+  nothing ended the connection while the peer did not read. Raw upgrades already bounded their close the
+  same way (`WebConnectionImpl.CLOSE_WRITE_GRACE`): past it `UpgradedConnection.close()` closes the socket
+  without the lock a blocked write holds (over TLS, `SslHandler.close()` skips close_notify after a bounded
+  wait), so no thread stays parked there. Tests: `anUndeployDoesNotWaitForASendBlockedOnThePeer` returns after
+  the 2 s grace with `[open, close, destroy]` and 1001; `anUndeployCutsAConnectionWhoseCloseASendHoldsBack`
+  and `aSendBlockedInOnOpenIsCutAndTheListenerHearsTheUndeploys1001` (foy-core), and
+  `SessionEndToEndTest.anUndeployCutsTheSendsBlockedOnAPeerThatDoesNotRead` (foy-websocket, a blocking and an
+  asynchronous send of a Jakarta endpoint), were red before the cut: the send stayed blocked. On that path the
+  endpoint gets `onClose(1001)` with no Close frame at all, against Jakarta WebSocket 2.2 section 2.1.5 (the
+  Close before `onClose`): waiting for the frame would let a peer that does not read hold the undeploy
+  without limit.
+
+## BUG-20261114-09 — The stalled-peer upgrade test reads the writer's state twice and can see it running
+
+- Date: 2026-11-14 (found by the Error Prone check of `fix/websocket-shutdown-order`, a full `install` under
+  `-Pquality,errorprone`; the branch does not touch the test or the upgrade path).
+- Symptom: `ServletUpgradeEndToEndTest.closeReturnsWhileACallbackIsBlockedOnAStalledPeer` failed with
+  `the callback never blocked on the write ==> expected: <WAITING> but was: <RUNNABLE>` after 7 ms, far
+  from its 10 s deadline.
+- Repro: not deterministic. Repeated 3,000 times under load (macOS, 18 cores, 18 busy processes): 3 failures
+  (and 1 in 300). The test loops until the writer's state is `WAITING`, then asserts on a second
+  `getState()`.
+- Cause: the test, not Foy. A stack trace taken right after the loop saw `WAITING` showed the writer parked in
+  the socket write (`SocketChannelImpl.implWrite` → `Poller.poll`) in every case; with the stack walk
+  between the two reads, the second read saw `RUNNABLE` in 2,352 of 3,000. That park is not final: the
+  kernel still moves bytes to the peer's receive buffer, and the poller wakes the writer, which writes more
+  and parks again. The loop leaves on the first `WAITING`; the assertion's second read can land in one of
+  those wake-ups.
+- Status: FIXED on `fix/websocket-shutdown-order`. The loop reads the state once per check and the assertion
+  uses that value: the writer was seen blocked on the write, which is what the test needs before `close()`.
+  After the fix, under the same load: 0 failures in 3,000.
+
+## BUG-20261114-08 — An undeploy runs a WebSocket's `onClose` and `destroy()` after `contextDestroyed`
+
+- Date: 2026-11-14 (found while fixing BUG-20261114-05: `Deployment` closes upgraded connections first so
+  that their handlers end "while the application is intact", which did not hold for WebSockets).
+- Symptom: on undeploy, `Endpoint.onClose` and the upgrade handler's `destroy()` ran after the application's
+  `ServletContextListener.contextDestroyed`. An `onClose` that uses what the application releases there (a
+  context attribute, a resource, in lot 2 a CDI bean of a context Vauban ends there) ran against a stopped
+  application.
+- Repro: deterministic with a peer that never answers: `SessionEndToEndTest.undeployRunsOnCloseBeforeContextDestroyed`
+  (`[contextDestroyed, onClose]`), and at the transport hook `WebSocketTakeoverEndToEndTest.anUndeployEndsTheTakeoverBeforeItReturns`
+  and `anUndeployWaitsForAClosingHandshakeUnderWay`: failed in 15 runs of 15 under load. With the JDK
+  client, which answers at once, `onClose` still ran after `contextDestroyed` in 988 undeploys of 1,000
+  (macOS, 18 cores, 18 busy processes, `-Djdk.virtualThreadScheduler.parallelism=1`).
+- Cause: the undeploy hook of `WebSocketTakeover` only sent the 1001 Close and returned. The takeover ended
+  (the listener's `onClose`, then `destroy()`) on chappe's connection thread when the closing handshake
+  ended: the peer's answer, chappe's close deadline (the read timeout, 30 s by default) or `Server.stop()`
+  cutting it. The undeploy meanwhile went on to the filters, the servlets, the sessions and
+  `contextDestroyed`. Neither Servlet 6.1 nor Jakarta WebSocket 2.2 orders the two; Jakarta WebSocket 2.2
+  section 2.1.5 only asks a local close to send its Close frame before `onClose`, so `onClose` need not
+  wait for the peer.
+- Status: FIXED on `fix/websocket-shutdown-order`. The undeploy hook sends the Close, then ends the takeover
+  on the undeploy's thread (`onClose(1001)`, then `destroy()`) under a lock that every event of the
+  transport takes too: the end waits for the event in progress (section 5.1: never two threads at once),
+  and no event follows it. A connection whose closing handshake had already begun keeps the code of the
+  side that closed first; the undeploy waits for its end. Both waits stop after 2 s, with a WARNING: the
+  takeover then ends on chappe's thread as before. After the fix, under the same load: 0 failing runs in
+  15, and `onClose(1001)` before `contextDestroyed` in 1,000 undeploys of 1,000. Review, 2026-11-15: the
+  undeploy closed its connections one after another, so N stuck ones cost N × 2 s, and an `Error` from
+  `onClose` (now on the undeploy's side) stopped the whole undeploy. The connections now close all at once,
+  each on a virtual thread of its own, within one 3 s deadline (`VidocqServletContext.UPGRADED_CONNECTIONS_GRACE`),
+  and a failure of one, `Error` included, is logged without stopping the rest
+  (`UpgradedConnectionsUndeployTest`, `WebSocketTakeoverEndToEndTest.anUndeployWaitsForStuckConnectionsTogether`:
+  four stuck connections took 8.0 s before, about 2 s after). Also in review: an interrupt that reached the
+  undeploy hook while it waited ended the hook with nothing ending the takeover and nothing logged, the
+  connection left marked as closed by the undeploy (`[open]` only). The takeover of a connection the undeploy
+  closed now ends at once unless an event runs, with a WARNING, and the thread keeps its interrupt
+  (`WebSocketTakeoverEndToEndTest.anInterruptedUndeployHookStillEndsTheTakeover`). Final review, 2026-11-15:
+  that interrupt path was removed, with its test. Since the parallel close above, each hook runs on a
+  `foy-upgrade-close-N` virtual thread the context starts, and its Close on a `foy-websocket-close` thread;
+  nothing interrupts either, so the path only ran in that test, which reached the hook by reflection. An
+  interrupt of the undeploy's own thread now only stops the undeploy's wait for its connections: those still
+  closing finish on their own virtual threads, and their `onClose` may then come after `contextDestroyed`.
+  Also in the final review: on that grace-out path, frames read after an event that outlived the 2 s grace
+  still reached the listener after `contextDestroyed`, the takeover ending only on Chappe's `onClose`. Once
+  the undeploy closed a connection, `deliver` now hands no frame to the listener and ends the takeover
+  with 1001, after the event in progress or instead of the next frame
+  (`WebSocketTakeoverEndToEndTest.aFrameAfterTheUndeployGaveUpReachesNoListener`: `[open, text:held,
+  text:late]` before, `[open, text:held, close, destroy]` after). Final re-review: that cut-off ended the
+  takeover as soon as an event returned or a frame arrived, even before the hook's 1001 Close went out, so
+  `onClose` could come before the Close frame on an ordinary path (a send of the endpoint holding the
+  Close back for a moment). The connection's thread now ends it only once the hook is past its wait for
+  the Close; before that, frames are still dropped and the hook ends it after the Close
+  (`onCloseFollowsTheUndeploysCloseFrame`: the connection still open in `onClose` before, closed after).
+  And an `onClose` that runs on the connection's thread when the hook's 2 s run out held the events lock:
+  the hook logged "a WebSocket event still ran" and the undeploy went on, `contextDestroyed` able to
+  overlap that `onClose`. The hook now waits for an end already under way, which the context's 3 s still
+  bound (`anUndeployWaitsForAnOnCloseRunningOnTheConnectionsThread`, and
+  `anUndeployWaitsForTheOnCloseOfAClosingHandshakeThatEndsLate` for a closing handshake the listener began:
+  the hook's WARNING and an undeploy back at 2 s before, no hook WARNING and the context's 3 s after).
+
+## BUG-20261114-07 — A server stop right after an undeploy reports a spurious `onError` before `onClose(1001)`
+
+- Date: 2026-11-14 (found while fixing BUG-20261114-05: 47 undeploys in 1,000 under load).
+- Symptom: an undeploy closed a session with 1001; when the server stopped before the peer answered the
+  Close, `Endpoint.onError` got a `ClosedByInterruptException` or an `AsynchronousCloseException` just before
+  `onClose(1001)`. The error is the server going down, not an error of the session, which the container had
+  already closed.
+- Repro: deterministic with a peer that never answers, `SessionEndToEndTest.aServerStopAfterAnUndeployIsNoErrorOfTheSession`
+  and, at the transport hook, `WebSocketTakeoverEndToEndTest.aServerStopAfterAnUndeployReportsNoError`
+  (undeploy, then `Server.stop()`): both failed in 15 runs of 15 under load. With the JDK client, which
+  answers, only when the stop wins the race: 69 undeploys in 1,000 (macOS, 18 cores, 18 busy processes,
+  `-Djdk.virtualThreadScheduler.parallelism=1`). Since BUG-20261114-08 the undeploy ends the session before
+  the stop, so both pass without this fix.
+  `WebSocketTakeoverEndToEndTest.aServerStopAfterTheUndeployGaveUpReportsNoError` (the undeploy's grace runs
+  out on an event in progress, then the server stops) reproduced it until the final review's frame cut-off
+  (BUG-20261114-08's last note), which ends that takeover as soon as the event returns, before the stop's
+  failure reaches `onError`. The test that reproduces it now is
+  `WebSocketTakeoverEndToEndTest.aServerStopWhileTheUndeployWaitsForItsCloseReportsNoError`: the server stops
+  while the undeploy hook waits for a Close that a blocked send holds back (`[open, error, close, destroy]`
+  without the fix).
+- Cause: `Server.stop()` closes the sockets (step 3: `AsynchronousCloseException` in the read loop) and
+  interrupts the connection threads (step 4: `ClosedByInterruptException`). Chappe's read loop reports the
+  `IOException` through `WebSocketHandler.onError`, and `WebSocketTakeover.onError` passed every error on to
+  the listener, `FoySession`, whose session was not closed yet.
+- Status: FIXED on `fix/websocket-shutdown-order`. The takeover, which marks a connection the undeploy closed,
+  does not pass on an `IOException` of such a connection (logged at DEBUG); any other error still reaches
+  `onError`. After the fix, under the same load: 0 failing runs in 15, 0 `onError` in 1,000 undeploys.
+
+## BUG-20261114-06 — Tests pick a free port, close it, then bind it: another process can take it meanwhile
+
+- Date: 2026-11-14 (found while looping the WebSocket tests of BUG-20261114-05, with other JVMs running on
+  the machine).
+- Symptom: `VaubanSessionTest` failed in `@BeforeAll` with `Failed to bind to 127.0.0.1:53501`.
+- Repro: not deterministic. The tests opened `new ServerSocket(0)`, read its port, closed it, then started a
+  Chappe `Server` on that port; a process that binds an ephemeral port in that window takes it first. The
+  same pattern was in `WeldServletSessionTest`, `WeldPortabilityTest`, `FoyWebExtensionTest` (four tests),
+  `foy-core`'s `TestServerLauncher` and `foy-tck`'s `ServletTestHost`; the last two retried five times,
+  which only made the failure rarer.
+- Cause: a time-of-check to time-of-use race in the tests. Chappe can bind port 0 itself and report the port
+  it got (`Server.port()`), as `foy-websocket`'s `WebSocketTestServer` already does.
+- Status: FIXED on `fix/websocket-shutdown-order`. Every one of them binds port 0 and reads `server.port()`
+  after `start()`; the retries are gone. No new test: the suites that use them stay green.
+
+## BUG-20261114-05 — An undeploy reports 1006 to `Endpoint.onClose` when the server stops before the peer answers
+
+- Date: 2026-11-14 (CI failure of `SessionEndToEndTest.undeployClosesSessionsWith1001` on a Linux runner,
+  `fix/websocket-origin-setting-name`: "expected: <GOING_AWAY> but was: <CLOSED_ABNORMALLY>").
+- Symptom: on undeploy, the client received the 1001 Close, but `Endpoint.onClose` got 1006. Even when it
+  got 1001, the reason was the peer's echo (empty phrase), not the undeploy's: a peer answering with another
+  code made the endpoint report that code. `usage.adoc` and `reference.adoc` promise that an undeploy reports
+  its own reason, even when TCP is cut afterwards.
+- Repro: intermittent in the original test (macOS, 18 cores: 1 run in 15 of the class, 63 undeploys in 1000
+  of a loop of the same scenario, with 18 busy processes and `-Djdk.virtualThreadScheduler.parallelism=1`;
+  1 in 300 without load). Deterministic: `SessionEndToEndTest.undeployReports1001WhenTheServerStopsBeforeThePeerAnswers`
+  and, for the transport hook, `WebSocketTakeoverEndToEndTest.anUndeployReports1001WhenTheServerStopsBeforeThePeerAnswers`
+  (a raw client that never answers, 1006) and `anUndeployReportsItsOwn1001WhateverThePeerAnswers` (a client
+  answering 4000).
+- Cause: the undeploy closes the connection beneath the Jakarta session. `WebSocketTakeover`'s undeploy hook
+  sends the 1001 Close on chappe's socket directly, so `FoySession` never records a local close and passes on
+  the code chappe reports when the connection ends: the peer's answer, or 1006 when `WebSocketTestServer.close()`
+  (undeploy, then `Server.stop()`) closes the socket before the read loop has read the answer
+  (`ClosedByInterruptException` in the read loop). Not test isolation: in 2,300 looped undeploys, `onClose`
+  always ran before `server.close()` returned, once.
+- Status: FIXED on `fix/websocket-origin-setting-name`. The hook marks a connection still open as closed by
+  the undeploy before its Close goes out, and the takeover then reports 1001 and its reason to the listener,
+  whatever chappe reports; a connection the peer or the listener closed first keeps their code. The SPI
+  `WebSocketListener.onClose` documents it.
+
+## BUG-20261114-04 — The WebSocket origin messages name Foy's init parameter, not the setting the user configured
+
+- Date: 2026-11-14 (found while reviewing the Vidocq runtime wiring of `feat/websocket`).
+- Symptom: the 403 WARNING "origin ... is not allowed ... listed in the context init parameter
+  io.vidocq.foy.websocket.allowed-origins" and the malformed-entry error "(init parameter
+  io.vidocq.foy.websocket.allowed-origins)" send a Vidocq user to an init parameter they never wrote. The
+  runtime fills it from its own key `vidocq.websocket.allowed-origins`.
+- Repro: `HandshakeEndToEndTest.theRefusalNamesTheSettingTheRuntimeReports` and
+  `aMalformedEntryNamesTheSettingTheRuntimeReports`; `OriginPolicyTest` for the policy.
+- Cause: `FoyServerContainer.refuseOrigin` and `OriginPolicy.requireOrigin` always used
+  `OriginPolicy.INIT_PARAMETER`; the policy knew no other name.
+- Status: FIXED on `fix/websocket-origin-setting-name`. A runtime sets the context init parameter
+  `io.vidocq.foy.websocket.allowed-origins.setting-name`; the policy keeps it (default: the init parameter)
+  and both messages name it. The policy itself is unchanged.
+
+## BUG-20261114-03 — A `Sec-WebSocket-Extensions` offer without a name breaks the handshake
+
+- Date: 2026-11-14 (found while fixing the Error Prone findings of `feat/websocket`).
+- Symptom: a client offering `Sec-WebSocket-Extensions: ;` made `HandshakeRequestImpl.requestedExtensions`
+  throw `ArrayIndexOutOfBoundsException`, so the handshake failed with an internal error instead of opening.
+  An offer such as `; a=b` reached the configurator's `getNegotiatedExtensions` as an extension named `""`.
+- Repro: `HandshakeRequestImplTest.anOfferWithoutANameIsIgnored`.
+- Cause: the offer was split with `String.split(";")`, which returns an empty array for `;`, and the name
+  `parts[0]` was used without checking that it is not blank.
+- Status: FIXED on `feat/websocket`. An offer without an extension token is not an offer (RFC 6455
+  section 9.1): it is skipped, and the other offers of the header are kept.
+
+## BUG-20261114-02 — A WebSocket endpoint path ending in `/` is refused, so every Vaadin start logs a stack trace
+
+- Date: 2026-11-14 (found by the end-to-end Vaadin run of `feat/websocket`, Atmosphere 3.0.5).
+- Symptom: `ServerContainer.addEndpoint` throws `DeploymentException: An endpoint path has no empty
+  segment: /VAADIN/push/`. Atmosphere logs a WARN "Duplicate Servlet Mapping Path /VAADIN/push" with the
+  stack trace at every start, and `/VAADIN/push/` gets no endpoint. Push still works, because the client
+  uses `/VAADIN/push`.
+- Repro: `addEndpoint(ServerEndpointConfig.Builder.create(E.class, "/a/b/").build())`. Atmosphere's
+  `JSR356AsyncSupport` constructor registers `/VAADIN/push`, `/VAADIN/push/` (on purpose, its comment
+  lists "/servletPath/"), then `/VAADIN/push/{path0}` to `/VAADIN/push/{path0}/…/{path4}`.
+- Cause: `PathTemplate.parse` refused every empty segment, the trailing one included. Tomcat's
+  `UriTemplate` accepts a trailing `/` on a template without variables.
+- Status: FIXED on `feat/websocket`. The rule now follows Tomcat's. The leading `/` is skipped, and a
+  trailing empty segment is accepted on a template without variables, as a literal empty last segment.
+  `/a/b/` therefore matches only `/a/b/`, and `/a/b/{x}` never matches it, since a variable matches one
+  non-empty segment. Every other empty segment (`/a//b`, `//`, `/a/{x}/`) is still a `DeploymentException`.
+  For precedence, the trailing segment counts as a literal.
+- Validation: `PathTemplateTest` (accept and match `/a/b/`, `/a/b` and `/a/b/` do not match each other,
+  `/a/{x}/` and `/a//b` refused, precedence) and `EndpointRegistryTest
+  .aPathEndingInASlashIsALiteralBesideItsVariableSibling` (`/a/b`, `/a/b/` and `/a/b/{x}` registered
+  together, each request resolves to its own template). Before the fix, three of them failed on the
+  `DeploymentException`.
+
+## BUG-20261114-01 — Dynamic filter mappings ignore `isMatchAfter`
+
+- Date: 2026-11-14 (found while designing the WebSocket filter, which registers itself with
+  `addMappingForUrlPatterns(…, true, "/*")` and must run after the declared filters).
+- Symptom: `FilterRegistration.addMappingForUrlPatterns` and `addMappingForServletNames` ignore
+  `isMatchAfter`: every dynamic mapping comes after the declared ones, whatever the flag.
+- Repro: a descriptor filter `M`, a dynamic filter `A` (`isMatchAfter=true`) then `B` (`false`), all on
+  `/*`: a request runs `M,A,B`; the API says `B,M,A`. Same by servlet name.
+- Cause: `WebAppDeployer.buildFilterMappings` appended all dynamic mappings after the model's ones;
+  `DynamicFilterRegistration.Mapping.isMatchAfter` was recorded but never read.
+- Status: FIXED on `feat/websocket`. The order is now the dynamic mappings with `isMatchAfter=false` (call
+  order), the model mappings, then the dynamic mappings with `isMatchAfter=true` (call order).
+- Validation: `DynamicFilterOrderTest` (by URL pattern and by servlet name) failed with `M,A,B` before the
+  fix and passes after it.
+
+## BUG-20261111-01 — In a jlink image, no static resource of a module is served
+
+- Date: 2026-11-11 (reported by Vaadin in mstahv/vaadin-jpms-examples, finding 7: in the jlink image of
+  `03-vidocq`, the theme stylesheet `aura/aura.css` answers 404, with the released Vaadin too).
+- Symptom: `ServletContext.getResource`, `getResourceAsStream` and `getResourcePaths`, and so the default
+  servlet, find nothing under the `META-INF/resources/` of a module linked into the run-time image. The
+  same application served from jars (`vidocq:package`) serves them.
+- Repro: a module `m` holding `META-INF/resources/a/b.css`, linked with `jlink --add-modules m`. In the
+  image, `getResources("META-INF/resources")` and `getResources("META-INF/resources/a")` return nothing,
+  `getResources("META-INF/resources/a/b.css")` returns `jrt:/m/META-INF/resources/a/b.css` (checked on
+  Temurin 25.0.3).
+- Cause: `ClassPathResourceProvider` reads only `jar:` and `file:` locations. In an image, every module's
+  code source is `jrt:/<module>` and its resources have `jrt:` URLs: `Loc.of` returns nothing for them, and
+  `pathOf` drops a `jrt:` application root or fragment jar. The class loader of an image finds no
+  directory, so the `META-INF/resources` lookup that finds the roots of the other tier finds none either.
+- Status: FIXED on `fix/jrt-static-resources`. A `jrt:/<module>` application root or fragment jar is read from
+  the image's `jrt` file system, like a directory. The roots of the other tier now also include the
+  `META-INF/resources/` of the image's modules, found once in the image itself, after the roots the class
+  loader names: a module is kept when the class loader returns the first file of its `META-INF/resources/`
+  under that module's own `jrt:` URL, so a module the application's loader cannot see is not served, and an
+  ordered or excluded module is not added twice. Finding them costs one listing of the image's modules
+  (0.7 ms for the 69 modules of a JDK, measured on Temurin 25.0.3), on the first lookup only.
+- Validation: `ClassPathResourceProviderImageTest` links a real image with `jlink` (in a process of its own:
+  a JDK without `jmods` links from its run-time image, which `jlink` refuses in a JVM patched with
+  `--patch-module`) and reads it through its own `jrt` file system: 5 of its 8 tests failed before the fix
+  (files, listing, application root, ordered root, exclusion), all pass after it, and so does the whole
+  Foy reactor.
+
+## BUG-20261024-01 — The multipart end-to-end test bounded each request to 5 s of disk work
+
+- Date: 2026-10-24 (seen in the downstream rebuild of Vidocq/vauban run 46487, `pr-validate`, `foy-core`;
+  CI study of Vidocq/vidocq#285).
+- Symptom: `ServletMultipartEndToEndTest.uploadsFileAndFormField`,
+  `partsSpillToTheContextTempDirAndAreDeletedAfterTheRequest` and
+  `aRelativeWriteLandsInTheLocationAndOutlivesTheRequest` failed with
+  `java.net.http.HttpTimeoutException: request timed out` (5.0 s, 5.0 s and 7.6 s). The other 12 tests of
+  the class passed in the same run.
+- Frequency: 1 failing run out of the 23 CI logs of the study that ran the class (15 Vauban, 8 Chappe
+  downstream rebuilds).
+- Cause (confirmed): the runner's temporary file system was slow, and the test treated the request's
+  5-second bound as a hang guard. In run 46487, the five test classes that create multipart temporary
+  files were 5 to 29 times slower than their slowest time in the 22 other runs
+  (`MultipartLifecycleTest` 1.683 s against at most 0.061 s, `PartStorageTest` 0.768 s against 0.093 s,
+  `MultipartParserTest` 1.555 s against 0.314 s), while the rest of the suite ran at its usual speed.
+  The three failing tests are the ones that do the most file operations per request (two spilled parts,
+  or one part plus `Part.write`): `fileSizeThreshold` 0 sends every part to disk, so each request
+  creates, writes, reads and deletes files under `@TempDir`. The server is slow, not stuck: injecting a
+  delay in the file operations makes each request longer by that delay times the number of operations,
+  no more.
+- Repro: a test-only default file system provider (`-Djava.nio.file.spi.DefaultFileSystemProvider`)
+  that adds 300 ms to every file operation under JUnit's `@TempDir` makes the class fail 5 runs out of 5,
+  with the CI's exception on `uploadsFileAndFormField` and
+  `partsSpillToTheContextTempDirAndAreDeletedAfterTheRequest` (`aRelativeWrite…` still passed at 400 ms;
+  the harness adds a flat delay, while a real disk's cost varies with the operation). CPU pressure alone (54 busy loops on 18 cores) did not reproduce it: 0 failures out of 20.
+- Status: FIXED on `fix/flaky-multipart-e2e`: the client timeout and the socket read timeout of the
+  class become one `EXCHANGE_TIMEOUT` of 60 s. It still fails a hung request; it no longer fails a
+  request that is only slow because the disk is. Foy's multipart code is unchanged.
+- Validation: with the same 300 ms per file operation, 0 failures out of 50 runs (three parallel loops, one of them with 18 busy loops; 5 out of 5 before); the whole `foy-core` suite and
+  the Foy `clean install` pass.
+
+## BUG-20261022-06 — A request runs with the server thread's context class loader, not the application's
+
+- Date: 2026-10-22. Found by Bodoni (JSTL 3.0) while testing `fmt:message` on its Ibarra IT host
+  (Vidocq/bodoni BOD-002).
+- Symptom: while a filter, a servlet or a JSP handles a request, `Thread.currentThread().getContextClassLoader()`
+  is whatever the server thread inherited (the system `AppClassLoader` in a launcher that never set it),
+  not the application's loader. Libraries that look things up by name through the context loader
+  (`ResourceBundle.getBundle(name, locale, tccl)` in JSTL `fmt:message`, `ServiceLoader.load(...)`, JAXB)
+  cannot see the application module's layer: the page renders `???key???`. The Vidocq runtime hid the
+  bug because it sets the context loader process-wide; a plain Foy deployment did not.
+- Minimal repro: `DeployOptions.defaults(appLoader)` with a loader distinct from the server threads',
+  then a servlet that reads its context loader (`RequestContextClassLoaderTest`).
+- Cause: Foy knew the application loader only through `DeployOptions.defaults(loader)`, which handed it to
+  the component factory and the `@HandlesTypes` resolver and kept it nowhere else.
+  `VidocqServletContext.getClassLoader()` answered the caller's context loader, and
+  `ChappeServletBridge.handle` started the pipeline thread `foy-request-<n>` with the loader it inherited
+  from Chappe's thread. The upgrade handler, the non-blocking I/O callbacks and the session reaper did
+  install a loader, but it was that same inherited one. `AsyncContext.start` runnables inherited the
+  loader of whichever thread called `start`.
+- Status: FIXED on `fix/request-context-class-loader`. `DeployOptions` carries the application loader
+  (`applicationLoader`, set by every `defaults(loader, ...)`, `withApplicationLoader`), the servlet
+  context keeps it and answers it from `getClassLoader()`. One helper, `ContextLoaderScope`, installs it
+  and gives the thread its previous loader back on the way out (exceptions included), and leaves the
+  context loader untouched when no loader is known. It covers the request pipeline (request listeners,
+  filters, servlet, `RequestDispatcher` forward and include, error pages, async dispatches and
+  `AsyncListener` events, which all run on the pipeline thread), the `AsyncContext.start` runnables,
+  and the existing uses: upgrade handler `init`/`destroy`, read and write listener callbacks, session
+  reaper. It also wraps the whole of `WebAppDeployer.deploy` (initializers, context listeners, component
+  instantiation, `JspEngine.deploy`, servlet and filter `init`, the tear-down of a failed deployment) and
+  of `Deployment.undeploy` (upgrade handlers, `destroy`, session invalidation, `contextDestroyed`), and
+  the bridge's dispatch entry: a cross-context forward, include or async dispatch runs with the target
+  context's loader, and the caller's loader comes back when it returns. The request records the context
+  of the dispatch running now, so the async cycle (`AsyncContext.start` runnables, `AsyncListener` events,
+  fired from any thread) and the upgrade handler a cross-context target opens keep the target's loader
+  after the dispatch returned (found by review). Each read or write listener keeps the loader of the
+  context that registered it (the dispatch running at `setReadListener`/`setWriteListener`, else the open
+  async cycle's), even when the request later moves to another context's async cycle. The captured
+  loaders are the deployment's (`ContextLoaderScope.applicationLoaderOf`), never a capturing thread's
+  context loader: without an application loader, the context loader is left untouched.
+  Tests: `RequestContextClassLoaderTest` (`theRequestRunsWithTheApplicationLoaderAndTheThreadGetsItsOwnBack`,
+  `theErrorPageRunsWithTheApplicationLoader`, `asyncStartListenersAndDispatchRunWithTheApplicationLoader`
+  failed before the fix; `withoutAnApplicationLoaderTheContextLoaderIsLeftUntouched` pins the null case) and
+  `DeploymentContextClassLoaderTest` (`deploymentAndUndeploymentRunTheApplicationWithItsLoader`,
+  `aCrossContextDispatchRunsTheTargetWithItsLoaderAndGivesTheCallerItsOwnBack`, both failed before the fix;
+  `theAsyncWorkOfAForwardedTargetRunsWithTheTargetLoader` and
+  `theAsyncWorkOfACrossContextAsyncDispatchTargetRunsWithTheTargetLoader` failed before the review fix;
+  `aReadListenerKeepsTheLoaderOfItsContextAfterACrossContextAsyncDispatch` and
+  `aReadListenerOfAForwardedTargetRunsWithTheTargetLoader` failed before the per-listener loader;
+  `anUpgradeHandlerOfAForwardedTargetRunsWithTheTargetLoader` pins the upgrade), `ContextLoaderScopeTest`.
+
+## BUG-20261022-05 — A Content-Type set as a header loses its media type
+
+- Date: 2026-10-22. Found while pinning `interceptSpecialHeader` before clearing its SonarJava
+  `java:S2259` finding (Vidocq/vidocq#285).
+- Symptom: after `setCharacterEncoding("UTF-8")` then `setHeader("Content-Type", "text/html")`,
+  `getContentType()` answers `null;charset=UTF-8`. After `setContentType("text/plain")` then
+  `setHeader("Content-Type", "text/html")`, `getWriter()` rewrites the header to
+  `text/plain;charset=ISO-8859-1`: the header's type is lost on the wire.
+- Minimal repro: the two sequences above on an `HttpServletResponseImpl`.
+- Cause: `setHeader`/`addHeader("Content-Type", ...)` (through `interceptSpecialHeader`) recorded the
+  content type and its charset, but not the media type that `getContentType()` and
+  `refreshContentTypeHeader()` compose with the charset: it stayed `null`, or kept the value of an
+  earlier `setContentType`.
+- Status: FIXED on `fix/infer-races`: a `Content-Type` header records its media type as
+  `setContentType` does. Tests: `HttpServletResponseImplTest.aContentTypeHeaderWithoutCharsetKeepsItsMediaType`
+  and `theWriterKeepsTheTypeOfTheLastContentTypeHeader` (both failed before the fix);
+  `aContentTypeHeaderSetsTheCharsetAndANullOneClearsTheType` pins the unchanged behaviour.
+
+## BUG-20261022-04 — A @WebListener that is also an initializer receives a null @HandlesTypes set
+
+- Date: 2026-10-22. Reported through Vaadin's development mode in a user project
+  (threadlocalrandom/VaadinCreate2026) on `vidocq:run`.
+- Symptom: with `com.vaadin:vaadin-dev-server`, deployment fails with
+  `Foy deployment failed: Cannot invoke "java.util.Collection.toArray()" because "c" is null`, thrown
+  from `DevModeInitializer$DevModeClassFinder`. The application's `@Route` and `AppShellConfigurator`
+  classes were in its class index.
+- Minimal repro: a jar whose `META-INF/services/jakarta.servlet.ServletContainerInitializer` names a
+  class that is `@WebListener`, implements `ServletContextListener` and `ServletContainerInitializer`,
+  and declares `@HandlesTypes(Marker.class)`, next to a class implementing `Marker`. Its `onStartup`
+  receives `null`.
+- Cause: a descriptor has a single kind, and `@WebListener` makes it LISTENER. `foy-processor`
+  (`ComponentModel`) and the runtime `ClassFileDescriptorReader` kept `handlesTypes` only for the
+  INITIALIZER kind. `IndexedHandlesTypesResolver` then saw no handled type and answered `null`.
+  Vaadin's `DevModeStartupListener` is such a class.
+- Status: FIXED (b7f2870). Both keep `handlesTypes` for any class that implements
+  `ServletContainerInitializer`, whatever its kind. A `$$FoyComponent` generated before the fix takes
+  precedence over the class-file tier and keeps the empty list: rebuild the jar, or rerun
+  `vidocq:generate` without its cache for a dependency jar.
+- Validation:
+  - `ComponentKindsGenerationTest.webListenerThatIsAlsoAnInitializerKeepsItsHandledTypes`,
+    `ClassFileDescriptorReaderTest.webListenerThatIsAlsoAnInitializerKeepsItsHandledTypes` and the
+    boot-level `FoyChappeBootListenerInitializerTest` failed before the fix (`[]`, `[]`, `null`).
+  - On the user project with `vaadin-dev-server`, the regenerated companion of `DevModeStartupListener`
+    lists its 26 handled types. Deployment succeeds, and Vaadin starts its development bundle build.
+- Not Foy: the bundle build then fails in Vite, because `vaadin-dev-tools.js` is not copied from the
+  jars. Vaadin's `ResourceFolderUtil` cannot list the application layer's `vauban:file:...!/` resource
+  URLs, as its `PinnedNpmVersions` warning also shows.
+
+## BUG-20261022-03 — Static text files are served with charset=ISO-8859-1
+
+- Date: 2026-10-22 (seen in the first local run of the nightly OWASP ZAP scan, Vidocq/vidocq#273).
+- Symptom: ZAP raises *Charset Mismatch (Header Versus Meta Charset)* (rule 90011, informational) on
+  `/` and `/index.html` of `foy-zap-target`: the default servlet answers
+  `Content-Type: text/html;charset=ISO-8859-1` for a file whose `<meta charset="UTF-8">` says otherwise.
+  The header wins over the meta element, so a UTF-8 page with non-ASCII characters is shown garbled.
+- Minimal repro: `curl -sI http://127.0.0.1:18081/index.html` on the running target
+  (`zap-foy-local.sh <worktree> probe`).
+- Cause hypothesis: `HttpServletResponseImpl.refreshContentTypeHeader` adds `ISO-8859-1` to every
+  `text/*` type when no charset was set, also when the body is written through `getOutputStream`, which
+  the default servlet uses. Tomcat names a charset only when one was set or `getWriter` was called.
+- Status: FIXED on `fix/static-charset`: `refreshContentTypeHeader` names a charset only when one was
+  set, configured for the context, or fixed by `getWriter()` (which still resolves `ISO-8859-1` by
+  default); `getCharacterEncoding()` keeps answering `ISO-8859-1`. Tests:
+  `HttpServletResponseImplTest.aTextTypeWrittenAsBytesNamesNoCharsetThatWasNeverSet` (failed before the
+  fix) and `theWriterStillNamesTheCharsetItWrites`. Official Servlet TCK, full suite, run with the fix.
+
+## BUG-20261022-02 — The session cookie has no SameSite attribute
+
+- Date: 2026-10-22 (found by the first local run of the nightly OWASP ZAP scan, Vidocq/vidocq#273).
+- Symptom: ZAP raises *Cookie without SameSite Attribute* (rule 10054, risk Low) on every response of
+  `foy-zap-target` that creates a session: `Set-Cookie: JSESSIONID=...; Path=/; HttpOnly`. A browser
+  that does not default to `Lax` sends the session cookie on cross-site requests, which helps
+  cross-site request forgery.
+- Minimal repro: `ServletSessionEndToEndTest.theSessionCookieIsSameSiteLaxByDefault`.
+- Cause: `ChappeServletBridge.sessionCookieHeader` emitted the attributes of `SessionCookieConfig`
+  only, and the configuration has none by default.
+- Status: FIXED on `ci/zap-nightly`: the session cookie is `SameSite=Lax` unless the application sets a
+  `SameSite` attribute (`theSameSiteAttributeOfTheApplicationWins`). The default is the container's:
+  `SessionCookieConfig.getAttribute("SameSite")` stays `null`.
+
+## BUG-20261022-01 — The container's error page does not escape the sendError message
+
+- Date: 2026-10-22 (found by the first local run of the nightly OWASP ZAP scan, Vidocq/vidocq#273).
+- Symptom: ZAP raises *Cross Site Scripting (Reflected)* (rule 40012, risk High) on
+  `/missing?item=</h1><scrIpt>alert(1);</scRipt><h1>` of `foy-zap-target`, whose servlet calls
+  `sendError(404, "No such item: " + item)`: the script comes back as markup in the 404 page.
+- Minimal repro: `HttpServletResponseImplTest.sendErrorEscapesTheMessageInTheDefaultErrorPage`.
+- Cause: `HttpServletResponseImpl.sendError(int, String)` wrote the message into its HTML page as is. An
+  application often puts a request value in that message, and Tomcat and Jetty escape it.
+- Status: FIXED on `ci/zap-nightly`: the message is HTML-escaped in the page (`&`, `<`, `>`, `"`, `'`);
+  `errorMessage()`, behind the `jakarta.servlet.error.message` attribute, stays raw.
+
+## BUG-20261021-02 — The endless-chunked test bounded the upload below the kernel's socket buffers
+
+- Date: 2026-10-21 (seen in the downstream rebuild of chappe#39's validation, Chappe run 199).
+- Symptom: `ChunkedBodyLimitEndToEndTest.anEndlessChunkedBodyIsCutOffAfterTheAnswer` failed with
+  `wrote 10690920 bytes`: the writer had stopped (the server did cut the upload off), but past the
+  test's bound of 10 MiB.
+- Cause: the bound assumed the client could write little more than chappe's drain (`maxDrainSize`,
+  1 MiB). It also fills the kernel's socket buffers before its writes fail: on Linux, autotuning grows
+  them up to 6 MiB on the receiving side and 4 MiB on the sending side by default (`tcp_rmem`,
+  `tcp_wmem`), so about 11 MiB can be written against a correct server. The test is right in intent,
+  its bound was too tight; nothing in the server is wrong.
+- Status: FIXED on `test/chunked-cutoff-bound`: the bound becomes 64 MiB. The writer stopping within
+  15 s (asserted just before) is what rules out an unbounded drain; the byte bound only catches a
+  drain far beyond the limit.
+
+## BUG-20261021-01 — An exception after flushBuffer() can lose the flushed bytes
+
+- Date: 2026-10-21 (seen in the downstream rebuild of chappe#38's validation, which changes nothing on
+  this path).
+- Symptom: `ServletStreamingEndToEndTest.exceptionAfterCommitAbortsTheConnection` failed once
+  (`connection closed before the status line`), then passed on the next run with the same Foy and the
+  same Chappe code: the client saw the connection close before any byte of the response, although the
+  servlet had written `partial` and called `flushBuffer()` before throwing.
+- Minimal repro: the test itself. On Linux CI it failed in 2 of 4 runs (Vidocq/chappe runs 181 and 199,
+  job `pr-validate`, `foy-core`); on macOS (Apple M5 Max) it failed 20 times out of 20.
+  `ResponsePipeTest.abortDeliversTheBufferedBytesThenMakesTheReaderThrow` is the deterministic form:
+  write `partial`, abort, then read.
+- Cause (confirmed): after the commit, an exception makes `ChappeServletBridge` call `res.abortBody(...)`.
+  The head and the first chunk travel through `ResponsePipe`, which Chappe drains; `ResponsePipe`'s reader
+  checked the abort before the buffered bytes, and `available()` reported 0 once aborted. When the abort
+  came before Chappe's first read, the flushed bytes were dropped, and Chappe, which writes the head
+  together with the first body bytes, never wrote the head. `flushBuffer()` means the bytes were written
+  to the client (Servlet 6.1, `ServletResponse.flushBuffer`).
+- Status: FIXED on `fix/abort-delivers-flushed-bytes`: the reader hands out the bytes already in the
+  pipe, then fails; `available()` reports them. The client receives the head and `partial`, then the
+  connection ends without the last chunk, as the test expects.
+- Validation: the unit test failed before the fix; the end-to-end test went from 20 failures out of 20
+  runs to 0 out of 20 (macOS); the whole Foy build passes.
+
+## BUG-20261015-01 — @HandlesTypes gets null in a jlink image
+
+- Date: 2026-10-15 (reported by the Vidocq session, PRs Vidocq/vidocq#257 and Vidocq/vauban#165).
+- Symptom: a Vaadin 25 application linked with `vidocq:jlink` fails at boot. The log shows
+  "ServletContainerInitializer is called but the provided set of classes is 'null'. class
+  com.vaadin.flow.di.LookupInitializer should always be present", then "Foy deployment failed:
+  The application Lookup instance is not found in VaadinContext". The same application boots
+  under run, dev and package.
+- Minimal repro: on any JDK (the JDK is itself an image), call `ApplicationSources.scanRoots`
+  with `jrt:/java.logging`, the form of a linked module's code source. It returns an empty list,
+  so `ClassFileHandlesTypesScanner` never scans that module. At boot, an initializer whose
+  component source is `jrt:/java.logging` and that handles `java.util.logging.Formatter`
+  receives `null`.
+- Cause: `scanRoots` kept only `file:` roots. In a jlink image every module's code source is
+  `jrt:/<module>`. Since vidocq#246, jars copied with brick enrichment carry no
+  `META-INF/foy/class-index.list`: the processors see only the hinted classes, so the index
+  cannot cover the whole jar. For such jars Foy relies on the class-bytes scan, which skipped
+  every module of the image. A module that does carry an index is still answered from it.
+- Status: FIXED (28318c9). `scanRoots` maps a `jrt:/<module>` root to that module's directory in the
+  `jrt` file system, `/modules/<module>`. It leaves the root out when the image has no such
+  module, or when the root is below a module. The scanner walks that directory like any other.
+- Validation:
+  - `ApplicationSourcesTest.scanRootsKeepsJrtModuleRootsOfALinkedImage` and
+    `ClassFileHandlesTypesScannerTest.jrtModuleRootIsScanned` both failed before the fix. The
+    second one finds `java.util.logging.SimpleFormatter` as a `Formatter` subtype in
+    `jrt:/java.logging`.
+  - The boot-level `FoyChappeBootJrtRootsTest` maps an initializer to `jrt:/java.logging` through
+    `componentSource`. Its set was `null` before the fix; it now holds the module's formatters.
+  - `scanRootsLeavesOutAJrtRootOfAnUnknownModule` and
+    `scanRootsDeduplicatesJrtRootsAndLeavesOutRootsBelowAModule` cover the edge cases.
+  - On 2026-10-15 the Vidocq session rebuilt its Vaadin 25 jlink image from e7c6f65.
+    `LookupServletContainerInitializer` now receives its classes, and the "LookupInitializer
+    should always be present" failure is gone. The boot then stops on a Vauban `uses` issue
+    (`InstantiatorFactory`), which is unrelated to Foy.
+- Static resources under `jrt:` roots work. With Vidocq/vauban#168 also applied, the same image
+  served `GET /` with status 200 and served the main bundle `VAADIN/build/generated-*.js` from a
+  `jrt:` module (Vidocq session report).
+- Not covered: `web-fragment.xml` discovery under `jrt:` roots. Neither the report nor the tests
+  exercise it.
+
+## BUG-20261015-02 — JSP property-group patterns do not dispatch to the JSP engine
+
+- Date: 2026-10-15.
+- Module: `foy-core` (`WebAppDeployer`).
+- Symptom: when a request matches a servlet mapping and a JSP property-group pattern,
+  Foy dispatches to the application servlet even when the JSP pattern is more specific
+  or identical.
+- Minimal repro: `WebAppDeployerEndToEndTest.jspPropertyGroupMappingsTakePrecedenceOverServletMappings`;
+  the official Pages TCK reproduces it in `URLClientIT`.
+- Cause: the live dispatcher only contained servlet registration mappings, so it never
+  considered JSP property-group patterns when selecting a target.
+- Status: FIXED on branch `fix-jsp-property-group-precedence`. The deployed JSP servlet
+  now receives the group routes before servlet mappings, preserving the dispatcher's
+  normal specificity ordering and the JSP servlet's initialization-failure response.
+- Validation: the regression failed before the change and passes after it (both the
+  more-specific and identical-pattern cases). In the official Pages TCK, two of the
+  three `URLClientIT` methods now pass; the remaining prefix-pattern case reaches Ibarra
+  but returns 404 because its router reads `getServletPath()` without `getPathInfo()`.
+  That follow-up belongs to the Ibarra adapter.
+
+## BUG-20261013-05 — JSP forwards cannot preserve application wrappers inside an include
+
+- Date: 2026-10-13.
+- Symptom: a page engine forwarding its current application response chain during an
+  INCLUDE gets ignored status/header/reset operations and no forward completion;
+  peeling response wrappers instead loses application transformations and cached writers.
+- Minimal repro: include twice, add application response wrappers with writers cached
+  before forwarding, write pending caller content, and forward to a target setting
+  status 207 and writing `target`. Ordinary dispatch retains `discardTARGET`, status
+  200 and no target headers. Retained asynchronous responses also lose target policy.
+- Cause: the normal Servlet forward intentionally preserves the enclosing INCLUDE
+  response policy. JSP forwarding needs an explicit container operation ending the
+  page inclusion chain, without changing opaque application wrapper delegates.
+- Status: FIXED. Additive `JspEngine.ForwardDispatcher.forwardFromJsp` retains the
+  current wrapper chain and applies forward policy per operation only to Foy-owned
+  INCLUDE scopes. Servlet reset and completion remain container-owned. Async dispatch
+  retains the response captured by `startAsync(request, response)`. Ownership is
+  confined to the operating thread, and partial scope acquisition is rolled back.
+- Validation: ten HTTP regressions in `JspForwardDispatcherTest` cover nested
+  wrappers, cached writers/streams, asynchronous completion/dispatch, exceptions,
+  missing targets through HTTP and generic wrappers, concurrent original references
+  and partial acquisition cleanup. Four original behavior failures, the thread-policy
+  leak and generic-wrapper silent 200 were reproduced before their fixes. On 2026-10-14,
+  a generic wrapper forwarding to an existing target reproduced `discardTARGET`
+  instead of `TARGET` and zero application resets instead of one. Reset now uses
+  the current forwarding response view, so INCLUDE scope policy and application
+  overrides both apply. The initial focused dispatch/async/error suite passed
+  101 tests with zero failures, errors or skips:
+  `./mvnw -o -ntp -pl foy-core -am '-Dtest=JspForwardDispatcherTest,DispatcherSemanticsTest,ServletDispatcherTest,AsyncSupportedDispatchTest,*Async*Test,ErrorPageDispatchTest' -Dsurefire.failIfNoSpecifiedTests=false test`.
+  Final rebased normal reactor: `./mvnw -o -ntp -Dmaven.repo.local=/private/tmp/ibarra-forward-m2 test`
+  passes 1307 tests with zero failures, errors or skips, including all ten HTTP regressions.
+  Related Ibarra tracking: IBARRA-119 and IBARRA-130.
+
+## BUG-20261013-04 — an async cycle started in an error page never runs
+
+- Date: 2026-10-13 (final fix wave of the dispatch batch).
+- Symptom: an error page that calls `startAsync()` (or `startAsync(req, res)`) and then
+  `AsyncContext.dispatch()` gets an empty response. The dispatch never runs, and no exception tells the
+  application.
+- Minimal repro: a servlet calls `sendError(500)`. The `<error-page>` location is async-supported; it calls
+  `startAsync(req, res)` then `dispatch()`. The client receives an empty body.
+- Cause: `ChappeServletBridge` runs the async cycles (`runAsyncCycles`) before the error handling
+  (`maybeHandleError`), so a cycle opened by the ERROR dispatch is never driven. A zero-argument
+  `startAsync()` also binds the container request, not the `ErrorDispatchRequest`.
+- Investigation: pinned by `ErrorPageDispatchTest.startAsyncInAnErrorPageThrowsIse` and
+  `startAsyncWithRequestAndResponseInAnErrorPageThrowsIse`.
+- Status: FIXED (d32ec2d). `startAsync()` and `startAsync(req, res)` throw `IllegalStateException` during an ERROR
+  dispatch, so the gap is no longer silent. Driving the cycle after an ERROR dispatch stays out of scope.
+
+## BUG-20261013-03 — forward and include put the container wrapper above an HTTP application wrapper instead of under it
+
+- Date: 2026-10-13 (review of the BUG-20261009-01 fix).
+- Symptom: when an application passes an `HttpServletRequestWrapper` (or `HttpServletResponseWrapper`)
+  to `forward`/`include`, the target does not receive the object the application passed (section
+  6.2.2): it receives the container's `ForwardedRequest`/`IncludedRequest` wrapping it. The application
+  wrapper's overrides of `getParameter*`, the path methods and `getAttribute` are hidden, because the
+  dispatch wrapper answers them itself. Tomcat puts its dispatch wrapper under the application's chain
+  for HTTP wrappers too (`ApplicationDispatcher.wrapRequest`).
+- Minimal repro: servlet `C` calls `getRequestDispatcher("/T").forward(new HttpServletRequestWrapper(req) {
+  getParameter -> "h" }, resp)`; `T` reads `getParameter("p")` → `null` instead of `h`.
+  `DispatcherSemanticsTest.anHttpWrapperIsStillPassedAsBefore` pinned the old behaviour through a
+  delegated method (`getHeader`).
+- Cause: `RequestDispatcherImpl` only hooks the lowest *non-HTTP* wrapper (BUG-20261009-01). When the
+  outer object is HTTP, it still wraps the outer object in the dispatch wrapper.
+- Status: FIXED by 99d40d1. `RequestDispatcherImpl` now finds the first *container* request/response
+  of the chain (`HttpServletRequestImpl`, `ForwardedRequest`, `IncludedRequest`, `AsyncDispatchRequest`,
+  `ErrorDispatchRequest`; `HttpServletResponseImpl`, `IncludedResponse`) and hooks the dispatch wrapper
+  under the application wrapper right above it (`hookAbove`), HTTP or not, restoring the chain in
+  `finally`. `ErrorDispatchRequest` became public for the check. Pinned by
+  `DispatcherSemanticsTest.anHttpWrapperPassedTo{Forward,Include}IsTheObjectTheTargetReceives`,
+  `anHttpResponseWrapperPassedToIncludeIsTheObjectTheTargetReceives`,
+  `theHttpWrapperChainIsRestoredAfterForwardAndInclude`,
+  `aFilterWrappingOnForwardComposesWithASecondDispatch`,
+  `anHttpWrapperDelegatesTheDispatchPathsToTheDispatchWrapper` and
+  `aFilterWrapperOverAnApplicationWrapperComposesWithASecondDispatchAndBothChainsAreRestored`.
+  Full official TCK (`run-official-tck-servlet6.1.sh --all`, branch build): 1714 tests, 5 known JSP
+  errors, identical per class to the run before the change. Official TCK subset (dispatch, wrapper,
+  filter-dispatcher, dispatcher-type, async and error-page classes): 309 tests, 0 failures, 0 errors.
+- Stricter behaviour (48d534f): the request (and, for include, the response) must be, or wrap, the
+  container's objects. A request that is neither a container object nor wraps one (for example an application-implemented `HttpServletRequest` that only delegates) is now
+  rejected with `ServletException("the request and response must be, or wrap,
+  the objects the container passed (RequestDispatcher)")`, as the `RequestDispatcher` Javadoc requires.
+  Pinned by `DispatcherSemanticsTest.aRequestThatDoesNotWrapTheContainersIsRejected`.
+
+## BUG-20261013-02 — FoyChappeBoot fails on the module path: foy-core does not declare `uses CdiContextListeners`
+
+- Date: 2026-10-13 (vidocq PR 245, `vidocq-runtime-it-foy-servlet` red in CI).
+- Symptom: booting through `FoyChappeBoot` with Foy on the module path fails with
+  `ServiceConfigurationError: io.vidocq.foy.spi.cdi.CdiContextListeners: module io.vidocq.foy.core does
+  not declare 'uses'` (`FoyServletModulePathTest`, `FoyServletContextPathTest` in vidocq).
+- Minimal repro: `LayeredProvidersTest.theModuleMayLoadTheCdiContextListenersService`.
+- Cause: the BUG-20261012-02 fix (foy#38) moved the `ServiceLoader.load` call for the CDI context
+  listeners from `foy-chappe` (which declares `uses`) to `ApplicationSources.providers` in `foy-core`,
+  whose `module-info.java` did not declare the service. The foy unit tests that ran it did so on a
+  class path or with a service already declared, so only the runtime's module-path IT saw it.
+- Status: FIXED by `uses io.vidocq.foy.spi.cdi.CdiContextListeners;` in `foy-core`'s `module-info.java`.
+
+## BUG-20261013-01 — the case check does not detect case folding on Linux case-insensitive mounts
+
+- Date: 2026-10-13 (final review of the security batch).
+- Symptom: on a Linux case-insensitive mount (ext4 casefold, vfat/exFAT, CIFS, some container bind
+  mounts), a directory resource root still serves `/STATIC/x.txt` from `static/x.txt`, around a
+  `/static/*` constraint: the BUG-20261011-05 bypass remains there.
+- Minimal repro: by code reading; deploy a directory resource root on a casefold or vfat mount with a
+  constraint on `/static/*` and request `/STATIC/x.txt`. Not pinned by a test (no such mount on CI).
+- Cause: `ResourcePaths.realNameMatches` reads the real name through `toRealPath(NOFOLLOW_LINKS)`, which
+  corrects the case only where the JDK's file system reports case-insensitive-and-preserving (macOS,
+  and the real path on Windows). On Linux it returns the requested spelling.
+- Status: OPEN (documented limit, in the `realNameMatches` Javadoc, `usage.adoc` and `internals.adoc`:
+  serve static resources from jars or from a case-sensitive file system on such hosts). Fix direction:
+  a per-segment exact-name check against the directory listing, at a cost per request.
+
+## BUG-20261012-02 — a provider module in two layers registers its CDI context listeners twice
+
+- Date: 2026-10-12 (foy#38).
+- Symptom: under Vidocq, the startup report lists `VaubanWebContextsListener` twice, and each
+  request and session event activates and deactivates the CDI contexts twice.
+- Minimal repro: `LayeredProvidersTest`, where the same provider module sits in a parent layer and in a
+  child layer whose loader delegates to the parent one.
+- Cause: Vidocq re-layers the application over the boot layer, so `io.vidocq.foy.cdi.vauban` is in
+  both layers. `ServiceLoader.load(service, loader)` with the application layer's loader returns its
+  provider once per layer. `ServletContainerInitializer` discovery had the same exposure.
+- Status: FIXED by `ApplicationSources.providers`, which keeps the first provider of each class
+  name (the child layer's), for the CDI context listeners and the initializers.
+
+## BUG-20261012-01 — components of an excluded fragment stay deployed under a shared class loader
+
+- Date: 2026-10-12.
+- Symptom: with an absolute ordering that excludes a fragment, its servlets, filters, listeners
+  and `ServletContainerInitializer`s are still deployed when the harness loads the classes of
+  several jars from one class loader (vidocq#228, `Aordering4Tests.absoluteOrderingTest`).
+- Minimal repro: `FoyChappeBootFragmentsTest.aSharedLoaderHarnessExcludesTheFragmentThroughComponentSource`
+  (classes load parent-first from `shared.jar`, `META-INF/web-fragment.xml` is found in `ex.jar`).
+- Cause: a component was attributed to a jar by the code source of its class only, which names the
+  shared jar and not the jar of the fragment.
+- Status: FIXED by `FoyChappeBoot.Builder#componentSource`, which attributes each class to its real
+  jar for the exclusions, the application roots and the initializers.
+
+## FOY-TLD-001 · 2026-10-11 · A factory can hide its actual listener class
+
+- Symptom: an interface/base descriptor type bypasses deduplication by actual
+  listener class when its factory constructs a subtype.
+- Minimal repro: `TldListenerLifecycleTest.factoryTypesMustIdentifyTheExactConstructedClassForDeduplication`.
+- Cause: `type.isInstance` accepts subtypes while the container deduplicates by
+  the declared type before constructing listeners.
+- Status: FIXED; factories must return the exact declared class.
+
+## BUG-20261011-01 — duplicate JSP taglib fields overwrite earlier values
+
+- Date: 2026-10-11.
+- Symptom: repeated `taglib-uri` fields silently select the last URI.
+- Minimal repro: `JspConfigurationTest.duplicateTaglibFieldsAreRejectedInsteadOfSilentlyOverwriting`.
+- Cause: collecting fields with `Map.put` loses duplicates.
+- Status: FIXED in the JSP-engine SPI branch; reject duplicates and unknown fields.
+
+## BUG-20261011-02 — existing Vauban request-scope test prevents a full local install
+
+- Date: 2026-10-11.
+- Symptom: `FoyWebExtensionTest.requestScopedThroughFoyChappeBoot` gets HTTP 500
+  with `ContextNotActiveException: RequestScope is not active`.
+- Minimal repro: Java 25, local Vauban 0.4.0-SNAPSHOT, `./mvnw -o -ntp -pl foy-cdi-vauban -am test -Dtest=FoyWebExtensionTest#requestScopedThroughFoyChappeBoot -Dsurefire.failIfNoSpecifiedTests=false`.
+- Cause hypothesis: existing Vauban request activation gap, also referenced as
+  vauban#147 in BUG-20261010-07; unrelated to JSP service discovery.
+- Status: FIXED upstream by Vauban `f420ea84` (`RequestContextController` and
+  `@ActivateRequestContext`, vauban#147). Verified 2026-10-13: `FoyWebExtensionTest` passes in full
+  (11/11, `requestScopedThroughFoyChappeBoot` included) against the current Vauban 0.4.0-SNAPSHOT,
+  with no Foy change.
+
+Suivi des bugs reproductibles. Convention : voir `../CLAUDE.md` (workspace root).
+
+Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
+
+---
+
+## BUG-20260611-01 — chunked request with HTTP trailers never gets a response (connection hangs)
+
+- **Date** : 2026-06-11
+- **Statut** : FIXED (foy PR #2 + chappe PR #2/#3 — see investigations)
+- **Module touché** : `foy-chappe` / chappe transport (trailer parsing after the final chunk)
+- **Symptôme** : a `Transfer-Encoding: chunked` request carrying trailer fields
+  gets **no response at all** — the connection stays open and silent. A client
+  reading the socket without `SO_TIMEOUT` blocks forever (this froze the first
+  full Servlet TCK run: `HttpServletRequest40Tests.TrailerTest` stuck in
+  `Socket.read()`, thread dump captured 2026-06-11).
+- **Reproduction minimale** :
+  ```
+  ./run-official-tck-servlet6.1.sh "-Dtest=HttpServletRequest40Tests#TrailerTest"
+  # or: send POST with Transfer-Encoding: chunked, a body chunk, then
+  # "0\r\nmyTrailer: foo\r\n\r\n" — no bytes ever come back
+  ```
+- **Hypothèse de cause** : the chunked decoder does not consume/parse trailer
+  fields after the terminal `0\r\n` chunk, so the request never completes and
+  the dispatch never fires (or blocks reading what it thinks is more body).
+  `request.getTrailerFields()` (Servlet 4.0 §) depends on the same parsing.
+  Related TCK fallout: the rest of `HttpServletRequest40Tests` (10/11 errors).
+- **Investigations** :
+  - 2026-06-11 : found during the first full Servlet 6.1 TCK measurement run
+    (see `TCK.md` §3.2 and §5). Mitigated harness-side with a JUnit global
+    timeout (`junit-platform.properties`) so measurement runs cannot freeze;
+    the implementation gap itself remains open. Audit hint: see the workspace
+    memory of CHAPPE-004-style single-read bugs — the trailer path may be
+    another "assumes everything arrives in one read()" case.
+  - 2026-06-12 : full root-cause chain identified and fixed — FOUR stacked
+    issues, none of them the initially suspected chunked decoder:
+    1. chappe threw the parsed trailer fields away → exposed via
+       `Request.trailers()` (chappe PR #2);
+    2. chappe's `Router.mount`/`withPathParams` anonymous wrappers fell back
+       to the `trailers()`/`onDisconnect()` interface defaults (CASSINI-002
+       pattern) → `ForwardingRequest` + reflective parity test (chappe PR #3);
+    3. foy inherited the spec-default `getTrailerFields()` (empty map) →
+       implemented on `chappe.trailers()` (lowercase keys) +
+       `isTrailerFieldsReady()` on body-EOF tracking;
+    4. the REAL hang: the TCK 6.1.0 client reads the response to EOF on a
+       keep-alive connection and relies on the container's keep-alive
+       timeout — chappe's idle timeout was a silent no-op
+       (`setSoTimeout` on a `SocketChannel`, CHAPPE-005) → `BoundedReads`
+       watchdog (chappe PR #3); upstream later fixed the test itself
+       (`Connection: close`, jakartaee/servlet `079ceb29cb`).
+    Also fixed here: `foy-tck` froze `foy.version=0.1.0-SNAPSHOT` while the
+    reactor is 0.2.0 — the TCK was validating stale M2 jars (same trap as
+    cassini-tck); bumped, with a warning comment. `TrailerTest` now PASSES.
+
+## BUG-20261007-01 — form POST parameters ignored
+
+- **Date** : 2026-10-07
+- **Statut** : FIXED (this commit)
+- **Module touché** : `foy-core` / `HttpServletRequestImpl`
+- **Symptôme** : `getParameter*` only read the query string; an
+  `application/x-www-form-urlencoded` POST body never became parameters (§3.1.1).
+- **Reproduction minimale** : `ServletFormParametersEndToEndTest`.
+- **Hypothèse de cause** : M1 shortcut ("query-string only for this milestone").
+
+## BUG-20261008-01 — declared filter registrations expose no mappings
+
+- **Date** : 2026-10-08
+- **Statut** : FIXED (this commit)
+- **Module touché** : `foy-core` (`WebAppDeployer.registerStatic`)
+- **Symptôme** : for a filter declared in web.xml, a web fragment or by `@WebFilter`,
+  `ServletContext.getFilterRegistration(name).getUrlPatternMappings()` and
+  `getServletNameMappings()` are empty, although the filter is mapped and invoked.
+  TCK: `spec.annotationservlet.webfilter.WebFilterTests.test2` (forward1).
+- **Reproduction minimale** : deploy a model with filter `f` mapped to `/x` and to servlet `a`,
+  then `ctx.getFilterRegistration("f").getUrlPatternMappings()` → `[]`
+  (`WebAppDeployerEndToEndTest.declaredRegistrationsExposeTheirMappings`).
+- **Hypothèse de cause** : `registerStatic` called `ctx.registerStaticFilter(name, type, params,
+  async)` without the model's filter mappings; routing used the model directly, so only the
+  introspection API was wrong. Servlet registrations already received their patterns.
+- **Investigations** :
+  - 2026-10-08 : found while routing the TCK harness through the product merge (Task 3.10 review).
+    Fixed: the model mappings of each declared filter are added to its static registration
+    (URL patterns and servlet names, with their dispatcher types); routing unchanged.
+
+## BUG-20261008-02 — a filter mapped by URL pattern and by servlet name runs twice for one request
+
+- **Date** : 2026-10-08
+- **Statut** : FIXED (4393baf, 2026-10-09, Phase 4 Task 4.4)
+- **Module touché** : `foy-core` (`WebAppDeployer.buildFilterMappings`, `FilterRegistry` chain building)
+- **Symptôme** : a filter with a `<url-pattern>` mapping and a `<servlet-name>` mapping that both
+  match the same request is invoked twice in the chain. Tomcat invokes it once (§6.2.4: the chain
+  is built from the matching mappings, a filter appears once).
+- **Reproduction minimale** : filter `f` mapped to `/x` and to servlet `a`, servlet `a` mapped to
+  `/x`; `GET /x` → `f.doFilter` runs twice.
+- **Hypothèse de cause** : servlet-name mappings are expanded into the target servlet's URL
+  patterns (one `FilterMapping` per pattern) and the chain is assembled from every matching
+  mapping with no deduplication by filter name.
+- **Investigations** :
+  - 2026-10-08 : noted during the Task 3.10 review; left unfixed (Phase 4 dispatch work).
+  - 2026-10-09 : cause confirmed. Expanding servlet-name mappings into URL patterns also broke the
+    §6.2.4 order (URL-pattern matches before servlet-name matches), applied a servlet-name filter
+    to requests another servlet serves, gave named dispatches the `/*` filters instead of the
+    target's servlet-name filters, and ignored `<servlet-name>*</servlet-name>`.
+- **Correction** : `FilterMapping` is either a URL-pattern or a servlet-name mapping (never
+  expanded); `FilterRegistry.chainFor(path, type, servletName)` returns the URL-pattern matches in
+  declaration order, then the servlet-name matches (`*` = every servlet), each filter at most once;
+  a named dispatch passes no path, only the target's name. Tests: `FilterRegistryServletNameTest`,
+  `WebAppDeployerEndToEndTest.filterMappedByUrlAndServletNameRunsOnce` and siblings.
+
+## BUG-20261009-01 — forward/include drop a non-HTTP application wrapper passed to the dispatcher
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (the dispatch wrapper goes under the lowest non-HTTP application wrapper, restored in a finally, 1de5b96; review round 37a7de4)
+- **Module touché** : `foy-core` (`RequestDispatcherImpl.unwrapHttp` / `unwrapHttpResponse`)
+- **Symptôme** : when a servlet or filter passes a plain `ServletRequestWrapper` (or
+  `ServletResponseWrapper`) that is not an `HttpServletRequest` to `forward`/`include`, the target
+  receives the inner HTTP request (wrapped by the container's dispatch wrapper), not the
+  application's wrapper. Section 9.1/6.2.2: the target must see the objects that were passed in.
+  HTTP wrappers (`HttpServletRequestWrapper`) are kept.
+- **Reproduction minimale** : servlet `C` calls
+  `getRequestDispatcher("/T").include(new ServletRequestWrapper(req) { getParameter -> "w" }, resp)`;
+  `T` reads `getParameter(...)` → the wrapper's override is not seen.
+- **Hypothèse de cause** : the dispatcher unwraps to the first `HttpServletRequest` to build the
+  `ForwardedRequest`/`IncludedRequest`; the dispatch wrapper should instead be inserted under the
+  application's wrapper chain (Tomcat `ApplicationDispatcher.wrapRequest`).
+- **Investigations** :
+  - 2026-10-09 : noted during the Task 4.4 fix round; no failing TCK test identified.
+  - 2026-10-13 : fixed in 1de5b96. `RequestDispatcherImpl` sets the `ForwardedRequest` /
+    `IncludedRequest` / `IncludedResponse` under the lowest non-HTTP wrapper with
+    `setRequest`/`setResponse` and restores it in a `finally`; `Invoker.invoke` takes
+    `ServletRequest`/`ServletResponse`. Pinned by `DispatcherSemanticsTest`
+    (`aPlainRequestWrapperPassedToIncludeReachesTheTarget`,
+    `aPlainRequestWrapperPassedToForwardReachesTheTarget`,
+    `aPlainResponseWrapperPassedToIncludeReachesTheTarget`,
+    `theApplicationChainIsRestoredAfterTheDispatch`,
+    `nestedDispatchesUnwindTheApplicationChainInOrder`, `anHttpWrapperIsStillPassedAsBefore`).
+    Review round 37a7de4 added `theApplicationChainIsRestoredAfterAForward` and
+    `aPlainResponseWrapperPassedToForwardReachesTheTarget`.
+    Out of scope: the async dispatch path (`ChappeServletBridge` async `dispatch`) still wraps the
+    container request, not `AsyncContext.getRequest()`.
+
+## BUG-20261009-02 — getServletPath/getPathInfo are not percent-decoded
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (1906b44, fix round in the following `fix(core)` commit — Task 4.5b)
+- **Module touché** : `foy-core` (`ChappeServletBridge.handle`, `HttpServletRequestImpl`)
+- **Symptôme** : the bridge derives the servlet path and path info from the raw chappe
+  `request.path()`, which is not percent-decoded. Servlet 6.1 section 3.6 (and the
+  `getServletPath`/`getPathInfo` Javadoc) require decoded values. Mapping and static resource
+  lookup therefore see the encoded form: `GET /my%20file.txt` answers 404 although the WAR holds
+  `/my file.txt`.
+- **Reproduction minimale** : deploy a resource `/my file.txt` (container default servlet), then
+  `GET /ctx/my%20file.txt` → 404; a servlet mapped `/a b` is not reached by `/a%20b`.
+- **Hypothèse de cause** : no decoding step between the chappe request path and the dispatcher;
+  `getRequestURI` must stay raw, the servlet path and path info must be decoded (UTF-8), with the
+  default servlet's encoded-separator check (`ResourcePaths`) kept against double encoding.
+- **Investigations** :
+  - 2026-10-09 : found during Task 4.5 (default servlet). The default servlet refuses encoded
+    `.`, `/`, `\` and NUL, so the raw path is not a traversal risk today.
+  - 2026-10-09 : fixed by `RequestPaths.canonicalize` (section 3.5.2), called once in
+    `ChappeServletBridge.handle`: path parameters stripped from every segment, encoded `/`, `\`,
+    NUL, raw `\`, control and non-ASCII characters refused with 400 (Tomcat
+    `encodedSolidusHandling=reject`), one UTF-8 percent-decoding (malformed → 400), dot segments and
+    repeated slashes normalised (`..` above the root → 400). Servlet/filter mapping, the default
+    servlet and the security enforcer see the canonical path (kept on the request);
+    `getRequestURI`/`getRequestURL` stay raw. A 400 honours a status error page. Dispatch paths
+    (`getRequestDispatcher`, `DispatchResolver`) are normalised but not decoded again; one climbing
+    above the root gets no dispatcher. Tests: `RequestPathsTest`, `RequestPathCanonicalisationTest`.
+  - 2026-10-09 (fix round) : a zero-argument `AsyncContext.dispatch()` on an application-wrapped
+    request now uses the canonical path found through the wrapper chain
+    (`HttpServletRequestImpl.canonicalDispatchUri`); the context path is removed on a segment
+    boundary (`/ctx;x=1/a` → `/a`, `/ctx2/a` → 404); segments made only of dots and spaces
+    (`...`, `..%20`) are refused with 400; `OPTIONS *` is dispatched unchanged.
+
+## BUG-20261009-03 — error dispatch shows the error-page location's paths only to the default servlet
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (`ErrorDispatchRequest` gives every error-page target the location's paths, URI and mapping, 926deae; relative dispatcher resolved against the location, 3fd3288)
+- **Module touché** : `foy-core` (`ChappeServletBridge.maybeHandleError` / `errorTargetRequest`)
+- **Symptôme** : on an ERROR dispatch the target receives the original request, whose
+  `getServletPath`/`getPathInfo` describe the failing request, not the error-page location
+  (section 10.9: the error dispatch behaves like a forward to the location). Only the container
+  default servlet gets a wrapper with the location's paths (an `instanceof DefaultServlet` special
+  case), so that static error pages are found.
+- **Reproduction minimale** : error page `500 → /err` mapped to a servlet printing
+  `req.getServletPath()`; a servlet throwing → the error servlet prints the failing servlet's path.
+- **Hypothèse de cause** : `maybeHandleError` invokes the target with the container request instead
+  of a forward-style wrapper; generalise `errorTargetRequest` to every target once the TCK impact
+  is checked.
+- **Investigations** :
+  - 2026-10-09 : special case introduced by Task 4.5; generalisation deferred.
+  - 2026-10-13 : fixed in 926deae. `ErrorDispatchRequest` replaces the `DefaultServlet`-only wrapper
+    and overrides `getServletPath`, `getPathInfo`, `getRequestURI`, `getRequestURL` and
+    `getHttpServletMapping` from the `DispatchTarget` (Servlet 6.1 section 10.9.1); the query string,
+    parameters and `jakarta.servlet.error.*` attributes are unchanged. Static error pages still pass.
+    Pinned by `ErrorPageDispatchTest#anErrorPageSeesTheLocationsServletPath`,
+    `anErrorPageAfterAnExceptionSeesTheLocationsPaths`, `theHttpServletMappingOfAnErrorPageIsTheLocations`,
+    `aPathMappedErrorPageSeesTheServletPathAndPathInfoOfItsLocation`,
+    `anErrorPageRequestUrlEndsWithItsLocationPath` and
+    `anErrorInsideAForwardGivesTheErrorPageItsLocationButTheOriginalErrorUri`.
+
+## BUG-20261009-04 — decoded paths leak into dispatch URIs (query split, wrapper URIs)
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (dispatch URIs are percent-encoded and a zero-argument async dispatch keeps its path and query apart, 363b082, cae4c77)
+- **Module touché** : `foy-core` (`AsyncContextImpl.dispatch()`, `ForwardedRequest`, `IncludedRequest`, `AsyncDispatchRequest`)
+- **Symptôme** : (1) a zero-argument `AsyncContext.dispatch()` builds its target from the decoded
+  canonical path; an encoded `%3F` in the request path decodes to `?`, which the dispatch then
+  splits as a query string (Tomcat behaves the same). (2) `jakarta.servlet.include.request_uri`,
+  the forwarded `getRequestURI()` and the async-dispatched `getRequestURI()` are built from the
+  decoded dispatch path instead of a re-encoded URI.
+- **Reproduction minimale** : servlet mapped `/a?b/*` (decoded), `GET /ctx/a%3Fb/x` → startAsync +
+  `dispatch()` → resolves `/ctx/a` with query `b/x`. Forward to `/my file.txt` →
+  `getRequestURI()` is `/ctx/my file.txt`, not `/ctx/my%20file.txt`.
+- **Hypothèse de cause** : dispatch paths are decoded context-relative paths (section 9.1.1); the
+  wrappers concatenate them into the URI without percent-encoding, and the zero-argument dispatch
+  passes a path through the string-based `dispatch(String)` API that splits on `?`.
+- **Investigations** :
+  - 2026-10-09 : found in the Task 4.5b review; not exercised by the TCK.
+  - 2026-10-13 : fixed in 363b082. `RequestPaths.encodeUriPath` re-encodes the dispatch path in the
+    request URI of `ForwardedRequest`, `AsyncDispatchRequest` and `ErrorDispatchRequest` and in
+    `jakarta.servlet.include.request_uri`; `AsyncContextImpl` passes the path and the query apart and
+    `DispatchResolver.resolve(path, query)` no longer splits the path; `canonicalDispatchPath` reads
+    the target's decoded path. Pinned by `RequestPathsTest.encodesADecodedPathForARequestUri` /
+    `encodingAPathIsIdempotent` and `RequestPathCanonicalisationTest.theForwardTargetRequestUriIsEncoded`,
+    `theIncludeRequestUriAttributeIsEncoded`, `zeroArgumentAsyncDispatchKeepsADecodedQuestionMarkInThePath`
+    and `zeroArgumentAsyncDispatchAfterAForwardUsesTheForwardTargetPath`.
+  - 2026-10-13 : review follow-up in cae4c77. A lone or mismatched surrogate is encoded as U+FFFD
+    instead of swallowing the next character as `?`. Pinned by
+    `RequestPathsTest.surrogatePairsAreEncodedTogetherAndLoneSurrogatesAsReplacementCharacters` and
+    `RequestPathCanonicalisationTest.anErrorPageRequestUriIsEncoded`,
+    `anAsyncDispatchTargetReportsTheUrlOfItsOwnPath` and
+    `zeroArgumentAsyncDispatchAfterANamedForwardUsesTheCallerPath`.
+
+## BUG-20261009-05 — changeSessionId throws UnsupportedOperationException; HttpSessionIdListener ignored
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (Phase 4 Task 4.7, `feat(core): changeSessionId, session expiry reaper, ...`)
+- **Module touché** : `foy-core` (`HttpServletRequestImpl.changeSessionId`, `ListenerRegistry`)
+- **Symptôme** : `HttpServletRequest.changeSessionId()` answered 500 `UnsupportedOperationException:
+  changeSessionId not implemented` (TCK `HttpSessionIdListenerTests.changeSessionIDTest1`,
+  `HttpServletRequestWrapperTests.changeSessionIDTest1`); `ListenerRegistry.register` silently dropped
+  `HttpSessionIdListener` instances.
+- **Reproduction minimale** : a servlet calling `req.getSession(); req.changeSessionId()`.
+- **Hypothèse de cause** : not implemented (Phase 1 stub).
+- **Investigations** :
+  - 2026-10-09 : `SessionManager.changeSessionId` re-keys the session in the store
+    (`SessionStore.rename`, a backward-compatible default method), keeps attributes and times,
+    fires `sessionIdChanged` once; the bridge emits the new cookie (requested id != current id).
+  - 2026-10-09 (Task 4.7 review, fix round 1) : race with invalidation/undeploy — the guard
+    checked `isInvalidated()` only, so `sessionIdChanged` could fire on a session being destroyed
+    and `rename` could re-insert a dead session under its new id. The change now runs under the
+    session monitor (which every invalidation claim takes) and refuses a session whose
+    invalidation started; the store removal of an invalidated session takes the same
+    `renameLock` as the re-keying.
+
+## BUG-20261009-06 — expired sessions dropped without sessionDestroyed; wrong last-accessed time
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (Phase 4 Task 4.7, same commit)
+- **Module touché** : `foy-core` (`SessionManager`, `HttpSessionImpl`)
+- **Symptôme** : (1) `SessionManager.find` removed an expired session from the store without firing
+  `HttpSessionListener.sessionDestroyed` nor unbinding its attributes, and a session never asked for
+  again was never expired (no reaper). (2) `invalidate()` unbound the attributes and marked the
+  session invalid *before* `sessionDestroyed`, so a listener reading an attribute got an
+  `IllegalStateException`. (3) `getLastAccessedTime()` returned the start of the current request
+  instead of the previous request's time (TCK `HttpSessionTests.expireHttpSessionTest`:
+  "indicates last accessed at … which is after it was last accessed").
+- **Reproduction minimale** : (1) timeout 1 s, create a session holding an
+  `HttpSessionBindingListener`, wait 2 s, request it → no `sessionDestroyed`/`valueUnbound`.
+  (3) two requests on one session → the second sees its own start time.
+- **Hypothèse de cause** : lazy-only expiry with a bare `store.remove`; access time updated on lookup.
+- **Investigations** :
+  - 2026-10-09 : Tomcat semantics adopted: a request begins an access on lookup and ends it in the
+    bridge after processing (async included); the end becomes the last-accessed time; a session in
+    use is never expired. Expiry (lazy in `find`/`peek` and by a virtual-thread reaper, period
+    `min(60 s, max(1 s, timeout / 2))`) fires `sessionDestroyed` while the session is still valid,
+    then `valueUnbound`/`attributeRemoved`. Undeploy stops the reaper and invalidates every live
+    session with its listeners (no persistence).
+
+## BUG-20261009-07 — tracking modes not enforced on input; COOKIE-only default
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (Phase 4 Task 4.7 fix round 1, `fix(core): ...`)
+- **Module touché** : `foy-core` (`HttpServletRequestImpl.getRequestedSessionId`, `VidocqServletContext`)
+- **Symptôme** : a `;jsessionid=` path parameter resolved the session even when `URL` was not an
+  effective tracking mode, and the session cookie did when `COOKIE` was not; the default modes
+  were `{COOKIE}` only, so URL rewriting was off by default.
+- **Reproduction minimale** : `<tracking-mode>COOKIE</tracking-mode>`, create a session, request
+  `/ctx/x;jsessionid=<id>` without the cookie → the session is found.
+- **Hypothèse de cause** : the request read both sources unconditionally.
+- **Investigations** :
+  - 2026-10-09 : ruling — default `{COOKIE, URL}` (Tomcat; `SSL` never by default), each source
+    read only when its mode is effective (section 7.1).
+  - 2026-10-09 (fix round 2) : session fixation — with both a `;jsessionid=` and a session
+    cookie, the URL id won; the cookie now wins when `COOKIE` is effective (Tomcat), the path
+    parameter applies only without a session cookie.
+
+## BUG-20261009-08 — HttpSessionTests.expireHttpSessionTest flaky: a request not calling getSession does not access the session
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (Phase 4 Task 4.10, `fix(core): access the requested session on every request`)
+- **Module touché** : `foy-core` (`ChappeServletBridge.handle`, `HttpServletRequestImpl`)
+- **Symptôme** : api `HttpSessionTests.expireHttpSessionTest` passed in some TCK runs and failed
+  in others, in isolation too. The failure is in its `getLastAccessedTime` step, not the expiry:
+  `Session created before 1791573543421 ... last accessed at 1791573543420 which is before
+  creation` (`task49b-api.log`).
+- **Reproduction minimale** : `./run-official-tck-servlet6.1.sh --no-install
+  -Dtest=servlet.tck.api.jakarta_servlet_http.httpsession.HttpSessionTests` (intermittent);
+  deterministic: `SessionCoreTest.aRequestCarryingTheSessionIdAccessesTheSessionWithoutGetSession`.
+- **Hypothèse de cause** : the test sets the max interval (request 1), records `t1` on the
+  client, fetches the static `/index.html` with the session cookie, records `t2`, then asks for
+  `t1 <= getLastAccessedTime() <= t2`, i.e. it expects the static request to be the last access
+  (section 7.6: "accessed when a request that is part of the session is first handled"). Foy
+  began an access only when the application called `getSession`, which the default servlet
+  never does, so the last access stayed the end of request 1. That end is recorded before the
+  response is written, so it is `< t1` unless the client read the reply within the same
+  millisecond: pass or fail depended on timing.
+- **Investigations** :
+  - 2026-10-09 : javap of `HttpSessionTests`/`GetLastAccessedTime` (data only) confirmed the
+    three-request sequence; failure message reproduced from the TCK log. Fix: the bridge calls
+    `HttpServletRequestImpl.accessRequestedSession()` once the request is set up, before any
+    filter or servlet, which resolves the requested session (`getSession(false)`, as Tomcat's
+    `ALWAYS_ACCESS_SESSION`) so that every request carrying a valid id begins and ends an access
+    (and keeps the session from expiring while it runs). 5 consecutive isolated TCK runs of
+    `HttpSessionTests`: 25/25 each.
+
+## BUG-20261009-09 — getServletConnection id not unique for the JVM lifetime; no HTTP/2 protocol request id
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (8f781b5)
+- **Module touché** : `foy-core` (`HttpServletRequestImpl.getServletConnection`, `getProtocolRequestId`); needs `chappe-api` `Request`
+- **Symptôme** : `getServletConnection().getConnectionId()` is the socket address pair
+  (`remote-ip:port-local-ip:port`, `?-?` when Chappe gives no address): two connections that
+  reuse the same ephemeral port get the same id, whereas the Javadoc requires an id unique for
+  the lifetime of the JVM. `getProtocolRequestId()` is `""` for HTTP/2 instead of the stream id.
+- **Reproduction minimale** : two sequential `Connection: close` requests from a client bound to
+  the same local port → equal `getConnectionId()`; any HTTP/2 request → `getProtocolRequestId()`
+  is `""`.
+- **Hypothèse de cause** : Chappe's `Request` API exposes neither a connection identity nor the
+  HTTP/2 stream id (`Http2Stream` keeps it internal), so Foy cannot report them.
+- **Investigations** :
+  - 2026-10-09 (Phase 4 Task 4.10) : interim behaviour documented in the Javadoc. Chappe
+    follow-up: add a per-connection id (e.g. a JVM-wide counter assigned on accept) and the HTTP/2
+    stream id to `io.vidocq.chappe.api.Request`; Foy then maps them to `getConnectionId()`,
+    `getProtocolConnectionId()` (HTTP/2: `""`, HTTP/3: the QUIC connection id) and
+    `getProtocolRequestId()`. The chappe repository is not modified here.
+  - 2026-10-14 (chappe CHAPPE-035) : Chappe's `Request` now exposes `connectionId()` and
+    `streamId()`. Foy maps the connection id to `getServletConnection().getConnectionId()` (the
+    address pair stays as fallback for a `Request` that carries none) and the stream id to
+    `getProtocolRequestId()`. `getProtocol()` now reports `HTTP/2.0` on HTTP/2, as the Servlet
+    Javadoc requires, and the trailer check on a declared `Content-Length` follows.
+
+## BUG-20261009-10 — dispatch paths stripped of a context-path prefix they never carried
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED (2f7fcf0)
+- **Module touché** : `foy-core` (`VidocqServletContext.getRequestDispatcher`, `ChappeServletBridge` async dispatch, `HttpServletRequestImpl.getRequestDispatcher`, `AsyncContextImpl.dispatch()`)
+- **Symptôme** : paths that are already context-relative were stripped of a leading copy of the
+  context path with `startsWith`: in context `/app`, `getServletContext().getRequestDispatcher("/apple.jsp")`
+  returned `null` (`"le.jsp"`); in context `/views`, a dispatcher for `/views/x.jsp` served `/x.jsp`;
+  `AsyncContext.dispatch("/application/x")` answered an empty 200.
+- **Reproduction minimale** : `ContainerGuardsEndToEndTest#aDispatchPathStartingLikeTheContextPathIsNotStripped`,
+  `#aDispatchPathEqualToTheContextPathPrefixIsKept`, `#anAsyncDispatchPathIsContextRelative`.
+- **Hypothèse de cause** : `ServletRequest.getRequestDispatcher` prepended the context path and the
+  servlet context stripped it again, a round trip that misfired on any path starting with the
+  context path's characters.
+- **Investigations** :
+  - 2026-10-09 (Phase 4 final review) : every internal dispatch path is now context-relative; the
+    request no longer prepends the context path, the strips and the dead `"/".equals` guards are
+    removed, and the zero-argument `dispatch()` takes the canonical context-relative path.
+
+## BUG-20261009-11 — chappe HTTP/1.1 writer truncates header chars to one byte (header injection)
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED in chappe (CHAPPE-008, commit `fix(http): validate response header fields everywhere`,
+  branch `pr/ybl/chappe-008-014`); mitigated in foy by 2f7fcf0 before that
+- **Module touché** : chappe `chappe-http` (`HttpResponseWriter.putAsciiString`)
+- **Symptôme** : `putAsciiString` casts each `char` of a header name or value to a `byte`, so a
+  character above U+00FF loses its high byte: U+010D U+010A become CR LF on the wire, which lets
+  a value such as `"/xčĊSet-Cookie: a=b"` inject a header line.
+- **Reproduction minimale** : a Chappe handler answering `Response.builder().header("X", "ačĊSet-Cookie: a=b")`
+  → the client receives a separate `Set-Cookie` header.
+- **Hypothèse de cause** : the writer assumes ASCII header text and never validates it.
+- **Investigations** :
+  - 2026-10-09 (Phase 4 final review) : foy now rejects CR, LF, NUL and chars above U+00FF at
+    every header entry point (`IllegalArgumentException`) and percent-encodes redirect locations.
+    Chappe follow-up: reject (or encode) non-Latin-1 and CR/LF/NUL characters in
+    `HttpResponseWriter` itself. The chappe repository is not modified here.
+  - 2026-10-12: fixed on the chappe side by CHAPPE-008. Header names must be tokens and values may
+    hold only field-vchar, obs-text, SP and HTAB, checked in the API (`IllegalArgumentException`),
+    in the HTTP/1.1 writer (500 and close) and in the HTTP/2 encoder (500).
+
+## BUG-20261009-12 — dispatch query string decoded as UTF-8 regardless of the request encoding
+
+- **Date** : 2026-10-09
+- **Statut** : CLOSED (by design: every query string is decoded as UTF-8, as the request's own; 418ba09)
+- **Module touché** : `foy-core` (`ForwardedRequest`, `AsyncDispatchRequest` parameter merging)
+- **Symptôme** : the parameters of a dispatch query string (`getRequestDispatcher("/x?a=%E9")`,
+  `AsyncContext.dispatch("/x?a=...")`) are always decoded as UTF-8, even when the request
+  character encoding (`setCharacterEncoding`, `<request-character-encoding>`) is another charset.
+- **Reproduction minimale** : request encoding `ISO-8859-1`, forward to `/x?a=%E9` → `getParameter("a")`
+  is U+FFFD instead of `é`.
+- **Hypothèse de cause** : `ForwardedRequest` and `AsyncDispatchRequest` pass
+  `StandardCharsets.UTF_8` to the decoder instead of the request's effective encoding.
+- **Investigations** :
+  - 2026-10-09 (Phase 4 final review) : found in review; not exercised by the TCK.
+  - 2026-10-13 : closed by design. The request's own query string is decoded as UTF-8
+    (`HttpServletRequestImpl`), so a dispatch query decoded with the request encoding would make one
+    parameter name decode differently depending on the dispatch type. The request encoding applies to the
+    form body only (documented in `usage.adoc`). Fixed the async parser: `AsyncDispatchRequest` now
+    uses `DispatchParameters.View` like forward and include (a malformed escape skips the pair instead
+    of throwing, target values precede the original ones), in 418ba09. Pinned by
+    `RequestPathCanonicalisationTest#aMalformedEscapeInAnAsyncDispatchQueryIsSkipped` and
+    `#asyncDispatchQueryParametersPrecedeTheOriginalOnes`.
+
+## BUG-20261009-13 — resource metadata and openStream may describe different roots
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED — `openStream` now opens only the first root's file, the one `metadata`
+  describes, and returns `null` when it cannot be opened instead of streaming the next root's file;
+  pinned by `ClassPathResourceProviderTest.metadataAndStreamDescribeTheSameRoot`.
+- **Module touché** : `foy-core` (`ClassPathResourceProvider.metadata` / `openStream`)
+- **Symptôme** : `metadata(path)` reports the first root holding a file at `path`, while
+  `openStream(path)` falls through to the next root when opening the first one fails: the default
+  servlet can then announce the length and last-modified time of one file and stream another.
+- **Reproduction minimale** : two roots with `META-INF/resources/x.txt`, the first unreadable →
+  `Content-Length` from the first, body from the second.
+- **Hypothèse de cause** : the two lookups iterate the roots independently.
+- **Investigations** :
+  - 2026-10-09 (Phase 4 final review) : found in review. Fix direction: one lookup returning the
+    opened stream with its metadata.
+
+## BUG-20261009-14 — session listeners invoked while session or manager locks are held
+
+- **Date** : 2026-10-09
+- **Statut** : FIXED — `createNew` counts itself under a `ReentrantLock` and fires `sessionCreated`
+  after releasing it (`close` sets `closed` at once and waits for the creations being announced);
+  `changeSessionId` claims the change under the session monitor and fires `sessionIdChanged` outside
+  it, an invalidation claimed meanwhile completing once the listener returned. Pinned by
+  `SessionListenerLockingTest` (both scenarios blocked 2 s before the fix).
+- **Module touché** : `foy-core` (`SessionManager.createNew`, `SessionManager.changeSessionId`, `HttpSessionImpl` invalidation)
+- **Symptôme** : `sessionCreated` runs under the manager's close read lock and `sessionIdChanged`
+  under the session monitor; a listener that blocks or calls back into another session (or waits
+  for another request on the same session) can stall undeploy or deadlock.
+- **Reproduction minimale** : an `HttpSessionIdListener` that waits for another thread which calls
+  `invalidate()` on the same session → both threads block.
+- **Hypothèse de cause** : the locks guarantee that a listener never sees a destroyed session and
+  that no session is created after close, at the price of running application code under them.
+- **Investigations** :
+  - 2026-10-09 (Phase 4 final review) : found in review. Fix direction: claim the state change
+    under the lock, fire the listener after releasing it, with a state flag replacing the lock.
+
+## BUG-20261010-01 — the CDI request context is never active for a servlet request
+
+- **Date** : 2026-10-10
+- **Statut** : FIXED (branch `feat/foy-request-scope-weld`, foy#18)
+- **Module touché** : `foy-core`, `foy-chappe`
+- **Symptôme** : a `@RequestScoped` bean injected into a servlet fails on first use:
+  `WELD-001303: No active contexts for scope type jakarta.enterprise.context.RequestScoped` under Weld,
+  and the same under Vauban; no `@Initialized(RequestScoped.class)` event fires.
+- **Reproduction minimale** : `foy-it-weld`, `WeldPortabilityTest.requestScopedBeanIsOnePerRequest`
+  and `requestContextEventsFire` on `main`.
+- **Hypothèse de cause** : nothing in Foy activated the request context; a Servlet container must make it
+  active during `service()` and the request listeners (CDI 4.1 §6.7.1). Every test used `@Dependent` or
+  `@ApplicationScoped` beans only.
+- **Correction** : `CdiRequestScopeListener` (foy-core) activates the context through
+  `RequestContextController` and deactivates it at the end of the request, on the same thread;
+  `FoyChappeBoot` registers it ahead of the application's request listeners
+  (`ListenerRegistry.addFirst`) whenever a `BeanManager` is given. A `BeanManager` that cannot supply a
+  controller leaves the request without a context, as before. The session context is still not activated
+  (no portable API).
+
+## BUG-20261010-02 — async timeout lets the pipeline thread and an async thread write the response concurrently
+
+- **Date** : 2026-10-10
+- **Statut** : PARTIAL — data race FIXED (Task 5.6 + fix round 1); residual gap below (threads the application manages itself)
+- **Module touché** : `foy-core` (`ChappeServletBridge.runPipeline`, `ServletOutputStreamImpl`, `ResponsePipe`)
+- **Symptôme** : after an `AsyncContext` timeout, `awaitAsyncIfStarted` returns while the async
+  thread (`AsyncContext.start`) may still be writing. The pipeline thread then runs
+  `finishBody()` → `ServletOutputStreamImpl.push()`/`ResponsePipe.write` while the async thread is
+  inside `write()`/`push()` on the same unsynchronised buffer. `ResponsePipe` is single-producer.
+  Possible effects: interleaved or lost body bytes, a corrupted `ByteArrayOutputStream` count, a
+  body finished while the async thread still writes (its write then fails with
+  "response body already ended"), or, when not yet committed, a buffered head sent while a late
+  commit's `head.complete` returns false.
+- **Reproduction minimale** : servlet calls `startAsync()`, `setTimeout(50)`, then
+  `ac.start(() -> { for (;;) { out.write(block); out.flush(); } })` — the timeout fires while the
+  async thread is writing; run repeatedly (race, not deterministic).
+- **Hypothèse de cause** : the Task 5.4 streaming model assumes one writer at a time, which the
+  async-completion handshake guarantees except on the timeout path: `AsyncContextImpl.awaitCompletion`
+  completes internally on timeout without waiting for (or fencing) the async thread.
+- **Investigations** :
+  - 2026-10-10 (Task 5.4 review, fix round 1) : found in review; not fixed in 5.4 by ruling —
+    Task 5.6 (async lifecycle: timeout → error dispatch, onComplete at the end of the cycle) owns it.
+    Fix direction: after a timeout, fence the response (writes from the stale async thread fail or
+    are dropped) before the pipeline touches the stream, or serialise stream access.
+  - 2026-10-10 (Task 5.6) : fixed with both. (1) One `ReentrantLock` in `ServletOutputStreamImpl`
+    serialises write/flush/close/push/finish/reset/toByteArray; the response writer and
+    `flushBuffer`/`finishBody` take it too (before the writer's monitor). `abort` aborts the pipe
+    before taking the lock, so a writer blocked on a full pipe wakes up. (2) When an async cycle
+    ends (complete, dispatch, timeout, error), `AsyncContextImpl.awaitCycleEnd` lets the pipeline
+    thread claim the output (`HttpServletResponseImpl.claimOutput`) before any listener runs: from
+    then on a write/flush/close from another thread fails with `IOException` (a stale loop stops);
+    through the `PrintWriter` the characters are discarded and `checkError()` turns true. A new
+    `startAsync` re-opens the output (`openOutput`). Tests: `ResponseOutputFenceTest`,
+    `ServletAsyncEndToEndTest.lateAsyncWritesFailOnceTheTimeoutFired` and
+    `aCommittedResponseTimingOutStopsTheStaleWriter` (writer looping past the timeout, latch-driven).
+  - 2026-10-10 (Task 5.6 fix round 1) : (a) lock-order deadlock fixed: PrintWriter's println(x),
+    printf and format hold the writer monitor before calling write(); `ResponseWriter` now overrides
+    them to take the stream lock first, so the order is always stream lock → monitor (test
+    `printlnOnOneThreadAndFlushBufferOnAnotherDoNotDeadlock`, hung 10 s before). (b) Per-cycle claim:
+    `AsyncContext.start` registers its virtual thread before it runs; when a cycle ends those threads
+    are retired for good (`claimOutput(cycleThreads)`), so a re-opened output (new `startAsync`)
+    does not let them write again. (c) Every cycle, including one opened by an ASYNC target that then
+    throws, ends in `ChappeServletBridge.runAsyncCycles` (claim, onError, container completion).
+    (d) `finish`/`abort` are mutually exclusive (one `AtomicBoolean` claimed by compare-and-set).
+    **Residual gap** : a thread the application created itself (its own executor, not
+    `AsyncContext.start`) is refused from the end of its cycle only until a later cycle re-opens
+    the output; it is not known to the container, so it cannot be retired. Memory safety holds
+    (every output operation takes the lock); only the logical interleaving of bytes is the app's.
+
+## BUG-20261010-03 — kept non-blocking bytes are sent blocking at the end of a cycle, with no Foy-side bound
+
+- **Date** : 2026-10-10
+- **Statut** : OPEN (documented limit, Phase 5 exit)
+- **Module touché** : `foy-core` (`ServletOutputStreamImpl.endNonBlocking`, `ChappeServletBridge.finishBody`)
+- **Symptôme** : in non-blocking mode (`WriteListener`), a write the pipe cannot take is kept by
+  the stream (at most one buffer plus one write). When the async cycle ends (complete, dispatch,
+  timeout, error) with bytes still kept, the stream returns to blocking mode and `finishBody`
+  sends them on the pipeline thread, blocking until the client reads them. A client that never
+  reads holds the pipeline thread and the connection until chappe's write timeout closes the
+  channel (`ServerConfig.writeTimeout`, 30 s per blocked write by default; never with a zero
+  write timeout).
+- **Reproduction minimale** : async servlet with a `WriteListener` writing until `isReady()` is
+  `false`, then `complete()`; the client sends the request and never reads. The pipeline thread
+  stays in `ResponsePipe.write` until the write timeout fires.
+- **Hypothèse de cause** : by design of Task 5.8 (blocking mode after the cycle keeps byte order and
+  matches what blocking mode does anyway); the container has no write deadline of its own.
+- **Investigations** :
+  - 2026-10-10 (Task 5.8 review, deferred minor; recorded at the Phase 5 exit, Task 5.10) : fix
+    direction — bound the end-of-cycle drain with a container deadline (abort the body, so chappe
+    drops the connection) or rely on a mandatory non-zero chappe write timeout.
+
+---
+
+## BUG-20261010-04 — startAsync() accepted after upgrade(); a live body pump could race chappe's upgrade drain
+
+- **Date** : 2026-10-10
+- **Statut** : FIXED (commit `fix(core): close the upgrade gaps of the Phase 5 final review`)
+- **Module touché** : `foy-core` (`HttpServletRequestImpl.startAsync`, `ChappeServletBridge.upgraded`)
+- **Symptôme** : `upgrade()` refused an async-started request, but `startAsync()` after `upgrade()`
+  was accepted. A `ReadListener` set then started a body pump still alive when the bridge returned
+  the `ConnectionUpgrade`: chappe drained the unread body while the pump read the same channel, and
+  the connection was upgraded although body bytes went to the pump.
+- **Reproduction minimale** : `ServletUpgradeEndToEndTest#startAsyncAfterUpgradeThrowsIse`
+  (`async accepted` before the fix). Pump race (experiment, `startAsync` guard removed): a servlet
+  calls `upgrade()`, `startAsync()`, sets a ReadListener on a `Content-Length: 10` body whose bytes
+  arrive after the upgrade; without the hand-back the client got `101 Switching Protocols`.
+- **Hypothèse de cause** : missing mirror of the `upgrade()`-after-`startAsync()` guard; `upgraded()`
+  only stopped the pump (`endNonBlockingIo`) without joining it.
+- **Fix** : `startAsync()` throws `IllegalStateException` once an upgrade handler is set; `upgraded()`
+  hands the body back (`handBackInput()`: interrupt + join a live pump) before returning the
+  `ConnectionUpgrade`.
+
+---
+
+## BUG-20261010-05 — WebConnection.close() cut a non-blocking write still in flight
+
+- **Date** : 2026-10-10
+- **Statut** : FIXED (commit `fix(core): close the upgrade gaps of the Phase 5 final review`)
+- **Module touché** : `foy-core` (`WebConnectionImpl`, `UpgradedOutputStream`)
+- **Symptôme** : `out.write(lastFrame); wc.close();` from `onWritePossible` lost the last frame: the
+  write runs on a writer thread and `close()` closed the connection under it.
+- **Reproduction minimale** : `ServletUpgradeEndToEndTest#closeDeliversTheNonBlockingWriteInFlight`
+  (0 of 4 MiB received before the fix).
+- **Hypothèse de cause** : close did not wait for the write in flight.
+- **Fix** : the connection closes once the write in flight is done, waiting at most
+  `WebConnectionImpl.CLOSE_WRITE_GRACE` (2 s); past it the connection closes anyway
+  (`#closeAfterANonBlockingWriteIsBoundedOnAStalledPeer`).
+
+## BUG-20261010-06 — upgrade() called during an ASYNC dispatch is silently dropped
+
+- **Date** : 2026-10-10
+- **Statut** : FIXED (3abdaff, 0c03460 — upgrade() throws IllegalStateException outside the REQUEST dispatch the bridge reads)
+- **Module touché** : `foy-core` (`HttpServletRequestImpl.upgrade`, `ChappeServletBridge`)
+- **Symptôme** : a servlet reached by `AsyncContext.dispatch()` that calls `upgrade(...)` gets no
+  exception, the response switches to discard mode, and the client receives an empty plain HTTP
+  response (possibly carrying the 101 status and `Upgrade` headers set by the application). The
+  handler instance is never initialised nor destroyed.
+- **Reproduction minimale** : servlet A calls `startAsync()` then `dispatch("/b")`; servlet B calls
+  `setStatus(101)`, `setHeader("Upgrade", "x")`, `upgrade(Handler.class)`.
+- **Hypothèse de cause** : `upgrade()` only refuses when `isAsyncStarted()`, which is false during
+  the ASYNC dispatch; the bridge reads `upgradeHandler()` only on the REQUEST exit, never after an
+  async cycle.
+- **Fix envisagé** : throw `IllegalStateException` from `upgrade()` when the dispatcher type is
+  `ASYNC` (or whenever an async cycle exists), mirroring "upgrade() after startAsync()". No TCK
+  test exercises this path.
+- **Investigation 2026-10-13** : fixed with a dedicated `inAsyncDispatch` flag set by the bridge around both async-dispatch invocations (the dispatcher type is untouched). Pinned by `ServletUpgradeEndToEndTest.upgradeDuringAsyncDispatchThrowsIse`.
+- **Investigation 2026-10-13 (final review)** : an error page dispatched after the REQUEST invocation
+  (`maybeHandleError`) passed the async-only guard and lost its body to the same dropped upgrade. The
+  guard is now a whitelist: the bridge sets a `volatile upgradable` flag only around the REQUEST
+  invocation whose `upgradeHandler()` it reads (nested forwards and includes stay upgradable) and
+  clears it in a `finally`; `upgrade()` throws `IllegalStateException` ("upgrade() outside the request
+  dispatch") whenever the flag is down, so the `inAsyncDispatch` flag and its async-dispatch wrappers are
+  gone. Pinned by `ServletUpgradeEndToEndTest.upgradeFromAnErrorPageThrowsIse` (and
+  `upgradeDuringAsyncDispatchThrowsIse`).
+
+## BUG-20261010-07 — no CDI context on AsyncContext.start() threads nor in AsyncListener.onComplete
+
+- **Date** : 2026-10-10
+- **Statut** : FIXED — `onComplete` now fires before `requestDestroyed` (on the pipeline thread, contexts
+  bound), and `AsyncContextImpl.start` runs the `Runnable` with the container's context listeners
+  (`addFirst`/`registerFirst`, i.e. the CDI ones) bound on its thread through
+  `ListenerRegistry.bindingContainerContexts`, with a request wrapper as the event's request so a listener
+  keyed by request keeps the serving thread's state. The start thread shares the session and gets a request
+  context of its own. The application's request listeners are not fired again. Pinned by
+  `AsyncContainerContextsTest`.
+- **Module touché** : `foy-core` (`AsyncContextImpl`, `ChappeServletBridge`)
+- **Symptôme** : a `@RequestScoped` or `@SessionScoped` bean used from the `Runnable` given to
+  `AsyncContext.start()`, or from `AsyncListener.onComplete`, fails with `ContextNotActiveException`.
+  Async dispatches are not affected: `ChappeServletBridge.runAsyncCycles` runs them on the pipeline
+  thread, which keeps the contexts bound until `fireRequestDestroyed`. `onTimeout` and `onError` fire on
+  the pipeline thread before `fireRequestDestroyed` (`AsyncContextImpl.awaitCycleEnd`), so the contexts
+  are active there; `onComplete` fires after it (`lastCycle.endCycle()` in `ChappeServletBridge.handle`),
+  so no context is active in `onComplete`; `onStartAsync` runs on the thread that calls `startAsync()`,
+  without contexts when that is an `AsyncContext.start()` thread. The `SessionScoped` Javadoc requires the
+  session context to be active when the container calls an `AsyncListener`.
+- **Reproduction minimale** : under Weld (`foy-it-weld`), a servlet calls `startAsync()`, then
+  `AsyncContext.start(() -> { requestScopedBean.ping(); ac.complete(); })`: the async thread gets
+  `ContextNotActiveException`. Under Vauban the same holds for a `@SessionScoped` bean
+  (`foy-cdi-vauban`); Vauban's request context is never active anyway (vauban#147).
+- **Hypothèse de cause** : the CDI contexts are bound per thread by the request listeners Foy registers
+  first when given a `BeanManager` — `CdiRequestScopeListener` (foy#18, through
+  `RequestContextController`) and the `CdiContextListeners` services (foy#21; on Vauban
+  `VaubanWebContextsListener`, a `ThreadLocal` in `vauban-webcontexts`). They bind on the pipeline thread
+  in `requestInitialized` and unbind in `requestDestroyed`. `AsyncContextImpl.start` runs the `Runnable`
+  on a new virtual thread and propagates no context to it; `onComplete` runs after `requestDestroyed`.
+- **Fix envisagé** : activate the contexts around the `Runnable` in `AsyncContextImpl.start` (needs a
+  per-thread hook in the `CdiContextListeners` contract and a request context per thread), and fire
+  `onComplete` before the request listeners are destroyed, or bind the contexts around it.
+
+## BUG-20261010-08 — error pages run without the CDI request and session contexts
+
+- **Date** : 2026-10-10
+- **Statut** : FIXED — on the mapped path `requestDestroyed` fires after `maybeHandleError` and after
+  `onComplete`; a denial's error page runs before it; `rejected(...)` and the unmapped-path branch run their
+  error page inside `requestInitialized`/`requestDestroyed`. Pinned by `RequestListenersAroundErrorPagesTest`;
+  full official TCK run recorded in the commit.
+- **Module touché** : `foy-core` (`ChappeServletBridge`)
+- **Symptôme** : an error page (a `<error-page>` location dispatched after an exception, after
+  `sendError(...)`, or after an async timeout) runs with no CDI context driven by Foy's request
+  listeners active: a `@RequestScoped` bean (Weld) or a `@SessionScoped` bean (Vauban) used there fails
+  with `ContextNotActiveException`.
+- **Reproduction minimale** : by code reading (not pinned by a test): a servlet calls `resp.sendError(404)`
+  (or throws); a `<error-page>` maps that status (or exception) to a servlet that injects a
+  `@RequestScoped` bean; under Weld (`foy-it-weld`) the error page fails with
+  `ContextNotActiveException`. Requests that reach no listener at all have the same gap: the
+  unmapped-path 404 branch and `rejected(...)` dispatch their error page without `fireRequestInitialized`.
+- **Hypothèse de cause** : on the mapped path, `ChappeServletBridge.handle` fires `requestDestroyed`
+  (where `CdiRequestScopeListener` deactivates the request context and the `CdiContextListeners`
+  listeners unbind the session) before `maybeHandleError` dispatches the error page; the async timeout's
+  error page goes through the same `maybeHandleError`. The order dates from foy#18 (request listeners
+  added before the CDI work); Tomcat fires request-destroyed after its error pages (`StandardHostValve`).
+- **Fix envisagé** : fire `requestDestroyed` after the error handling (after `maybeHandleError`, still
+  before `onComplete`), and initialise the request listeners around the unmapped-path error dispatch;
+  needs a full official Servlet TCK run (`run-official-tck-servlet6.1.sh --all`) since every error
+  dispatch changes order.
+
+## BUG-20261011-03 — CLIENT-CERT authentication is not supported
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED (2026-10-12, branch `pr/ybl/foy-client-cert`, on chappe#29: TLS client
+  authentication and `Request.tls()`). CLIENT-CERT authenticates the TLS client certificate through
+  `IdentityStore.validate(X509Certificate[])`, and `foy-tck` serves the security wars that target it from
+  an `https` Arquillian container: `spec.security.clientcert.ClientCertTests#clientCertTest` and
+  `spec.security.clientcertanno.ClientCertAnnoTests#clientCertTest` now pass.
+- **Module touché** : `foy-core` (`WebSecurity.authenticatorFor`, `DenyingAuthenticator`), chappe (TLS)
+- **Symptôme** : an application whose `login-config` says `<auth-method>CLIENT-CERT</auth-method>` gets
+  `403` on every protected resource, whatever certificate the client presents; `login()` throws
+  `ServletException`. The official TCK `spec.security.clientcert.ClientCertTests` and
+  `spec.security.clientcertanno.ClientCertAnnoTests` (1 test each) fail.
+- **Reproduction minimale** : any application with `auth-method` CLIENT-CERT and a
+  `security-constraint` with an `auth-constraint`: a request to the constrained path answers `403`
+  (a `WARNING` at deploy says the method is not supported).
+- **Hypothèse de cause** : not implemented by decision. It needs chappe TLS client authentication
+  (requested or required `SSLEngine` client auth) and the peer certificate chain exposed to Foy
+  (`jakarta.servlet.request.X509Certificate`), a certificate-to-identity mapping in the identity SPI,
+  and an `https` Arquillian container in `foy-tck` for the two TCK tests.
+- **Fix envisagé** : chappe exposes the peer certificates; Foy adds a CLIENT-CERT authenticator mapping
+  the subject to an `Identity` through the store; `foy-tck` gets a TLS container.
+
+## BUG-20261011-04 — SecFormTests.test2 and test2_anno need a JSP engine
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED (2026-10-18: `foy-tck` compiles the war's pages with Ibarra at deployment)
+- **Module touché** : `foy-tck` (no Foy defect)
+- **Symptôme** : `servlet.tck.spec.security.secform.SecFormTests.test2` and `test2_anno` fail: after
+  a failed login, the expected error page content is never produced.
+- **Reproduction minimale** : run `./run-official-tck-servlet6.1.sh --no-install -Dtest=SecFormTests`:
+  a failed `j_security_check` forwards to `form-error-page` `/error.jsp`, which lands on `*.jsp`; Foy
+  has no JSP engine, so the page is not executed.
+- **Hypothèse de cause** : the TCK test application uses JSP pages for its login error page. FORM
+  authentication itself behaves (the 23 other SecForm tests pass).
+- **Fix envisagé** : run these tests, and the 3 JSP tests of `ServletContext40Tests`, with Ibarra
+  (Jakarta Pages 4.0) plugged into Foy's JSP-engine SPI, through an optional `foy-tck` profile.
+- **Investigations** :
+  - 2026-10-14 : the SPI is delivered (`io.vidocq.foy.spi.jsp.JspEngine` in `foy-api`, discovered
+    with `ServiceLoader` in the application layer), and Ibarra provides it in `ibarra-foy`. Two things
+    still block the TCK run:
+    - Ibarra serves only pages compiled at build time. Its runtime translation is milestone I9, and the
+      TCK WARs ship JSP source.
+    - The `foy-tck` Arquillian adapter deploys WARs on the class path, with no application layer, so
+      it looks up no engine.
+    The precompiling WAR adapter is Ibarra's milestone I8, and its TCK deployment model is open
+    question 2 of Ibarra's `PLAN.md`. Decision: wait for I8, then reuse a WAR-precompiling adapter
+    shared by Ibarra, or wait for I9; Foy then adds the `foy-tck` profile. Foy does not duplicate the
+    adapter.
+  - 2026-10-18 : Ibarra's I8 is complete (Pages TCK 682/682), but its adapter cannot be reused: it lives in
+    `ibarra-tck`'s test sources, starts a modular host JVM, and refuses wars with Servlet annotations or
+    initializers, which these TCK wars have. `foy-tck` reuses Ibarra's public `PagePrecompiler` instead
+    (`WarPages`): when a war holds a page, a tag file or a tag library descriptor (its own or in a
+    `WEB-INF/lib` jar), its pages are compiled at deployment into the module `foy.tck.pages`, and the
+    harness hands Foy the engine (`IbarraJspEngine`) and the layer through the new
+    `ServletTestHarness.Builder.jsp(ModuleLayer, JspEngine)`. The harness runs on the class path, so
+    the layer's class loaders all end at the test class loader: the modules the pages require are
+    resolved from their real descriptors in a parent layer defined to a relay loader that defines
+    nothing, and the pages module reads the test loader's unnamed module. No profile is needed: Ibarra
+    is a test dependency of `foy-tck`, which only builds under `-Ptck`. Result: `SecFormTests` 25/25,
+    `ServletContext40Tests` 12/12, full suite 1707/1714, 7 skipped, 0 errors, no class regressed.
+    `WarPagesTest` covers the detection, the layer and a served page.
+
+## BUG-20261011-05 — case-sensitive constraint matching vs a case-insensitive file system
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED (a182b8b, e5bf01d — real-name case check in ClassPathResourceProvider and DefaultServlet)
+- **Module touché** : `foy-core` (`ConstraintTable`, container default servlet, resource providers)
+- **Symptôme** : security constraints match url-patterns case-sensitively, as the specification
+  requires, but a resource provider over a case-insensitive file system (macOS directory roots, Windows)
+  serves `/STATIC/x` from the same file as `/static/x`. A `/static/*` constraint therefore does not
+  protect `/STATIC/x`, which the default servlet serves: a bypass by case.
+- **Reproduction minimale** : on macOS, deploy with a directory resource root holding
+  `META-INF/resources/static/x.txt` and a `security-constraint` on `/static/*` with an `auth-constraint`;
+  `GET /static/x.txt` answers `401`, while `GET /STATIC/x.txt` is expected to answer `200` with the
+  file (by code reading and the Phase 6 preflight scan, S-11; not pinned by a test yet).
+- **Hypothèse de cause** : the constraint decision runs on the canonical request path, the file lookup is
+  delegated to a file system that folds case.
+- **Fix envisagé** : make the default servlet (or the resource provider) refuse a resource whose resolved
+  real name differs in case from the request path (404), so the served path is always the matched one.
+- **Investigation 2026-10-13** : fixed by `ResourcePaths.realNameMatches` (real name via `toRealPath(NOFOLLOW_LINKS)`),
+  applied in `ClassPathResourceProvider.DirLoc.resolve` and `DefaultServlet.locate` (any `file:` provider).
+  Pinned by `ClassPathResourceProviderTest.aPathThatDiffersInCaseFromTheRealNameIsMissing` and
+  `WebSecurityEndToEndTest.aResourceRequestedWithAnotherCaseIsNotServedAroundAConstraint` (skipped on case-sensitive file systems).
+
+## BUG-20261011-06 — CallbackSerializerTest.holdWaitsForTheRunningCallbackAndDefersTheQueuedOnes is flaky
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED (test only; the test now releases the first callback only once `hold()` took
+  effect, through `CallbackSerializer.isHeld()`; reproduced deterministically by delaying the holder
+  thread 300 ms, which fails the old test at the same assertion and passes the new one)
+- **Module touché** : `foy-core` tests (`CallbackSerializerTest`)
+- **Symptôme** : the test failed once in three full `./mvnw -ntp clean install` runs, at line 108
+  (`assertFalse(second.await(200, ms))` got `true`: the queued callback ran although `hold()` was
+  expected to defer it). It passes on reruns.
+- **Reproduction minimale** : run `./mvnw -ntp -pl foy-core test -Dtest=CallbackSerializerTest` in a
+  loop under load; it fails now and then.
+- **Hypothèse de cause** : a race in the test, not in `CallbackSerializer`: the holder virtual thread is
+  started and `proceed.countDown()` is called at once, so the first callback may end and the serializer
+  start the second one before the holder thread has called `hold()`.
+- **Fix envisagé** : release `proceed` only once the holder thread is blocked in `hold()` (wait for its
+  state, or add a test hook signalling that `hold()` is waiting).
+
+## BUG-20261011-07 — a security denial on the redirect or unmapped branch runs without request listeners
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED — the directory-redirect and unmapped-path branches run the security gate inside the
+  request listeners. Pinned by `RequestListenersAroundErrorPagesTest.aDenialOnTheDirectoryRedirectRunsInsideTheRequestListeners`.
+- **Module touché** : `foy-core` (`ChappeServletBridge.gate`)
+- **Symptôme** : on the directory-redirect branch of the default servlet and on the unmapped-path branch,
+  `WebSecurity.admit` (and a FORM forward to the login page) runs before any `requestInitialized`: a
+  login page reached through those branches has no CDI request or session context driven by Foy's
+  request listeners.
+- **Reproduction minimale** : by code reading: a FORM application whose login page injects a
+  `@RequestScoped` bean, and a constraint on an unmapped path; a request to that path forwards to the
+  login page outside the request listeners (same family as BUG-20261010-08).
+- **Hypothèse de cause** : those two branches never fire the request listeners; `gate` was added there to
+  fail closed.
+- **Fix envisagé** : fire the request listeners around those branches, or restrict them to mechanisms
+  that do not forward (BASIC).
+
+## BUG-20261011-08 — a fragment conflict on security-role-ref is silently resolved
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED (c2c421f — fragment role refs merged through MergeSlots.Keyed)
+- **Module touché** : `foy-core` (`ComponentMerger.servlets`)
+- **Symptôme** : when two `web-fragment.xml` declare the same servlet with a `security-role-ref` of the
+  same `role-name` but different `role-link`s, and `web.xml` does not reference that role-name, the
+  first fragment in the ordering wins silently (`putIfAbsent`). Section 8.2.3 makes such a conflict an
+  error that fails the deployment, as Foy already does for conflicting `init-param`s.
+- **Reproduction minimale** : fragments A and B both declare servlet `s` with
+  `<security-role-ref><role-name>MGR</role-name><role-link>admin</role-link>` (A) and
+  `<role-link>user</role-link>` (B); deploy: it succeeds, and `isUserInRole("MGR")` in `s` follows A.
+- **Hypothèse de cause** : role refs from fragments are merged with `Map.putIfAbsent` instead of the
+  `MergeSlots.Keyed` slot used for `init-param` (which records the source and reports a conflict).
+- **Fix envisagé** : merge fragment role refs through a `Keyed<String>` per servlet (web.xml entries
+  override, equal values from two fragments are not a conflict), and fail the deployment otherwise.
+- **Investigation** : 2026-10-13, fixed on `pr/ybl/foy-security-batch`. Fragment role refs are merged through
+  `MergeSlots.Keyed`; web.xml wins per role-name, equal values are not a conflict, and a disagreement fails the
+  deployment. Pinned by `FragmentMergerTest.securityRoleRefConflictBetweenFragmentsFails`.
+
+## BUG-20261011-09 — InMemoryIdentityStore digest encodes the password with Charset.encode
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED (392c400 — strict UTF-8 encoder into an exact-size wiped buffer)
+- **Module touché** : `foy-core` (`InMemoryIdentityStore.digest`)
+- **Symptôme** : the password is encoded with `StandardCharsets.UTF_8.encode(CharBuffer)`, whose
+  coding error action is REPLACE: two passwords differing only by lone (unpaired) surrogates encode to the
+  same bytes (`?`), so they collide and either one authenticates. `Charset.encode` may also grow its
+  output buffer, leaving an intermediate copy of the encoded password that is never wiped (only the
+  final `ByteBuffer`'s array and the copied `byte[]` are), and the returned `ByteBuffer`'s backing array
+  itself is not wiped.
+- **Reproduction minimale** : register `"a\uD800"` and authenticate with `"a\uDC00"`: by code reading,
+  both digest to SHA-256(salt + `a?`) and the login succeeds.
+- **Hypothèse de cause** : convenience encoder with REPLACE semantics and an internal buffer growth policy.
+- **Fix envisagé** : use `UTF_8.newEncoder().onMalformedInput(REPORT).onUnmappableCharacter(REPORT)`
+  into a `ByteBuffer` sized `maxBytesPerChar * length` (exact upper bound, no reallocation), refuse a
+  password that does not encode (no identity), and wipe that buffer's backing array.
+- **Investigation** : 2026-10-13, fixed on `pr/ybl/foy-security-batch`. `digest` now throws
+  `IllegalArgumentException` on a password that is not valid UTF-16; `Builder.user` rejects it before
+  registering anything; `validate` digests the decoy then refuses it. Pinned by
+  `InMemoryIdentityStoreTest.aMalformedCandidateIsRefused` (and `aPasswordWithALoneSurrogateDoesNotDigest`,
+  `aMalformedPasswordCannotBeRegistered`).
+
+## BUG-20261011-10 — FoyVaubanBootstrap offers no way to configure an IdentityStore
+
+- **Date** : 2026-10-11
+- **Statut** : FIXED (2026-10-11), on the Vidocq side by vidocq#222 (merged 2026-10-11, closes
+  vidocq#220): the Vidocq Servlet extension passes an `IdentityStore` bean or the
+  `vidocq.servlet.users.*` configuration to `FoyChappeBoot`. No merge commit exists (the PR was
+  rebased onto vidocq `main`); its commits there are `a4c11687` (feat: configure Foy's identity
+  store and transport rules) to `12518f83`. Found by code reading in the final Phase 6 review.
+- **Module touché** : `foy-cdi-vauban` (`FoyVaubanBootstrap`)
+- **Symptôme** : the identity store is configured through `FoyChappeBoot` only; an application booted
+  with `FoyVaubanBootstrap` (CDI) cannot pass an `IdentityStore`, so its security settings keep the
+  default empty store and no BASIC, FORM or programmatic login can ever succeed: every protected
+  resource answers 401 (or the login page / error page) for every credential.
+- **Reproduction minimale** : boot through `FoyVaubanBootstrap` an application with a
+  `security-constraint` and an `auth-constraint`; send valid-looking Basic credentials: `401`.
+- **Hypothèse de cause** : `SecuritySettings`/`identityStore` were wired into `FoyChappeBoot.Builder` in
+  Phase 6, not into the Vauban bootstrap.
+- **Fix envisagé** : accept an `IdentityStore` in the Vauban bootstrap builder, or resolve one as a CDI
+  bean (an `IdentityStore` bean in the application), and pass it to the deploy options.
+
+## BUG-20261011-11 — chappe drains an over-cap request body without bound
+
+- **Date**: 2026-10-11
+- **Status**: FIXED by chappe#28 (CHAPPE-020 chunked cap, CHAPPE-021 maxDrainSize); pinned by
+  ChunkedBodyLimitEndToEndTest.anEndlessChunkedBodyIsCutOffAfterTheAnswer (found in Phase 7)
+- **Module**: chappe (`chappe-http`, `HttpBodyReader.drain`); seen from `foy-core`
+- **Symptom**: once `maxChunkedRequestBodySize` trips, Foy stops reading the body and answers, but
+  chappe's `HttpBodyReader.drain` still reads the rest of a chunked body before the next request on
+  the connection or its close. Memory stays bounded (the bytes are discarded), but the connection and
+  its virtual thread are held for as long as the client keeps sending.
+- **Minimal repro**: `ChunkedBodyLimitEndToEndTest` (`foy-core`) with an endless
+  `HttpRequest.BodyPublishers.ofInputStream` publisher: Foy gives up at the cap, but the connection
+  keeps reading the upload (found by code reading; no committed test, since such a test never ends).
+- **Cause hypothesis**: chappe caps only `Content-Length` bodies (`ServerConfig.maxRequestSize`); a
+  chunked body is drained to its end whatever its size.
+- **Planned fix**: in chappe, cap chunked bodies at `maxRequestSize` and close the connection instead of
+  draining past the cap.
+
+## BUG-20261011-12 — the web.xml version is never the effective Servlet version
+
+- **Date**: 2026-10-11
+- **Status**: FIXED by the commit `fix(core): apply the web.xml version as the effective Servlet
+  version` (branch `pr/ybl/effective-version`). Found by Vidocq: the official Servlet TCK on the
+  assembled runtime, against Foy `main` `ee6c899` (vidocq#217).
+- **Module**: `foy-core` (`DescriptorMerger`, `WebAppDescriptor`), seen through `foy-chappe`
+  (`FoyChappeBoot.build`)
+- **Symptom**: `ServletContext.getEffectiveMajorVersion()` / `getEffectiveMinorVersion()` always
+  answer 6 and 1, whatever the `web-app/version` attribute. The official tests
+  `ServletContext30Tests.getEffectiveMajorVersionTest` and `getEffectiveMinorVersionTest` (api and
+  pluggability families) fail on the runtime: a `version="5.0"` web.xml expects 5 and 0.
+- **Minimal repro**: `FoyChappeBootTest.webXmlVersionIsTheEffectiveVersion`.
+- **Cause**: no product code called `WebAppModel.Builder.effectiveVersion`; only the foy-tck harness
+  (`VidocqDeployableContainer`) did, so the in-reactor TCK passed and hid the gap.
+- **Fix**: `DescriptorMerger` (the deploy path shared by `FoyChappeBoot` and the TCK harness) applies
+  the effective descriptor's version. Fragments never change it (`FragmentMerger` keeps web.xml's), nor
+  does `metadata-complete`. `WebAppDescriptor.version()` is now `null` when no version is declared (it
+  was `"6.0"`), so an application without web.xml or without a version keeps the container version
+  6.1. The harness override is removed, so the TCK guards the product path.

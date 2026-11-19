@@ -1,0 +1,51 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.dispatcher;
+
+import jakarta.servlet.Servlet;
+import jakarta.servlet.http.HttpServletMapping;
+
+/**
+ * Resolved target of a servlet dispatch: the servlet and contact details
+ * URL it will see ({@code servletPath}, {@code pathInfo}, {@code queryString}).
+ * {@code mapping} is the {@link HttpServletMapping} of the match, {@code null} for a named
+ * dispatch ({@code named == true}), which has no path and keeps the caller's paths and mapping.
+ */
+public record DispatchTarget(Servlet servlet,
+                             String servletName,
+                             String path,
+                             String servletPath,
+                             String pathInfo,
+                             String queryString,
+                             boolean asyncSupported,
+                             HttpServletMapping mapping,
+                             boolean named) {
+
+    /** A path-resolved target. */
+    public DispatchTarget(Servlet servlet, String servletName, String path, String servletPath, String pathInfo,
+                          String queryString, boolean asyncSupported, HttpServletMapping mapping) {
+        this(servlet, servletName, path, servletPath, pathInfo, queryString, asyncSupported, mapping, false);
+    }
+
+    /** A named-dispatch target (section 9.1.2): no path, no query, no mapping. */
+    public static DispatchTarget named(Servlet servlet, String servletName, boolean asyncSupported) {
+        return new DispatchTarget(servlet, servletName, null, null, null, null, asyncSupported, null, true);
+    }
+}

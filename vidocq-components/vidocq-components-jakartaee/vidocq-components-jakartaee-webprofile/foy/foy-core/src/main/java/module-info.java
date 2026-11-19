@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+module io.vidocq.foy.core {
+    requires transitive io.vidocq.foy.api;
+    requires transitive jakarta.servlet;
+    requires static jakarta.cdi;
+    requires static jakarta.annotation;
+    requires java.xml;
+    requires static java.net.http;
+
+    // Couplage transport HTTP temporaire (M1) : HttpServletRequestImpl,
+    // HttpServletResponseImpl, ServletOutputStreamImpl et ChappeServletBridge
+    // référencent encore directement chappe-api. À découpler en M2 via
+    // l'introduction d'une SPI FoyHttpExchange dans foy-api.
+    requires io.vidocq.chappe.api;
+
+    uses io.vidocq.foy.spi.gen.WebComponent;
+    uses jakarta.servlet.ServletContainerInitializer;
+    uses io.vidocq.foy.spi.jsp.JspEngine;
+    // ApplicationSources.providers runs ServiceLoader.load here for FoyChappeBoot.
+    uses io.vidocq.foy.spi.cdi.CdiContextListeners;
+
+    exports io.vidocq.foy.internal.async;
+    exports io.vidocq.foy.internal.boot;
+    exports io.vidocq.foy.internal.bridge;
+    exports io.vidocq.foy.internal.container;
+    exports io.vidocq.foy.internal.dispatcher;
+    exports io.vidocq.foy.internal.error;
+    exports io.vidocq.foy.internal.gen;
+    exports io.vidocq.foy.internal.http;
+    exports io.vidocq.foy.internal.listener;
+    exports io.vidocq.foy.internal.security;
+    exports io.vidocq.foy.internal.session;
+    exports io.vidocq.foy.internal.webxml;
+}

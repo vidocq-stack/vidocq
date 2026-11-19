@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.foy</groupId>
+        <artifactId>foy-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>foy-cdi-vauban</artifactId>
+    <name>Foy :: CDI Vauban Adapter</name>
+    <description>Adapter Vauban CDI pour Foy : implémente la SPI BeanProvider et expose les beans @WebServlet/@WebFilter/@WebListener du container Vauban.</description>
+
+    <properties>
+        <japicmp.skip>false</japicmp.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <!-- The session context (foy#21): this module binds the HttpSession to it. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-webcontexts</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- Test only: FoyWebExtensionTest compiles tiny apps in-process with vauban's annotation
+             processor on the processor path (with this module's classes), then serves them
+             through FoyChappeBoot. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-processor</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-chappe</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- The API compatibility report (quality profile): the packages module-info.java exports. -->
+                <plugin>
+                    <groupId>com.github.siom79.japicmp</groupId>
+                    <artifactId>japicmp-maven-plugin</artifactId>
+                    <configuration>
+                        <parameter>
+                            <includes>
+                                <include>io.vidocq.foy.cdi.vauban</include>
+                            </includes>
+                        </parameter>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Same set-up as cassini-cdi-vauban: vauban's annotation processor runs over
+                         this module's own beans, the producers of HttpServletRequest, HttpSession
+                         and ServletContext (ServletBuiltInBeans) and their holders. It generates
+                         their client proxies, the _VaubanComponents provider and the
+                         META-INF/vauban-beans.list a deployment's scanClasspath reads. The build
+                         compatible extension and the synthetic bean creator are not beans.
+                         vauban-webcontexts brings the extension that registers the session context
+                         of the HttpSession bean: it runs here, so the processor marks this archive
+                         processed (META-INF/vauban-bce-processed). Without the marker, every
+                         deployment that holds this module would run its extensions again at start.
+                         FoyWebExtension, this module's own extension, is not on the processor path
+                         and does not run here: it runs at the build of the applications. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-webcontexts</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans; the tests drive javac in-process
+                         (javax.tools), an HTTP client and java.util.logging (the backend of the
+                         System.Logger records they read), which the main module does not read. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                            <compilerArgs>
+                                <arg>--add-modules</arg>
+                                <arg>java.compiler,java.net.http,java.logging</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.foy.cdi.vauban=java.compiler,java.net.http,java.logging</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Keep the module path; only add the JDK modules the test reads. -->
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>@{argLine} --add-modules java.compiler,java.net.http,java.logging --add-reads io.vidocq.foy.cdi.vauban=java.compiler,java.net.http,java.logging</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

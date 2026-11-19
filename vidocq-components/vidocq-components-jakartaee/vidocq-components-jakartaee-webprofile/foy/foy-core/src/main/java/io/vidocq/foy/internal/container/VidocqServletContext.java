@@ -1,0 +1,1146 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.foy.internal.container;
+
+import io.vidocq.foy.internal.dispatcher.DispatchResolver;
+import io.vidocq.foy.internal.dispatcher.RequestDispatcherImpl;
+import io.vidocq.foy.internal.listener.ListenerRegistry;
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterRegistration;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.Servlet;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletRegistration;
+import jakarta.servlet.SessionCookieConfig;
+import jakarta.servlet.SessionTrackingMode;
+import jakarta.servlet.descriptor.JspConfigDescriptor;
+
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * {@link ServletContext} minimum for milestone M2a.
+ * <p>
+ * Dynamic configuration operations (addServlet/addFilter/...) are not
+ * supported in this milestone — we rely solely on the CDI discovery of
+ * beans annotated {@code @WebServlet}.
+ * </p>
+ */
+public final class VidocqServletContext implements ServletContext {
+
+    private static final System.Logger LOG = System.getLogger(VidocqServletContext.class.getName());
+
+    private final String contextPath;
+    private final String serverInfo;
+    private final Map<String, Object> attributes = new HashMap<>();
+    private final Map<String, String> initParameters = new HashMap<>();
+    /** Configured default encodings; {@code null} until the descriptor or the application sets one. */
+    private String requestCharacterEncoding;
+    private String responseCharacterEncoding;
+    private Map<String, String> mimeMappings = Map.of();
+    private java.util.List<String> welcomeFiles = java.util.List.of();
+    private Set<SessionTrackingMode> descriptorTrackingModes;
+    private int sessionTimeout = 30;
+    private ListenerRegistry listenerRegistry = new ListenerRegistry();
+    private DispatchResolver dispatchResolver;
+    private RequestDispatcherImpl.Invoker dispatchInvoker;
+    private io.vidocq.foy.internal.error.ErrorPageRegistry errorPages =
+            new io.vidocq.foy.internal.error.ErrorPageRegistry();
+    private volatile io.vidocq.foy.internal.security.SecuritySettings securitySettings =
+            io.vidocq.foy.internal.security.SecuritySettings.DEFAULTS;
+    private volatile io.vidocq.foy.internal.http.RequestLimits requestLimits =
+            io.vidocq.foy.internal.http.RequestLimits.DEFAULTS;
+    private boolean initialized;
+    private volatile Map<String, jakarta.servlet.MultipartConfigElement> multipartConfigs;
+    private boolean programmaticListenerActive;
+    private Map<String, String> localeEncodingMappings = Map.of();
+    private final java.util.LinkedHashMap<String, DynamicServletRegistration> dynamicServlets = new java.util.LinkedHashMap<>();
+    private final java.util.LinkedHashMap<String, DynamicFilterRegistration> dynamicFilters = new java.util.LinkedHashMap<>();
+    /** Static registrations (web.xml / @WebServlet), exposed by
+     *  {@link #getServletRegistrations()} but not applied again by
+     *  the harness (they are already part of the active servlet list). */
+    private final java.util.LinkedHashMap<String, DynamicServletRegistration> staticServlets = new java.util.LinkedHashMap<>();
+    private final java.util.LinkedHashMap<String, DynamicFilterRegistration> staticFilters = new java.util.LinkedHashMap<>();
+
+    /** Registers a static servlet registration (from web.xml/@WebServlet).
+     *  The name is also marked reserved to block a later dynamic addServlet. */
+    public DynamicServletRegistration registerStaticServlet(String name, Class<? extends Servlet> klass,
+                                                            java.util.List<String> patterns,
+                                                            java.util.Map<String, String> initParams,
+                                                            boolean asyncSupported) {
+        DynamicServletRegistration r = new DynamicServletRegistration(name, klass);
+        r.attach(this);
+        if (initParams != null) r.setInitParameters(new java.util.LinkedHashMap<>(initParams));
+        if (patterns != null) for (String p : patterns) r.addMappingDirect(p);
+        r.setAsyncSupported(asyncSupported);
+        staticServlets.put(name, r);
+        reservedServletNames.add(name);
+        if (patterns != null) for (String p : patterns) reserveUrlPattern(p);
+        return r;
+    }
+
+    public DynamicFilterRegistration registerStaticFilter(String name, Class<? extends Filter> klass,
+                                                          java.util.Map<String, String> initParams,
+                                                          boolean asyncSupported) {
+        DynamicFilterRegistration r = new DynamicFilterRegistration(name, klass);
+        if (initParams != null) r.setInitParameters(new java.util.LinkedHashMap<>(initParams));
+        r.setAsyncSupported(asyncSupported);
+        staticFilters.put(name, r);
+        reservedFilterNames.add(name);
+        return r;
+    }
+    /** Names reserved by web.xml — an addServlet/addFilter with this name should return null. */
+    private final java.util.Set<String> reservedServletNames = new java.util.HashSet<>();
+    private final java.util.Set<String> jspRegistrations = new java.util.HashSet<>();
+    private final java.util.concurrent.atomic.AtomicReference<io.vidocq.foy.spi.jsp.JspEngine.Application> jspApplication =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    /** Container hook; the engine is application-owned and installed once before initialization. */
+    public void setJspEngineApplication(io.vidocq.foy.spi.jsp.JspEngine.Application application) {
+        if (!jspApplication.compareAndSet(null, java.util.Objects.requireNonNull(application)))
+            throw new IllegalStateException("A JSP application is already installed");
+    }
+    public io.vidocq.foy.spi.jsp.JspEngine.Application jspEngineApplication() { return jspApplication.get(); }
+    public void markJspRegistration(String name) { jspRegistrations.add(name); }
+    public boolean isJspRegistration(String name) { return jspRegistrations.contains(name); }
+    /** Called after the container has stopped requests and destroyed application components. */
+    public void closeJspEngineApplication() {
+        var application = jspApplication.getAndSet(null);
+        if (application != null) application.close();
+    }
+    private final java.util.Set<String> reservedFilterNames = new java.util.HashSet<>();
+    /** URL patterns already mapped by web.xml to a static servlet. */
+    private final java.util.Set<String> reservedUrlPatterns = new java.util.HashSet<>();
+    public void reserveServletName(String name) { reservedServletNames.add(name); }
+    public void reserveFilterName(String name) { reservedFilterNames.add(name); }
+    public void reserveUrlPattern(String pattern) {
+        if (pattern != null && !pattern.isEmpty()) reservedUrlPatterns.add(pattern);
+    }
+
+    /** Indicates whether {@code pattern} is already mapped to a servlet other than
+     *  {@code selfName}, either from web.xml or another
+     *  {@link DynamicServletRegistration}. Used by addMapping (§4.4)
+     *  to enforce all-or-nothing conflict semantics. */
+    public boolean isUrlPatternMappedElsewhere(String selfName, String pattern) {
+        if (pattern == null) return false;
+        if (reservedUrlPatterns.contains(pattern)) return true;
+        for (var entry : dynamicServlets.entrySet()) {
+            if (entry.getKey().equals(selfName)) continue;
+            if (entry.getValue().getMappings().contains(pattern)) return true;
+        }
+        return false;
+    }
+
+    public Map<String, DynamicServletRegistration> dynamicServletRegistrations() {
+        return java.util.Collections.unmodifiableMap(dynamicServlets);
+    }
+    public Map<String, DynamicFilterRegistration> dynamicFilterRegistrations() {
+        return java.util.Collections.unmodifiableMap(dynamicFilters);
+    }
+
+    /** Enables/disables the "programmatic listener init" phase, during which
+     *  dynamic configuration methods must throw UOE (§4.4.3). */
+    public void setProgrammaticListenerActive(boolean active) { this.programmaticListenerActive = active; }
+
+    /** Mapping &lt;locale&gt; → &lt;encoding&gt; from {@code web.xml} (Servlet 6.1 §14.4). */
+    public void setLocaleEncodingMappings(Map<String, String> mappings) {
+        var normalized = new java.util.HashMap<String, String>();
+        if (mappings != null) {
+            // Accept "zh_CN", "zh-CN" and "zh" spellings in any case.
+            mappings.forEach((k, v) -> normalized.put(k.trim().replace('_', '-').toLowerCase(java.util.Locale.ROOT), v));
+        }
+        this.localeEncodingMappings = Map.copyOf(normalized);
+    }
+    public String encodingForLocale(java.util.Locale locale) {
+        if (locale == null) return null;
+        String lang = locale.getLanguage();
+        String country = locale.getCountry();
+        // 1) Mappings explicites du web.xml (§14.4) — prioritaires.
+        if (!localeEncodingMappings.isEmpty()) {
+            if (country != null && !country.isEmpty()) {
+                String full = lang + "-" + country.toLowerCase(java.util.Locale.ROOT);
+                String v = localeEncodingMappings.get(full);
+                if (v != null) return v;
+            }
+            String v = localeEncodingMappings.get(lang);
+            if (v != null) return v;
+        }
+        // 2) Défauts du conteneur (table alignée avec Tomcat / Servlet 6.1).
+        return DEFAULT_LOCALE_ENCODINGS.get(lang);
+    }
+
+    private static final String LATIN_1 = "ISO-8859-1";
+    private static final String LATIN_2 = "ISO-8859-2";
+    private static final String CYRILLIC = "ISO-8859-5";
+    /** Parameter names in the messages of the name checks. */
+    private static final String SERVLET_NAME = "servletName";
+    private static final String FILTER_NAME = "filterName";
+
+    private static final Map<String, String> DEFAULT_LOCALE_ENCODINGS = Map.ofEntries(
+            Map.entry("ar", "ISO-8859-6"),
+            Map.entry("be", CYRILLIC),
+            Map.entry("bg", CYRILLIC),
+            Map.entry("ca", LATIN_1),
+            Map.entry("cs", LATIN_2),
+            Map.entry("da", LATIN_1),
+            Map.entry("de", LATIN_1),
+            Map.entry("el", "ISO-8859-7"),
+            Map.entry("en", LATIN_1),
+            Map.entry("es", LATIN_1),
+            Map.entry("et", LATIN_1),
+            Map.entry("fi", LATIN_1),
+            Map.entry("fr", LATIN_1),
+            Map.entry("hr", LATIN_2),
+            Map.entry("hu", LATIN_2),
+            Map.entry("is", LATIN_1),
+            Map.entry("it", LATIN_1),
+            Map.entry("iw", "ISO-8859-8"),
+            Map.entry("ja", "Shift_JIS"),
+            Map.entry("ko", "EUC-KR"),
+            Map.entry("lt", LATIN_2),
+            Map.entry("lv", LATIN_2),
+            Map.entry("mk", CYRILLIC),
+            Map.entry("nl", LATIN_1),
+            Map.entry("no", LATIN_1),
+            Map.entry("pl", LATIN_2),
+            Map.entry("pt", LATIN_1),
+            Map.entry("ro", LATIN_2),
+            Map.entry("ru", CYRILLIC),
+            Map.entry("sh", CYRILLIC),
+            Map.entry("sk", LATIN_2),
+            Map.entry("sl", LATIN_2),
+            Map.entry("sq", LATIN_2),
+            Map.entry("sr", CYRILLIC),
+            Map.entry("sv", LATIN_1),
+            Map.entry("tr", "ISO-8859-9"),
+            Map.entry("uk", CYRILLIC),
+            Map.entry("zh", "GB2312"),
+            Map.entry("zh_TW", "Big5"));
+
+    /** {@code contextPath} {@code "/"} is taken as the root context, whose context path is {@code ""}. */
+    public VidocqServletContext(String contextPath) {
+        this.contextPath = "/".equals(contextPath) ? "" : contextPath;
+        this.serverInfo = "Vidocq Servlet/Chappe";
+    }
+
+    /** End-of-initialization marker (Servlet 6.1 §4.4); after this call,
+     *  dynamic configuration methods must throw {@link IllegalStateException}. The multipart
+     *  configuration of every servlet is frozen here for the request threads. */
+    public void markInitialized() {
+        this.initialized = true;
+        var frozen = new HashMap<String, jakarta.servlet.MultipartConfigElement>();
+        staticServlets.forEach((name, r) -> { if (r.getMultipartConfig() != null) frozen.put(name, r.getMultipartConfig()); });
+        dynamicServlets.forEach((name, r) -> { if (r.getMultipartConfig() != null) frozen.put(name, r.getMultipartConfig()); });
+        this.multipartConfigs = Map.copyOf(frozen);
+    }
+
+    /**
+     * The effective multipart configuration of {@code servletName} (section 3.2): the registration's
+     * {@code setMultipartConfig}, else the descriptor's {@code <multipart-config>}, else the class's
+     * {@code @MultipartConfig}; {@code null} for none or a {@code null} name. Read live from the
+     * registrations until {@link #markInitialized()}, frozen afterwards.
+     */
+    public jakarta.servlet.MultipartConfigElement multipartConfig(String servletName) {
+        if (servletName == null) return null;
+        var frozen = multipartConfigs;
+        if (frozen != null) return frozen.get(servletName);
+        DynamicServletRegistration r = dynamicServlets.get(servletName);
+        if (r == null) r = staticServlets.get(servletName);
+        return r == null ? null : r.getMultipartConfig();
+    }
+
+    public void setListenerRegistry(ListenerRegistry registry) {
+        this.listenerRegistry = registry;
+    }
+
+    public ListenerRegistry listenerRegistry() { return listenerRegistry; }
+
+    public void setDispatchInfrastructure(DispatchResolver resolver, RequestDispatcherImpl.Invoker invoker) {
+        this.dispatchResolver = resolver;
+        this.dispatchInvoker = invoker;
+    }
+
+    public DispatchResolver dispatchResolver() { return dispatchResolver; }
+    public RequestDispatcherImpl.Invoker dispatchInvoker() { return dispatchInvoker; }
+
+    public io.vidocq.foy.internal.error.ErrorPageRegistry errorPages() {
+        return errorPages;
+    }
+
+    public void setErrorPages(io.vidocq.foy.internal.error.ErrorPageRegistry errorPages) {
+        this.errorPages = errorPages;
+    }
+
+    public io.vidocq.foy.internal.security.SecuritySettings securitySettings() { return securitySettings; }
+
+    public void setSecuritySettings(io.vidocq.foy.internal.security.SecuritySettings settings) {
+        this.securitySettings = java.util.Objects.requireNonNull(settings, "settings");
+    }
+
+    /** The container ceilings of this context's requests (body, form, multipart). */
+    public void setRequestLimits(io.vidocq.foy.internal.http.RequestLimits limits) {
+        this.requestLimits = java.util.Objects.requireNonNull(limits, "limits");
+    }
+
+    public io.vidocq.foy.internal.http.RequestLimits requestLimits() { return requestLimits; }
+
+    public io.vidocq.foy.spi.security.IdentityStore identityStore() { return securitySettings.identityStore(); }
+
+    private volatile io.vidocq.foy.internal.security.RoleMapping roleMapping =
+            io.vidocq.foy.internal.security.RoleMapping.EMPTY;
+
+    /** Declared roles and {@code security-role-ref}s of this application (§13.3). */
+    public io.vidocq.foy.internal.security.RoleMapping roleMapping() { return roleMapping; }
+
+    public void setRoleMapping(io.vidocq.foy.internal.security.RoleMapping mapping) {
+        this.roleMapping = java.util.Objects.requireNonNull(mapping, "mapping");
+    }
+
+    private volatile io.vidocq.foy.internal.security.WebSecurity security =
+            io.vidocq.foy.internal.security.WebSecurity.unconfigured();
+
+    /**
+     * The application's security. Until the deployer (or a test, explicitly) sets one it is
+     * {@link io.vidocq.foy.internal.security.WebSecurity#unconfigured()}, which refuses every request:
+     * no context ever admits requests by default.
+     */
+    public io.vidocq.foy.internal.security.WebSecurity security() { return security; }
+
+    public void setSecurity(io.vidocq.foy.internal.security.WebSecurity security) {
+        this.security = java.util.Objects.requireNonNull(security, "security");
+    }
+
+    private volatile io.vidocq.foy.internal.boot.ComponentFactory componentFactory;
+
+    /** Sets the factory behind {@code createServlet/createFilter/createListener/addListener}. */
+    public void setComponentFactory(io.vidocq.foy.internal.boot.ComponentFactory factory) {
+        this.componentFactory = java.util.Objects.requireNonNull(factory, "factory");
+    }
+
+    /**
+     * The factory creating dynamically requested components; when none was set, a
+     * registry-backed factory over this context's class loader.
+     */
+    public io.vidocq.foy.internal.boot.ComponentFactory componentFactory() {
+        var f = componentFactory;
+        if (f == null) {
+            synchronized (this) {
+                f = componentFactory;
+                if (f == null) {
+                    f = io.vidocq.foy.internal.gen.RegistryComponentFactory.forClassLoader(getClassLoader());
+                    componentFactory = f;
+                }
+            }
+        }
+        return f;
+    }
+
+    // ---- Requests in service (Servlet 6.1 section 2.3.4) ----
+
+    /**
+     * How long an undeploy waits for the requests in service before it destroys the filters and servlets:
+     * Servlet 6.1 section 2.3.4 lets the container stop waiting at "a server-defined time limit". 2 s, as
+     * Tomcat's default {@code unloadDelay}, counted from the start of the undeploy, like
+     * {@link #UPGRADED_CONNECTIONS_GRACE}: the requests keep running while the upgraded connections close, so
+     * the two waits overlap and the undeploy reaches {@code destroy()} 3 s after it began at most, not 5 s.
+     * Past it, {@code destroy()} runs while they still run.
+     */
+    static final java.time.Duration REQUESTS_GRACE = java.time.Duration.ofSeconds(2);
+
+    /*
+     * A request takes no lock: it increments requestsInService, then reads requestsRefused. The undeploy
+     * writes requestsRefused, then reads requestsInService. These are volatile accesses, so they fall in
+     * one total order that keeps each thread's own order (JLS 17.4.4). Either the request reads the flag
+     * after the undeploy wrote it, and backs out with 503, or the undeploy reads the count after the
+     * request's increment, and waits for that request. A request is refused or waited for, never neither.
+     * Checking the flag before the increment would break this: the request reads false, the undeploy sets
+     * the flag and reads 0, and the request then runs under destroy(). The lock below is taken only once
+     * the undeploy began, to wait for the count to reach 0 and to signal it, never on a request's way in.
+     */
+
+    /** The requests that entered the application and have not left it (a refused one, for an instant). */
+    private final java.util.concurrent.atomic.AtomicInteger requestsInService =
+            new java.util.concurrent.atomic.AtomicInteger();
+    /** The undeploy began: requests are refused. */
+    private volatile boolean requestsRefused;
+    private final java.util.concurrent.locks.ReentrantLock requestsDrain = new java.util.concurrent.locks.ReentrantLock();
+    private final java.util.concurrent.locks.Condition noRequestInService = requestsDrain.newCondition();
+
+    /**
+     * A request enters the application. It is counted until {@link #exitRequest()}, unless the undeploy
+     * began: then it is refused and must reach no filter and no servlet, since the container may not
+     * route a request to a servlet it destroys (Servlet 6.1 section 2.3.4, BUG-20261115-02).
+     *
+     * @return {@code false} when the request is refused: the caller answers 503
+     */
+    public boolean enterRequest() {
+        requestsInService.incrementAndGet();
+        if (!requestsRefused) return true;
+        exitRequest();
+        return false;
+    }
+
+    /** A request {@link #enterRequest() entered} left the application, its asynchronous processing included. */
+    public void exitRequest() {
+        // The undeploy reads the count under the lock before it waits, and the flag was set before that
+        // read: the last request out sees the flag and signals after the undeploy waits, or the undeploy
+        // reads 0 and does not wait.
+        if (requestsInService.decrementAndGet() == 0 && requestsRefused) {
+            requestsDrain.lock();
+            try {
+                noRequestInService.signalAll();
+            } finally {
+                requestsDrain.unlock();
+            }
+        }
+    }
+
+    /** Undeploy, its first step: every request from now on is refused (BUG-20261115-02). */
+    public void refuseRequests() {
+        requestsRefused = true;
+    }
+
+    /**
+     * Undeploy, before the filters and servlets are destroyed: lets the requests still in service finish,
+     * until {@link #REQUESTS_GRACE} after {@code undeployStart} (Servlet 6.1 section 2.3.4, BUG-20261115-03),
+     * and logs those it stops waiting for. The interrupt of the undeploy's thread is cleared for the wait and
+     * restored afterwards; one that arrives during the wait ends it.
+     *
+     * @param undeployStart the {@link System#nanoTime()} at which the undeploy began
+     */
+    public void awaitRequestsInService(long undeployStart) {
+        boolean interrupted = Thread.interrupted();
+        int left;
+        requestsDrain.lock();
+        try {
+            awaitNoRequestInService(undeployStart + REQUESTS_GRACE.toNanos());
+            left = requestsInService.get();
+        } finally {
+            requestsDrain.unlock();
+        }
+        if (interrupted) Thread.currentThread().interrupt();
+        if (left > 0) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "The undeploy stopped waiting for the requests still in service ({0}), {1} ms after it began:"
+                            + " the filters and servlets are destroyed while they run",
+                    left, java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - undeployStart));
+        }
+    }
+
+    /** Holding {@link #requestsDrain}: waits for no request in service, until {@code deadline} at most. */
+    private void awaitNoRequestInService(long deadline) {
+        long nanos = deadline - System.nanoTime();
+        try {
+            while (requestsInService.get() > 0 && nanos > 0) {
+                nanos = noRequestInService.awaitNanos(nanos);
+            }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // ---- Upgraded connections (Servlet 6.1 section 2.3.3.5) ----
+
+    /**
+     * How long an undeploy waits for its upgraded connections, all of them together: each closes on a
+     * virtual thread of its own and bounds its own waits to 2 s (a raw upgrade's last write, a WebSocket's
+     * Close, event in progress or closing handshake), half a second more for a WebSocket whose Close a send
+     * blocked on its peer held, which it cuts, and the rest is for the application's {@code onClose} and
+     * {@code destroy()}. Counted from the start of the undeploy. Past it the undeploy
+     * goes on, and the connections still closing end after the application stopped.
+     */
+    public static final java.time.Duration UPGRADED_CONNECTIONS_GRACE = java.time.Duration.ofSeconds(3);
+
+    /**
+     * The bound of an undeploy: it reaches {@code destroy()} this long after it began at most, since
+     * {@link #REQUESTS_GRACE} and {@link #UPGRADED_CONNECTIONS_GRACE} both count from its start; the later
+     * of the two (3 s). A request refused while the application goes away is told to retry after it.
+     */
+    public static final java.time.Duration UNDEPLOY_BOUND =
+            java.util.Collections.max(java.util.List.of(REQUESTS_GRACE, UPGRADED_CONNECTIONS_GRACE));
+
+    /**
+     * The {@code Retry-After} of a request refused during an undeploy (RFC 9110 section 10.2.3):
+     * {@link #UNDEPLOY_BOUND} in whole seconds, rounded up, so the client never comes back before the undeploy
+     * reached {@code destroy()}.
+     */
+    public static final long UNDEPLOY_RETRY_AFTER_SECONDS =
+            Math.ceilDiv(UNDEPLOY_BOUND.toMillis(), java.util.concurrent.TimeUnit.SECONDS.toMillis(1));
+
+    /** The open upgraded connections of this context, closed at undeploy. */
+    private final Set<AutoCloseable> upgradedConnections = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private volatile boolean upgradedConnectionsClosed;
+
+    /**
+     * Tracks an upgraded connection until {@link #unregisterUpgradedConnection} or undeploy.
+     *
+     * @return {@code false} when the context is already undeployed: the caller closes the connection
+     */
+    public boolean registerUpgradedConnection(AutoCloseable connection) {
+        upgradedConnections.add(connection);
+        if (upgradedConnectionsClosed) {
+            upgradedConnections.remove(connection);
+            return false;
+        }
+        return true;
+    }
+
+    /** The connection closed: no longer tracked. */
+    public void unregisterUpgradedConnection(AutoCloseable connection) {
+        upgradedConnections.remove(connection);
+    }
+
+    /**
+     * Undeploy: closes every open upgraded connection (its handler's {@code destroy()} runs) and
+     * refuses later ones. The connections close all at once, each on a virtual thread of its own, and
+     * the undeploy waits for them until one deadline, {@link #UPGRADED_CONNECTIONS_GRACE}: connections
+     * that each wait for their peer or for a callback cost it that much in all, not that much each. A
+     * close that fails, even with an {@code Error} from the application's {@code onClose} or
+     * {@code destroy()}, is logged and stops neither the others nor the rest of the undeploy. The
+     * interrupt of the undeploy's thread is cleared for the wait and restored afterwards; one that
+     * arrives during the wait ends it, and the connections still closing then finish on their own
+     * virtual threads, a WebSocket's {@code onClose} possibly after {@code contextDestroyed}.
+     *
+     * @param undeployStart the {@link System#nanoTime()} at which the undeploy began: the deadline counts
+     *                      from it
+     */
+    public void closeUpgradedConnections(long undeployStart) {
+        upgradedConnectionsClosed = true;
+        Thread.Builder closers = Thread.ofVirtual().name("foy-upgrade-close-", 1)
+                .uncaughtExceptionHandler((thread, failure) -> closeFailed(failure));
+        java.util.List<Thread> closing = new java.util.ArrayList<>();
+        for (AutoCloseable c : java.util.List.copyOf(upgradedConnections)) {
+            upgradedConnections.remove(c);
+            closing.add(closers.start(() -> close(c)));
+        }
+        awaitClosed(closing, undeployStart + UPGRADED_CONNECTIONS_GRACE.toNanos());
+    }
+
+    private static void close(AutoCloseable connection) {
+        try {
+            connection.close();
+        } catch (Exception e) {
+            closeFailed(e);
+        }
+    }
+
+    private static void closeFailed(Throwable failure) {
+        LOG.log(System.Logger.Level.WARNING, "closing an upgraded connection failed", failure);
+    }
+
+    /** Waits for the closing threads until {@code deadline}; logs the late ones. */
+    private static void awaitClosed(java.util.List<Thread> closing, long deadline) {
+        boolean interrupted = Thread.interrupted();
+        try {
+            for (Thread thread : closing) {
+                thread.join(java.time.Duration.ofNanos(Math.max(0, deadline - System.nanoTime())));
+            }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+        }
+        if (interrupted) Thread.currentThread().interrupt();
+        long late = closing.stream().filter(Thread::isAlive).count();
+        if (late > 0) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "{0} upgraded connections were still closing when the undeploy stopped waiting for them"
+                            + " ({1} ms after it began, at most): their handlers end after the application stopped",
+                    late, UPGRADED_CONNECTIONS_GRACE.toMillis());
+        }
+    }
+
+    @Override public String getContextPath() { return contextPath; }
+    /**
+     * The context of a URI (Servlet 6.1 section 4.8), among the applications deployed in this JVM, by one rule
+     * whoever asks: the application whose context path is the longest one the URI lies under, on a segment
+     * boundary; the root application holds every URI no other application does. An application being
+     * undeployed has left the registry, so the other applications no longer find it (BUG-20261115-04), yet it
+     * still counts as deployed for its own lookups (BUG-20261115-07).
+     *
+     * @return the context, or {@code null} when none holds the URI or {@code uripath} does not start with
+     *         {@code /}
+     */
+    @Override public ServletContext getContext(String uripath) {
+        if (uripath == null || !uripath.startsWith("/")) return null;
+        VidocqServletContext found = CrossContextRegistry.lookup(uripath);
+        if (!CrossContextRegistry.isUnder(uripath, contextPath)) return found;
+        // Under this application's path: only an application deployed under a longer path takes the URI from it.
+        return found != null && found.getContextPath().length() > contextPath.length() ? found : this;
+    }
+    @Override public int getMajorVersion() { return 6; }
+    @Override public int getMinorVersion() { return 1; }
+
+    private int effectiveMajor = 6;
+    private int effectiveMinor = 1;
+    public void setEffectiveVersion(int major, int minor) {
+        this.effectiveMajor = major; this.effectiveMinor = minor;
+    }
+    @Override public int getEffectiveMajorVersion() { return effectiveMajor; }
+    @Override public int getEffectiveMinorVersion() { return effectiveMinor; }
+    /** The descriptor's {@code mime-mapping} entries (lower-case extension, no dot), consulted first. */
+    public void setMimeMappings(Map<String, String> mappings) { this.mimeMappings = Map.copyOf(mappings); }
+
+    /** The descriptor's welcome files, in declaration order (used by the Phase 4 welcome-file dispatch). */
+    public void setWelcomeFiles(java.util.List<String> files) { this.welcomeFiles = java.util.List.copyOf(files); }
+    public java.util.List<String> getWelcomeFiles() { return welcomeFiles; }
+
+    /** Pre-populates the session cookie configuration from the descriptor (before initialisation). */
+    public void applyCookieConfig(io.vidocq.foy.internal.webxml.WebAppDescriptor.CookieConfigDef def) {
+        if (def == null) return;
+        if (def.name() != null) sessionCookieConfig.setName(def.name());
+        if (def.domain() != null) sessionCookieConfig.setDomain(def.domain());
+        if (def.path() != null) sessionCookieConfig.setPath(def.path());
+        if (def.maxAge() != null) sessionCookieConfig.setMaxAge(def.maxAge());
+        if (def.httpOnly() != null) sessionCookieConfig.setHttpOnly(def.httpOnly());
+        if (def.secure() != null) sessionCookieConfig.setSecure(def.secure());
+        def.attributes().forEach(sessionCookieConfig::setAttribute);
+    }
+
+    /** Tracking modes declared by the descriptor; they replace the container default. */
+    public void setDescriptorTrackingModes(Set<SessionTrackingMode> modes) {
+        this.descriptorTrackingModes = EnumSet.copyOf(modes);
+    }
+
+    /** The configured default request encoding, {@code null} when none (the client's charset rules). */
+    public String configuredRequestCharacterEncoding() { return requestCharacterEncoding; }
+
+    /** The configured default response encoding, {@code null} when none. */
+    public String configuredResponseCharacterEncoding() { return responseCharacterEncoding; }
+
+    /** The session cookie configuration, without the programmatic-listener guard (container use). */
+    public io.vidocq.foy.internal.session.VidocqSessionCookieConfig sessionCookieConfigInternal() {
+        return sessionCookieConfig;
+    }
+
+    @Override public String getMimeType(String file) {
+        if (file == null) return null;
+        int dot = file.lastIndexOf('.');
+        if (dot < 0) return null;
+        String ext = file.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+        String mapped = mimeMappings.get(ext);
+        if (mapped != null) return mapped;
+        return switch (ext) {
+            case "class" -> "application/x-java-class";
+            case "html", "htm" -> "text/html";
+            case "txt" -> "text/plain";
+            case "xml" -> "text/xml";
+            case "json" -> "application/json";
+            case "css" -> "text/css";
+            case "js"  -> "application/javascript";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "svg" -> "image/svg+xml";
+            case "pdf" -> "application/pdf";
+            case "zip" -> "application/zip";
+            default -> java.net.URLConnection.guessContentTypeFromName(file);
+        };
+    }
+    /**
+     * WAR resource source — provided by the DeployableContainer at startup
+     * of the harness. The provider exposes the known paths and opens the flows.
+     */
+    public interface ResourceProvider {
+        /** Lists immediate paths under {@code path} (type {@code /WEB-INF/}). */
+        Set<String> listPaths(String path);
+        java.io.InputStream openStream(String path);
+        /** Returns a URL (for example {@code file:}) exposing {@code path}
+         *  with original path case and structure, or {@code null}. */
+        default java.net.URL toUrl(String path) { return null; }
+        /**
+         * Size and last-modification time of the file at {@code path}, read from the provider's
+         * own index or file system so that no URL connection is opened for metadata;
+         * {@code null} when {@code path} is not a file or the provider does not know.
+         */
+        default Metadata metadata(String path) { return null; }
+
+        /** A file's length in bytes and modification time in epoch milliseconds ({@code -1}: unknown). */
+        record Metadata(long length, long lastModified) {}
+    }
+
+    private ResourceProvider resourceProvider;
+    public void setResourceProvider(ResourceProvider provider) { this.resourceProvider = provider; }
+
+    @Override public Set<String> getResourcePaths(String path) {
+        if (path == null || !path.startsWith("/")) return null;
+        if (resourceProvider == null) return null;
+        Set<String> out = resourceProvider.listPaths(path);
+        return (out == null || out.isEmpty()) ? null : out;
+    }
+    @Override public java.net.URL getResource(String path) throws java.net.MalformedURLException {
+        if (path == null) return null;
+        if (!path.startsWith("/")) {
+            throw new java.net.MalformedURLException("path must start with '/': " + path);
+        }
+        if (resourceProvider == null) return null;
+        return resourceProvider.toUrl(path);
+    }
+    /** {@link ResourceProvider#metadata} of the configured provider, {@code null} when unknown. */
+    public ResourceProvider.Metadata resourceMetadata(String path) {
+        if (path == null || !path.startsWith("/") || resourceProvider == null) return null;
+        return resourceProvider.metadata(path);
+    }
+    @Override public java.io.InputStream getResourceAsStream(String path) {
+        if (path == null || !path.startsWith("/")) return null;
+        if (resourceProvider == null) return null;
+        return resourceProvider.openStream(path);
+    }
+    @Override public RequestDispatcher getRequestDispatcher(String path) {
+        // Servlet 6.1 section 9.1: a dispatcher for every context-relative path. A deployed
+        // application always resolves (its "/" servlet or the container default servlet, which
+        // answers 404 for a missing resource); notFound only serves a bridge built without one.
+        if (path == null) return null;
+        if (!path.startsWith("/")) return null; // doit être absolu dans le contexte
+        if (dispatchResolver == null || dispatchInvoker == null) return null;
+        // The path is context-relative: it is never stripped of a context-path prefix.
+        String tmp = path;
+        // Section 9.1.1: the dispatch path is already decoded; only its dot segments are normalised
+        // (query string split off first). A path climbing above the context root has no dispatcher.
+        String query = "";
+        int q = tmp.indexOf('?');
+        if (q >= 0) { query = tmp.substring(q); tmp = tmp.substring(0, q); }
+        String normalized = io.vidocq.foy.internal.http.RequestPaths.normalize(tmp);
+        if (normalized == null) return null;
+        final String resolvePath = normalized + query;
+        return dispatchResolver.resolve(resolvePath)
+                .<RequestDispatcher>map(t -> new RequestDispatcherImpl(t, dispatchInvoker))
+                .orElseGet(() -> RequestDispatcherImpl.notFound(resolvePath));
+    }
+    @Override public RequestDispatcher getNamedDispatcher(String name) {
+        if (dispatchResolver == null || dispatchInvoker == null || name == null) return null;
+        return dispatchResolver.resolveByName(name)
+                .<RequestDispatcher>map(t -> new RequestDispatcherImpl(t, dispatchInvoker))
+                .orElse(null);
+    }
+    @Override public void log(String msg) { System.getLogger("servlet.log").log(System.Logger.Level.INFO, msg); }
+    @Override public void log(String message, Throwable throwable) {
+        System.getLogger("servlet.log").log(System.Logger.Level.ERROR, message, throwable);
+    }
+    /**
+     * The file-system path of {@code path} when the resource provider serves it from a directory
+     * ({@code file:} URL) and it exists; {@code null} otherwise (no provider, a resource inside an
+     * archive, a missing resource). A path without a leading {@code '/'} is taken as relative to
+     * the context root. The path is canonicalised first: {@code "."} and {@code ".."} segments are
+     * resolved ({@code /css/../css/site.css} is {@code /css/site.css}), and a path climbing above
+     * the root, or holding a backslash, has no real path.
+     */
+    @Override public String getRealPath(String path) {
+        if (path == null || resourceProvider == null) return null;
+        String canonical = canonicalResourcePath(path.startsWith("/") ? path : "/" + path);
+        if (canonical == null) return null;
+        URL url = resourceProvider.toUrl(canonical);
+        if (url == null || !"file".equalsIgnoreCase(url.getProtocol())) return null;
+        try {
+            Path file = Path.of(url.toURI());
+            return Files.exists(file) ? file.toAbsolutePath().toString() : null;
+        } catch (URISyntaxException | IllegalArgumentException | FileSystemNotFoundException _) {
+            return null;
+        }
+    }
+
+    /**
+     * {@code path} (starting with {@code '/'}) with its {@code "."} and {@code ".."} segments
+     * resolved and a trailing {@code '/'} kept; {@code null} when it climbs above the root or
+     * holds a backslash.
+     */
+    static String canonicalResourcePath(String path) {
+        if (path.indexOf('\\') >= 0) return null;
+        var segments = new ArrayDeque<String>();
+        String[] parts = path.substring(1).split("/", -1);
+        for (String part : parts) {
+            if (part.isEmpty() || ".".equals(part)) continue;
+            if ("..".equals(part)) {
+                if (segments.isEmpty()) return null;
+                segments.removeLast();
+            } else {
+                segments.addLast(part);
+            }
+        }
+        String last = parts[parts.length - 1];
+        boolean directory = last.isEmpty() || ".".equals(last) || "..".equals(last);
+        String joined = "/" + String.join("/", segments);
+        return directory && !segments.isEmpty() ? joined + "/" : joined;
+    }
+    @Override public String getServerInfo() { return serverInfo; }
+    @Override public String getInitParameter(String name) {
+        if (name == null) throw new NullPointerException("name is null");
+        return initParameters.get(name);
+    }
+    @Override public Enumeration<String> getInitParameterNames() {
+        return Collections.enumeration(initParameters.keySet());
+    }
+    @Override public boolean setInitParameter(String name, String value) {
+        if (name == null) throw new NullPointerException("name is null");
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        return initParameters.putIfAbsent(name, value) == null;
+    }
+
+    @Override public Object getAttribute(String name) {
+        // Servlet 6.1 §4.0 : NullPointerException sur name null.
+        if (name == null) throw new NullPointerException("name is null");
+        return attributes.get(name);
+    }
+    @Override public Enumeration<String> getAttributeNames() {
+        return Collections.enumeration(attributes.keySet());
+    }
+    @Override public void setAttribute(String name, Object object) {
+        if (name == null) throw new NullPointerException("name is null");
+        if (object == null) { removeAttribute(name); return; }
+        Object previous = attributes.put(name, object);
+        if (previous == null) listenerRegistry.fireContextAttributeAdded(this, name, object);
+        else listenerRegistry.fireContextAttributeReplaced(this, name, previous);
+    }
+    @Override public void removeAttribute(String name) {
+        if (name == null) throw new NullPointerException("name is null");
+        Object previous = attributes.remove(name);
+        if (previous != null) listenerRegistry.fireContextAttributeRemoved(this, name, previous);
+    }
+
+    private String servletContextName = "vidocq";
+    public void setServletContextName(String name) {
+        if (name != null && !name.isEmpty()) this.servletContextName = name;
+    }
+    @Override public String getServletContextName() { return servletContextName; }
+
+    // ---- Dynamic registration — not supported in M2a ----
+    // Servlet 6.1 §4.4 : après initialisation du contexte, ces méthodes doivent throw
+    // IllegalStateException. Avant initialisation, elles throw UnsupportedOperationException
+    // tant que la feature n'est pas implémentée.
+
+    @Override public ServletRegistration.Dynamic addServlet(String name, String className) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, SERVLET_NAME);
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
+        var r = new DynamicServletRegistration(name, className);
+        r.attach(this);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+    @Override public ServletRegistration.Dynamic addServlet(String name, Servlet servlet) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, SERVLET_NAME);
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
+        var r = new DynamicServletRegistration(name, servlet);
+        r.attach(this);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+    @Override public ServletRegistration.Dynamic addServlet(String name, Class<? extends Servlet> c) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, SERVLET_NAME);
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
+        var r = new DynamicServletRegistration(name, c);
+        r.attach(this);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+    @Override public ServletRegistration.Dynamic addJspFile(String name, String jspFile) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        // §4.4 addJspFile : IllegalArgumentException si servletName null ou vide.
+        requireNonEmptyName(name, SERVLET_NAME);
+        if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
+        var application = jspApplication.get();
+        var r = application == null ? new DynamicServletRegistration(name, (String) null)
+                : new DynamicServletRegistration(name, java.util.Objects.requireNonNull(application.servletFor(jspFile)));
+        if (application != null) markJspRegistration(name);
+        r.attach(this);
+        dynamicServlets.put(name, r);
+        return r;
+    }
+
+    private static void requireNonEmptyName(String name, String arg) {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException(arg + " is null or empty");
+        }
+    }
+    @Override public <T extends Servlet> T createServlet(Class<T> c) throws jakarta.servlet.ServletException {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return componentFactory().newInstance(c);
+    }
+    @Override public ServletRegistration getServletRegistration(String name) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        var d = dynamicServlets.get(name);
+        return d != null ? d : staticServlets.get(name);
+    }
+    @Override public Map<String, ? extends ServletRegistration> getServletRegistrations() {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        // §4.4 : retourne *toutes* les ServletRegistration — web.xml + dynamiques.
+        var merged = new java.util.LinkedHashMap<String, ServletRegistration>();
+        merged.putAll(staticServlets);
+        merged.putAll(dynamicServlets);
+        return java.util.Collections.unmodifiableMap(merged);
+    }
+    @Override public FilterRegistration.Dynamic addFilter(String name, String className) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, FILTER_NAME);
+        if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
+        var r = new DynamicFilterRegistration(name, className);
+        dynamicFilters.put(name, r);
+        return r;
+    }
+    @Override public FilterRegistration.Dynamic addFilter(String name, Filter f) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, FILTER_NAME);
+        if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
+        var r = new DynamicFilterRegistration(name, f);
+        dynamicFilters.put(name, r);
+        return r;
+    }
+    @Override public FilterRegistration.Dynamic addFilter(String name, Class<? extends Filter> c) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        requireNonEmptyName(name, FILTER_NAME);
+        if (dynamicFilters.containsKey(name) || reservedFilterNames.contains(name)) return null;
+        var r = new DynamicFilterRegistration(name, c);
+        dynamicFilters.put(name, r);
+        return r;
+    }
+    @Override public <T extends Filter> T createFilter(Class<T> c) throws jakarta.servlet.ServletException {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return componentFactory().newInstance(c);
+    }
+    @Override public FilterRegistration getFilterRegistration(String name) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        var d = dynamicFilters.get(name);
+        return d != null ? d : staticFilters.get(name);
+    }
+    @Override public Map<String, ? extends FilterRegistration> getFilterRegistrations() {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        var merged = new java.util.LinkedHashMap<String, FilterRegistration>();
+        merged.putAll(staticFilters);
+        merged.putAll(dynamicFilters);
+        return java.util.Collections.unmodifiableMap(merged);
+    }
+
+    // ---- Listeners ----
+    // Servlet 6.1 §4.4 : addListener n'est autorisé que pendant l'initialisation
+    // (SCI.onStartup ou contextInitialized d'un listener non-programmatique).
+
+    @Override public void addListener(String className) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        var factory = componentFactory();
+        try {
+            Class<?> c = factory.load(className);
+            addProgrammaticListener((java.util.EventListener) factory.newInstance(c));
+        } catch (ClassNotFoundException | jakarta.servlet.ServletException | ClassCastException e) {
+            throw new IllegalArgumentException("cannot load listener " + className, e);
+        }
+    }
+    @Override public <T extends java.util.EventListener> void addListener(T t) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        addProgrammaticListener(t);
+    }
+    @Override public void addListener(Class<? extends java.util.EventListener> listenerClass) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        try {
+            addProgrammaticListener(componentFactory().newInstance(listenerClass));
+        } catch (jakarta.servlet.ServletException e) {
+            throw new IllegalArgumentException("cannot instantiate " + listenerClass, e);
+        }
+    }
+    @Override public <T extends java.util.EventListener> T createListener(Class<T> c) throws jakarta.servlet.ServletException {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        // Servlet 6.1 §4.4 : seule une classe implémentant une interface reconnue
+        // peut être instanciée par createListener.
+        if (!jakarta.servlet.ServletContextListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.ServletContextAttributeListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.ServletRequestListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.ServletRequestAttributeListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.http.HttpSessionListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.http.HttpSessionAttributeListener.class.isAssignableFrom(c)
+                && !jakarta.servlet.http.HttpSessionIdListener.class.isAssignableFrom(c)) {
+            throw new IllegalArgumentException(
+                    "class " + c.getName() + " does not implement any supported listener interface");
+        }
+        return componentFactory().newInstance(c);
+    }
+
+    private boolean contextInitializedPhase;
+    /** Active/désactive la phase d'appel des {@code contextInitialized} des listeners
+     *  declared (web.xml/@WebListener) — during this phase, addListener
+     *  d'un ServletContextListener doit throw IllegalArgumentException (§4.4). */
+    public void setContextInitializedPhase(boolean active) { this.contextInitializedPhase = active; }
+
+    private void addProgrammaticListener(java.util.EventListener l) {
+        // Servlet 6.1 §4.4 : rejette un EventListener qui n'implémente aucune des
+        // interfaces écoute reconnues.
+        if (!(l instanceof jakarta.servlet.ServletContextListener
+                || l instanceof jakarta.servlet.ServletContextAttributeListener
+                || l instanceof jakarta.servlet.ServletRequestListener
+                || l instanceof jakarta.servlet.ServletRequestAttributeListener
+                || l instanceof jakarta.servlet.http.HttpSessionListener
+                || l instanceof jakarta.servlet.http.HttpSessionAttributeListener
+                || l instanceof jakarta.servlet.http.HttpSessionIdListener)) {
+            throw new IllegalArgumentException(
+                    "listener " + l.getClass().getName() + " does not implement any supported listener interface");
+        }
+        // §4.4 : addListener d'un ServletContextListener n'est autorisé que depuis
+        // un SCI.onStartup — jamais depuis un contextInitialized d'un autre SCL.
+        if (contextInitializedPhase && l instanceof jakarta.servlet.ServletContextListener) {
+            throw new IllegalArgumentException(
+                    "ServletContextListener " + l.getClass().getName()
+                            + " can only be added from a ServletContainerInitializer");
+        }
+        if (listenerRegistry == null) listenerRegistry = new ListenerRegistry();
+        listenerRegistry.register(l, true);
+    }
+
+    private static UnsupportedOperationException programmaticForbidden() {
+        return new UnsupportedOperationException(
+                "dynamic configuration not allowed from a programmatic listener");
+    }
+
+    // ---- Sessions ----
+
+    private Set<SessionTrackingMode> effectiveSessionTrackingModes; // null = the default modes
+    private final io.vidocq.foy.internal.session.VidocqSessionCookieConfig sessionCookieConfig
+            = new io.vidocq.foy.internal.session.VidocqSessionCookieConfig(this);
+    @Override public SessionCookieConfig getSessionCookieConfig() {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        return sessionCookieConfig;
+    }
+    @Override public void setSessionTrackingModes(Set<SessionTrackingMode> modes) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (modes != null && modes.contains(SessionTrackingMode.SSL) && modes.size() > 1) {
+            throw new IllegalArgumentException("SSL tracking mode is mutually exclusive");
+        }
+        this.effectiveSessionTrackingModes = modes == null ? null : EnumSet.copyOf(modes);
+    }
+    /**
+     * The container default is {@code COOKIE} and {@code URL} (as Tomcat; {@code SSL} is never a
+     * default); {@code <tracking-mode>} in the descriptor replaces it.
+     */
+    @Override public Set<SessionTrackingMode> getDefaultSessionTrackingModes() {
+        return descriptorTrackingModes == null ? EnumSet.of(SessionTrackingMode.COOKIE, SessionTrackingMode.URL)
+                : EnumSet.copyOf(descriptorTrackingModes);
+    }
+    @Override public Set<SessionTrackingMode> getEffectiveSessionTrackingModes() {
+        return effectiveSessionTrackingModes == null
+                ? getDefaultSessionTrackingModes()
+                : EnumSet.copyOf(effectiveSessionTrackingModes);
+    }
+    /** Flag "initialized" no longer prevents tracking modes from being read from a contextInitialized. */
+    public boolean isInitializedInternal() { return initialized; }
+    @Override public int getSessionTimeout() { return sessionTimeout; }
+    @Override public void setSessionTimeout(int sessionTimeout) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        this.sessionTimeout = sessionTimeout;
+    }
+    /** Setter interne (contourne les checks) — utilisé par le harness pour
+     *  propager la valeur de {@code <session-timeout>} du web.xml. */
+    public void setSessionTimeoutInternal(int minutes) { this.sessionTimeout = minutes; }
+
+    private JspConfigDescriptor jspConfigDescriptor;
+    public void setJspConfigDescriptor(JspConfigDescriptor config) {
+        jspConfigDescriptor = io.vidocq.foy.internal.webxml.JspDescriptors.copy(config);
+    }
+    @Override public JspConfigDescriptor getJspConfigDescriptor() { return jspConfigDescriptor; }
+    /** The loader of the application's classes, set once at deployment; {@code null} when unknown. */
+    private final java.util.concurrent.atomic.AtomicReference<ClassLoader> applicationClassLoader =
+            new java.util.concurrent.atomic.AtomicReference<>();
+    public void setApplicationClassLoader(ClassLoader loader) { this.applicationClassLoader.set(loader); }
+    /**
+     * The application's class loader, installed as the context class loader while Foy runs
+     * application code ({@link ContextLoaderScope}); {@code null} when the deployment named none.
+     */
+    public ClassLoader applicationClassLoader() { return applicationClassLoader.get(); }
+    /** The application's class loader, else (none was named) the caller's context class loader. */
+    @Override public ClassLoader getClassLoader() {
+        ClassLoader loader = applicationClassLoader.get();
+        return loader != null ? loader : Thread.currentThread().getContextClassLoader();
+    }
+    /** The url-patterns a descriptor {@code security-constraint} targets exactly (section 13.4.2). */
+    private volatile Set<String> descriptorConstrainedPatterns = Set.of();
+    public void setDescriptorConstrainedPatterns(Set<String> patterns) {
+        this.descriptorConstrainedPatterns = Set.copyOf(patterns);
+    }
+    public boolean isDescriptorConstrained(String pattern) { return descriptorConstrainedPatterns.contains(pattern); }
+
+    /** The element given to {@code setServletSecurity} on the registration of {@code servletName}, else {@code null}. */
+    public jakarta.servlet.ServletSecurityElement registeredServletSecurity(String servletName) {
+        var d = dynamicServlets.get(servletName);
+        if (d != null && d.getServletSecurity() != null) return d.getServletSecurity();
+        var s = staticServlets.get(servletName);
+        return s == null ? null : s.getServletSecurity();
+    }
+
+    /** Roles given to {@link #declareRoles}; {@code *} covers them once the constraints are compiled. */
+    private final Set<String> programmaticDeclaredRoles = new java.util.LinkedHashSet<>();
+    public Set<String> programmaticDeclaredRoles() { return Set.copyOf(programmaticDeclaredRoles); }
+
+    @Override public void declareRoles(String... roleNames) {
+        if (programmaticListenerActive) throw programmaticForbidden();
+        if (initialized) throw alreadyInitialized();
+        if (roleNames == null) throw new IllegalArgumentException("roleNames is null");
+        for (String r : roleNames) {
+            if (r == null || r.isEmpty()) throw new IllegalArgumentException("a role name is null or empty");
+        }
+        programmaticDeclaredRoles.addAll(java.util.List.of(roleNames));
+    }
+    private volatile String virtualServerName = "vidocq";
+    @Override public String getVirtualServerName() { return virtualServerName; }
+    /** Deploy-time setting ({@code FoyChappeBoot.Builder.virtualServerName}); {@code null} keeps {@code "vidocq"}. */
+    public void setVirtualServerName(String name) { if (name != null) this.virtualServerName = name; }
+
+    /** {@code null} when nothing is configured (Servlet 6.1). */
+    @Override public String getRequestCharacterEncoding() { return requestCharacterEncoding; }
+    @Override public void setRequestCharacterEncoding(String encoding) {
+        if (initialized) throw alreadyInitialized();
+        this.requestCharacterEncoding = encoding;
+    }
+    @Override public void setRequestCharacterEncoding(Charset encoding) {
+        setRequestCharacterEncoding(encoding == null ? null : encoding.name());
+    }
+    @Override public String getResponseCharacterEncoding() { return responseCharacterEncoding; }
+    @Override public void setResponseCharacterEncoding(String encoding) {
+        if (initialized) throw alreadyInitialized();
+        this.responseCharacterEncoding = encoding;
+    }
+    @Override public void setResponseCharacterEncoding(Charset encoding) {
+        setResponseCharacterEncoding(encoding == null ? null : encoding.name());
+    }
+
+    private static IllegalStateException alreadyInitialized() {
+        return new IllegalStateException("ServletContext already initialized");
+    }
+}
