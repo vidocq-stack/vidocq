@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>knock-cdi-vauban</artifactId>
+    <name>Knock :: CDI Vauban Integration</name>
+
+    <properties>
+        <!-- Every class here is package-private (ServiceLoader provider + generated
+             wiring only). javadoc has no public API to document; still produce the
+             (empty) javadoc jar for the release train instead of failing the build. -->
+        <maven.javadoc.failOnError>false</maven.javadoc.failOnError>
+    </properties>
+    <description>Intégration CDI 4.1 (Vauban) — découverte auto des @Liveness/@Readiness/@Startup via BCE</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.knock</groupId>
+            <artifactId>knock-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- CDI container for integration tests -->
+        <!-- Runtime dependency, under any CDI container: the Vauban build weaves a
+             `protected <init>(io.vidocq.vauban.api.ProxyLink)` entry constructor into every
+             normal-scoped bean, so the bean class cannot be loaded without this jar — Weld, for one,
+             then skips the bean silently (WELD-000119). API types only, no code runs outside Vauban
+             (vidocq-workspace#15, knock-it-weld). The Jakarta CDI APIs it declares are excluded: like
+             every Jakarta API here they come from the container (`provided`), and a CDI 4.0 server
+             (Open Liberty, MicroProfile 7) must not find CDI 4.1 API jars in the application. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT-processed dependency jars). During
+                the main compile it generates _ClientProxy/_Factory (so @ApplicationScoped beans —
+                KnockCdiHealthCheckRegistry, HealthCheckRegistrar — are proxied), META-INF/
+                vauban-beans.list (runtime discovery on the module path), and one _VaubanComponents
+                per package (in-module instantiation/field-injection/observer invocation, no `opens`).
+                The processor runs at build time only; the output it leaves needs vauban-api at
+                runtime (the woven ProxyLink constructor, see the dependency above) and is otherwise
+                inert for another CDI container (Weld: knock-it-weld).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Vauban APT processes this module's own beans at compile time. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- Tests run on the module path: the test builds a VaubanContainer (test-scope module) directly and hands it bean classes reflectively. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>
+                        @{argLine}
+                        --add-reads io.vidocq.knock.cdi.vauban=io.vidocq.vauban.core
+                    --add-opens io.vidocq.knock.cdi.vauban/io.vidocq.knock.cdi.internal=io.vidocq.vauban.core
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

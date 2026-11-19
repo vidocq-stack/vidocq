@@ -1,0 +1,233 @@
+# Knock - Claude Code Guidelines
+
+> "Knock, or the Triumph of Medicine" (Jules Romains, 1923) — a doctor who
+> diagnoses everything and transforms every villager into a potential patient.
+> This is exactly the role of a health check system: examine each component
+> of the system, diagnose its state (UP/DOWN), and aggregate these diagnoses into a
+> health dashboard consultable at any moment.
+
+## Prerequisites
+
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- The MicroProfile Health 4.0 TCK is a **public Maven Central** artifact:
+  `org.eclipse.microprofile.health:microprofile-health-tck:4.0`
+  (unlike Jakarta TCKs, no need to install manually).
+
+## Essential Commands
+
+```bash
+# Build reactor (knock-tck excluded — it joins only under the `tck` profile)
+./mvnw -ntp install -DskipTests
+
+# Unit tests
+./mvnw test
+
+# TCK — smoke test only
+./run-official-tck-mp-health-4.0.sh
+
+# TCK — full suite
+./run-official-tck-mp-health-4.0.sh all
+
+# TCK — targeted test
+./run-official-tck-mp-health-4.0.sh -Dtest=TestName
+
+# TCK — direct in-reactor invocation (equivalent to the script, without the report)
+./mvnw -Ptck -pl knock-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl knock-tck test     # full suite
+```
+
+> `knock-tck` is **in-reactor behind the `tck` Maven profile** (TCK harmonisation, same
+> pattern as the `vidocq-runtime-tck-*` runners): a regular `./mvnw install` neither builds
+> nor downloads the TCK harness. The historical ShrinkWrap Maven Resolver 3.3 vs
+> Model 4.1.0 constraint that once kept TCK runners out of reactors is obsolete since
+> the Maven 3.9.16 / Model 4.0.0 migration.
+
+## Architecture
+
+Knock is a MicroProfile Health 4.0 implementation with **zero third-party libraries**
+(no SmallRye Health, no Vert.x Health), only Jakarta EE / MicroProfile specs as
+dependencies, virtual threads, strict Java Modules.
+
+```
+knock-api          ← Re-exposes the org.eclipse.microprofile.health spec
+                     (HealthCheck, HealthCheckResponse, HealthCheckResponseBuilder,
+                      @Liveness, @Readiness, @Startup)
+knock-core         ← Implementation: HealthCheckRegistry, UP/DOWN aggregation,
+                     JSON serialization via champollion (Jakarta JSON-P/JSON-B)
+knock-cdi-vauban   ← CDI Vauban integration: BCE discovering
+                     @Liveness / @Readiness / @Startup beans, auto-registering in registry
+knock-jaxrs        ← Cassini adapter (Jakarta REST): JAX-RS resources /health,
+                     /health/live, /health/ready, /health/started
+knock-tck          ← Official MicroProfile Health 4.0 TCK runner
+                     (in-reactor, activated by the `tck` Maven profile)
+```
+
+**Health check flow:**
+HTTP `GET /health/live` → `knock-jaxrs` (JAX-RS resource `@Path("/health/live")`)
+→ `HealthCheckRegistry` → collect all `@Liveness HealthCheck` beans → call `.call()`
+on each instance → aggregation (DOWN if ≥ 1 DOWN) → JSON serialization via champollion
+→ HTTP 200/503 response.
+
+**MicroProfile Health 4.0 endpoints:**
+- `GET /health/live`    — liveness probes (`@Liveness`)
+- `GET /health/ready`   — readiness probes (`@Readiness`)
+- `GET /health/started` — startup probes (`@Startup`)
+- `GET /health`         — aggregate of all checks
+
+**Response format (spec §3.1):**
+```json
+{
+  "status": "UP",
+  "checks": [
+    {
+      "name": "database-connection",
+      "status": "UP",
+      "data": { "responseTime": "12ms" }
+    }
+  ]
+}
+```
+HTTP 200 if `status=UP`, HTTP 503 if `status=DOWN`.
+
+## Architecture Constraints Not to Violate
+
+1. **`knock-core` only depends on `org.eclipse.microprofile.health` + `jakarta.json`**
+   (Jakarta JSON-P, provided by champollion) — no CDI, no JAX-RS. The registry,
+   aggregation, and JSON serialization work in standalone SE.
+2. **`knock-cdi-vauban` depends on `knock-core` + `jakarta.cdi`** but never the reverse —
+   CDI discovery is an optional module invisible from the core.
+3. **`knock-jaxrs` depends on `knock-core` + `jakarta.ws.rs`** (Jakarta REST, implemented by
+   Cassini) — JAX-RS adaptation is optional and decoupled from the core. The `/health*`
+   endpoints are standard JAX-RS resources, not raw Chappe handlers.
+4. **champollion is the reference Jakarta JSON-P/JSON-B implementation**: `knock-core`
+   declares `requires jakarta.json` (spec API); champollion is provided at runtime.
+   Never Jackson, Gson, or any other third-party JSON library.
+5. **Strict Java Modules**: all modules have a `module-info.java`, `internal.*` packages
+   not exported, SPI exposed only via `provides ... with`.
+6. **No `synchronized`, no `ThreadLocal`** — virtual-thread-friendly. Use
+   `ConcurrentHashMap` for the registry, `ScopedValue` if propagation context becomes needed.
+7. **No `setAccessible(true)` reflection** — no functional reason in a
+   health check system. Any eventual Java Modules opening must be documented.
+8. **MicroProfile Health 4.0 TCK PASS at 100%** is a hard contract before any structural merge.
+
+## Conventions
+
+- **Explicit Java modules**: all modules have a `module-info.java`.
+- **Packages**:
+  - `io.vidocq.knock.spi.*` = stable public SPI (third-party registry extensions)
+  - `io.vidocq.knock.internal.*` = internal code (may break between versions)
+- **Maven groupId**: `io.vidocq.knock`.
+- **Records** for immutable objects (`HealthCheckResult`, `HealthSnapshot`);
+  **sealed interfaces** for closed hierarchies (status, probe types).
+- **Exhaustive pattern matching** on switch — no `if/else if` chains.
+- **JUnit 6** only for tests (BOM `org.junit:junit-bom` 6.x).
+- **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
+
+## TDD — Test-Driven Development (mandatory)
+
+Knock is developed with **strict TDD**, in this order:
+
+1. **Red** — write the test describing the expected behavior (cite the MicroProfile Health 4.0
+   spec section in JavaDoc comments). The test must fail for the right reason
+   (compilation OK, assertion KO).
+2. **Green** — write the minimum code to make the test pass.
+3. **Refactor** — clean up while keeping tests green. Run the full module suite
+   before any commit.
+
+Concrete rules:
+
+- **One test per public class**, named `<Class>Test`, in the same package (`src/test/java`).
+- **No Mockito** — hand-written doubles or inline `HealthCheck` implementations.
+- **Spec fixture tests**: for each MicroProfile Health 4.0 spec section referenced,
+  a test named `<method>_spec_section<X>_<Y>()`.
+
+## TCK — Technology Compatibility Kit
+
+MicroProfile Health TCK — run from the `knock-tck` module (in-reactor, gated behind the
+`tck` Maven profile so a regular build never pulls the TCK harness):
+
+| TCK | Artifact | Target |
+|---|---|---|
+| MicroProfile Health 4.0 | `org.eclipse.microprofile.health:microprofile-health-tck:4.0` | 100% PASS (hard contract) |
+
+The `run-official-tck-mp-health-4.0.sh` script:
+
+- supports `smoke` (default), `all`, and targeted `-Dtest=TestName`;
+- installs the reactor locally (`mvn install -DskipTests`) before invocation;
+- produces a `target/tck-report.txt` report with the PASS/FAIL/SKIP score.
+
+**Release discipline:**
+
+- **No structural merge** on `knock-core`/`knock-cdi-vauban` without TCK PASS.
+- Any challenges (disabled tests for spec interpretation or TCK bug) are
+  documented in `TCK.md` with spec citation, test hash, and reactivation plan.
+
+## AI Principles — Collaboration on This Repository
+
+- **Plan mode by default** on any structural change (new module, new SPI,
+  modification of registry or HTTP endpoints).
+- **Balanced elegance**: prefer a simple design that passes the TCK over a perfect design
+  that does not. Document trade-offs in ADRs (`docs/adr/`).
+- **No laziness on specs**: cite the MicroProfile Health 4.0 section in code
+  comments when the implementation directly responds to it.
+- **Zero third-party libraries**: Jakarta EE and MicroProfile specs are the only
+  dependencies allowed in `provided`/`compile` scope. If an implementation library
+  seems necessary, the decomposition is wrong.
+- Use agents **`java-modules-guardian`**, **`virtual-threads-reviewer`**,
+  **`dependency-gatekeeper`** proactively on any `module-info.java` modification,
+  concurrent code, or `pom.xml`.
+- If the rules in this file need updating, remember to align `AGENTS.md` accordingly
+  so Copilot Code can reference it easily.
+
+## Documentation (Antora) conventions
+
+The project documentation lives in `docs/en` as an Antora component and is
+aggregated by the **vidocq-docs** site, which provides a **shared UI bundle** (banner,
+logo, fonts, colours, footer). **Never customise the documentation UI per project** —
+all visual harmonisation is centralised in `vidocq-docs/ui-bundle`.
+
+### Gold reference
+**Vauban** is the reference implementation for documentation structure. Mirror its
+`docs/en` layout when creating or updating docs. **Chappe** (HTTP server)
+and **Vidocq** (runtime orchestrator) are *special cases*, not references: they are not
+Jakarta EE / MicroProfile spec implementations.
+
+### Repository layout
+- `docs/en/antora.yml` → `name: <project>`, `title:`, versioned per branch (`dev` prerelease on `main`, `'<version>'` on `docs/<version>`), `project-version` attribute, `nav:`, `lang: en`.
+- Pages in `modules/ROOT/pages/`, navigation in `modules/ROOT/nav.adoc`, images in
+  `modules/ROOT/images/`.
+- **English-only** (ADR 0004 in vidocq-docs): no French mirror — do not reintroduce one.
+
+### Canonical navigation (section order)
+`index` → `getting-started` → `usage` → `concepts` → `internals` → `tck` →
+`performance` → `reference` → `migration`
+
+Multi-module projects (e.g. Vidocq, Mansart) may append `modules/*` / `sub-modules/*`
+sub-pages after `migration`.
+
+### TCK / Performance rule (not mutually exclusive)
+- Every **spec implementation** — i.e. **all projects except Chappe and Vidocq** — MUST
+  have a **`tck`** section documenting TCK coverage/status.
+- Projects with a performance story (e.g. **Chappe**) keep their **`performance`** section.
+- When **both** sections exist, order them **TCK first, then Performance**.
+- **Chappe** and **Vidocq** do not require a `tck` section (not spec implementations).
+
+### `index.adoc` structure
+Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a centred logo
+(`image::<project>-logo.png[...,role=module-logo]`), a `[.lead]` paragraph, then
+`== Origin of the name`, an `== At a glance` table, and ecosystem / quick-links sections.
+
+### Logo
+Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
+
+> When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.
+
+## Architecture rules
+
+- The architecture rules (module dependencies, layers, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal`) are ArchUnit tests in `knock-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path is documented in `internals.adoc` and added to the rule's fallback list with its reason, never silently.

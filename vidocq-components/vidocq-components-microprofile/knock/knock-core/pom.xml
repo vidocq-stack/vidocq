@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>knock-core</artifactId>
+    <name>Knock :: Core</name>
+    <description>Implémentation MicroProfile Health 4.0 standalone — registry, agrégation, sérialisation JSON</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.knock</groupId>
+            <artifactId>knock-api</artifactId>
+        </dependency>
+        <!-- JSON-P API, `provided`: the runtime supplies it with its implementation (champollion on
+             Vidocq, the jsonp feature on a server, the implementation jar an application adds). -->
+        <dependency>
+            <groupId>jakarta.json</groupId>
+            <artifactId>jakarta.json-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JSON-P implementation for tests -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

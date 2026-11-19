@@ -1,0 +1,169 @@
+= Reference
+:description: Maven artefacts, exported Java Modules packages, SPI types, endpoints, commands, compatibility.
+
+[.lead]
+This page lists every artefact published by Knock, the Java Modules packages they export, the public SPI, the HTTP endpoints, and the build commands.
+
+== Maven artefacts
+
+All artefacts share the version `{project-version}` under the `io.vidocq.knock` group.
+
+[cols="2,1,3"]
+|===
+| Artefact | Recommended scope | Role
+
+| `knock-mp-health-api`
+| `compile`
+| Vidocq fork of the MicroProfile Health 4.0 API with a `module-info.java`.
+
+| `knock-api`
+| `compile`
+| Knock SPI (`ProbeType`, `HealthCheckRegistry`, `Knock`); re-exports spec types.
+
+| `knock-core`
+| `runtime`
+| Standalone runtime: registry, aggregator, JSON-P serialiser, `KnockHealthService`.
+
+| `knock-cdi-vauban`
+| `runtime`
+| CDI auto-registration at context start (`@Observes @Initialized(ApplicationScoped.class)`, generated Vauban wiring).
+
+| `knock-jaxrs`
+| `runtime`
+| Jakarta REST `/health*` resource (deployed on Cassini).
+|===
+
+[NOTE]
+====
+`knock-tck` (the official MicroProfile Health 4.0 TCK runner) is **not** published to Maven Central: it joins the reactor only under the `tck` Maven profile and cannot be declared as a dependency.
+====
+
+== Exported Java Modules packages
+
+[cols="2,3"]
+|===
+| Module | Exported packages
+
+| `knock-api`
+| `io.vidocq.knock.spi` (`ProbeType`, `HealthCheckRegistry`, `CheckResult`, `Knock`)
+
+| `knock-core`
+| `io.vidocq.knock.runtime` (`HealthCheckRegistries`, `KnockHealthService`, `HealthReport`)
+
+| `knock-jaxrs`
+| `io.vidocq.knock.jaxrs` (`KnockHealthResource`)
+|===
+
+Internal packages (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) are not exported. `knock-core` provides `org.eclipse.microprofile.health.spi.HealthCheckResponseProvider` via `provides` and `META-INF/services`.
+
+== Public SPI (`knock-api`)
+
+[cols="2,3"]
+|===
+| Type | Role
+
+| `ProbeType` (enum)
+| `LIVENESS`, `READINESS`, `STARTUP`, `ALL` — selects the checks to report.
+
+| `HealthCheckRegistry` (interface)
+| Register checks and retrieve them by probe type: `register(ProbeType type, String name, HealthCheck check)`, `unregister(String name)`, `getChecks(ProbeType type)`.List the checks without calling them: `getNamedChecks(ProbeType type)` (registration name to check, concrete probe only), `getCheckNames(ProbeType type)`; store and read the last answers: `recordResult(CheckResult result)`, `getLastResults()`. All four are default methods, so a third-party registry still compiles; its defaults remember nothing. See xref:concepts.adoc#last-results[Last results].
+
+| `CheckResult` (record)
+| The last answer of one check: `probe` (never `ALL`), `name`, `responseName` (may be `null`), `status`, `observedAt`, `data` (values as strings). Plain values only.
+
+| `Knock` (class)
+| Module metadata constants.
+|===
+
+Standalone instances come from the exported factory `HealthCheckRegistries.newRegistry()` (in `knock-core`); the `KnockHealthCheckRegistry` implementation lives in the unexported `io.vidocq.knock.internal` package. Under CDI the registry is provided as a managed bean (`KnockCdiHealthCheckRegistry`, injectable as `HealthCheckRegistry`).
+
+== Endpoints
+
+[cols="2,2,2"]
+|===
+| Endpoint | Probe | HTTP status
+
+| `GET /health`         | `ProbeType.ALL`       | 200 UP / 503 DOWN
+| `GET /health/live`    | `ProbeType.LIVENESS`  | 200 UP / 503 DOWN
+| `GET /health/ready`   | `ProbeType.READINESS` | 200 UP / 503 DOWN
+| `GET /health/started` | `ProbeType.STARTUP`   | 200 UP / 503 DOWN
+|===
+
+== Dependency versions
+
+[cols="2,1"]
+|===
+| Dependency | Version
+
+| MicroProfile Health (upstream reference) | 4.0.1
+| Jakarta JSON-P API | 2.1.3
+| Jakarta REST API | 4.0.0
+| Jakarta CDI API | 4.1.0
+| Jakarta Inject API | 2.0.1
+| Jakarta Annotation API | 3.0.0
+|===
+
+== Commands
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests        # full build, skip tests
+./mvnw test                             # unit tests
+./run-official-tck-mp-health-4.0.sh     # TCK smoke test
+./run-official-tck-mp-health-4.0.sh all # full TCK suite
+----
+
+== Compatibility
+
+* Java 25, Maven 3.9.16.
+* Strict Java Modules, named modules only.
+* MicroProfile Health 4.0.
+* Zero third-party libraries — Jakarta / MicroProfile specs only.
+* Compatible with GraalVM `native-image` and `jlink` minimal images.
+* Runs without Vauban, under Weld or Open Liberty — see <<other-containers>>.
+
+[#other-containers]
+== Other CDI containers
+
+Knock does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `knock-it-other-containers`, prove it on every build (Vidocq/knock#34):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `knock-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: the checks are discovered and registered by probe type, `KnockHealthService` reports them, and `KnockHealthResource` is a bean.
+
+| `knock-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, JSON-P 2.1), with Liberty's `mpHealth` feature off: `/health`, `/health/live`, `/health/ready` and `/health/started` answer over HTTP from Knock.
+|===
+
+Neither module is published. Three things make this work:
+
+* **`vauban-api` is a runtime dependency** of `knock-cdi-vauban` and `knock-jaxrs`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (the client-proxy entry point, see the Vauban usage guide); a container that cannot load that type cannot load the bean class, and Weld then drops the bean with an INFO message (`WELD-000119`) instead of failing. `vauban-api` holds API types only (13 KB, no dependency): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+* **Both jars are explicit bean archives** — `knock-cdi-vauban` and `knock-jaxrs` ship a `META-INF/beans.xml` (`bean-discovery-mode="annotated"`), so a container that does not scan implicit archives (Weld SE by default) still finds their beans.
+* **The Jakarta APIs come from the container** — Knock uses nothing beyond CDI 4.0 and Jakarta REST 3.1, so it runs on a Jakarta EE 10 server as well.
+
+The application provides Jakarta REST, JSON-P and CDI, as any server does. With Weld SE alone there is no Jakarta REST runtime: use `KnockHealthService` to build the reports.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own health checks off** — `mpHealth` on Open Liberty. Otherwise the server answers `/health` itself, and Knock's checks are never reported.
+* **Enable the server's CDI, Jakarta REST and JSON-P** — `cdi-4.0`, `restfulWS-3.1` and `jsonp-2.1` on Open Liberty. Knock leaves them `provided` (vidocq-workspace#17); under Vidocq, the Health extension brings them, with Champollion for JSON-P.
+* **Nothing to exclude** — the WAR carries the Knock jars, the MicroProfile Health API and `vauban-api` (API types only). `knock-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== See also
+
+* xref:concepts.adoc[Concepts] — the model behind these artefacts.
+* xref:internals.adoc[Internals] — implementation details.
+* xref:tck.adoc[TCK status] — conformance.
+
+== Architecture rules
+
+`io.vidocq.knock:knock-architecture-tests` is a **test-only** module, never released. It runs Knock's architecture
+rules on the classes of every shipped module: the dependencies of each module (the MicroProfile Health API, Jakarta JSON-P and the Jakarta APIs it reads, nothing else), the layers between the modules, no reflection (Knock has no reflective path, `internals.adoc`), no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.

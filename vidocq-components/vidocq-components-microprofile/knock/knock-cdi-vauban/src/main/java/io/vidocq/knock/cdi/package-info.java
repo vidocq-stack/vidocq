@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+/**
+ * Knock Vauban CDI integration — public package (empty in M2).
+ *
+ * <p>The implementation lives in {@code io.vidocq.knock.cdi.internal} (not exported):</p>
+ * <ul>
+ *   <li>{@code KnockCdiHealthCheckRegistry} — injectable {@code @ApplicationScoped} bean</li>
+ *   <li>{@code HealthCheckRegistrar} — automatic registration of qualified checks at CDI startup</li>
+ * </ul>
+ *
+ * <p>A {@code HealthCheck} bean with none of the {@code @Liveness}/{@code @Readiness}/
+ * {@code @Startup} qualifiers is not a health-check procedure (MicroProfile Health 4.0 §4.2):
+ * it is an ordinary CDI bean, silently ignored — neither registered nor a deployment error.</p>
+ */
+package io.vidocq.knock.cdi;

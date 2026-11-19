@@ -1,0 +1,280 @@
+# BUG — Knock
+
+Tracking of reproducible bugs in `knock` (internal issues, regressions, incorrect behaviours
+not yet fixed). Vidocq workspace convention: short id, date, symptom,
+minimal repro, root cause hypothesis, status.
+
+---
+
+## BUG-001 — `tck-mp-health` crashes: `cassini-tck:0.1.0-SNAPSHOT` not found
+
+- **Opened**: 2026-05-10
+- **Resolved**: 2026-05-11
+- **Status**: ✅ RESOLVED
+
+### Symptom
+
+The `CI / tck-mp-health` job in knock's `ci.yml` consistently fails during the Maven
+resolution phase:
+
+```
+[ERROR] Failed to execute goal on project knock-tck:
+  Could not resolve dependencies for project io.vidocq.knock:knock-tck:jar:0.1.0-SNAPSHOT:
+  The following artifacts could not be resolved:
+    io.vidocq.cassini:cassini-tck:jar:0.1.0-SNAPSHOT (absent)
+  → vidocq-snapshots: HTTP 404
+```
+
+On the Forgejo run side: status `CI / tck-mp-health (push) | failure | Failing after 37s` on
+all `main` pushes prior to 2026-05-11.
+
+### Minimal Repro
+
+```bash
+cd ~/projects/perso/vidocq/knock
+./mvnw -ntp -pl knock-api,knock-core,knock-cdi-vauban,knock-cassini -am install -DskipTests
+./run-official-tck-mp-health-4.0.sh all
+# → fails at the "mvn test -f knock-tck/pom.xml" phase
+```
+
+### Root Cause
+
+`knock-tck/pom.xml` (line 263) declares in `<scope>test</scope>`:
+
+```xml
+<dependency>
+  <groupId>io.vidocq.cassini</groupId>
+  <artifactId>cassini-tck</artifactId>
+  <version>${cassini.version}</version>
+  <scope>test</scope>
+</dependency>
+```
+
+However `cassini-tck` is itself an **out-of-reactor** module in cassini (standalone POM Model 4.0.0,
+ShrinkWrap Maven Resolver vs Model 4.1 constraint). The `mvn deploy` of the cassini
+reactor **did not include it** → never published to Reposilite → resolution fails
+on the knock side.
+
+### Temporary Workaround (before fix)
+
+`deploy needs: build` (and **not** `needs: tck-mp-health`) in knock's `ci.yml` to
+allow publishing knock snapshots despite the failing TCK — knock had to remain
+consumable by `vidocq` even while the TCK was red.
+
+### Applied Fix
+
+**Commit**: `cassini@1f9e6000` — added a dedicated step to cassini's `ci.yml`, after
+the `Deploy to Forgejo Maven registry` step:
+
+```yaml
+- name: Build and deploy cassini-tck (out-of-reactor)
+  run: |
+    mvn -B -ntp -f cassini-tck/pom.xml \
+        deploy -Dmaven.test.skip=true \
+        -DaltDeploymentRepository=vidocq-snapshots::https://repo.vidocq.dev/snapshots
+```
+
+Key points:
+
+- `-f cassini-tck/pom.xml` points to the standalone POM (Model 4.0.0 remains unchanged)
+- `-Dmaven.test.skip=true` (not `-DskipTests`) avoids resolution of test deps, including
+  `jakarta-restful-ws-tck` (non-public Jakarta artifact)
+- `-DaltDeploymentRepository=id::url` redirects the deploy to Reposilite without modifying
+  the standalone pom (which has no `<distributionManagement>`)
+
+**Second commit**: `knock@6086572a` — restores `deploy needs: [build, tck-mp-health]`
+in knock's `ci.yml` (release gate on TCK 100% PASS).
+
+### Validation
+
+Full pipeline `knock@6086572a` (2026-05-11 17:16-17:17):
+
+| Job | Status | Duration |
+| --- | --- | --- |
+| `build` | ✅ | 16s |
+| `tck-mp-health` | ✅ TCK PASS 100% | 33s |
+| `deploy` | ✅ (runs after tck-mp-health) | 17s |
+
+Total: 1m06s. The `deploy needs: [build, tck-mp-health]` gate is enforced.
+
+### External References
+
+- `Forge-New/99-Annexes/Gotchas-Java-Maven.md` §2 (generic recipe for out-of-reactor TCKs)
+- `Forge-New/60-CICD-Cross-Repo/Workflow-ci.yml.md` (section "Publishing out-of-reactor TCKs")
+- `cassini/.forgejo/workflows/ci.yml` (step added at line ~71)
+
+---
+
+## BUG-002 — Java Modules workaround via manual copy of compile-scope JARs
+
+- **Opened**: 2026-05-25
+- **Status**: ✅ FIXED 2026-10-07 — workaround removed (Vidocq/vidocq-parent#13)
+
+### Symptom
+
+The root `pom.xml` of knock uses `maven-dependency-plugin` (phase `initialize`) to
+clean and repopulate `target/javamodules/` with all compile-scope JARs, then passes
+`--module-path ${project.build.directory}/javamodules` manually to the compiler.
+
+This workaround indicates that Maven's native Java Modules resolution does not work for
+certain compile-scope dependencies of knock, notably `champollion-jsonp`, `cassini-core`
+and `vauban-core`/`vauban-classloader-spi`.
+
+### Minimal Repro
+
+```bash
+grep -n "javamodules\|module-path" knock/pom.xml
+# reveals maven-clean-plugin + maven-dependency-plugin + compilerArgs
+```
+
+Without the workaround, `javac` fails to resolve the `io.vidocq.champollion`
+or `io.vidocq.cassini` modules from the `module-info.java` of the knock sub-modules.
+
+### Root Cause Hypothesis
+
+The affected JARs do not have a `module-info.class` in a version recognised by
+`maven-compiler-plugin` 4.x for automatic placement on `--module-path`. Copying
+to `target/javamodules/` forces javac to treat them as automatic modules. The
+`maven-clean-plugin` in phase `initialize` prevents stale JAR conflicts during
+incremental builds.
+
+### Resolution Path
+
+Check module by module which ones have an explicit Java Modules descriptor and which ones
+only have an `Automatic-Module-Name` — then remove the corresponding entries from the
+workaround as upstream modules are fixed.
+
+### Resolution (2026-10-07)
+The failure no longer reproduces on main: with the `target/javamodules` copy and the `--module-path` arguments
+removed, `clean verify` passes with the same tests (59) and every produced jar (5) keeps the same module
+descriptor. Most likely the failure dated from the Maven 4 RC / compiler-plugin 4.0.0-beta era (it does not come
+back with compiler plugin 3.13 either). Workaround removed; the shared execution in vidocq-parent goes next
+(Vidocq/vidocq-parent#13).
+
+## BUG-20260712-01 — hardcoded implementation version constant in the published api artifact
+
+- **Date** : 2026-07-12
+- **Statut** : FIXED (branch fix/build-derived-version — ships with the next release)
+- **Module touché** : Knock.IMPLEMENTATION_VERSION (knock-api/Knock.java)
+- **Symptôme** : the artifact published on Maven Central as 0.2.0 reports a hardcoded
+  "0.1.0-SNAPSHOT" implementation version — the constant was maintained by hand and never
+  updated by the release train. Same class as vidocq BUG-20260704-01 (CLI banner).
+- **Reproduction minimale** : read the constant from the published 0.2.0 jar.
+- **Hypothèse de cause** : compile-time constant, no build filtering.
+- **Investigations** :
+  - 2026-07-12 : found by grepping for stale version strings after the issue #3 follow-up.
+    Fixed: version.properties filtered by Maven next to the class, constant loaded at class
+    init (same-module Java Modules resource, no opens). No longer compile-time-inlineable, which
+    also protects future consumers from the javac inlining trap.
+
+## BUG-20260823-01 — main build-and-deploy fails: javadoc jar on knock-cdi-vauban has nothing to document
+
+- **Date** : 2026-08-23
+- **Statut** : FIXED (58e1f31)
+- **Module touché** : knock-cdi-vauban (maven-javadoc-plugin attach-javadocs)
+- **Symptôme** : `build-and-deploy` on main is red since 2026-07-26 (first failure right
+  after PR #17 merged, well before the Codefloe migration — reproduced identically on the
+  Codefloe runners). `maven-javadoc-plugin:3.11.2:jar` fails with
+  "error: No public or protected classes found to document."
+- **Reproduction minimale** :
+  ```
+  ./mvnw -pl knock-cdi-vauban javadoc:jar
+  ```
+- **Hypothèse de cause** : the BCE static-metadata wave made every class in
+  knock-cdi-vauban package-private (the module only ships a ServiceLoader provider and
+  generated wiring); javadoc then has zero public API to document and fails the build.
+- **Investigations** :
+  - 2026-08-23 : surfaced by the post-migration CI sweep on codefloe.com; Codeberg run
+    history shows the same failure on 2026-07-26. Candidate fix: set
+    `<maven.javadoc.failOnError>false</maven.javadoc.failOnError>` in the module POM so an
+    (empty) javadoc jar is still produced for the release train, rather than skipping the
+    javadoc jar entirely (Central requires the artifact's presence).
+
+## BUG-20261010-01 — outside Vauban, every Knock bean is dropped: woven `ProxyLink` constructor, `vauban-api` only `provided`
+
+- **Date**: 2026-10-10
+- **Status**: FIXED locally (branch `test/weld-openliberty-it`, not pushed yet) — Vidocq/knock#34
+- **Modules**: knock-cdi-vauban, knock-jaxrs
+- **Symptom**: under Weld SE 6.0.4 (class path) and Open Liberty 26.0.0.10 (Weld 5.1.1 inside),
+  `HealthCheckRegistry` is unsatisfied, no check is registered and `KnockHealthResource` is not a
+  bean. The container starts anyway; the only trace is an INFO line per bean:
+  `WELD-000119: Not generating any bean definitions from io.vidocq.knock.cdi.internal.KnockCdiHealthCheckRegistry
+  because of underlying class loading error: Type io.vidocq.vauban.api.ProxyLink not found`.
+  On Liberty, the Jakarta REST application then fails with `NoClassDefFoundError: io/vidocq/vauban/api/ProxyLink`.
+- **Minimal repro**: `./mvnw install -pl :knock-it-weld -am` with `vauban-api` back in `provided`
+  scope; or `knock-it-openliberty` with `<packagingExcludes>WEB-INF/lib/vauban-api-*.jar</packagingExcludes>`.
+- **Cause**: the Vauban build (vauban#24) weaves `protected <init>(io.vidocq.vauban.api.ProxyLink)`
+  into every normal-scoped bean. Knock declared `vauban-api` as `provided` (and `requires static`),
+  on the belief that the generated output was inert outside Vauban. Reflecting on the class's
+  constructors needs `ProxyLink`, so without the jar the bean class cannot be introspected.
+  Separately, `knock-jaxrs` had no `META-INF/beans.xml`, so Weld SE never scanned it.
+- **Fix**: `vauban-api` becomes a compile dependency (its `jakarta.enterprise` / `jakarta.inject`
+  dependencies excluded, the container supplies those) and `requires io.vidocq.vauban.api`;
+  `knock-jaxrs` ships `beans.xml` (`annotated`). New modules `knock-it-weld` and
+  `knock-it-openliberty` guard it.
+- **Validation (2026-10-10)**: `clean install` 68/68 (Weld 5/5, Liberty 4/4 on the packaged WAR,
+  no warning in `messages.log`); negative control on Liberty without `vauban-api`: 4/4 red;
+  MicroProfile Health 4.0 TCK on Vauban 28/28; vidocq knock extension + example rebuilt against
+  this Knock (1240 tests) and the jlinked example answers `/api/health*` with 200.
+- **Same fix, Jakarta APIs**: `knock-core` declared `jakarta.json-api` and `knock-mp-health-api`
+  declared `jakarta.enterprise.cdi-api` + `jakarta.inject-api` in `compile` scope (the latter two
+  despite `requires static`), so the WAR on a CDI 4.0 Liberty carried CDI 4.1 API jars. All three
+  are now `provided`; `knock-tck`, which plays the container, declares the CDI and Inject APIs
+  itself (it failed 20 classes with `NoClassDefFoundError: jakarta/enterprise/inject/Produces`
+  until it did). Re-validated: 68/68, TCK 28/28, vidocq extension + example 1240 tests, WAR holds
+  only the Knock jars and `vauban-api`.
+- **Scope**: every brick whose beans the Vauban build weaves has the same defect
+  (Vidocq/vidocq-workspace#15).
+
+## BUG-20261102-01 — every `/health` request looks the JSON-P provider up through `ServiceLoader` and creates it by reflection
+
+- **Date** : 2026-11-02
+- **Statut** : FIXED (branch fix/reflection-per-request)
+- **Module touché** : knock-core (`KnockJsonSerializer`)
+- **Symptôme** : the Vidocq reflection audit (tracing agent on a multi-extension application) shows a
+  `ServiceLoader` lookup and a reflective `newInstance` of the JSON-P provider at every `/health` call.
+- **Reproduction minimale** : call `/health` repeatedly with the tracing agent; `JsonProvider.provider()`
+  appears once per builder created.
+- **Hypothèse de cause** : `KnockJsonSerializer` built its objects through the static `Json.createObjectBuilder()`
+  / `Json.createArrayBuilder()`, each of which calls `JsonProvider.provider()`.
+- **Investigations** :
+  - 2026-11-02 : the serializers build through one `JsonBuilderFactory`, resolved on first use and shared (the
+    `/health` resource creates a `KnockHealthService`, hence a serializer, per request);
+    `KnockJsonSerializerTest.serialize_builds_through_the_factory_resolved_once`,
+    `serializers_share_the_factory_resolved_once`. Traced on a multi-extension app: 9 provider lookups per
+    3 `/health` calls before, 1 for the JVM after.
+
+## BUG-20261114-01 — `/health` lists the `data` keys and the checks in an order that changes at every start
+
+- **Date**: 2026-11-14
+- **Status**: FIXED (branch `fix/health-data-order`)
+- **Modules**: knock-core (`KnockHealthCheckResponseBuilder`, `KnockHealthCheckRegistry`), knock-api
+  (`CheckResult`, `HealthCheckRegistry` default methods)
+- **Symptom**: reported by the tutorial-verification session on 0.4.0-SNAPSHOT. A check built with
+  `.withData("heap-used-mb", …).withData("heap-max-mb", …)` renders its `data` keys in an order that differs
+  between the packaged application and the jlink image, and between two runs of the same mode. Nothing breaks,
+  but two `/health` outputs cannot be compared.
+- **Minimal repro**: build a response with twenty `withData` calls and serialize it twice, in two JVMs: the key
+  order differs, and matches neither the calls nor the alphabet
+  (`KnockJsonSerializerTest.serialize_renders_data_in_the_order_of_the_withData_calls_spec_section3_1`).
+- **Cause**: `Map.copyOf` / `Set.copyOf` on the data and check paths. Their iteration order depends on
+  `ImmutableCollections.SALT`, drawn at random per JVM. The builder copied its `LinkedHashMap` of data with
+  `Map.copyOf` at `build()`; `CheckResult` did the same for the recorded data; `KnockHealthCheckRegistry` kept the
+  checks in a `ConcurrentHashMap` and handed `Map.copyOf` of it to the aggregator, which lists the checks in that
+  map's order; the `HealthCheckRegistry` defaults (`getNamedChecks`, `getCheckNames`) also ended in
+  `Map.copyOf` / `Set.copyOf`.
+- **Fix**: the data copies keep their order (an unmodifiable `LinkedHashMap`) and still reject a `null` key or
+  value, as `Map.copyOf` did. The registry keeps each probe's checks and results in a `ConcurrentSkipListMap`, so
+  `/health` lists them probe by probe (liveness, readiness, startup), each probe in the order of the registration
+  names. Name order rather than registration order: the CDI integration registers the checks in the order its
+  `Instance` lists them, which CDI does not specify, while the name (the bean class) is the same at every start.
+  The `HealthCheckRegistry` defaults keep the order of `getChecks`.
+- **Tests (each failed before the fix)**: `KnockHealthCheckResponseBuilderTest.withData_keeps_the_order_of_the_calls_spec_section3_1`,
+  `KnockJsonSerializerTest.serialize_renders_data_in_the_order_of_the_withData_calls_spec_section3_1`,
+  `CheckResultTest.data_keeps_its_order`,
+  `KnockAggregatorTest.aggregate_reports_the_checks_probe_by_probe_in_the_order_of_their_names`,
+  `KnockHealthCheckRegistryTest.checks_names_and_results_come_in_the_order_of_the_names`,
+  `HealthCheckRegistryTest.named_checks_keep_the_order_of_the_checks`,
+  `HealthCheckRegistryTest.check_names_keep_the_order_of_the_checks`. The `null` rejection is pinned by
+  `KnockHealthCheckResponseBuilderTest.build_still_rejects_a_null_data_key_or_value` and
+  `CheckResultTest.a_null_data_key_or_value_is_still_rejected`, green before and after.

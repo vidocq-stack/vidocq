@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.knock.spi;
+
+import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * TDD — {@link CheckResult}: the last answer of one registered check, kept as plain values.
+ */
+class CheckResultTest {
+
+    private static final Instant AT = Instant.parse("2026-09-23T10:15:30Z");
+
+    @Test
+    void data_is_copied_and_immutable() {
+        Map<String, String> data = new HashMap<>();
+        data.put("pool", "8");
+
+        CheckResult result = new CheckResult(ProbeType.READINESS, "com.acme.DbCheck", "db",
+                HealthCheckResponse.Status.UP, AT, data);
+        data.put("pool", "0");
+
+        Map<String, String> copy = result.data();
+        assertEquals(Map.of("pool", "8"), copy);
+        assertThrows(UnsupportedOperationException.class, () -> copy.put("x", "y"));
+    }
+
+    /**
+     * The recorded data keeps the order the check answered it in, so that a dev console lists it the same
+     * at every start ({@code Map.copyOf} iterated in an order salted per JVM, BUG-20261114-01).
+     */
+    @Test
+    void data_keeps_its_order() {
+        List<String> keys = IntStream.range(0, 20).mapToObj(i -> "key-" + (i * 7 % 20)).toList();
+        Map<String, String> data = new LinkedHashMap<>();
+        keys.forEach(key -> data.put(key, key));
+
+        CheckResult result = new CheckResult(ProbeType.LIVENESS, "com.acme.HeapCheck", "heap",
+                HealthCheckResponse.Status.UP, AT, data);
+
+        assertEquals(keys, List.copyOf(result.data().keySet()));
+    }
+
+    @Test
+    void a_null_data_key_or_value_is_still_rejected() {
+        Map<String, String> nullValue = new HashMap<>();
+        nullValue.put("key", null);
+        Map<String, String> nullKey = new HashMap<>();
+        nullKey.put(null, "value");
+
+        assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
+                HealthCheckResponse.Status.UP, AT, nullValue));
+        assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
+                HealthCheckResponse.Status.UP, AT, nullKey));
+    }
+
+    @Test
+    void null_data_becomes_an_empty_map() {
+        CheckResult result = new CheckResult(ProbeType.LIVENESS, "c", "c",
+                HealthCheckResponse.Status.DOWN, AT, null);
+
+        assertEquals(Map.of(), result.data());
+    }
+
+    @Test
+    void all_is_not_a_probe_a_check_answers_for() {
+        Map<String, String> noData = Map.of();
+        assertThrows(IllegalArgumentException.class, () -> new CheckResult(ProbeType.ALL, "c", "c",
+                HealthCheckResponse.Status.UP, AT, noData));
+    }
+
+    @Test
+    void identity_fields_are_mandatory() {
+        Map<String, String> noData = Map.of();
+        assertThrows(NullPointerException.class, () -> new CheckResult(null, "c", "c",
+                HealthCheckResponse.Status.UP, AT, noData));
+        assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, null, "c",
+                HealthCheckResponse.Status.UP, AT, noData));
+        assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
+                null, AT, noData));
+        assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
+                HealthCheckResponse.Status.UP, null, noData));
+    }
+}

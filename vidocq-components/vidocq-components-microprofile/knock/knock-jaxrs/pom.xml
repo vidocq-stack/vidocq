@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.knock</groupId>
+        <artifactId>knock-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>knock-jaxrs</artifactId>
+    <name>Knock :: Jakarta REST endpoints</name>
+    <description>Endpoints Jakarta REST /health* — ressources JAX-RS standard uniquement, indépendantes de toute implémentation (Cassini, RESTEasy, Jersey…). L'adapter Cassini est tissé à part par le runtime Vidocq (cassini-maven-plugin repackaging).</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.knock</groupId>
+            <artifactId>knock-cdi-vauban</artifactId>
+        </dependency>
+        <!-- Jakarta REST API only - implementation provided by Cassini at runtime -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Cassini adapter codegen (APT): cassini-api supplies the adapter interface that the
+             generated $$CassiniAdapter implements. provided = compile-only, non-transitive — the jar
+             carries the pre-generated adapter but does not pull Cassini at runtime (requires static in
+             module-info), so knock-jaxrs stays runtime-agnostic. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <version>${cassini.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Runtime for integration tests: Cassini + Weld -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Runtime dependency, under any CDI container: the Vauban build weaves a
+             `protected <init>(io.vidocq.vauban.api.ProxyLink)` entry constructor into every
+             normal-scoped bean, so the bean class cannot be loaded without this jar — Weld, for one,
+             then skips the bean silently (WELD-000119). API types only, no code runs outside Vauban
+             (vidocq-workspace#15, knock-it-weld). The Jakarta CDI APIs it declares are excluded: like
+             every Jakarta API here they come from the container (`provided`), and a CDI 4.0 server
+             (Open Liberty, MicroProfile 7) must not find CDI 4.1 API jars in the application. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT dependency jars). It generates
+                _ClientProxy/_Factory, META-INF/vauban-beans.list and one _VaubanComponents per
+                package (in-module instantiation/field-injection, no opens). The processor runs at build
+                time only; its output needs vauban-api at runtime (see the dependency above).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <!-- Cassini codegen (APT): generates KnockHealthResource$$CassiniAdapter at
+                             compile time (zero-reflection dispatch, AOT-friendly) so a Cassini runtime
+                             finds the pre-generated adapter — no runtime adapter generation, no opens,
+                             and no build-time repackaging needed by the consuming app. -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- Library module, not a complete deployment: KnockHealthResource injects
+                         HealthCheckRegistry, produced in knock-cdi-vauban. Cross-module beans are
+                         not on the APT index, so deployment validation runs at the Vidocq runtime
+                         assembly, not here. -->
+                    <compilerArgs>
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans (resolved reflectively on the class
+                         path); do not run the APT over them. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
