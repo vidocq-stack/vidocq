@@ -314,6 +314,18 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Investigations**:
   - 2026-11-18: found while fixing BUG-20261118-04. The logs of the three shapes, with the extensions frozen, show
     the two warnings and nothing else generated at start.
+  - 2026-11-19, reported by VAUBAN: part 1 is not fixed by Vidocq/vauban#348 in Vidocq's layout. Vauban
+    0.4.0-SNAPSHOT build 78 (build-info `475b64a4`, vauban#348 merged), Vidocq `origin/main` `cb0410ba`:
+    `McpLaunchShapesTest` passes 8/8 on a private repository. All six `i1` logs (flat, `app_path`, `ide`, and their
+    frozen variants, each `3 extensions frozen at build`) still print the Vauban fallback for
+    `McpCdi41InvokerProvider_ClientProxy`, plus Cassini's `McpEndpoint` adapter (part 2, Vidocq/vidocq#662).
+    The build writes the proxy:
+    `target/classes/META-INF/vauban/placed/dev/langchain4j/cdi/mcp/invoker/cdi41/McpCdi41InvokerProvider_ClientProxy.class`,
+    and `required-opens.list` lists `McpCdi41InvokerProvider`. The start cannot place it:
+    `VaubanClassLoader.placesClass` requires the produced type to be defined by that Vauban loader. The application
+    layer holds only the application module, and the langchain4j-cdi jar sits in the runtime layer. Part 1 stays
+    OPEN, now as a Vauban gap: a placed proxy for a class outside the Vauban layer (Vauban BUG-20261119-70, filed by
+    VAUBAN).
 
 ## BUG-20261118-04 — The jar of the MCP extension carries a record of frozen extensions, so its applications run theirs at each start
 
