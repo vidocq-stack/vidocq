@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Ravel on Open Liberty (MicroProfile 7 distribution). mpConfig stays off, otherwise Liberty's own
+    MicroProfile Config would serve ConfigProvider and the @ConfigProperty injection points.
+    restfulWS only lets the test read the values over HTTP.
+-->
+<server description="ravel-it-openliberty">
+    <featureManager>
+        <feature>cdi-4.0</feature>
+        <feature>restfulWS-3.1</feature>
+    </featureManager>
+
+    <httpEndpoint id="defaultHttpEndpoint" host="localhost" httpPort="${http.port}" httpsPort="${https.port}"/>
+
+    <webApplication location="ravel-it-openliberty.war" contextRoot="/ravel"/>
+</server>

@@ -1,0 +1,120 @@
+= TCK
+:description: Technology Compatibility Kit for MicroProfile Config 3.1.
+
+== Overview
+
+Ravel targets **100 % conformance** with the official MicroProfile Config 3.1 Technology Compatibility Kit (TCK). This ensures Ravel can be used as a drop-in replacement for other MicroProfile Config implementations.
+
+== Running the TCK
+
+The TCK lives in the `ravel-tck` module, which is in-reactor but joins the build only under the `tck` Maven profile — a plain `mvn install` neither downloads nor runs anything TCK-related.
+
+=== Smoke test (default)
+
+Quick sanity check without Arquillian:
+
+[source,bash]
+----
+./mvnw -Ptck -pl ravel-tck test
+----
+
+Or with the provided script:
+
+[source,bash]
+----
+./run-official-tck-mp-config-3.1.sh
+----
+
+=== Full TCK suite
+
+Run all 378 official MicroProfile Config tests:
+
+[source,bash]
+----
+./run-official-tck-mp-config-3.1.sh all
+----
+
+Or:
+
+[source,bash]
+----
+./mvnw -P"tck,tck-official" -pl ravel-tck test
+----
+
+=== Specific test class
+
+Run a single test class:
+
+[source,bash]
+----
+./run-official-tck-mp-config-3.1.sh -Dtest=ConfigProviderTest
+----
+
+== Expected results
+
+The current score is **378 PASS / 0 FAIL / 0 SKIP** out of 378 tests — 100 % conformance, the count WildFly runs on the same TCK. Until 2026-08-27 the runner's include patterns (`*Test`, `*Tests`, `*IT`) dropped `EmptyValuesTestProgrammaticLookup` and `TestCustomConfigProfile`, 29 tests, and the score read 349/349.
+
+Any regression from that score blocks a structural merge; a FAIL may only be tolerated when documented in `TCK.md` with a spec citation and a reactivation plan.
+
+== What the TCK covers
+
+The MicroProfile Config 3.1 TCK validates:
+
+* **Config sources** — system properties, environment variables, `microprofile-config.properties`
+* **Type conversion** — primitives, collections, temporal types
+* **Config profiles** — environment-specific values
+* **Property expressions** — pass:[${key}], pass:[${key:default}]
+* **Custom sources and converters** — SPI extensibility
+* **CDI integration** — `@ConfigProperty` injection (optional)
+
+== TCK phases
+
+Ravel's implementation reached these milestones:
+
+[cols="1,3,1",options="header"]
+|===
+| Milestone | Features | Status
+
+| M0 | Reactor, Java Modules, `.sdkmanrc` | ✅ Done
+| M1 | 3 built-in sources, basic converters, `ConfigProvider` | ✅ Done
+| M2 | Advanced converters, arrays, implicit converters | ✅ Done
+| M3 | Profiles, property expressions, cycle detection | ✅ Done
+| M4 | CDI integration via Vauban BCE | ✅ Done
+| M5 | **TCK 100 % PASS + JMH benchmark** | ✅ Done — 349/349 PASS, 378/378 since every TCK class runs
+|===
+
+== Known issues and workarounds
+
+If you encounter a TCK failure, check `TCK.md` in the repository root for documented issues and workarounds.
+
+Common issues:
+
+* **weld-lite-extension-translator incompatibility** — see `ravel-tck/pom.xml` for version alignment
+* **Arquillian environment variable setup** — see `ravel-tck/pom.xml` for required vars
+
+== Contributing test fixes
+
+If you identify a TCK failure that's not documented:
+
+1. File an issue with full stack trace
+2. Specify the Java version (`java -version`)
+3. Include environment details (OS, network isolation, etc.)
+4. Run with verbose output: `mvn -X test`
+
+== Performance verification
+
+While not part of TCK compliance, Ravel includes JMH benchmarks (`ravel-bench`) for performance measurement:
+
+[source,bash]
+----
+./mvnw -pl ravel-bench -am package
+java -jar ravel-bench/target/benchmarks.jar
+----
+
+See `BENCH.md` for interpretation of results.
+
+== Next
+
+* xref:reference.adoc[Reference] — API documentation
+* xref:usage.adoc[Usage] — programmatic configuration
+

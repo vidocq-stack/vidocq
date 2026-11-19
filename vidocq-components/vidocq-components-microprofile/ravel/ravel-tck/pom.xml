@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    In-reactor TCK runner, gated by the `tck` Maven profile of ravel-parent
+    (TCK harmonisation — same pattern as the vidocq-runtime-tck-* runners and
+    the dirac pilot): a plain `mvn install` neither downloads nor runs anything
+    TCK-related.
+
+    History: this module used to be a STANDALONE out-of-reactor POM to work
+    around ShrinkWrap Maven Resolver 3.3 (could not parse Model 4.1.0 POMs).
+    That constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration.
+
+    Execution goes through the script (thin wrapper over the reactor):
+        ./run-official-tck-mp-config-3.1.sh                      (smoke test)
+        ./run-official-tck-mp-config-3.1.sh all                  (full suite)
+        ./run-official-tck-mp-config-3.1.sh -Dtest=SomeTests     (targeted class)
+
+    Or directly:
+        ./mvnw -Ptck -pl ravel-tck test                          (smoke)
+        ./mvnw -Ptck,tck-official -pl ravel-tck test             (full suite)
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.ravel</groupId>
+        <artifactId>ravel-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>ravel-tck</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Ravel :: TCK Runner</name>
+    <description>Harness de conformance MicroProfile Config 3.1 — point d'entrée pour le TCK officiel</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
+        <microprofile.config.version>3.1.1</microprofile.config.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+                Aligne weld-lite-extension-translator avec weld-core-impl 6.0.2+.
+                La version transitive 6.0.0.Alpha1 (amenée par arquillian-weld-embedded)
+                appelle AfterBeanDiscoveryImpl.addBean(Class) qui n'existe plus dans
+                weld-core-impl 6.0.2 — ce qui casse la phase @Synthesis des BCE :
+
+                    java.lang.NoSuchMethodError:
+                      'WeldBeanConfigurator AfterBeanDiscoveryImpl.addBean(Class)'
+                      at LiteExtensionTranslator.synthesis(...)
+            -->
+            <dependency>
+                <groupId>org.jboss.weld</groupId>
+                <artifactId>weld-lite-extension-translator</artifactId>
+                <version>6.0.1.Final</version>
+            </dependency>
+
+            <!--
+                Le TCK MP Config tire transitivement cdi-api 4.1.0-M1 (Milestone)
+                qui ne contient pas InvokerFactory. weld-lite-extension-translator
+                6.0.1.Final référence cette classe au chargement statique de
+                ExtensionMethodParameterType : NoClassDefFoundError pendant la
+                phase @Registration. On force la 4.1.0 finale.
+            -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>4.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.lang-model</artifactId>
+                <version>4.1.0</version>
+            </dependency>
+
+            <!--
+                arquillian-weld-embedded:4.0.0.Final tire transitivement
+                arquillian-container-spi:1.8.0.Final dans laquelle l'interface
+                Container N'EST PAS générique. Sous JDK 23+, la validation stricte de
+                ParameterizedTypeImpl déclenche alors :
+
+                    java.lang.reflect.MalformedParameterizedTypeException:
+                      Mismatch of count of formal and actual type arguments in
+                      constructor of org.jboss.arquillian.container.spi.Container
+
+                À partir de 1.10.1.Final, Container est déclarée
+                Container<T extends ContainerConfiguration> ; on force donc le trio
+                spi/impl-base/core-impl-base sur 1.10.1.
+            -->
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-spi</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-impl-base</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.core</groupId>
+                <artifactId>arquillian-core-impl-base</artifactId>
+                <version>1.10.1.Final</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-core</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+            <version>${microprofile.config.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>6.0.3</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <!--
+            Profil par défaut : smoke test sans Arquillian — vérifie que le ServiceLoader
+            charge bien RavelConfigProviderResolver, sans dépendance Weld/TestNG.
+        -->
+        <profile>
+            <id>smoke</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+        </profile>
+
+        <!--
+            Profil TCK officiel : Arquillian TestNG + Weld SE embedded, dépendances
+            scannées du JAR microprofile-config-tck. Cible : 100 % PASS (contrat M5).
+        -->
+        <profile>
+            <id>tck-official</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <useModulePath>false</useModulePath>
+                            <dependenciesToScan>
+                                <dependency>org.eclipse.microprofile.config:microprofile-config-tck</dependency>
+                            </dependenciesToScan>
+                            <includes>
+                                <include>**/*Test.class</include>
+                                <include>**/*Tests.class</include>
+                                <include>**/*IT.class</include>
+                                <!-- Test classes of the official TCK whose names do not follow the
+                                     *Test suffix convention (silently skipped before 2026-08-27,
+                                     see BUG-20260827-01). Keep in sync with the vidocq runner. -->
+                                <include>**/EmptyValuesTestProgrammaticLookup.class</include>
+                                <include>**/TestCustomConfigProfile.class</include>
+                            </includes>
+                            <excludes>
+                                <!-- Le smoke test JUnit est réservé au profil 'smoke'. -->
+                                <exclude>**/RavelTckSmokeTest.class</exclude>
+                            </excludes>
+                            <trimStackTrace>false</trimStackTrace>
+                            <redirectTestOutputToFile>false</redirectTestOutputToFile>
+                            <useFile>false</useFile>
+                            <systemPropertyVariables>
+                                <arquillian.launch>weld-embedded</arquillian.launch>
+                                <!-- DefaultConfigSourceOrdinalTest.checkSetup -->
+                                <config_ordinal>120</config_ordinal>
+                                <customer.hobby>Tennis</customer.hobby>
+                                <!-- ConfigProviderTest.testPropertyConfigSource -->
+                                <mp.tck.prop.dummy>dummy</mp.tck.prop.dummy>
+                            </systemPropertyVariables>
+                            <environmentVariables>
+                                <!-- DefaultConfigSourceOrdinalTest.checkSetup : env
+                                     config_ordinal doit valoir 45 pour vérifier
+                                     l'override d'ordinal du ConfigSource env. -->
+                                <config_ordinal>45</config_ordinal>
+                                <customer_name>Bob</customer_name>
+                                <!-- ConfigProviderTest.testEnvironmentConfigSource -->
+                                <MP_TCK_ENV_DUMMY>dummy</MP_TCK_ENV_DUMMY>
+                                <!-- CDIPropertyNameMatchingTest.checkSetup §7.6 -->
+                                <my_int_property>45</my_int_property>
+                                <MY_BOOLEAN_PROPERTY>true</MY_BOOLEAN_PROPERTY>
+                                <my_string_property>haha</my_string_property>
+                                <MY_STRING_PROPERTY>woohoo</MY_STRING_PROPERTY>
+                            </environmentVariables>
+                        </configuration>
+                        <dependencies>
+                            <!--
+                                Force Surefire à utiliser le provider TestNG : le TCK MP Config
+                                est TestNG-driven, et junit-platform-engine est aussi présent
+                                en classpath via la dep racine du module (smoke test).
+                            -->
+                            <dependency>
+                                <groupId>org.apache.maven.surefire</groupId>
+                                <artifactId>surefire-testng</artifactId>
+                                <version>3.5.5</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+            <dependencies>
+                <dependency>
+                    <groupId>org.eclipse.microprofile.config</groupId>
+                    <artifactId>microprofile-config-tck</artifactId>
+                    <version>${microprofile.config.version}</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <!-- Arquillian TestNG container — version explicite ; BOM aligne les transitives -->
+                <dependency>
+                    <groupId>org.jboss.arquillian.testng</groupId>
+                    <artifactId>arquillian-testng-container</artifactId>
+                    <version>1.10.1.Final</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <!-- Container CDI : Weld SE embedded (CDI 4.1, BCE compatible avec ravel-cdi-vauban) -->
+                <dependency>
+                    <groupId>org.jboss.arquillian.container</groupId>
+                    <artifactId>arquillian-weld-embedded</artifactId>
+                    <version>4.0.0.Final</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.weld</groupId>
+                    <artifactId>weld-core-impl</artifactId>
+                    <version>6.0.2.Final</version>
+                    <scope>test</scope>
+                </dependency>
+
+                <!-- TestNG runtime -->
+                <dependency>
+                    <groupId>org.testng</groupId>
+                    <artifactId>testng</artifactId>
+                    <version>7.10.2</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>

@@ -1,0 +1,385 @@
+= CDI Integration
+:description: Injecting configuration values into CDI beans with @ConfigProperty.
+
+== Overview
+
+Ravel integrates with CDI via xref:vauban::index.adoc[Vauban] Build-Compatible Extension (`ravel-cdi-vauban`), allowing you to inject configuration values directly into CDI beans with the `@ConfigProperty` annotation.
+
+== Setup
+
+Add the dependency:
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.ravel</groupId>
+    <artifactId>ravel-cdi-vauban</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+The extension is automatically discovered by CDI via ServiceLoader and Vauban's Build-Compatible Extension mechanism.
+
+== Basic injection
+
+[source,java]
+----
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class DatabaseConfig {
+
+    @Inject
+    @ConfigProperty(name = "db.host")
+    String host;
+
+    @Inject
+    @ConfigProperty(name = "db.port")
+    int port;
+
+    @Inject
+    @ConfigProperty(name = "db.name")
+    String database;
+}
+----
+
+The values are injected at bean creation time, converted to the target type.
+
+== With defaults
+
+Use the `defaultValue` attribute to provide a fallback:
+
+[source,java]
+----
+@Inject
+@ConfigProperty(name = "app.timeout", defaultValue = "5000")
+long timeoutMs;
+
+@Inject
+@ConfigProperty(name = "app.cache.enabled", defaultValue = "true")
+boolean cacheEnabled;
+----
+
+If the configuration key is not found and no `defaultValue` is provided, deployment fails with `DeploymentException`.
+
+== Optional values
+
+For optional configuration, use `Optional<T>`:
+
+[source,java]
+----
+@Inject
+@ConfigProperty(name = "feature.flag.experimental")
+Optional<Boolean> experimentalFeature;
+
+// Usage
+if (experimentalFeature.isPresent()) {
+    boolean enabled = experimentalFeature.get();
+    // ...
+}
+----
+
+Any injectable type, including plain `String`, can be wrapped in `Optional`:
+
+[source,java]
+----
+@Inject
+@ConfigProperty(name = "app.version")
+Optional<String> version;
+----
+
+== Supported types
+
+All types supported by xref:type-converters.adoc[type converters] can be injected:
+
+* Primitives: `int`, `long`, `boolean`, `float`, `double`, etc.
+* Boxes: `Integer`, `Long`, `Boolean`, `Float`, `Double`, etc.
+* Collections: `List<T>`, `Set<T>`, `Collection<T>`
+* Temporal: `Duration`, `LocalDate`, `LocalDateTime`, `Instant`, etc.
+* Custom types with implicit or registered converters
+
+== Field vs. constructor injection
+
+Field injection is the canonical pattern for `@ConfigProperty`:
+
+[source,java]
+----
+@ApplicationScoped
+public class Config {
+    @Inject
+    @ConfigProperty(name = "key")
+    String value;
+}
+----
+
+Constructor injection also works, but is less commonly used with config:
+
+[source,java]
+----
+@ApplicationScoped
+public class Config {
+    private final String value;
+
+    @Inject
+    public Config(@ConfigProperty(name = "key") String value) {
+        this.value = value;
+    }
+}
+----
+
+== Profile-aware injection
+
+`@ConfigProperty` automatically respects configuration profiles:
+
+[source,properties]
+----
+app.db.host=prod-db.example.com
+%dev.app.db.host=localhost
+----
+
+[source,java]
+----
+@Inject
+@ConfigProperty(name = "app.db.host")
+String dbHost;
+----
+
+With `java -Dmp.config.profile=dev`:
+- `dbHost` = `localhost`
+
+== Validation at deployment time
+
+The configuration is checked against the injection points when the application starts. A required
+`@ConfigProperty` must have a value, or a `defaultValue`, that converts to the injected type; every member of a
+`@ConfigProperties` class must have a value, unless it has a `defaultValue`, an `Optional` type or a Java
+initializer. Otherwise the container does not start, and one `DeploymentException` lists every problem, each with
+the place where the value is injected:
+
+[source,java]
+----
+package com.acme;
+
+public class Secrets {
+    @Inject
+    @ConfigProperty(name = "app.secret.key") // Required, no default
+    String secretKey;
+
+    @Inject
+    @ConfigProperty(name = "app.secret.rounds") // app.secret.rounds=many
+    int rounds;
+}
+----
+
+[source]
+----
+jakarta.enterprise.inject.spi.DeploymentException: Invalid MicroProfile Config deployment (2 problems):
+ - Missing required config property 'app.secret.key' for type java.lang.String [at com.acme.Secrets#secretKey]
+ - Invalid @ConfigProperty for key 'app.secret.rounds': Cannot convert 'many' to int [at com.acme.Secrets#rounds]
+----
+
+Use `defaultValue` or `Optional<T>` to make injection optional. `Provider<T>`, `Supplier<T>`, `ConfigValue`,
+`OptionalInt`/`OptionalLong`/`OptionalDouble`, collections and arrays are not checked at start: they are resolved
+when the value is read.
+
+[#start-check]
+=== Where the check runs
+
+The Build Compatible Extension reads no configuration. It records, as plain text, what the start must check — for
+each required `@ConfigProperty`, the key, the name of the injected type, the `defaultValue` and the injection
+site; for each `@ConfigProperties` class, its name and the prefix written where it is injected — and registers
+`ConfigStartCheck`, a synthetic observer of `jakarta.enterprise.event.Startup`, with that text as its parameters.
+The observer has priority `0` (`Interceptor.Priority.PLATFORM_BEFORE`): it runs before the `Startup` observers of
+the application, which may already read the configuration. It loads the types by name, reads
+`ConfigProvider.getConfig()`, and throws the `DeploymentException`.
+
+[cols="1,3"]
+|===
+| Container | When the check runs
+
+| Vauban
+| When the container fires `Startup`, whether the extension ran in that start or in the compiler
+  (<<extension-in-the-compiler,below>>): the observer and its parameters are part of what Vauban keeps from a
+  build. Vauban does not start, and throws its own `DeploymentException` (`Observer … of Startup threw …; the
+  container does not start`) whose cause is the one above.
+
+| A full CDI container (Weld, Open Liberty)
+| At `AfterDeploymentValidation`: Ravel's portable extension takes the observer over, runs it there, and reports
+  what it throws as a deployment problem; the container does not run it a second time at `Startup`. A container
+  that fires no `Startup` at all, such as the embedded Weld of Arquillian that runs the TCK, is covered the same way.
+
+| Weld SE with discovery disabled
+| Weld SE then loads the build compatible extensions but no portable extension: the check stays the `Startup`
+  observer, and `Weld.initialize()` throws an `ObserverException` whose cause is the `DeploymentException`.
+|===
+
+The errors that depend on the code alone — an injection type nothing can supply, `@ConfigProperties` on a type
+that is not a class — are still reported by the extension itself, when it runs.
+
+[#extension-in-the-compiler]
+=== When the extension runs in the compiler
+
+Vauban can also run the extension while the application compiles: put `ravel-cdi-vauban` on the
+annotation processor path (on Vidocq, the `vidocq-runtime-ravel-config-extension-codegen` bundle does it).
+The extension then registers the beans that satisfy each `@ConfigProperty` and `@ConfigProperties` point,
+so Vauban's build-time validation accepts them, and an unsupported injection type fails the build.
+
+It does not check the values, there or anywhere else. They come from where the application runs — its
+configuration files, the environment, the system properties of its JVM — which the compiler does not see. The
+extension registers the start check instead, and Vauban writes it, with its parameters, next to the beans: a
+missing key still fails the container start, as above, without the extension running again.
+
+The extension asks Vauban whether it runs in the compiler (`io.vidocq.vauban.api.ExtensionPhase`) for one thing
+only: there, it leaves out the fallback `Config` bean it adds when the deployment has no other `Config` bean.
+
+[#generated-code]
+=== Generated code instead of reflection
+
+`ravel-processor`, on the same processor path (the Vidocq codegen bundle brings it too), writes into the
+application's own packages the code Ravel otherwise runs by reflection:
+
+* for each `@ConfigProperties` class, a factory (`<Class>$$RavelConfigProperties`) that creates the instance and
+  sets its fields with plain assignments — a `private` field through a `VarHandle` the application's module grants
+  itself, so the class's package needs no `opens`;
+* for the types injected with `@ConfigProperty` or held by a `@ConfigProperties` field, the
+  xref:type-converters.adoc#implicit-converters[implicit converter] the specification picks, called directly.
+
+Ravel finds them through `ServiceLoader`. A class the generated code cannot fill (abstract, with a `final` or
+type-variable field, without a non-private no-argument constructor) and a type without a generated converter keep
+the reflective path, which is also the path on every container where the processor did not run (Weld,
+Open Liberty, a CDI 3 container): it is unchanged.
+
+== Grouped configuration
+
+A common pattern is grouping related config in a `@Dependent` bean:
+
+[source,java]
+----
+@Dependent
+public class DatabaseConfig {
+    @Inject
+    @ConfigProperty(name = "database.host")
+    String host;
+
+    @Inject
+    @ConfigProperty(name = "database.port")
+    int port;
+
+    @Inject
+    @ConfigProperty(name = "database.name")
+    String name;
+}
+
+@ApplicationScoped
+public class MyApplication {
+    @Inject
+    DatabaseConfig dbConfig;
+
+    void start() {
+        // Use dbConfig.host, dbConfig.port, dbConfig.name
+    }
+}
+----
+
+== Example: Feature flags
+
+[source,java]
+----
+@ApplicationScoped
+public class Features {
+
+    @Inject
+    @ConfigProperty(name = "feature.cache", defaultValue = "true")
+    boolean cacheEnabled;
+
+    @Inject
+    @ConfigProperty(name = "feature.metrics", defaultValue = "false")
+    boolean metricsEnabled;
+
+    @Inject
+    @ConfigProperty(name = "feature.tracing")
+    Optional<Boolean> tracingEnabled;
+
+    public boolean isCacheEnabled() {
+        return cacheEnabled;
+    }
+
+    public boolean isMetricsEnabled() {
+        return metricsEnabled;
+    }
+
+    public boolean isTracingEnabled() {
+        return tracingEnabled.orElse(false);
+    }
+}
+----
+
+== Example: Multi-environment API client
+
+[source,properties]
+----
+# microprofile-config.properties
+api.base.url=https://api.example.com
+api.timeout=5000
+api.retry.attempts=3
+
+%dev.api.base.url=http://localhost:8080
+%dev.api.timeout=10000
+%dev.api.retry.attempts=1
+----
+
+[source,java]
+----
+@ApplicationScoped
+public class ApiClient {
+
+    @Inject
+    @ConfigProperty(name = "api.base.url")
+    String baseUrl;
+
+    @Inject
+    @ConfigProperty(name = "api.timeout")
+    long timeoutMs;
+
+    @Inject
+    @ConfigProperty(name = "api.retry.attempts", defaultValue = "3")
+    int retryAttempts;
+
+    public void call() {
+        // baseUrl, timeoutMs, retryAttempts are injected
+        // and vary by profile
+    }
+}
+----
+
+[#other-containers]
+== Other CDI containers
+
+Ravel does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `ravel-it-other-containers`, prove it on every build (ravel#25), next to the official TCK, which already runs on Weld (xref:tck.adoc[TCK]):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `ravel-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: `@ConfigProperty` with and without a default, `@ConfigProperties`, an injected `Config`, and `ConfigProvider.getConfig()` answering with Ravel. A missing or unconvertible required value, and a missing `@ConfigProperties` member, keep the container from starting, with and without Ravel's portable extension (<<start-check>>).
+
+| `ravel-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1), with Liberty's `mpConfig` feature off: the same injection checks, over HTTP. The same WAR on a second server, whose JVM blanks a required value (`-Dgreeting=`), does not start: Liberty logs the `DeploymentException` of the start check (`CWWKZ0002E`) and does not deploy the application (<<start-check>>).
+|===
+
+Neither module is published. `ravel-cdi-vauban` ships no `beans.xml`, on purpose: every bean it adds is synthetic, made by its build compatible extension, except `RavelConfigProducer`. A container that does not scan implicit archives, such as Weld SE by default, does not discover that producer, and the extension then synthesises the `@Default Config` bean itself.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own MicroProfile Config off** — `mpConfig` on Open Liberty. Ravel registers its `ConfigProviderResolver` through `META-INF/services`; with the server's implementation enabled, the two compete for `ConfigProvider` and for the `@ConfigProperty` injection points.
+* **Nothing to exclude** — the WAR carries `ravel-core`, `ravel-api` and the MicroProfile Config API (`ravel-mp-config-api`), and the Jakarta APIs are `provided`. `ravel-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== Next
+
+* xref:usage.adoc[Usage] — programmatic configuration and custom converters
+* xref:reference.adoc[Reference] — full API documentation
+
