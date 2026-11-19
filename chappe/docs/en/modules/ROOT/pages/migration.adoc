@@ -1,0 +1,195 @@
+= Migration
+:description: From Netty, Undertow, Jetty, JDK HttpServer.
+
+[.lead]
+This page collects the API mappings and the typical pitfalls when migrating an existing HTTP service to Chappe. For comparative performance numbers, see link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md].
+
+[CAUTION]
+====
+Chappe is at `{project-version}`. A production migration is premature. The tables below document the API mapping; validate every use case with your service's integration tests before switching.
+====
+
+== Overview
+
+[mermaid]
+....
+flowchart LR
+    subgraph existing["Existing stack"]
+        netty["Netty<br/>EventLoopGroup<br/>ChannelHandler"]
+        jetty["Jetty<br/>QueuedThreadPool<br/>ServletContextHandler"]
+        undertow["Undertow<br/>RoutingHandler<br/>ResourceHandler"]
+        jdk["JDK HttpServer<br/>HttpHandler"]
+    end
+    subgraph chappe_["Chappe"]
+        api["Server.builder()<br/>Router · Handler<br/>Filter · StaticFileHandler<br/>virtual threads"]
+    end
+    netty --> api
+    jetty --> api
+    undertow --> api
+    jdk --> api
+....
+
+== From Jetty
+
+[cols="2,2,3"]
+|===
+| Jetty | Chappe | Note
+
+| `Server` + `ServerConnector`
+| `Server.builder().port(...).build()`
+| Tighter API; no separate connector.
+
+| `ServletContextHandler`
+| xref:foy::index.adoc[Foy] on Chappe
+| Servlet via the Foy bridge.
+
+| `org.eclipse.jetty.util.thread.QueuedThreadPool`
+| `Executors.newVirtualThreadPerTaskExecutor()` (default)
+| No platform pool; no tuning.
+
+| `Handler.Sequence`
+| `Filter#andThen` composition
+| Simpler model, no `nextHandler()`.
+
+| `ResourceHandler`
+| `StaticFileHandler.builder().addPath(...).build()`
+| `cacheInMemory(true)` on the Chappe side for classpath resources.
+
+| `GzipHandler`
+| `Filter.gzip()` or pre-compressed sidecars
+| Auto-skip on `Cache-Control: no-transform` or non-text-like MIME.
+|===
+
+== From Netty
+
+[cols="2,2,3"]
+|===
+| Netty | Chappe | Note
+
+| `EventLoopGroup`
+| Virtual threads
+| No application-side event loop.
+
+| `ChannelInitializer` / `ChannelPipeline`
+| No direct equivalent
+| Compose via `Filter` and `Router`. For a custom binary protocol, Chappe is not the right fit.
+
+| `ChannelHandler`
+| `Handler` (lambda)
+| Synchronous model — Loom makes it scalable.
+
+| `ByteBuf`
+| `Body` (`InputStream` / `OutputStream`)
+| No buffer pool exposed to user code. The `chappe-http` `ByteBufferPool` is internal.
+
+| `HttpServerCodec` + `HttpObjectAggregator`
+| Built-in
+| HTTP/1.1 and HTTP/2 parsing live in `chappe-http`.
+|===
+
+[NOTE]
+====
+Migrating a complex Netty pipeline (for example a multi-protocol proxy with custom backpressure) is a real project. Chappe does not match Netty's low-level extensibility at the channel layer. If you write your own binary protocol or need fine-grained write-side backpressure control, Chappe is probably not the right tool.
+====
+
+== From Undertow
+
+[cols="2,2,3"]
+|===
+| Undertow | Chappe | Note
+
+| `Undertow.builder().addHttpListener(port, host)`
+| `Server.builder().port(port).host(host)`
+| Equivalent API.
+
+| `RoutingHandler`
+| `Router.builder()`
+| Fluent API, same verbs.
+
+| `ResourceHandler`
+| `StaticFileHandler`
+| Native filesystem → classpath fallback chain.
+
+| `BlockingHandler` wrapper
+| Not needed
+| All Chappe handlers are synchronous blocking on a virtual thread.
+
+| `XnioWorker` threads
+| Virtual threads
+| No pool tuning.
+
+| `HttpString` cache
+| Internal headers
+| Zero-allocation `ArrayHeaders` on the hot path.
+|===
+
+== From JDK 25 `HttpServer`
+
+`com.sun.net.httpserver.HttpServer` is minimal and not designed for production. Pros: no dependency. Cons: no HTTP/2, no virtual threads by default, limited multiplexing.
+
+[cols="2,2,3"]
+|===
+| JDK HttpServer | Chappe | Note
+
+| `HttpServer.create(addr, backlog)`
+| `Server.builder().port(...).host(...).backlog(...).build()`
+| Fluent builder.
+
+| `createContext("/path", handler)`
+| `Router.builder().get("/path", req -> ...).build()`
+| Match by method + path, not just by prefix.
+
+| `HttpHandler#handle(HttpExchange)`
+| `Handler#handle(Request) -> Response`
+| Pure function; no direct socket access.
+
+| `setExecutor(Executors.newVirtualThreadPerTaskExecutor())`
+| Default
+| No setup needed.
+|===
+
+== Switching to the standalone CLI
+
+If your need is just "serve a static site in production" (Docker case), swap your Java launcher for `chappe serve`:
+
+[source,bash]
+----
+java \
+     -jar chappe-cli/target/chappe-cli-*-shaded.jar \
+     serve --root /var/www/site --port 8080 --gzip
+----
+
+Configuration via YAML, environment-conditional headers, build-time `.gz` sidecars through the Maven plugin. See xref:reference.adoc#_chappe_serve_cli[Reference — `chappe serve` CLI].
+
+== Typical migration switch points
+
+[cols="2,3"]
+|===
+| Existing feature | Chappe replacement
+
+| HTTP access logger (Tomcat, Jetty `RequestLog`)
+| Custom `Filter` writing to `System.Logger` or `java.util.logging`. Chappe ships no logger.
+
+| Brotli runtime compression
+| Not supported. `.br` sidecars produced by an external build pipeline, served when `Accept-Encoding: br`.
+
+| WebSocket
+| Shipped — `Router.builder().webSocket(pattern, handler)`, RFC 6455 over HTTP/1.1 (handshake, TEXT/BINARY framing, close handshake, auto-PONG).
+
+| Full Servlet API
+| xref:foy::index.adoc[Foy] on Chappe (Jakarta Servlet 6.1).
+
+| JAX-RS / REST
+| xref:cassini::index.adoc[Cassini] on Chappe (Jakarta REST 4.0).
+
+| Native PEM TLS loading
+| Not supported on the Chappe side. Convert to PKCS12 via `openssl` or `keytool`, then load through `KeyStore`.
+|===
+
+== Migration-ready capabilities
+
+* link:usage.html#standalone-cli[Standalone CLI] (`chappe serve --config …`) — direct Docker packaging, ~50 MB jlink image.
+* `Filter.gzip()` + `StaticFileHandler.preferPrecompressed(true)` — negotiated compression + `.br` / `.gz` sidecars.
+* `StaticFileHandler.spaFallback("/index.html")` / `.notFoundFile("/404.html")` — SPA routing and custom 404.
+* `Filter.addHeaderIfEnv("STAGING", "true", "X-Robots-Tag", "noindex, nofollow")` — environment-conditional headers.
+* `Router.mount(prefix, handler)` — Servlet/REST extensions composed without coupling.

@@ -1,0 +1,74 @@
+= Concepts
+:description: MicroProfile Health vocabulary as Knock materialises it — check, probe type, registry, snapshot, JSON contract.
+
+[.lead]
+This page defines the health vocabulary as Knock materialises it. The model follows MicroProfile Health 4.0; implementation choices are described in xref:internals.adoc[Internals].
+
+== Health check
+
+A _health check_ is an application-supplied diagnostic. It implements `org.eclipse.microprofile.health.HealthCheck` and returns a `HealthCheckResponse` carrying a name, a status (`UP`/`DOWN`) and an optional `data` map. A check is associated with exactly one probe through its qualifier.
+
+== Probe type
+
+A _probe_ is a category of checks answering a specific operational question. Knock models them with the `ProbeType` enum:
+
+[cols="1,3"]
+|===
+| `ProbeType` | Selects
+
+| `LIVENESS`
+| Checks qualified with `@Liveness`.
+
+| `READINESS`
+| Checks qualified with `@Readiness`.
+
+| `STARTUP`
+| Checks qualified with `@Startup`.
+
+| `ALL`
+| Every registered check (backs `GET /health`).
+|===
+
+== Registry
+
+The _registry_ holds the registered checks and returns them filtered by probe type. The contract is the `HealthCheckRegistry` interface (in `knock-api`): `register(ProbeType, String, HealthCheck)`, `unregister(String)`, `getChecks(ProbeType)`. Instances are created through the exported factory `HealthCheckRegistries.newRegistry()` (in `knock-core`); the implementation, `KnockHealthCheckRegistry`, lives in the unexported `io.vidocq.knock.internal` package. It is virtual-thread friendly: state lives in a `ConcurrentHashMap`, never guarded by `synchronized`.
+
+== Aggregation
+
+_Aggregation_ reduces a set of individual responses to a single status. The rule (spec §3.2): the group is `DOWN` if at least one check is `DOWN`; an empty group is `UP`; an exception is folded into a `DOWN` check rather than being propagated. `KnockAggregator` implements this and produces a `HealthSnapshot`.
+
+== Snapshot
+
+A _snapshot_ (`HealthSnapshot`, an immutable record) captures the result of an aggregation: the probe type, the overall status, and the immutable list of individual checks. It is the input handed to serialisation, decoupling computation from rendering.
+
+== JSON contract
+
+The _JSON contract_ (spec §3.1) is fixed:
+
+* top-level `status` (`UP`/`DOWN`) and a `checks` array;
+* each entry has `name`, `status`, and an optional `data` object;
+* `data` is omitted when empty;
+* HTTP `200` when `UP`, `503` when `DOWN`.
+
+Knock renders it with Jakarta JSON-P only — no `StringBuilder`, no third-party JSON library. `HealthReport` wraps the serialised payload together with the HTTP status.
+
+== CDI discovery
+
+In a CDI deployment, checks are discovered by Vauban and registered by `HealthCheckRegistrar` when `@Initialized(ApplicationScoped.class)` fires: each bean qualified with `@Liveness`, `@Readiness`, or `@Startup` is registered into the registry by probe type, under the check's class name. The registry is itself a CDI bean (`KnockCdiHealthCheckRegistry`, injectable as `HealthCheckRegistry`) delegating to `HealthCheckRegistries.newRegistry()`. A `HealthCheck` bean with none of those qualifiers is not a health-check procedure and is silently ignored (spec §4.2). Outside CDI, the same registry is fed manually — the core never depends on a container.
+
+== Module boundaries
+
+Knock keeps responsibilities split so the core stays dependency-light:
+
+* `knock-mp-health-api` — Vidocq repackage of the MicroProfile Health API with a proper `module-info.java`.
+* `knock-api` — Knock SPI (`ProbeType`, `HealthCheckRegistry`, `Knock`); re-exports the spec types (`requires transitive microprofile.health.api`).
+* `knock-core` — registry, aggregation, JSON-P serialisation, runtime facade. Pure Java SE.
+* `knock-cdi-vauban` — CDI discovery and auto-registration.
+* `knock-jaxrs` — the `/health*` Jakarta REST resource.
+
+Internal packages (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) are never exported.
+
+== See also
+
+* xref:internals.adoc[Internals] — how these concepts are implemented.
+* xref:reference.adoc[Reference] — artefacts, packages, endpoints.

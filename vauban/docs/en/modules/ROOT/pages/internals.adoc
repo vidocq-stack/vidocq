@@ -1,0 +1,274 @@
+= Internals
+:description: Class-File API code generation, APT pipeline, threading model, bootstrap sequence.
+
+[.lead]
+Vauban rests on a simple principle: anything that can be computed at compile time is. No hot reflection, no dynamic proxies, no external bytecode library. This page documents the implementation choices that uphold that discipline.
+
+== Code generation via Class-File API and APT
+
+CDI 4.1 describes a richly reflective object model: `Bean<T>`, `BeanManager`, `InjectionPoint`, `AnnotatedType`. Vauban refuses to evaluate that model at runtime. It compiles it.
+
+Two tools run at `process-classes`:
+
+. **`vauban-indexer`** — walks the module path at compile time and builds the bean index, persisted as `META-INF/vauban-beans.list`. The static equivalent of Weld's runtime `BeanArchive`. Zero dependency.
+. **`vauban-processor`** — a `javax.annotation.processing.Processor` that consumes the index and emits bytecode through the **Class-File API** (https://openjdk.org/jeps/484[JEP 484]). No ASM, no Byte Buddy, no Gizmo.
+
+The processor generates:
+
+[cols="1,3"]
+|===
+| Generated artefact | Role
+
+| `MyBean_Factory`
+| One per bean. Implements `io.vidocq.vauban.core.BeanFactory<MyBean>`. No-arg constructor. Instantiates the bean via direct constructor invocation — no reflection.
+
+| `MyBean_ClientProxy`
+| Subclass generated for normal scopes. Intercepts every public method and delegates to the active context.
+
+| `MyBean$$Intercepted`
+| Subclass generated for beans with interceptor bindings — routes the intercepted methods through the interceptor chain.
+
+| `_VaubanComponents`
+| One per module. Implements `io.vidocq.vauban.api.VaubanComponentProvider`: instantiates the module's components in-module (`new X(…)`), injects fields, creates client proxies and invokes producers, observers, disposers and lifecycle callbacks — no reflection, no `opens`.
+|===
+
+[NOTE]
+====
+Drift between `ClientProxyGenerator` (compile time) and `RuntimeClientProxyGenerator` (fallback) is a tracked risk in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] (entry VAU-PRX-002). Any change to one generator must be replicated in the other.
+====
+
+== APT pipeline — sequence diagram
+
+[plantuml]
+....
+@startuml
+skinparam shadowing false
+participant "javac" as JC
+participant "vauban-indexer" as IDX
+participant "vauban-processor" as PROC
+participant "Class-File API" as CFA
+participant "filer" as F
+
+JC -> IDX : annotation discovery
+IDX -> IDX : scan module-path\n+ classpath
+IDX -> PROC : VaubanIndex\n(beans, scopes, qualifiers)
+PROC -> PROC : BeanDiscovery\n+ DeploymentValidator
+PROC -> PROC : BceProcessor\n(Build Compatible Extensions)
+PROC -> CFA : ClassBuilder\nper bean
+CFA -> F : write _Factory.class
+CFA -> F : write _ClientProxy.class
+CFA -> F : write $$Intercepted.class
+PROC -> F : write _VaubanComponents.java\n+ META-INF/vauban-beans.list
+F -> JC : generated-sources\n+ generated-classes
+@enduml
+....
+
+The whole index, the whole injection grid, every proxy is written before `javac` finishes its job.
+
+[#weaving-tiers]
+== Client-proxy weaving tiers [.tag-new]#NEW#
+
+A normal-scoped bean without a non-private no-arg constructor needs a side-effect-free
+client-proxy entry point: the synthetic `protected <init>(ProxyLink)` constructor
+(xref:usage.adoc[Usage — proxyable beans]). Annotation processing cannot add members to an
+existing class (JSR 269 only creates new files), so the marker is *woven into the compiled
+bytes* by the Class-File API transformations of the `vauban-weaver` module — one canonical
+implementation, applied at three possible moments:
+
+[cols="1,2,2"]
+|===
+|Tier |When |Covers
+
+|javac plugin
+|`COMPILATION finished` event, auto-started (`Plugin.autoStart()`) from the annotation
+processor jar; the processor publishes a weave plan, the plugin patches the class files
+javac just wrote
+|Maven, Gradle, plain `javac`, any javac-based build — no configuration
+
+|`vauban-maven-plugin`
+|`process-classes`
+|Belt-and-braces for Maven builds; ecosystem jars whose classes do not go through javac
+(enrichment, sjar packaging)
+
+|Load-time agent
+|Container boot — `LoadTimeWeaving` detects unwoven normal-scoped beans in the index
+*before any bean class is loaded* (resource bytes only), then dynamically attaches
+`vauban-weaver-agent.jar` (embedded in `vauban-core`) and hands it an explicit weaving
+plan; the `ClassFileTransformer` applies the same transformation at class definition
+|IDE builds — IntelliJ's build system (JPS) flushes hand-written classes to disk *after*
+javac finishes, so both build-time tiers see stale files
+|===
+
+Details worth knowing about the load-time tier:
+
+* **Why an agent and not reflection** — Vidocq application modules keep bean packages
+  fully encapsulated (zero `opens`, zero `exports`). Any reflective instantiation trick
+  (`ReflectionFactory`-style relaxed construction) is blocked by Java Modules; a
+  `ClassFileTransformer` works below access control and produces bytecode identical to a
+  woven build.
+* **Self-attach through a child process** — the JVM refuses `VirtualMachine.attach()` on
+  itself; `LoadTimeWeaving` spawns
+  `java -cp vauban-weaver.jar io.vidocq.vauban.weaver.AttachBack <pid> <jar> <plan>`,
+  which attaches back to the parent and loads the agent. The IDE debugger session is
+  unaffected. The JDK prints its standard dynamic-agent warning.
+* **Plan-driven, no heuristics** — the agent only ever touches the classes named in the
+  plan computed from the container's own index: unwoven beans get the marker constructor,
+  their `_ClientProxy` companions are retargeted to it.
+* **Ordering constraint** — adding a constructor is not a valid retransformation, so a
+  class loaded before the attach can no longer be woven. The hook therefore runs inside
+  `VaubanContainerBuilder.build()` right after the index is final and before bean
+  discovery, and the detection itself never loads classes.
+* **Opt-out** — `-Dvauban.weaving.loadtime=disabled`; unwoven beans then fail deployment
+  validation with the regular vauban#24 diagnostic. Explicit
+  `-javaagent:vauban-weaver.jar=<plan>` is also supported (`Premain-Class`).
+
+== Class loading
+
+Vauban owns application class loading, as a single engine with two plugin natures
+chained before `defineClass`:
+
+....
+             ┌─ sources ─────────────┐   ┌─ transformers ───────────┐
+archive ───▶ │ dir | jar | sjar | …  │ ─▶│ cdi-proxifier | (future) │ ─▶ defineClass
+             └───────────────────────┘   └──────────────────────────┘
+....
+
+* `vauban-classloader-spi` — the contracts: `ByteSourcePlugin` (*where the bytes of an
+  archive come from* — the encrypted-jar support in `vauban-sjar` is one plugin) and
+  `ClassTransformerPlugin` (*what happens to the bytes* before definition — experimental
+  SPI). Both are ServiceLoader-discovered and priority-ordered.
+* `vauban-classloader` — the engine: `VaubanClassLoader` resolves each archive through
+  the first source plugin that handles it (plain jars and exploded directories built in)
+  and pipes every class through the transformer chain. The shipped `cdi-proxifier`
+  transformer applies the vauban#24 weaving (`ProxyLinkWeaver`, same bytes as a build-time
+  weave — idempotent) at definition; an unwoven bean inside an *encrypted* archive can be
+  fixed nowhere else, the decrypt → weave composition falls out of the chaining for free.
+  The container's scanner defines sjar classes through this engine. Diagnostics:
+  transformations are logged, `-Dvauban.classloader.dump=<dir>` writes transformed bytes,
+  `-Dvauban.classloader.transformers.disabled=<names>` disables transformers by name, and
+  a transformer failure fails the class load — nothing silent.
+* `VaubanLayerFactory` — the module-path story: application archives stay *off* the JVM
+  module path and resolve into a child `ModuleLayer` whose single defining loader is the
+  engine. Exports and opens keep being enforced inside the child layer; `ServiceLoader`
+  provides/uses work across it. The Vidocq launcher activates this with
+  `-Dvidocq.app.path=<archives>` (`VidocqAppLayer`, installed before anything can touch
+  an application class), and every Vidocq launch vehicle uses it by default: packaged
+  distributions ship the application jar in `app/` (scripts boot the runtime,
+  `vidocq.package.layer=false` opts out), `vidocq dev` hands `target/classes` over the
+  same way (`vidocq.dev.layer=false` opts out), and in-process embedders (the CLI) get
+  the layer from `VidocqBootstrap.configure()`. An application `main` is run through the
+  layer via `-Dvidocq.app.main` — its package is exported to the runtime through the
+  layer `ModuleLayer.Controller`, the same technique the JDK launcher uses. The
+  load-time weaving agent then stands down — the loader does the weaving, without
+  `java.lang.instrument` and without the JDK's dynamic-agent warning. Implementation
+  note for custom layer loaders: the JVM loads layer-module classes through
+  `findClass(String moduleName, String name)`, whose inherited default returns `null` —
+  both name-based and module-based lookups are overridden. Known limitation: custom JUL
+  log handlers declared in `logging.properties` must live on the module path —
+  `LogManager` instantiates handlers through the system class loader and cannot see the
+  layer.
+* The container itself never reflects into application packages: generated
+  `_VaubanComponents` providers (`ServiceLoader`) instantiate beans and proxies
+  in-module, which is what keeps `opens`-free deployments possible.
+
+The layer is also what makes the dev-mode **in-JVM hot reload** possible (M3): after a
+successful recompile, `vidocq dev` signals the running JVM (reload file touch,
+`vidocq.dev.hotReload=false` restores the respawn cycle) — the runtime shuts the
+deployment down, discards the application layer and its loader, resolves a fresh layer
+over the recompiled classes and boots again. Same process, warm JIT, debugger and dev
+services untouched. Hosts embedding Cassini across such reloads must discard its static
+discovery caches (`io.vidocq.cassini.runtime.CassiniMaintenance.resetDiscoveryCaches()`,
+called by the Vidocq Cassini extension's `onStop`): they are keyed by application
+`Class` objects, which a new layer replaces wholesale.
+
+Design study and milestones: `tasks/vauban-classloader-universal.md` (M1 engine + sjar
+fold-in, M2 application layer, M2b launch vehicles and M3 in-JVM hot reload are
+implemented).
+
+== Runtime bootstrap sequence
+
+[mermaid]
+....
+sequenceDiagram
+  participant App
+  participant Vauban
+  participant Loader as ServiceLoader
+  participant BM as BeanManager
+  participant CTX as Contexts
+
+  App->>Vauban: VaubanContainer.builder().build()
+  Vauban->>Loader: load BeanFactory<*>\n(through generated _Factory)
+  Loader-->>Vauban: list of _Factory
+  Vauban->>BM: instantiate VaubanBeanManager
+  Vauban->>CTX: ApplicationContext.activate()
+  Vauban->>BM: fire @Initialized(Application)
+  Vauban-->>App: VaubanContainer
+  App->>BM: select(HelloApp.class)
+  BM->>CTX: Context.get(bean)
+  CTX-->>App: instance (proxy if normal-scoped)
+....
+
+The `ApplicationContext` is built in memory, with no reflection, no package opening.
+
+[#virtual-threads]
+== Threading model
+
+Vauban uses **virtual threads** (https://openjdk.org/jeps/444[JEP 444]) in two places:
+
+. **Async observers** — every `@ObservesAsync` is dispatched on an `Executors.newVirtualThreadPerTaskExecutor()` internal to the `EventDispatcher`. No platform-thread pool, no bounded queue.
+. **Request context** — when Vauban is embedded in Cassini or Foy, the `RequestContext` is carried by a `ScopedValue` (https://openjdk.org/jeps/487[JEP 487]) rather than a `ThreadLocal`. That lets structured virtual threads propagate the context without leaks.
+
+[NOTE]
+====
+The `ThreadLocal` → `ScopedValue` move is documented in the Vauban repo's `CLAUDE.md` as a guiding principle.
+====
+
+== AOT compatibility
+
+No `Class.forName`, no `Method.invoke`, no `Class.getDeclaredFields()` runs hot. The runtime relies on:
+
+* **direct invocations** on the generated `_Factory` classes;
+* **`MethodHandles`** for `@PostConstruct`, `@PreDestroy`, observer and interceptor invocations;
+* no dynamic class loading beyond standard `ServiceLoader`.
+
+Consequence: Vauban compiles to a GraalVM native image without a `reflect-config.json`. It works with Project Leyden CDS and with a minimal JLink image.
+
+== Exported Java modules
+
+[cols="2,3"]
+|===
+| Module | Main exports
+
+| `io.vidocq.vauban.api`
+| `io.vidocq.vauban.api` (`Vauban` version marker, `ProxyLink`, `VaubanComponentProvider`)
+
+| `io.vidocq.vauban.core`
+| `io.vidocq.vauban.core.container`, `io.vidocq.vauban.core.bean.model`, `io.vidocq.vauban.core.context`, `io.vidocq.vauban.core.event`, `io.vidocq.vauban.core.interceptor`, `io.vidocq.vauban.core.extensions`
+
+| `io.vidocq.vauban.indexer`
+| `io.vidocq.vauban.indexer`, `io.vidocq.vauban.indexer.codegen`, `io.vidocq.vauban.indexer.model`, `io.vidocq.vauban.indexer.scanner`
+
+| `io.vidocq.vauban.processor`
+| (internal, requires `java.compiler`)
+
+| `io.vidocq.vauban.classloader.spi`
+| `io.vidocq.vauban.classloader.spi` — `ByteSourcePlugin` SPI
+
+| `io.vidocq.vauban.classloader`
+| `io.vidocq.vauban.classloader` — universal loader engine (`VaubanClassLoader`, `VaubanLayerFactory`)
+
+| `io.vidocq.vauban.weaver`
+| `io.vidocq.vauban.weaver` — canonical vauban#24 weaving transforms, packaged as a load-time agent
+
+| `io.vidocq.vauban.sjar`
+| AES-256-GCM encrypted implementation of the SPI (optional)
+|===
+
+See xref:reference.adoc[the reference] for the exhaustive list.
+
+== Sources
+
+* link:{repo-vauban}/src/branch/main/vauban-core[vauban-core] — container runtime
+* link:{repo-vauban}/src/branch/main/vauban-processor[vauban-processor] — APT and Class-File API generators
+* link:{repo-vauban}/src/branch/main/vauban-indexer[vauban-indexer] — build-time scanner
+* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (VAU-PRX-002, VAU-INJ-001)

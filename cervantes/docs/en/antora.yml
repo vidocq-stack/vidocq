@@ -1,0 +1,11 @@
+name: cervantes
+title: Cervantes
+version: '0.3.0'
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: en
+    spec-mp-jwt: MicroProfile JWT 2.1
+    project-version: 0.3.0
+    release-version: 0.3.0

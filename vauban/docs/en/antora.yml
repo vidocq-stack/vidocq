@@ -1,0 +1,10 @@
+name: vauban
+title: Vauban
+version: '0.3.0'
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: en
+    project-version: 0.3.0
+    release-version: 0.3.0

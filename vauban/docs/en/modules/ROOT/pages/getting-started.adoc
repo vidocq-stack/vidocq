@@ -1,0 +1,158 @@
+= Getting started
+:description: First CDI bean resolved at compile time by Vauban.
+
+[.lead]
+This page shows how to write a first `@ApplicationScoped` bean, wire it via `@Inject`, and bootstrap the container. The build generates every byte of injection bytecode: no dynamic proxies, no runtime reflection.
+
+== Prerequisites
+
+* **Java 25** — Temurin recommended. Module path enabled.
+* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
+* Strict Java Modules: one `module-info.java` per Maven module.
+
+== Maven coordinates
+
+[source,xml,subs=attributes+]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-api</artifactId>
+        <version>{project-version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-core</artifactId>
+        <version>{project-version}</version>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-processor</artifactId>
+        <version>{project-version}</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+
+<build>
+  <plugins>
+    <plugin>
+      <groupId>io.vidocq.vauban</groupId>
+      <artifactId>vauban-maven-plugin</artifactId>
+      <version>{project-version}</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>generate</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+----
+
+== First `@ApplicationScoped` bean
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class GreetingService {
+    public String hello(String name) {
+        return "Hello, " + name + "!";
+    }
+}
+----
+
+== First `@Inject`
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+@ApplicationScoped
+public class HelloApp {
+
+    @Inject GreetingService greeting;
+
+    public void run() {
+        System.out.println(greeting.hello("Vauban"));
+    }
+}
+----
+
+[NOTE]
+====
+Both field and constructor injection are supported. Constructor injection is recommended to ease unit testing outside the container.
+====
+
+== Minimal `module-info.java`
+
+[source,java]
+----
+module io.example {
+    requires jakarta.cdi;
+    requires io.vidocq.vauban.core;
+    exports io.example;
+}
+----
+
+== Container bootstrap
+
+[source,java]
+----
+import io.vidocq.vauban.core.container.VaubanContainer;
+
+void main() {
+    try (var container = VaubanContainer.builder().scanLocal().build()) {
+        var app = container.select(HelloApp.class);
+        app.run();
+    }
+}
+----
+
+`try-with-resources` shuts the container down cleanly: `@PreDestroy` callbacks run, contexts are purged, and `@BeforeDestroyed(ApplicationScoped.class)` then `@Destroyed(ApplicationScoped.class)` events are fired.
+
+== Build and run
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests
+java --module-path target/modules --module io.example/io.example.Main
+----
+
+The annotation processor has emitted the `_Factory` classes for each bean, and the Maven plugin's `generate` goal has written the `META-INF/vauban-beans.list` bean index — both land in `${project.build.outputDirectory}` (`target/classes`). No reflection runs at startup: Vauban merely instantiates those factories then invokes the generated methods.
+
+== Three bean discovery modes
+
+Vauban ships three strategies, depending on context:
+
+[cols="1,3,2"]
+|===
+| Mode | Use case | API
+
+| `scanLocal()`
+| Standard single-module application
+| `VaubanContainer.builder().scanLocal().build()`
+
+| `scanClasspath()`
+| Multi-module application with transitive CDI dependencies
+| `VaubanContainer.builder().scanClasspath().build()`
+
+| `addBeanClass(...)`
+| Unit tests, programmatic selection
+| `VaubanContainer.builder().addBeanClass(MyBean.class).build()`
+|===
+
+== Next step
+
+* xref:usage.adoc[Usage patterns] — qualifiers, producers, events, interceptors.
+* xref:concepts.adoc[Concepts] — bean, scope, qualifier, BeanManager.
