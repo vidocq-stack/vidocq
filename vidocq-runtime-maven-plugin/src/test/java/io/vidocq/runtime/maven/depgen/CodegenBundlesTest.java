@@ -44,15 +44,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CodegenBundlesTest {
 
-    /** Resolves {@code g:a:version} to a directory of its own; records what was asked. */
+    /**
+     * Resolves {@code g:a:version} to a directory of its own; records what was asked. The closure of an artifact is
+     * the artifact, the artifacts {@code needs} lists for it, and a dependency of its own that holds no hints.
+     */
     private static final class Fake implements ArtifactResolver {
         final Path dir;
         final Map<String, Path> own;
+        final Map<String, List<String>> needs;
         final List<String> asked = new ArrayList<>();
 
         Fake(Path dir, Map<String, Path> own) {
+            this(dir, own, Map.of());
+        }
+
+        Fake(Path dir, Map<String, Path> own, Map<String, List<String>> needs) {
             this.dir = dir;
             this.own = own;
+            this.needs = needs;
         }
 
         @Override
@@ -62,8 +71,17 @@ class CodegenBundlesTest {
         }
 
         @Override
-        public List<Path> resolveWithDependencies(String g, String a, String v, String type, String classifier) {
-            return List.of(own.get(g + ":" + a), dir.resolve("dep-of-" + a + ".jar"));
+        public List<Resolved> resolveClosure(String g, String a, String v, String type, String classifier)
+                throws IOException {
+            asked.add(g + ":" + a + ":" + v);
+            List<Resolved> closure = new ArrayList<>();
+            closure.add(new Resolved(g, a, v, classifier, own.get(g + ":" + a)));
+            for (String needed : needs.getOrDefault(g + ":" + a, List.of())) {
+                closure.add(new Resolved(g, needed, v, null, own.get(g + ":" + needed)));
+            }
+            closure.add(new Resolved(g, "dep-of-" + a, v, null,
+                    Files.createDirectories(dir.resolve("dep-of-" + a + ".jar"))));
+            return closure;
         }
     }
 
@@ -116,6 +134,63 @@ class CodegenBundlesTest {
         assertEquals("with", bricks.get(0).hints().brick());
         assertEquals("g:with:1.0", bricks.get(0).coordinates());
         assertEquals(List.of(with, dir.resolve("dep-of-with.jar")), bricks.get(0).processorPath());
+    }
+
+    @Test
+    void aHintsFileInTheClosureOfABundleIsABrickOfItsOwn(@TempDir Path dir) throws Exception {
+        Path bundle = bundle(dir, "bundle", false);
+        Path processor = bundle(dir, "processor", true);
+        Fake resolver = new Fake(dir, Map.of("g:bundle", bundle, "g:processor", processor),
+                Map.of("g:bundle", List.of("processor")));
+
+        List<Brick> bricks = CodegenBundles.of(project(path("bundle", "1.0", null), null), resolver);
+
+        assertEquals(1, bricks.size());
+        assertEquals("processor", bricks.get(0).hints().brick());
+        assertEquals("g:processor:1.0", bricks.get(0).coordinates());
+        // Its processors load from its own closure, so that what they report is attributed to it.
+        assertEquals(List.of(processor, dir.resolve("dep-of-processor.jar")), bricks.get(0).processorPath());
+    }
+
+    @Test
+    void theBricksOfTheClosureComeBeforeTheBundleSoTheirProcessorsAreAttributedToThem(@TempDir Path dir)
+            throws Exception {
+        Path bundle = bundle(dir, "bundle", true);
+        Path processor = bundle(dir, "processor", true);
+        Fake resolver = new Fake(dir, Map.of("g:bundle", bundle, "g:processor", processor),
+                Map.of("g:bundle", List.of("processor")));
+
+        List<Brick> bricks = CodegenBundles.of(project(path("bundle", "1.0", null), null), resolver);
+
+        assertEquals(List.of("processor", "bundle"), bricks.stream().map(b -> b.hints().brick()).toList());
+        assertEquals(List.of(bundle, processor, dir.resolve("dep-of-bundle.jar")), bricks.get(1).processorPath());
+    }
+
+    @Test
+    void aJarInTheClosureOfTwoBundlesIsOneBrick(@TempDir Path dir) throws Exception {
+        Path processor = bundle(dir, "processor", true);
+        Fake resolver = new Fake(dir, Map.of("g:one", bundle(dir, "one", false), "g:two", bundle(dir, "two", false),
+                "g:processor", processor), Map.of("g:one", List.of("processor"), "g:two", List.of("processor")));
+
+        List<Brick> bricks = CodegenBundles.of(project(path("one", "1.0", null) + path("two", "1.0", null), null),
+                resolver);
+
+        assertEquals(List.of("processor"), bricks.stream().map(b -> b.hints().brick()).toList());
+    }
+
+    @Test
+    void aMalformedHintsFileInTheClosureFailsNamingTheJar(@TempDir Path dir) throws Exception {
+        Path broken = bundle(dir, "broken", false);
+        Files.createDirectories(broken.resolve(DependencyCodegenHints.PATH).getParent());
+        Files.writeString(broken.resolve(DependencyCodegenHints.PATH), "brick=Broken\nflavour=sweet\n");
+        Fake resolver = new Fake(dir, Map.of("g:bundle", bundle(dir, "bundle", false), "g:broken", broken),
+                Map.of("g:bundle", List.of("broken")));
+
+        MojoExecutionException e = assertThrows(MojoExecutionException.class,
+                () -> CodegenBundles.of(project(path("bundle", "1.0", null), null), resolver));
+
+        assertTrue(e.getMessage().startsWith("The codegen bundle g:broken:1.0 declares malformed hints: "),
+                e.getMessage());
     }
 
     @Test

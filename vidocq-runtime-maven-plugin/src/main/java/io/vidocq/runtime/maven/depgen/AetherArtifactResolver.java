@@ -65,15 +65,18 @@ public final class AetherArtifactResolver implements ArtifactResolver {
     }
 
     @Override
-    public List<Path> resolveWithDependencies(String groupId, String artifactId, String version, String type,
-                                              String classifier) throws IOException {
+    public List<Resolved> resolveClosure(String groupId, String artifactId, String version, String type,
+                                         String classifier) throws IOException {
         try {
             Dependency root = new Dependency(artifact(groupId, artifactId, version, type, classifier),
                     JavaScopes.RUNTIME);
             DependencyRequest request = new DependencyRequest(new CollectRequest(root, repositories),
                     DependencyFilterUtils.classpathFilter(JavaScopes.RUNTIME));
             return system.resolveDependencies(session, request).getArtifactResults().stream()
-                    .map(ArtifactResult::getArtifact).map(a -> a.getFile().toPath()).toList();
+                    .map(ArtifactResult::getArtifact)
+                    .map(a -> new Resolved(a.getGroupId(), a.getArtifactId(), a.getBaseVersion(),
+                            a.getClassifier().isEmpty() ? null : a.getClassifier(), a.getFile().toPath()))
+                    .toList();
         } catch (DependencyResolutionException e) {
             throw new IOException("Cannot resolve " + groupId + ":" + artifactId + ":" + version
                     + " and its dependencies: " + e.getMessage(), e);

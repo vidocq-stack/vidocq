@@ -54,6 +54,7 @@ The bundles and the bricks they serve:
 | `vidocq-runtime-cassini-rest-extension-codegen` | `cassini-processor`, `champollion-codegen-apt`, and the
   extensions of `cassini-cdi` and `champollion-jsonb-cdi`
 | xref:cassini::internals.adoc#generated-code[Cassini], xref:champollion::internals.adoc#generated-code[Champollion]
+| `vidocq-runtime-langchain4j-cdi-mcp-extension-codegen` | the bundle of the REST extension, hence `cassini-processor`, which writes the adapter of `McpEndpoint` in the langchain4j-cdi jar | xref:cassini::internals.adoc#generated-code[Cassini]
 | `vidocq-runtime-ravel-config-extension-codegen` | `ravel-processor`, the extension of `ravel-cdi-vauban` | xref:ravel::internals.adoc#generated-code[Ravel]
 | `vidocq-runtime-cyrano-rest-client-extension-codegen` | `cyrano-processor`, the extension of `cyrano-cdi-vauban` | xref:cyrano::internals.adoc#generated-code[Cyrano]
 | `vidocq-runtime-heisenberg-fault-tolerance-extension-codegen` | `heisenberg-processor`, the extension of `heisenberg-cdi-vauban` | xref:heisenberg::internals.adoc#generated-code[Heisenberg]

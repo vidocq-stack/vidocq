@@ -30,7 +30,22 @@ public interface ArtifactResolver {
     Path resolve(String groupId, String artifactId, String version, String type, String classifier)
             throws IOException;
 
+    /**
+     * One artifact of a closure.
+     *
+     * @param classifier the classifier, {@code null} for none
+     * @param file       the artifact's file
+     */
+    record Resolved(String groupId, String artifactId, String version, String classifier, Path file) {
+    }
+
+    /** The artifact and its transitive runtime dependencies, with their coordinates. The artifact comes first. */
+    List<Resolved> resolveClosure(String groupId, String artifactId, String version, String type, String classifier)
+            throws IOException;
+
     /** The artifact and its transitive runtime dependencies, as files. */
-    List<Path> resolveWithDependencies(String groupId, String artifactId, String version, String type,
-                                       String classifier) throws IOException;
+    default List<Path> resolveWithDependencies(String groupId, String artifactId, String version, String type,
+                                               String classifier) throws IOException {
+        return resolveClosure(groupId, artifactId, version, type, classifier).stream().map(Resolved::file).toList();
+    }
 }

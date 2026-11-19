@@ -41,11 +41,13 @@ class McpLaunchShapesTest {
     private static final String LAYER_OF_THE_APP_ALONE =
             "Application layer ready: modules [" + LaunchedServer.APP_MODULE + "] (";
     /**
-     * BUG-20261118-05 part 1: the client proxy of langchain4j-cdi's invoker provider is generated at build since
-     * Vidocq/vauban#348 and #351, so Vauban generates nothing at start. Cassini's adapter of {@code McpEndpoint} is
-     * part 2 (Vidocq/vidocq#662) and is not asserted here.
+     * BUG-20261118-05: nothing is generated when the application starts. The client proxy of langchain4j-cdi's
+     * invoker provider (part 1) is generated at build since Vidocq/vauban#348 and #351, and the Cassini adapter of
+     * {@code McpEndpoint} (part 2, Vidocq/vidocq#662) since the build gives a dependency jar the generated code of
+     * Cassini's processor. Both bricks print this block when they generate at start.
      */
     private static final String VAUBAN_FALLBACK = "VAUBAN — RUNTIME CODE GENERATION FALLBACK";
+    private static final String CASSINI_FALLBACK = "CASSINI — RUNTIME CODE GENERATION FALLBACK";
     /** 40 bytes: langchain4j-cdi accepts it (at least 32). */
     private static final String SECRET = "it-request-state-secret-of-40-characters";
 
@@ -63,6 +65,7 @@ class McpLaunchShapesTest {
             assertFalse(log.contains("No McpServerSPI implementation found"), log);
             assertFalse(log.contains("[VIDOCQ-MCP-"), log);
             assertFalse(log.contains(VAUBAN_FALLBACK), log);
+            assertFalse(log.contains(CASSINI_FALLBACK), log);
         }
     }
 
@@ -81,6 +84,7 @@ class McpLaunchShapesTest {
                     .matches("cdi extensions\\s+\\d+ extensions frozen at build")), log);
             assertFalse(log.contains("[VIDOCQ-GEN-003]"), log);
             assertFalse(log.contains(VAUBAN_FALLBACK), log);
+            assertFalse(log.contains(CASSINI_FALLBACK), log);
         }
     }
 

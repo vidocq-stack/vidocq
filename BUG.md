@@ -306,9 +306,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261118-05 — An application with the MCP extension generates two classes at each start
 
 - **Date**: 2026-11-18
-- **Status**: OPEN for part 2 (Cassini's adapter of `McpEndpoint`, Vidocq/vidocq#662). Part 1 (Vauban's client proxy)
-  is FIXED by Vidocq/vauban#348 and #351, and `McpLaunchShapesTest` now fails on any Vauban fallback. The MCP calls
-  pass: part 2 costs start time and keeps such an application out of a start ahead of time.
+- **Status**: FIXED on `fix/mcp-cassini-hints` for part 2 (Cassini's adapter of `McpEndpoint`, Vidocq/vidocq#662;
+  Cassini's `fix/mcp-cassini-hints` ships the hints). Part 1 (Vauban's client proxy) is FIXED by Vidocq/vauban#348
+  and #351. `McpLaunchShapesTest` fails on any Vauban or Cassini fallback block.
 - **Module**: `vidocq-runtime-langchain4j-cdi-mcp-extension`, `vidocq-runtime-cassini-rest-extension-codegen`; Vauban
   for the first class.
 - **Symptom**: every application that depends on the MCP extension prints two `RUNTIME CODE GENERATION FALLBACK`
@@ -360,6 +360,18 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
     exception: `i2-keys`, a dev launch whose start refuses the build's record (`3 extensions run at start (the record
     of the build is not this deployment's)`), still generates the proxy at start. The proxy of a synthetic bean comes
     with the frozen record (vauban#342), so a start that runs its extensions has none: expected, and not asserted.
+  - 2026-11-19, fix of part 2 (route 1 of the leads): `cassini-processor` ships its own
+    `META-INF/vidocq/dependency-codegen.properties` (brick Cassini, `class-bytes=jakarta/ws/rs/Path`, the
+    `ResourceAdapter` and `RouteProvider` service files as markers and merge entries), and `vidocq:generate` reads the
+    hints of every jar in the closure of a codegen bundle, not only of the bundle's own jar (`ArtifactResolver
+    .resolveClosure`, `CodegenBundles`): a hints file names one brick, and the REST bundle's names Champollion. The MCP
+    extension gets a codegen bundle of its own, `vidocq-runtime-langchain4j-cdi-mcp-extension-codegen`, which depends
+    on the REST bundle; the application declares it. Run on a private repository: `vidocq:generate:
+    langchain4j-cdi-mcp-server-1.4.0-SNAPSHOT.jar — Cassini (2 classes, generated)`, `McpLaunchShapesTest` 8/8
+    (6 of 8 red before) with no fallback block, the 10 tests of the module green. The extension is not in the extension
+    catalog while it is left out of the releases (the catalog lists the published extensions), so nothing wires the
+    bundle for an application that does not declare it: add the descriptor, with `codegen =`, when vidocq#204 releases
+    the extension.
 
 ## BUG-20261118-04 — The jar of the MCP extension carries a record of frozen extensions, so its applications run theirs at each start
 

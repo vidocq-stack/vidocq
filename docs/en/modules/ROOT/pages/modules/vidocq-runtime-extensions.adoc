@@ -1454,6 +1454,19 @@ The extension is not on Maven Central yet. It depends on langchain4j-cdi `1.4.0-
 </dependency>
 ----
 
+The extension has a companion `-codegen` bundle, declared in `<annotationProcessorPaths>` like those of the other extensions. It brings Cassini's processor, so that the server's REST resource is generated at build:
+
+[source,xml,subs=attributes+]
+----
+<annotationProcessorPaths>
+    <path>
+        <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+        <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension-codegen</artifactId>
+        <version>{project-version}</version>
+    </path>
+</annotationProcessorPaths>
+----
+
 The application's `module-info.java` still reads the MCP server, whose annotations and types it compiles against; `mcp.server.api` comes with it. It never requires the extension, which the runtime finds as a service.
 
 [source,java]
@@ -1490,7 +1503,7 @@ The extension's module, `io.vidocq.runtime.extensions.essentials.langchain4jcdi.
 
 The extension's manifest asks the application's `vidocq:generate` to scan the langchain4j-cdi jars it brings (`Vidocq-Scan-Dependencies: dev.langchain4j.cdi.mcp:*`): the server's beans run generated code — created, injected and called by a `_VaubanComponents` in their own packages, behind build-time client proxies — instead of reflection, from an enriched copy of the jars that every launch uses. The JAX-RS providers among them carry `@Provider` alone and are beans only through Cassini's build-compatible extension; `vidocq:generate` runs it too, so they are covered like the rest. See xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal].
 
-Two classes are still generated when the application starts, and each start says so in a `RUNTIME CODE GENERATION FALLBACK` warning: the client proxy of `McpCdi41InvokerProvider`, a synthetic bean that the CDI 4.1 invoker module registers, and Cassini's adapter of `McpEndpoint`, a resource class of a dependency jar (BUG-20261118-05). The MCP calls are not affected.
+Nothing is generated when the application starts, and the start prints no `RUNTIME CODE GENERATION FALLBACK` warning (BUG-20261118-05). The client proxy of `McpCdi41InvokerProvider`, a synthetic bean that the CDI 4.1 invoker module registers, is generated at build by Vauban. Cassini's adapter and routes for `McpEndpoint`, a resource class of a dependency jar, are written by `vidocq:generate` into that jar's enriched copy: the extension's `-codegen` bundle brings Cassini's processor, whose hints select a jar with a `@Path` class (xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars]). An application declares the bundle itself, as above: the extension is not in the extension catalog while it is left out of the releases, so nothing adds the bundle for it. An application that does not declare it generates the adapter when it starts.
 
 Two hand-made layouts break this:
 

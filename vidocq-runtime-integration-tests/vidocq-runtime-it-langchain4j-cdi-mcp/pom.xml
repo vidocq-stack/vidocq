@@ -123,6 +123,22 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- An application declares the codegen bundle of the MCP extension like that of any extension. It
+                 brings Cassini's processor, so the adapter of McpEndpoint, a resource class of a dependency jar, is
+                 written at build, in that jar's enriched copy, and not at each start (BUG-20261118-05, #662). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+                            <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
             <!-- Vidocq/vidocq#186: as an application builds, vidocq:generate scans the langchain4j-cdi jars the
                  extension declares and writes their enriched copies (generated code inside, providers declared)
                  into target/vidocq-enriched/. -->
