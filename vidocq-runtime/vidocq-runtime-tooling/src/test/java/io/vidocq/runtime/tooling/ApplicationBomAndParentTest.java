@@ -48,6 +48,10 @@ class ApplicationBomAndParentTest {
     private static final Path ROOT = Path.of("..");
     private static final String RUNTIME_GROUP = "io.vidocq.runtime";
 
+    /** The folders of the monorepo that hold the bricks, one level each: stable, then preview. */
+    private static final List<Path> BRICK_LEVELS = List.of(
+            ROOT.resolve("../vidocq-components"), ROOT.resolve("../preview"));
+
     /** Published modules an application never declares as a dependency. */
     private static final Set<String> NOT_A_DEPENDENCY = Set.of(
             "vidocq-runtime-bom", "vidocq-runtime-parent", "vidocq-runtime-maven-plugin");
@@ -80,9 +84,30 @@ class ApplicationBomAndParentTest {
         assertTrue(missing.isEmpty(), "published artifacts the BOM does not manage at " + version + ": " + missing);
     }
 
+    /**
+     * The monorepo publishes the bricks with the runtime, at one version: an application that declares a brick module
+     * (vauban-junit, cassini-client, ...) takes its version from the BOM too.
+     */
     @Test
-    void theBomManagesNothingButTheRuntimeArtifacts() throws Exception {
+    void theBomManagesEveryPublishedBrickModuleAtTheReactorVersion() throws Exception {
+        String version = reactorVersion();
+        Map<String, String> managed = managedVersions(pom(ROOT.resolve("vidocq-runtime-bom")));
+        Set<String> bricks = publishedBrickArtifacts();
+
+        Set<String> missing = new TreeSet<>();
+        for (String artifact : bricks) {
+            if (!version.equals(managed.get(artifact))) {
+                missing.add(artifact);
+            }
+        }
+        assertFalse(bricks.isEmpty(), "no brick found next to the runtime");
+        assertTrue(missing.isEmpty(), "published brick modules the BOM does not manage at " + version + ": " + missing);
+    }
+
+    @Test
+    void theBomManagesNothingButThePublishedArtifacts() throws Exception {
         Set<String> published = publishedArtifacts();
+        published.addAll(publishedBrickArtifacts());
         Set<String> foreign = new TreeSet<>(managedVersions(pom(ROOT.resolve("vidocq-runtime-bom"))).keySet());
         foreign.removeAll(published);
 
@@ -149,6 +174,9 @@ class ApplicationBomAndParentTest {
     void theApplicationParentManagesTheVaubanPluginAtTheReactorsVauban() throws Exception {
         Element project = pom(ROOT.resolve("vidocq-runtime-parent")).getDocumentElement();
         String vauban = child(elements(pom(ROOT).getDocumentElement(), "properties").getFirst(), "vauban.version");
+        if ("${project.version}".equals(vauban)) { // the monorepo: Vauban is built at the reactor version
+            vauban = reactorVersion();
+        }
 
         assertEquals(vauban, child(elements(project, "properties").getFirst(), "vauban.version"),
                 "the parent's vauban.version is not the reactor's");
@@ -224,6 +252,39 @@ class ApplicationBomAndParentTest {
         }
         for (String module : modules) {
             collect(dir.resolve(module), published);
+        }
+    }
+
+    /**
+     * {@code groupId:artifactId} of every brick module a release publishes: nothing under a deploy or publishing skip,
+     * no aggregator, no Maven plugin (a plugin is never a dependency).
+     */
+    private static Set<String> publishedBrickArtifacts() throws Exception {
+        Set<String> published = new TreeSet<>();
+        for (Path level : BRICK_LEVELS) {
+            collectBricks(level, published);
+        }
+        return published;
+    }
+
+    private static void collectBricks(Path dir, Set<String> published) throws Exception {
+        String text = Files.readString(dir.resolve("pom.xml"));
+        if (text.contains("<maven.deploy.skip>true</maven.deploy.skip>")
+                || text.contains("<skipPublishing>true</skipPublishing>")) {
+            return;
+        }
+        Element project = pom(dir).getDocumentElement();
+        List<String> modules = modules(dir);
+        String packaging = child(project, "packaging");
+        if (modules.isEmpty() && !"pom".equals(packaging) && !"maven-plugin".equals(packaging)) {
+            String groupId = child(project, "groupId");
+            if (groupId == null) {
+                groupId = child(elements(project, "parent").getFirst(), "groupId");
+            }
+            published.add(groupId + ":" + child(project, "artifactId"));
+        }
+        for (String module : modules) {
+            collectBricks(dir.resolve(module), published);
         }
     }
 
