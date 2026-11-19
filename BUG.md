@@ -331,9 +331,10 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261118-05 — An application with the MCP extension generates two classes at each start
 
 - **Date**: 2026-11-18
-- **Status**: FIXED on `fix/mcp-cassini-hints` for part 2 (Cassini's adapter of `McpEndpoint`, Vidocq/vidocq#662;
-  Cassini's `fix/mcp-cassini-hints` ships the hints). Part 1 (Vauban's client proxy) is FIXED by Vidocq/vauban#348
-  and #351. `McpLaunchShapesTest` fails on any Vauban or Cassini fallback block.
+- **Status**: FIXED. Part 2 (Cassini's adapter of `McpEndpoint`, Vidocq/vidocq#662) by 3cc57d6f (Vidocq/vidocq#675),
+  with the hints that Vidocq/cassini#152 (1ea1d1f2) ships in `cassini-processor`. Part 1 (Vauban's client proxy) is
+  FIXED by Vidocq/vauban#348 and #351. `McpLaunchShapesTest` fails on any Vauban or Cassini fallback block. The MCP
+  extension and its codegen bundle move to VCU with Vidocq/vidocq#204.
 - **Module**: `vidocq-runtime-langchain4j-cdi-mcp-extension`, `vidocq-runtime-cassini-rest-extension-codegen`; Vauban
   for the first class.
 - **Symptom**: every application that depends on the MCP extension prints two `RUNTIME CODE GENERATION FALLBACK`
