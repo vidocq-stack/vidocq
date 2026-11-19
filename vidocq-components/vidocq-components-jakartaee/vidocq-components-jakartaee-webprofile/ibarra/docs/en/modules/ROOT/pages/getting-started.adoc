@@ -1,0 +1,104 @@
+= Getting started
+:description: Precompile an application module with Ibarra and deploy it in Foy.
+
+[.lead]
+Ibarra compiles JSP/JSPX into application modules during the build. The initial
+Foy binding serves those pages over HTTP without a runtime compiler. Build-time
+EL, TLD functions, listeners and initial tag-handler invocations are generated at build time.
+
+== Prerequisites
+
+* **Java 25** — Temurin recommended. Module path enabled.
+* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
+* Strict Java Modules: one `module-info.java` per Maven module.
+
+== Maven setup (initial I4)
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.ibarra</groupId>
+    <artifactId>ibarra-api</artifactId>
+    <version>{project-version}</version>
+</dependency>
+
+<plugin>
+    <groupId>io.vidocq.ibarra</groupId>
+    <artifactId>ibarra-maven-plugin</artifactId>
+    <version>{project-version}</version>
+    <executions>
+        <execution>
+            <goals><goal>precompile</goal></goals>
+        </execution>
+    </executions>
+</plugin>
+----
+
+The application module requires `io.vidocq.ibarra.api`; generated packages need
+no exports or opens. Put pages in `src/main/webapp` and run `mvn package`.
+See xref:modules/maven-plugin.adoc[the plugin reference] and the repository's
+`examples/precompiled-pages` for a complete buildable example.
+
+Deploy with `ibarra-foy` and the explicit application layer as described in
+xref:modules/foy-binding.adoc[the binding reference]. Default packaging compiles EL
+through Peano; applications using EL add `peano-api` and require its Java module.
+Packaging never enables startup preview.
+
+== A first page (initial I5)
+
+[source,jsp]
+----
+<%@ page contentType="text/html;charset=UTF-8" session="false" %>
+<p>Hello!</p>
+----
+
+Placed in `src/main/webapp/hello.jsp`, it is compiled during the build and served by Foy at `/hello.jsp`.
+
+== Parsing a source (implemented)
+
+On the module path, require `io.vidocq.ibarra.compiler` and use:
+
+[source,java]
+----
+var page = new PageParser().parse("/hello.jsp", "<p>Hello, ${name}!</p>");
+var nodes = page.nodes();
+----
+
+`PageParser` is in `io.vidocq.ibarra.compiler`. This parses source structure; it
+does not compile or render the page. See xref:internals.adoc[Internals] for scope.
+
+== Generating a servlet source (initial I3)
+
+With the compiler module and `java.compiler` resolved in a full Java 25 JDK:
+
+[source,java]
+----
+var generated = new PageGenerator(List.of()).generate(
+    "/hello.jsp", "<%@ page session='false' %><p>Hello!</p>",
+    "example.HelloPage", GenerationOptions.DEFAULT);
+var javaSource = generated.source();
+----
+
+`PageCompiler.compile` accepts generated sources, an output directory and javac
+options for the target application's module path. It emits classes and retains
+`.ibarra-sources` for inspection; it does not load pages. Default EL generation
+emits Peano class files alongside the servlet. Both the source and bytecode roots
+must be in the target application's module patch when using PageCompiler directly;
+the Maven goal configures this automatically. Tests/previews can explicitly select
+`GenerationOptions.DEFAULT.withStartupEl(true)` for interpreter initialization.
+See xref:modules/compiled-el.adoc[compiled EL] for module and resolver requirements.
+
+The Maven goal, page-index discovery and runtime factory installation are
+implemented in initial I4/I5. See xref:internals.adoc[Internals] for the current action boundaries.
+
+== Building Ibarra from source
+
+Peano's published development snapshot includes the compiled-function extension.
+The normal Maven build resolves it directly; no prerequisite source checkout is
+needed.
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install
+----

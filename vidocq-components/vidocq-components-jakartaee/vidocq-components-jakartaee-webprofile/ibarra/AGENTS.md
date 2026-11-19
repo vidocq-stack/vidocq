@@ -1,0 +1,291 @@
+# AGENTS.md
+
+Single source of agent instructions for this repository (Codex, Claude Code and any other
+coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules here.
+
+> Joaquín Ibarra (1725–1785), royal printer in Madrid, composed the 1780 Real Academia
+> edition of *Don Quixote* once, then printed it on demand — a nod to `cervantes`, the
+> MicroProfile JWT brick. The Ibarra project implements **Jakarta Pages 4.0**: pages are
+> composed (translated and compiled) during the build, then rendered on each request.
+
+**Status: I1/I2 implemented; initial I3/I4/I5 and I6 handler generation available; full semantics/TCK pending.** Read [PLAN.md](PLAN.md) before any change — it is the design of
+record (spec scope, build-time page compilation, Java Modules layout, Foy JSP-engine SPI,
+Peano integration, TCK plan, milestones I0–I9, open questions). Structural decisions
+marked "to validate" there need the maintainer's sign-off first.
+
+## Ecosystem rules
+
+Ibarra is one repository of the Vidocq ecosystem. These rules are shared by every Vidocq
+repository; the summary below is self-contained, the **full text lives in
+`vidocq-workspace/AGENTS.md`** (<https://codefloe.com/Vidocq/vidocq-workspace>). In case
+of local divergence, the brick-specific sections further down take precedence.
+
+- **Branch + pull request.** `main` is protected: it requires signed commits and green
+  `pr-validate` / `governance-checks` checks. Work on a branch, open a PR, never push to
+  `main`.
+- **Signed and signed-off commits** — `git commit -S -s`: GPG signature (key registered in
+  `Vidocq/governance`, CLA signed) and DCO `Signed-off-by` trailer (see `CONTRIBUTING.md`).
+- **Conventional Commits in English**, with the project ticket when there is one.
+- **AI provenance** — when an AI tool helped, add a `Co-Authored-By: <tool> <email>`
+  trailer (e.g. `Co-Authored-By: Claude Opus 4.x <noreply@anthropic.com>`, or the Codex
+  equivalent). It is a provenance record, not a claim of co-authorship: author and
+  committer stay the human.
+- **Mandatory TDD** — test (or TCK scenario) first; red → green → refactor.
+- **Java Modules** — strict `module-info.java`, minimal `exports`, no unjustified `opens`,
+  no classpath. Say "Java Modules" / "Java module", **never "JPMS"**.
+- **Zero runtime dependency beyond the Jakarta API** this brick implements. Build tooling
+  may take a dependency when justified in the PR and named in the module's reference page.
+- **Static code generation over runtime reflection** — Class-File API (JEP 484) and APT at
+  build time; no dynamic proxies, no ASM/Byte Buddy. AOT-compatible.
+- **Virtual threads** for I/O; no platform-thread pool without a documented reason.
+- **`BUG.md` / `BENCH.md`** — every reproducible bug goes in `BUG.md` (id, date, symptom,
+  minimal repro, hypothesised cause, status); every performance figure goes in `BENCH.md`
+  (date, hardware/JVM, exact command, raw results, delta vs previous run) before it may
+  appear in a README or a commit message.
+- **English everywhere** — code, Javadoc, comments, commits, CI, issues/PRs and every
+  Markdown file. Exchanges with the maintainer stay in French.
+- **Docs** in `docs/en` as an Antora component, English-only (see below).
+
+## Build compatible extensions work at build only
+
+A CDI build compatible extension works at build, and only there. `vidocq:generate` runs the extensions of an
+application once and records what they did; the packaged application loads that record instead of running them
+(Vidocq/vauban#288). An extension that breaks these rules loses work or checks in a packaged application:
+
+- compute from the deployment's classes only: no configuration value, environment variable, outside file or network
+  resource in a phase;
+- check the start environment in an observer of `jakarta.enterprise.event.Startup` that throws a
+  `DeploymentException`, fed with what the build collected (`withParam`); models: Ravel's `ConfigStartCheck`,
+  Cervantes' `JwtConfigurationCheck`;
+- add annotations, never remove them; carry data in parameters, never in fields of the extension;
+- ask `ExtensionPhase.isBuildTime()` only as a last resort, in a class of its own: an extension that asks runs again
+  at each start (Heisenberg's `InterceptorPriorityExtension`);
+- the brick's Vidocq runtime extension adds its own beans with `VaubanContainerBuilder.addHostBean`, never
+  `addBeanClass`, and its `-codegen` bundle brings the brick's CDI jar to the processor path;
+- list in `@io.vidocq.vauban.api.ClientProxies` every interface the extension registers as a synthetic bean of a
+  normal scope (`@ApplicationScoped`, `@TransactionScoped`, ...). Vauban generates client proxies at build from the
+  classes it compiles, and a synthetic bean has none: the freeze records its descriptor, not a proxy, and a deployment
+  that runs its extensions at start has no build step. Without the list, the container builds a
+  `java.lang.reflect.Proxy` at every start: every call goes through reflection, the boot is slower, nothing runs ahead
+  of time, and every application prints the `RUNTIME CODE GENERATION FALLBACK` warning (Vauban BUG-20261113-19:
+  Noether's `EntityManager` and `EntityManagerFactory`). Put it on a class of a module compiled with
+  `vauban-processor` that provides its `_VaubanComponents`: the `*-cdi-vauban` extension, or, for a
+  container-neutral brick, its Vidocq runtime extension (Vidocq's `NoetherPersistenceExtension`). Public interfaces
+  only, no class, no `@Dependent` bean;
+- test both ways: the extensions run at start (TCK, another container) and frozen (the startup report says
+  `cdi extensions  N extensions frozen at build`, and an invalid environment still stops the start).
+
+Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspace`, and Vauban's concepts page,
+"Writing an extension the build can freeze" (`docs/en/modules/ROOT/pages/concepts.adoc#writing-a-frozen-extension`).
+
+## Prerequisites
+
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- `jakarta.servlet.jsp:jakarta.servlet.jsp-api:4.0.0` is already modular upstream
+  (module `jakarta.servlet.jsp`, requires `jakarta.servlet` and `jakarta.el`
+  transitively) — no Vidocq fork needed.
+- Official Pages TCK coordinates: `jakarta.tck:jakarta-pages-tck:4.0.0`, verified
+  from the distribution's embedded POM. The build-side Arquillian adapter, the
+  published `ibarra-arquillian` module, precompiles WARs and launches modular Foy;
+  see `ibarra-arquillian/README.md` (adapter, configuration) and
+  `ibarra-tck/README.md` (Pages TCK runner).
+  Explicit `PagePrecompiler.precompileDeployment` may retain individual translation
+  failures as compiled error servlets for this harness. Production/plugin packaging
+  uses `precompile` and remains fail-fast; never enable a runtime parser fallback.
+- The build uses `git-commit-id-maven-plugin` (from `vidocq-parent`): it needs at least
+  one commit in the repository.
+
+## Essential Commands
+
+```bash
+sdk env
+./mvnw -ntp install                                # default reactor (no TCK)
+./mvnw test
+./mvnw -pl ibarra-arquillian test                  # adapter regression tests
+./mvnw -Ptck -pl ibarra-tck test                   # runner tests
+./run-official-tck-pages-4.0.sh smoke              # bootstrap, clean install, official smoke
+./run-official-tck-pages-4.0.sh all                # full official suite (682/682 at the BASELINE.md date)
+```
+
+`ibarra-tck` is **in-reactor behind the `tck` Maven profile** from day one. A plain
+`./mvnw install` builds the published `ibarra-arquillian` adapter, and so adds its
+Arquillian/ShrinkWrap test tooling, but never builds the runner nor resolves the
+official TCK.
+
+## Architecture
+
+```
+ibarra-api    ← Immutable page/listener constructor factories and index SPI
+ibarra-core   ← I1 runtime: JspFactory, PageContext, JspWriter, BodyContent,
+                JspApplicationContext (tags and full Pages EL resolver chain planned)
+ibarra-compiler ← I2 parser/model; I3 generation and I4 application packaging;
+                  internal API + java.xml + static java.compiler
+ibarra-maven-plugin ← Build-only precompile goal, Maven classpath exception
+ibarra-foy    ← Optional Foy engine binding, application layers, routing and TLD listeners
+ibarra-arquillian ← Published Arquillian adapter (test tooling, class path), reused by bodoni-tck
+ibarra-tck    ← Official Pages 4.0 TCK runner, in-reactor behind `tck`
+(planned)     ibarra-bench (JMH)
+```
+
+## Architecture Constraints Not to Violate
+
+1. **`ibarra-core` depends on the internal `ibarra-api` SPI and the Jakarta Pages API** (plus what it brings:
+   Servlet, EL). It obtains its `ExpressionFactory` through `ExpressionFactory.newInstance()`
+   — Peano is the default provider, not a hard dependency (PLAN.md open question 4).
+2. **Only `ibarra-foy` depends on Foy.** The core stays container-neutral.
+   Include-forward uses the neutral application-owned `PageForwardDispatcher`
+   hook in the existing qualified binding facade. Core may transition only its
+   owned JSP writer bridges; the container owns response reset and INCLUDE/forward
+   policy. Preserve application wrappers and retained delegates, never classify
+   or mutate unknown wrappers. Completion state is typed through `PageDispatchContext`.
+3. **Pages are compiled at build time.** Runtime translation (`javax.tools`) is a
+   documented degraded mode, off by default in production; never make the runtime path
+   the default.
+4. **No reflection in generated code** — tag handlers, attribute setters and `useBean`
+   classes are known at translation time: generated code calls `new` and setters
+   directly. Pages are found through the generated page index, never by class name.
+5. **No `synchronized`, no `ThreadLocal`** — page state travels in the `PageContext`;
+   no tag-handler pooling unless a `BENCH.md` entry justifies it.
+6. **JSTL is out of scope** — do not add standard tag library code here.
+7. **JUnit 6** (`junit-bom` managed by `vidocq-parent`), no Mockito — hand-written
+   fixtures and servlet doubles only.
+8. **Language** — code, Javadoc, comments, commit messages and every `.md` file are in
+   **English**.
+
+9. **I3 boundary** — `GenerationOptions.DEFAULT` compiles EL through Peano at
+   build time. Application modules with EL require `io.vidocq.peano.api` explicitly.
+   `withStartupEl(true)` remains an interpreter preview; packaging rejects it.
+   Never add an automatic runtime parsing fallback. Fixed-arity TLD functions use
+   build-validated descriptors and generated direct static invokers. Deferred
+   tag attributes use typed per-invocation compiled expressions, with creation-time
+   variable/function capture and scoped method metadata/evaluation. Broader
+   translation semantics keep I3 in progress.
+   Generated page imports use lazy direct class literals from build-time metadata;
+   runtime ImportHandler mutations are rejected explicitly in that mode.
+
+10. **I4 boundary** — application modules must require `io.vidocq.ibarra.api`;
+    their generated packages need no exports/opens. Register page indexes with
+    Java module `provides`, never classpath service files or runtime class-name
+    lookup. Two class-path exceptions exist, both tooling: the Maven plugin uses
+    Maven's build-time classpath as designed in PLAN.md, and the published
+    `ibarra-arquillian` adapter (test tooling, taken at `test` scope) runs on the
+    test class path with Arquillian and ShrinkWrap. What the adapter deploys stays
+    named modules (`tck.application`, `tck.host`). Maven, Arquillian and ShrinkWrap
+    libraries must never enter application/runtime artifacts.
+
+11. **TLD boundary** — discovery and class-file validation run only at build time.
+    Generated listener factories call constructors directly; metadata discovery
+    must never initialize listener classes. Runtime TLD parsing/class-name lookup
+    is prohibited. Libraries must be reachable named modules with listener
+    packages accessible to the generated application module. Initial I6 handlers
+    use fresh instances and direct calls, including custom-tag named/fragment
+    attributes and explicit bodies. Tagdependent bodies are opaque to directive,
+    EL and scripting interpretation; resolve their TLD contracts before encoding
+    and directive probes. Standard bodies use the first exact closing delimiter;
+    XML preserves structural nesting and decoded character data. Named jsp:attribute
+    envelopes use their ordinary contracts; explicit jsp:body payloads stay opaque.
+    TLD validators (`<validator>`) run from generated code at initialization, not
+    at translation time as JSP.7.4 describes (IBARRA-087; known deviation, PLAN.md):
+    a page's validators and the `TagExtraInfo.validate` calls of its TEI-bearing
+    tags (the API default delegates to `isValid`) run once in servlet `init()`,
+    before `jspInit`, and any message fails initialization. A tag file's validators
+    (libraries of its `taglib` directives or, in `.tagx`, `xmlns` declarations,
+    IBARRA-154) run once per generated class on the first `doTag()`, monitor-free
+    (no `synchronized`) and without a lambda (IBARRA-153). A non-`Error` failure is
+    kept and reported to every call as a fresh `JspException`; an `Error` is not kept.
+    TEI `getVariableInfo` is read from class files at build time when it is a static
+    contract; other TEI variable metadata fails translation. TLD and tag-file
+    variables, unqualified dynamic attributes and `.tag`/`.tagx` files are supported.
+    Namespaced dynamic attributes and the tag-file constructs reported as "not
+    supported yet" by `TagFileCompiler` (e.g. TEI- or variable-bearing tags nested
+    in a tag file) fail translation; do not silently ignore their semantics.
+    Deferred named attributes accept text/EL; executable body capture and custom
+    literal method return conversion remain explicit follow-up boundaries.
+
+**Architecture rules as tests** — **ArchUnit** (`com.tngtech.archunit:archunit`, Apache-2.0, through the shared
+`vidocq-archrules` library of `vidocq-parent`) is test scope, used only by the test-only module
+`ibarra-architecture-tests` (Vidocq/vidocq#289): its `ArchitectureRules` turn constraints 1 to 5 into tests on the
+classes of `ibarra-api`, `ibarra-core`, `ibarra-compiler` and `ibarra-foy`. `ArchitectureRules.REFLECTIVE_FALLBACKS`
+is empty and must stay so unless a fallback has a documented reason there. `ibarra-core` reads `java.desktop` for
+`java.beans.Introspector.flushCaches` only (IBARRA-158).
+
+## Conventions
+
+- **Maven groupId**: `io.vidocq.ibarra`; version `0.4.0-SNAPSHOT` (workspace dev line,
+  parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`). Upstream Vidocq versions
+  (`peano.version`, `foy.version`) are properties, for cross-repo PR overrides.
+- **Packages**: `io.vidocq.ibarra.core.internal.*` = implementation, not exported.
+- Licence header from `etc/license-header.txt` on every `.java` file.
+- Commits: see "Ecosystem rules" above.
+
+## TDD — Test-Driven Development (mandatory)
+
+Red → green → refactor, one spec chapter at a time, following the PLAN.md milestones.
+Cite the spec section in commit messages / PR descriptions (e.g. "Pages 4.0 JSP.1.10
+directives").
+
+## TCK — Technology Compatibility Kit
+
+The official smoke subset passes, and the recorded full-suite run passes all 682
+methods of the 92 official classes, with no class-level deployment error (see
+`ibarra-tck/BASELINE.md`). That is a measured compatibility result, not a
+certification: formal Jakarta certification is a separate process, so never claim it.
+Do not treat class-level deployment errors as executed test methods. 100 % PASS is a
+merge gate; any challenge goes in a `TCK.md` with spec citation — created only if one
+is actually filed.
+
+## AI Principles — Collaboration on This Repository
+
+- **Plan mode by default** on any structural change (new module, new SPI, change to the
+  generated page shape).
+- When the workspace review agents are available (Claude Code subagents in
+  `vidocq-workspace/.claude/agents/`), use **`java-modules-guardian`**,
+  **`classfile-codegen`**, **`virtual-threads-reviewer`** and **`dependency-gatekeeper`**
+  proactively on `module-info.java`, codegen, concurrent code, or `pom.xml` changes.
+
+## Documentation (Antora) conventions
+
+The project documentation lives in `docs/en` as an Antora component and is
+aggregated by the **vidocq-docs** site, which provides a **shared UI bundle** (banner,
+logo, fonts, colours, footer). **Never customise the documentation UI per project** —
+all visual harmonisation is centralised in `vidocq-docs/ui-bundle`.
+
+### Gold reference
+**Vauban** is the reference implementation for documentation structure. Mirror its
+`docs/en` layout when creating or updating docs. **Chappe** (HTTP server)
+and **Vidocq** (runtime orchestrator) are *special cases*, not references: they are not
+Jakarta EE / MicroProfile spec implementations.
+
+### Repository layout
+- `docs/en/antora.yml` → `name: <project>`, `title:`, versioned per branch (`dev` prerelease on `main`, `'<version>'` on `docs/<version>`), `project-version` attribute, `nav:`, `lang: en`.
+- Pages in `modules/ROOT/pages/`, navigation in `modules/ROOT/nav.adoc`, images in
+  `modules/ROOT/images/`.
+- **English-only** (ADR 0004 in vidocq-docs): no French mirror — do not reintroduce one.
+
+### Canonical navigation (section order)
+`index` → `getting-started` → `usage` → `concepts` → `internals` → `tck` →
+`performance` → `reference` → `migration`
+
+Multi-module projects (e.g. Vidocq, Mansart) may append `modules/*` / `sub-modules/*`
+sub-pages after `migration`.
+
+### TCK / Performance rule (not mutually exclusive)
+- Every **spec implementation** — i.e. **all projects except Chappe and Vidocq** — MUST
+  have a **`tck`** section documenting TCK coverage/status.
+- Projects with a performance story (e.g. **Chappe**) keep their **`performance`** section.
+- When **both** sections exist, order them **TCK first, then Performance**.
+- **Chappe** and **Vidocq** do not require a `tck` section (not spec implementations).
+
+### `index.adoc` structure
+Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a centred logo
+(`image::<project>-logo.png[...,role=module-logo]`), a `[.lead]` paragraph, then
+`== Origin of the name`, an `== At a glance` table, and ecosystem / quick-links sections.
+
+### Logo
+Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.

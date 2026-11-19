@@ -1,0 +1,68 @@
+= TCK status
+:description: The complete Jakarta Pages 4.0 TCK passes all 682 methods across 92 classes.
+
+[.lead]
+The complete official Jakarta Pages 4.0.0 TCK passes **682/682 methods (100%)**
+across all 92 selected classes. Surefire reports zero failures, errors or skipped
+methods. This fulfills Ibarra milestone I8's full-suite merge gate. Formal Jakarta
+certification remains a separate process.
+
+== Recorded baseline
+
+Run date: 2026-10-17, Temurin Java 25 and Maven 3.9.16. The run prepared the
+official artifacts, built the Ibarra reactor and executed the complete official
+suite without provenance skips.
+
+[source,bash]
+----
+sdk env
+./run-official-tck-pages-4.0.sh all
+----
+
+| Measure | Result |
+|---|---:|
+| Official classes selected | 92 |
+| Official methods executed | 682 |
+| Passing methods | 682 |
+| Pass rate | 100% |
+| Failures, errors, skipped methods | 0, 0, 0 |
+
+The detailed environment, report totals and historical snapshots are in
+link:{repo-ibarra}/src/branch/main/ibarra-tck/BASELINE.md[the recorded baseline].
+The previous method-level diagnostic records remain in
+link:{repo-ibarra}/src/branch/main/ibarra-tck/FAILURES.md[the historical failure inventory];
+there are no outstanding official TCK failures.
+
+== Smoke and CI
+
+The pull-request smoke workflow is a bounded regression subset and does not
+replace the full `all` run. The complete command above is the acceptance check for
+milestone I8.
+
+== Runner
+
+`ibarra-tck` enters the reactor only under `-Ptck`; official artifact scanning
+requires `-Ptck,tck-official`. The official distribution is
+`jakarta.tck:jakarta-pages-tck:4.0.0`, published by Eclipse rather than Maven
+Central. Preparation preserves its embedded POM, supplies the omitted JavaTest
+5.0 dependency and checks artifact SHA-256 digests.
+
+The adapter is the published `ibarra-arquillian` module, which `ibarra-tck` takes at
+`test` scope. It precompiles pages before launching modular Foy/Chappe. The server
+contains neither the compiler nor `java.compiler`, and retains reflection denial.
+It supports isolated WARs and filesystem resources. Root JSP property groups reach
+the compiler through build-side descriptor parsing. Explicit deployment
+precompilation preserves per-page translation failures as error servlets so valid
+pages and negative translation tests can coexist; normal packaging still rejects
+translation errors.
+
+See xref:modules/official-tck-runner.adoc[Official TCK runner] for dependencies,
+commands, artifact preparation and retained logs, and
+xref:modules/arquillian-adapter.adoc[Arquillian adapter] for the deployment model,
+its configuration and its limits.
+
+== Tracking
+
+* Reproducible issues: link:{repo-ibarra}/src/branch/main/BUG.md[BUG.md].
+* Plan and milestones: link:{repo-ibarra}/src/branch/main/PLAN.md[PLAN.md].
+* Challenges, if filed, belong in `TCK.md` with a specification citation.

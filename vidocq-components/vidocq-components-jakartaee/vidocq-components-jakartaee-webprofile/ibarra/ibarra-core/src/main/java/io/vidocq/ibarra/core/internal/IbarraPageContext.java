@@ -1,0 +1,413 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.ibarra.core.internal;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.io.PrintWriter;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import jakarta.el.ELContext;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+import jakarta.servlet.jsp.*;
+import jakarta.servlet.jsp.tagext.BodyContent;
+
+/** Per-request page state. No thread-local storage or context pooling. */
+final class IbarraPageContext extends PageContext implements io.vidocq.ibarra.spi.BeanScopeContext, io.vidocq.ibarra.spi.PageDispatchContext {
+    private final IbarraApplicationContext applicationContext;
+    private final Map<String, Object> attributes = new HashMap<>();
+    private final ArrayDeque<JspWriter> bodies = new ArrayDeque<>();
+    private Servlet servlet;
+    private ServletRequest pageRequest;
+    private ServletResponse pageResponse;
+    private ServletConfig pageConfig;
+    private ServletContext servletContext;
+    private HttpSession pageSession;
+    private String errorPage;
+    private JspWriter pageOut;
+    private BufferedJspWriter base;
+    private ELContext elContext;
+    private IbarraPageContext includingPage;
+    private boolean forwarded;
+    private io.vidocq.ibarra.core.binding.PageForwardDispatcher forwardDispatcher;
+
+    IbarraPageContext() { this(new IbarraApplicationContext()); }
+    IbarraPageContext(IbarraApplicationContext application) { this.applicationContext = Objects.requireNonNull(application); }
+
+    @Override
+    public void initialize(Servlet servlet, ServletRequest request, ServletResponse response,
+            String errorPageURL, boolean needsSession, int bufferSize, boolean autoFlush) throws IOException {
+        if (this.servlet != null) throw new IllegalStateException("Page context is already initialized");
+        Objects.requireNonNull(servlet);
+        Objects.requireNonNull(request);
+        Objects.requireNonNull(response);
+        var config = Objects.requireNonNull(servlet.getServletConfig());
+        var context = Objects.requireNonNull(config.getServletContext());
+        var writer = new BufferedJspWriter(response::getWriter, bufferSize, autoFlush);
+        HttpSession session = null;
+        if (needsSession) {
+            if (!(request instanceof HttpServletRequest http)) throw new IllegalStateException("Session requires an HTTP request");
+            session = http.getSession();
+            if (session == null) throw new IllegalStateException("Session is unavailable");
+        }
+        this.servlet = servlet;
+        this.pageRequest = request;
+        this.pageResponse = response;
+        this.includingPage = includingPage(response);
+        this.forwarded = false;
+        this.forwardDispatcher = applicationContext.forwardDispatcher();
+        this.pageConfig = config;
+        this.servletContext = context;
+        this.pageSession = session;
+        this.errorPage = errorPageURL;
+        this.base = writer;
+        this.pageOut = writer;
+        attributes.put(PAGE, servlet);
+        attributes.put(PAGECONTEXT, this);
+        attributes.put(REQUEST, request);
+        attributes.put(RESPONSE, response);
+        attributes.put(CONFIG, config);
+        attributes.put(APPLICATION, context);
+        attributes.put(OUT, writer);
+        if (session != null) attributes.put(SESSION, session);
+        var exception = getException();
+        if (exception != null) attributes.put(EXCEPTION, exception);
+    }
+
+    @Override
+    public void release() {
+        attributes.clear();
+        bodies.clear();
+        servlet = null; pageRequest = null; pageResponse = null; pageConfig = null; servletContext = null;
+        pageSession = null; errorPage = null; pageOut = null; base = null; elContext = null;
+        includingPage = null; forwarded = false; forwardDispatcher = null;
+    }
+
+    @Override public boolean isForwarded() { return forwarded; }
+
+    private static String name(String name) { return Objects.requireNonNull(name, "attribute name"); }
+    private HttpSession requiredSession() {
+        if (pageSession == null) throw new IllegalStateException("Page does not participate in a session");
+        return pageSession;
+    }
+
+    @Override
+    public java.util.concurrent.locks.Lock beanScopeLock(int scope) {
+        if (servlet == null) throw new IllegalStateException("Page context is inactive");
+        if (scope == SESSION_SCOPE) requiredSession();
+        else if (scope != APPLICATION_SCOPE) throw new IllegalArgumentException("Not a shared scope: " + scope);
+        return applicationContext.beanScopeLock;
+    }
+
+    @Override public Object getAttribute(String name) { return attributes.get(name(name)); }
+    @Override
+    public Object getAttribute(String name, int scope) {
+        name(name);
+        return switch (scope) {
+            case PAGE_SCOPE -> attributes.get(name);
+            case REQUEST_SCOPE -> pageRequest.getAttribute(name);
+            case SESSION_SCOPE -> requiredSession().getAttribute(name);
+            case APPLICATION_SCOPE -> servletContext.getAttribute(name);
+            default -> throw new IllegalArgumentException("Invalid scope: " + scope);
+        };
+    }
+
+    @Override public void setAttribute(String name, Object value) { setAttribute(name, value, PAGE_SCOPE); }
+    @Override
+    public void setAttribute(String name, Object value, int scope) {
+        name(name);
+        if (value == null) { removeAttribute(name, scope); return; }
+        switch (scope) {
+            case PAGE_SCOPE -> attributes.put(name, value);
+            case REQUEST_SCOPE -> pageRequest.setAttribute(name, value);
+            case SESSION_SCOPE -> requiredSession().setAttribute(name, value);
+            case APPLICATION_SCOPE -> servletContext.setAttribute(name, value);
+            default -> throw new IllegalArgumentException("Invalid scope: " + scope);
+        }
+    }
+
+    @Override
+    public void removeAttribute(String name, int scope) {
+        name(name);
+        switch (scope) {
+            case PAGE_SCOPE -> attributes.remove(name);
+            case REQUEST_SCOPE -> pageRequest.removeAttribute(name);
+            case SESSION_SCOPE -> requiredSession().removeAttribute(name);
+            case APPLICATION_SCOPE -> servletContext.removeAttribute(name);
+            default -> throw new IllegalArgumentException("Invalid scope: " + scope);
+        }
+    }
+
+    @Override
+    public void removeAttribute(String name) {
+        removeAttribute(name, PAGE_SCOPE);
+        removeAttribute(name, REQUEST_SCOPE);
+        if (pageSession != null) removeAttribute(name, SESSION_SCOPE);
+        removeAttribute(name, APPLICATION_SCOPE);
+    }
+
+    @Override
+    public Object findAttribute(String name) {
+        int scope = getAttributesScope(name);
+        return scope == 0 ? null : getAttribute(name, scope);
+    }
+
+    @Override
+    public int getAttributesScope(String name) {
+        name(name);
+        if (getAttribute(name) != null) return PAGE_SCOPE;
+        if (pageRequest.getAttribute(name) != null) return REQUEST_SCOPE;
+        if (pageSession != null && pageSession.getAttribute(name) != null) return SESSION_SCOPE;
+        if (servletContext.getAttribute(name) != null) return APPLICATION_SCOPE;
+        return 0;
+    }
+
+    @Override
+    public Enumeration<String> getAttributeNamesInScope(int scope) {
+        return switch (scope) {
+            case PAGE_SCOPE -> Collections.enumeration(attributes.keySet());
+            case REQUEST_SCOPE -> pageRequest.getAttributeNames();
+            case SESSION_SCOPE -> requiredSession().getAttributeNames();
+            case APPLICATION_SCOPE -> servletContext.getAttributeNames();
+            default -> throw new IllegalArgumentException("Invalid scope: " + scope);
+        };
+    }
+
+    @Override public HttpSession getSession() { return pageSession; }
+    @Override public Object getPage() { return servlet; }
+    @Override public ServletRequest getRequest() { return pageRequest; }
+    @Override public ServletResponse getResponse() { return pageResponse; }
+    @Override public ServletConfig getServletConfig() { return pageConfig; }
+    @Override public ServletContext getServletContext() { return servletContext; }
+    @Override public JspWriter getOut() { return pageOut; }
+
+    @Override
+    public Exception getException() {
+        if (pageRequest == null) return null;
+        var error = pageRequest.getAttribute("jakarta.servlet.jsp.jspException");
+        if (error == null) error = pageRequest.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
+        if (error instanceof Exception exception) return exception;
+        return error instanceof Throwable throwable ? new ServletException(throwable) : null;
+    }
+
+    @Override
+    public BodyContent pushBody() {
+        var body = new BufferedBodyContent(pageOut);
+        push(body);
+        return body;
+    }
+
+    @Override
+    public JspWriter pushBody(Writer writer) {
+        Objects.requireNonNull(writer);
+        var body = new BufferedJspWriter(() -> writer, JspWriter.NO_BUFFER, true);
+        push(body);
+        return body;
+    }
+
+    private void push(JspWriter writer) {
+        bodies.push(pageOut);
+        pageOut = writer;
+        attributes.put(OUT, pageOut);
+    }
+
+    @Override
+    public JspWriter popBody() {
+        if (!bodies.isEmpty()) pageOut = bodies.pop();
+        attributes.put(OUT, pageOut);
+        return pageOut;
+    }
+
+    private RequestDispatcher dispatcher(String path) throws ServletException {
+        Objects.requireNonNull(path);
+        if (!path.startsWith("/")) {
+            Object included = pageRequest.getAttribute(RequestDispatcher.INCLUDE_SERVLET_PATH);
+            Object includedPathInfo = pageRequest.getAttribute(RequestDispatcher.INCLUDE_PATH_INFO);
+            String current;
+            if (included instanceof String servletPath) {
+                current = servletPath + (includedPathInfo instanceof String pathInfo ? pathInfo : "");
+            } else if (pageRequest instanceof HttpServletRequest http) {
+                String pathInfo = http.getPathInfo();
+                current = http.getServletPath() + (pathInfo == null ? "" : pathInfo);
+            } else {
+                current = "/";
+            }
+            path = current.substring(0, current.lastIndexOf('/') + 1) + path;
+        }
+        var dispatcher = servletContext.getRequestDispatcher(path);
+        if (dispatcher == null) throw new ServletException("No dispatcher for " + path);
+        return dispatcher;
+    }
+
+    @Override
+    public void forward(String path) throws ServletException, IOException {
+        var pages = forwardablePages();
+        var target = dispatcher(path);
+        var routes = new java.util.LinkedHashMap<IncludeWriter, Boolean>();
+        for (var current = pageResponse; current instanceof ServletResponseWrapper wrapper; current = wrapper.getResponse())
+            if (current instanceof Inclusion inclusion) routes.putIfAbsent(inclusion.writer(), inclusion.writer().forward);
+        boolean succeeded = false;
+        try {
+            for (var page : pages) page.clearPageOutput();
+            routes.keySet().forEach(writer -> writer.forward = true);
+            forwardDispatcher.forward(target, pageRequest, pageResponse);
+            for (var page : pages) page.forwarded = true;
+            succeeded = true;
+        } finally {
+            if (!succeeded) routes.forEach((writer, previous) -> writer.forward = previous);
+        }
+    }
+
+    /** This page and the pages including it, outermost last; fails when any of them already wrote output. */
+    private ArrayDeque<IbarraPageContext> forwardablePages() {
+        var pages = new ArrayDeque<IbarraPageContext>();
+        for (var page = this; page != null; page = page.includingPage) {
+            if (page.pageResponse.isCommitted()) throw new IllegalStateException("Response is already committed");
+            if (page.base.hasFlushed()) throw new IllegalStateException("Page output has already been flushed");
+            pages.addLast(page);
+        }
+        return pages;
+    }
+
+    private void clearPageOutput() throws IOException {
+        if (base.getBufferSize() != JspWriter.NO_BUFFER) base.clearBuffer();
+        if (pageOut instanceof BodyContent body) body.clearBody();
+        for (var writer : bodies) if (writer instanceof BodyContent body) body.clearBody();
+    }
+
+    @Override public void include(String path) throws ServletException, IOException { include(path, true); }
+    @Override
+    public void include(String path, boolean flush) throws ServletException, IOException {
+        if (flush) pageOut.flush();
+        var route = new IncludeWriter(this, pageOut, pageResponse);
+        ServletResponse included;
+        if (pageResponse instanceof HttpServletResponse http) {
+            included = new HttpInclusion(http, route);
+        } else {
+            included = new GenericInclusion(pageResponse, route);
+        }
+        dispatcher(path).include(pageRequest, included);
+        if (!forwarded && route.writer.checkError()) throw new IOException("Failed to write included output");
+    }
+
+    private interface Inclusion { IncludeWriter writer(); }
+
+    private static IbarraPageContext includingPage(ServletResponse response) {
+        while (response instanceof ServletResponseWrapper wrapper) {
+            if (response instanceof Inclusion inclusion && !inclusion.writer().forward) return inclusion.writer().page;
+            response = wrapper.getResponse();
+        }
+        return null;
+    }
+
+    /** Stable delegation for application writers retained before or after dispatch. */
+    private static final class IncludeWriter extends java.io.Writer {
+        final IbarraPageContext page;
+        final JspWriter output;
+        final ServletResponse response;
+        final PrintWriter writer = new PrintWriter(this) {
+            @Override public void close() { if (IncludeWriter.this.forward) super.close(); }
+        };
+        volatile boolean forward;
+        IncludeWriter(IbarraPageContext page, JspWriter output, ServletResponse response) {
+            this.page = page; this.output = output; this.response = response;
+        }
+        @Override public void write(char[] value, int offset, int length) throws IOException {
+            if (forward) response.getWriter().write(value, offset, length);
+            else output.write(value, offset, length);
+        }
+        @Override public void flush() throws IOException { if (forward) response.getWriter().flush(); }
+        @Override public void close() throws IOException { if (forward) response.getWriter().close(); }
+        ServletOutputStream outputStream() throws IOException {
+            if (!forward) throw new IllegalStateException("JSP inclusion uses character output");
+            return response.getOutputStream();
+        }
+    }
+
+    private static final class HttpInclusion extends HttpServletResponseWrapper implements Inclusion {
+        private final IncludeWriter route;
+        HttpInclusion(HttpServletResponse response, IncludeWriter route) { super(response); this.route = route; }
+        @Override public IncludeWriter writer() { return route; }
+        @Override public PrintWriter getWriter() { return route.writer; }
+        @Override public ServletOutputStream getOutputStream() throws IOException { return route.outputStream(); }
+    }
+
+    private static final class GenericInclusion extends ServletResponseWrapper implements Inclusion {
+        private final IncludeWriter route;
+        GenericInclusion(ServletResponse response, IncludeWriter route) { super(response); this.route = route; }
+        @Override public IncludeWriter writer() { return route; }
+        @Override public PrintWriter getWriter() { return route.writer; }
+        @Override public ServletOutputStream getOutputStream() throws IOException { return route.outputStream(); }
+    }
+
+    @Override
+    public void handlePageException(Exception exception) throws ServletException, IOException {
+        handlePageException((Throwable) exception);
+    }
+
+    @Override
+    public void handlePageException(Throwable exception) throws ServletException, IOException {
+        Objects.requireNonNull(exception);
+        if (errorPage == null || errorPage.isEmpty()) {
+            if (exception instanceof IOException io) throw io;
+            if (exception instanceof ServletException servletException) throw servletException;
+            if (exception instanceof RuntimeException runtime) throw runtime;
+            if (exception instanceof Error error) throw error;
+            throw new ServletException(exception);
+        }
+        pageRequest.setAttribute("jakarta.servlet.jsp.jspException", exception);
+        pageRequest.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
+        pageRequest.setAttribute(RequestDispatcher.ERROR_EXCEPTION_TYPE, exception.getClass());
+        pageRequest.setAttribute(RequestDispatcher.ERROR_MESSAGE, exception.getMessage());
+        pageRequest.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
+        pageRequest.setAttribute(RequestDispatcher.ERROR_SERVLET_NAME, pageConfig.getServletName());
+        if (pageRequest instanceof HttpServletRequest http) pageRequest.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, http.getRequestURI());
+        if (hasFlushedOutput()) include(errorPage, false);
+        else forward(errorPage);
+    }
+
+    private boolean hasFlushedOutput() {
+        for (var page = this; page != null; page = page.includingPage)
+            if (page.pageResponse.isCommitted() || page.base.hasFlushed()) return true;
+        return false;
+    }
+
+    @Override
+    public ELContext getELContext() {
+        if (elContext == null) {
+            elContext = applicationContext.createELContext(this);
+            // Listeners may call getELContext; publish it before invoking them.
+            boolean notified = false;
+            try {
+                applicationContext.notifyListeners(elContext);
+                notified = true;
+            } finally {
+                if (!notified) elContext = null;
+            }
+        }
+        return elContext;
+    }
+}
+

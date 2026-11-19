@@ -1,0 +1,269 @@
+= Tag handlers
+:description: Initial classic and simple custom-tag generation in strict application modules.
+
+== Build-time contracts
+
+`TldParser` retains immutable `TagDescriptor`, `TagAttribute` and `TldFunction` metadata.
+The precompiler resolves root descriptor aliases, implicit library URIs and
+context-relative TLD paths. Standard declarations use explicit aliases first; library resources
+precede loose WEB-INF resources. Relative taglib declarations retain their
+source origin across static includes. XML tag namespaces using `urn:jsptld:`
+force direct resource lookup, bypassing URI aliases. Ordinary XML namespaces use
+only URI mappings; discovering an external resource does not bind that namespace
+in unrelated pages. An unmapped absolute URI in a standard taglib directive is a
+translation error even when its prefix is unused. `urn:jsptagdir:` resolves a tag
+directory separately from TLD aliases.
+
+Direct TLD references retain immutable metadata from the raw per-file parse
+before normalization removes XML declaration wrappers. Includes, preludes and
+codas resolve relative paths from their own declaration origins. The precompiler
+reads referenced resource snapshots, including files outside implicit discovery
+roots and JARs containing META-INF/taglib.tld. Explicit TLD files need no .tld
+extension. Unreferenced external descriptors are ignored; referenced listeners
+join the generated index without class initialization. Reused translation units
+need no second parse during generation.
+
+Standalone generation can supply the catalogue with
+`GenerationOptions.withTagLibraries`. Its compatible constructors and other
+option helpers retain the immutable map. Runtime artifacts contain generated
+calls and factories, without TLD parsing or class-name lookup.
+Standalone generators can also provide direct descriptor bytes through
+`withByteSources`. Supplied resource metadata retains its existing relative-path
+fallback; discovered aliases remain separate from physical resource bindings.
+
+Class-File inspection validates public concrete handlers, public no-argument
+constructors, implemented interfaces and public instance setters. Ordinary static
+and request-time attributes bind the handler's actual JavaBeans property, including
+inherited setters. Missing dynamic type metadata remains Object; it does not require
+a setValue(Object) method. Actual-property coercion also applies when an explicit
+ordinary TLD type differs from the handler. This compatibility interpretation is
+supported by the official fixtures and
+https://github.com/apache/tomcat/blob/main/java/org/apache/jasper/compiler/Generator.java[Jasper's property-based generation];
+it does not change deferred expected types or their mandated setter protocols.
+
+Class-File inspection selects the unique most-specific compatible write method,
+with boolean-getter precedence, getter/write type compatibility and reference-array
+covariance. Incomparable overloads and incompatible readable/writable properties
+fail translation. No runtime JavaBeans introspection is used. Attribute names retain
+identifier lexical validation; Java keywords such as boolean, byte and static are
+accepted because the generator emits setters rather than Java variables with those names.
+
+Literal coercion supports String,
+Object and primitive/boxed numeric, boolean and character setters. Java scripting
+expressions require rtexprvalue; immediate EL is compiled by Peano at build time.
+
+== Invocation and cleanup
+
+Every invocation constructs a fresh handler. Classic Tag, IterationTag and
+BodyTag calls follow start/body/after-body/end ordering. Buffered body output
+is owned by the handler, including whether to clear it between iterations.
+The generated page restores the enclosing writer before end/catch/finally.
+
+TryCatchFinally action failures invoke catch/finally; setter failures bypass
+those callbacks. Classic release runs even after failure or page termination.
+A normal SKIP_PAGE return runs the returning tag's finally without calling its
+own catch, then propagates through enclosing handlers and stops the page.
+SimpleTag SkipPageException also stops page evaluation without error dispatch.
+
+Simple bodies are generated as member JspFragment classes. Each fragment holds
+its invocation's context, parent and forwarding state. It evaluates on demand,
+supports repeated invocation and restores the writer after an explicit Writer
+target. Scriptlets and scripting expressions are rejected inside scriptless
+bodies. Mixed nesting passes the current JspTag to simple handlers and adapts
+simple parents through the standard TagAdapter for classic handlers.
+
+Unqualified DynamicAttributes use direct interface calls when advertised by
+the TLD and implemented by the handler.
+
+== TagExtraInfo scripting variables
+
+For classic handlers, the precompiler reads literal `VariableInfo` arrays returned
+by `TagExtraInfo.getVariableInfo` from class files. It generates declared locals
+and synchronizes them from `PageContext` after `doStartTag`, `doInitBody`, each
+`doAfterBody`, and `doEndTag` according to their `AT_BEGIN`, `NESTED` or `AT_END`
+scope. The TEI class is not loaded or executed. Metadata that depends on `TagData`,
+non-diagnostic helper calls or other dynamic computation is rejected during translation.
+
+For simple handlers, declared `AT_BEGIN` and `AT_END` variables synchronize once
+after `doTag` returns. Scriptlets remain forbidden in scriptless simple-tag bodies.
+
+TLD `<variable>` declarations may use `<name-given>` or
+`<name-from-attribute>`, with an optional `<variable-class>`, and use the same
+scope mappings. A derived name comes from a required, non-runtime
+`java.lang.String` attribute whose value at the tag invocation is a translation-time
+literal. The generated `TagInfo` retains both TLD name fields.
+
+== TagExtraInfo validation
+
+When a generated page uses a TLD tag with a `TagExtraInfo` class, its servlet
+initialization constructs a `TagInfo` from the available TLD tag, attribute,
+variable and dynamic-attribute metadata, then calls `TagExtraInfo.validate`
+with a `TagData` containing the tag's static attribute values. Request-time
+attribute expressions use `TagData.REQUEST_TIME_VALUE`. Each TEI-bearing tag
+occurrence is validated during servlet initialization, before the page's
+`jspInit`; requests do not rerun validation. A nonempty validation-message array
+fails initialization.
+
+The generated `TagLibraryInfo` is linked from `TagInfo` and exposes the TLD URI,
+prefix, function catalogue as `FunctionInfo` values, ordinary TLD tags as
+`TagInfo` values, and TLD-declared tag files as `TagFileInfo` values. Ordinary tag
+entries retain their handler, body content, description, display name, icons,
+attributes, variables, dynamic-attribute flag and linked `TagExtraInfo`. Each
+tag-file entry retains its name and path, and its `TagInfo` carries metadata
+parsed from the referenced tag file's tag, attribute and variable directives.
+`TagLibraryInfo.getTagLibraryInfos()` exposes the complete set of TLDs imported by
+page directives, with each entry initialized from its descriptor metadata.
+
+TLD `TagLibraryValidator` classes receive the standard-syntax page XML view once
+during generated servlet initialization. The view includes tag-library namespaces,
+JSP directives, scripting elements, custom actions and unique `jsp:id` values;
+request-time attribute expressions use the XML-view `%=` form. A nonempty
+validation result fails initialization. JSP documents declare these libraries
+through `xmlns` attributes as well as `taglib` directives. For a tag file, validators
+declared by the libraries of its `taglib` directives, or of its `xmlns` declarations
+in an XML `.tagx` file, receive the tag-file XML view once per generated class, when
+its handler is first invoked. The generated class holds that call as a `FutureTask`
+over a named nested `Callable`, in a static `AtomicReference`, and uses no
+`synchronized`: concurrent first invocations wait for the single run. A success or
+a non-`Error` failure is kept: every later invocation receives its own
+`JspException` caused by the original failure. An `Error` is rethrown and not kept,
+so the next invocation validates again. A waiter interrupted while it waits gets a
+`JspException`, keeps its interrupt flag, and changes nothing.
+
+NOTE: JSP.7.4 describes `TagLibraryValidator` and `TagExtraInfo` validation as
+translation-time checks. Ibarra runs them from generated code instead: page
+validators and `TagExtraInfo` validation at servlet `init()`, tag-file
+`TagLibraryValidator` validation on the tag file's first invocation. An invalid page
+is therefore reported when it is first initialized or invoked, not when it is
+built. Moving validation to the build is deferred until
+the Bodoni Tags TCK shows a need for it.
+
+== Standard tag files
+
+Referenced standard `.tag` files support tag/import/attribute/variable/taglib
+directives, static text, Java declarations, scriptlets and scripting expressions.
+Declared scalar attributes generate setters; tag-file variables follow their
+declared scopes. Every invocation receives a `PageContext` wrapper with an empty,
+isolated page scope; declared attributes and the declared dynamic-attribute map
+are placed there, while request, session and application scopes delegate to the
+invoking page. `AT_BEGIN` and `AT_END` values synchronize back to the caller, and
+`NESTED` values are restored after invocation. Nested custom actions with declared
+attributes generate direct calls to simple or classic handlers, including
+request-time Java expressions. Literal-path `jsp:forward` dispatches and throws
+`SkipPageException` so neither the rest of the tag file nor its caller continues.
+Nested action bodies, `jsp:param` in tag-file forwards, classic body and exception
+callbacks, EL, XML tag-file actions, fragments and complete tag-file runtime
+semantics remain unsupported.
+
+TLD-declared `TagFileInfo` and ordinary `TagInfo` entries are available to TEI
+validation. Nested `TagLibraryInfo` catalogues remain unsupported.
+
+== Compiler-provided tag identifiers
+
+Classic and simple handlers implementing
+https://jakarta.ee/specifications/pages/4.0/apidocs/jakarta.servlet.jsp/jakarta/servlet/jsp/tagext/jspidconsumer[JspIdConsumer]
+receive a direct setJspId call during property initialization, after context/parent
+setup and before ordinary attributes. Class-File hierarchy inspection also detects
+the interface inherited through parent classes or interfaces; no runtime reflection
+or instance test is required.
+
+Each consumer occurrence in the expanded translation unit receives its own constant
+identifier, unique within that page and stable across requests. Repeated static
+includes get distinct identifiers even when their original source locations match.
+Repeated fragment invocations keep the identifier assigned to their tag occurrence
+and construct fresh handler instances. The emitted identifier begins with a letter
+and uses only letters, digits and underscores, satisfying the API's character rules.
+These request-time handler identifiers are independent of translation-time XML
+view jsp:id metadata. They do not enable pooling or handler reuse.
+
+Caller ordinary/named attributes targeting the consumer's setJspId(String) are
+rejected at translation, including capitalization or recipient-prefix aliases.
+Unqualified dynamic jspId attributes are also rejected. This protects the reserved
+container property from overwriting the generated identifier;
+https://jakarta.ee/specifications/pages/4.0/jakarta-server-pages-spec-4.0.html#_valid_names_for_actions_and_attributes[Pages 4.0 section 1.3.7]
+reserves jsp-prefixed attribute names. This bounded guard does not reject an entire
+TLD catalogue merely because an unused descriptor declares such a property.
+
+== Named attributes and explicit bodies
+
+Custom tags accept `jsp:attribute` before an optional `jsp:body`. Named attributes
+alone mean an empty invocation body. Duplicate attributes, mixed implicit/explicit
+body content and misplaced wrappers fail translation. A declared attribute may
+use the recipient tag's prefix in its name. Custom-tag `omit` is accepted and ignored.
+
+Static named attributes accept template text, including literal XML markup in
+JSPX. Runtime scalar attributes capture their body once before the recipient's
+action lifecycle, then apply JSP string conversion to the selected setter type.
+Empty numeric/character strings convert to zero; character strings otherwise
+use the first character. Runtime-generated boundary whitespace is preserved.
+`trim` removes only source boundary space, tab, CR and LF, and defaults to true.
+
+Fragment attributes receive lazy, repeatable JspFragment instances for classic
+and simple handlers. Their bodies must be scriptless. Tags inside named scalar
+or fragment bodies use the recipient handler as parent. Capture failures restore
+the writer and release classic recipients, without calling their own catch/finally
+hooks during setter setup. Enclosing handlers retain their normal failure cleanup.
+Local XML namespace bindings on jsp:attribute, jsp:body and nested jsp:text wrappers apply
+to both scalar captures and fragments, then restore the enclosing prefix bindings.
+Trimming changes source boundary text while retaining namespace-bearing wrappers.
+
+== Tag-dependent bodies
+
+For `body-content=tagdependent`, translation preserves the body without interpreting
+EL, scripting, directives or actions. Library contracts are resolved before directive
+and encoding probes, including bindings supplied by static includes and preludes.
+Handlers receive the body through their ordinary classic or simple lifecycle;
+no runtime parser or compiler is introduced.
+
+In standard syntax, the first exact closing tag terminates the body, allowing
+whitespace before `>`. Opening tags, comments and quoted text inside the body do
+not change this delimiter rule. Same-named opening text is literal and does not
+introduce nested actions. JSPX remains well-formed XML: nested markup is balanced,
+character entities and CDATA become character data, and nested markup is retained
+as literal body output. Initial `jsp:attribute` envelopes follow the ordinary scalar,
+fragment or deferred attribute contract, independently of the dependent body. An
+explicit `jsp:body` contains only opaque payload; its whitespace is retained while
+whitespace between envelopes is ignored. Named attributes without an explicit body
+are an empty-body invocation. XML aliases for the JSP namespace are supported.
+Duplicate/misordered envelopes, attributes on `jsp:body`, unwrapped content after
+named attributes and missing delimiters fail translation. Payload that resembles
+bean declarations, directives or actions creates no page variables or metadata.
+
+== Current boundary
+
+This is an initial I6/I7 implementation. Broader standard-action named-attribute
+support, namespaced dynamic attributes, dynamic TEI metadata, complete tag
+metadata, tag-file bodies and fragments, and broader XML tag-file actions remain
+follow-up work. Unsupported invoked metadata fails translation; no reflective
+fallback or handler pooling is enabled.
+
+Some official TEI validation fixtures share and reset translation-time static state
+with JSP requests. Build-side validation alone does not preserve that state in the
+separate server process. The observed contract and remaining design work are recorded
+in link:{repo-ibarra}/src/branch/main/studies/tag-extra-info-aot.md[the TEI/AOT study].
+The static variable synchronization case passes without replaying TEI code at request
+time or rewriting fixtures; broader metadata APIs remain incomplete.
+
+Java-expression request values must be compatible with the selected ordinary setter
+parameter. Fragment, ValueExpression, MethodExpression and mixed Object setter
+contracts remain exact.
+Production packaging compiles immediate EL with Peano; runtime parsing is not
+enabled. Fixed-arity TLD functions use direct static invokers as described in
+xref:modules/compiled-el.adoc[Compiled EL]. Typed deferred-value/deferred-method
+attributes follow the contracts described there.
+The official Pages TCK result, including its `TagLibraryValidator` and
+`TagExtraInfo` classes, is recorded in xref:tck.adoc[TCK status].
+
+== Verification
+
+Named-module fixtures exercise literal/runtime attributes, iteration, buffered
+bodies, static TEI variable synchronization, writer targets, mixed parents, setter failures, catch/finally/release,
+skip-page propagation and metadata/URI precedence. HTTP tests precompile private
+application handlers and serve JSP/JSPX without exports, opens or compiler
+modules at runtime. Repeated requests prove fresh handler state.
+Identifier fixtures cover classic/simple inherited consumers, setter order,
+character rules, repeated includes/fragments and both page syntaxes.
+
+The independent Maven-goal example also compiles a SimpleTag with named scalar
+and fragment attributes and an explicit body. No new runtime or build dependency
+is introduced.

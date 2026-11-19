@@ -1,0 +1,170 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+
+package io.vidocq.ibarra.compiler;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class TldParserTest {
+    private TagLibraryDescriptor parse(String xml) { return new TldParser().parse("/WEB-INF/test.tld", xml.getBytes(StandardCharsets.UTF_8)); }
+
+    @Test
+    void attributeNamesUseIdentifierLexicalRulesWithoutRejectingJavaKeywords() {
+        for (String name : List.of("boolean", "byte", "short", "long", "float", "double", "static", "class", "true", "null", "_", "$cash", "étiquette")) {
+            var library = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class><attribute><name>" + name + "</name></attribute></tag></taglib>");
+            assertEquals(name, library.tags().get("x").attributes().get(name).name());
+        }
+        for (String name : List.of("1value", "two words", "a.b", "a-b", "p:value"))
+            assertThrows(PageParseException.class, () -> parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class><attribute><name>"+name+"</name></attribute></tag></taglib>"));
+    }
+
+    @Test
+    void directListenerDeclarationsAndUriAreRetainedAsImmutableMetadata() {
+        var library = parse("""
+                <taglib xmlns="https://jakarta.ee/xml/ns/jakartaee" version="3.0">
+                  <uri>urn:test</uri>
+                  <listener><description>Context setup</description><listener-class>example.Startup</listener-class></listener>
+                  <listener><listener-class>example.Outer$Listener</listener-class></listener>
+                  <tag><name>metadata</name><tag-class>example.Handler</tag-class><body-content>empty</body-content>
+                    <tag-extension><listener><listener-class>example.Nested</listener-class></listener></tag-extension>
+                  </tag>
+                </taglib>
+                """);
+        assertEquals("/WEB-INF/test.tld", library.resourcePath());
+        assertEquals("urn:test", library.uri());
+        assertEquals(List.of("example.Startup", "example.Outer$Listener"), library.listenerClasses());
+        var listenerClasses = library.listenerClasses();
+        assertThrows(UnsupportedOperationException.class, listenerClasses::clear);
+    }
+
+    @Test
+    void tagLibraryValidatorClassAndInitParametersAreRetainedAsImmutableMetadata() {
+        var library = parse("""
+                <taglib xmlns="https://jakarta.ee/xml/ns/jakartaee" version="3.0">
+                  <validator>
+                    <description>Validate page data</description>
+                    <validator-class>example.PageValidator</validator-class>
+                    <init-param><param-name>mode</param-name><param-value>strict</param-value></init-param>
+                    <init-param><param-name>empty</param-name><param-value></param-value></init-param>
+                  </validator>
+                </taglib>
+                """);
+        assertEquals(new TagLibraryValidatorDescriptor("example.PageValidator", Map.of("mode", "strict", "empty", "")),
+                library.validator());
+        assertTrue(library.validationRequired());
+        var initParameters = library.validator().initParameters();
+        assertThrows(UnsupportedOperationException.class, initParameters::clear);
+    }
+
+    @Test
+    void tagExtraInfoClassIsRetainedForBuildTimeVariableAnalysis() {
+        var library = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>"
+                + "<tei-class>example.Metadata</tei-class></tag></taglib>");
+        var tag = library.tags().get("x");
+        assertEquals("example.Metadata", tag.teiClass());
+        assertFalse(tag.unsupportedMetadata());
+        assertThrows(PageParseException.class, () -> parse("<taglib><tag><name>x</name>"
+                + "<tag-class>example.Handler</tag-class><tei-class>not a class</tei-class></tag></taglib>"));
+    }
+
+    @Test
+    void staticVariableDeclarationsDoNotMarkATagUnsupported() {
+        var library = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>"
+                + "<variable><name-given>begin</name-given><variable-class>java.lang.Integer</variable-class>"
+                + "<scope>AT_BEGIN</scope></variable></tag></taglib>");
+        var tag = library.tags().get("x");
+        assertFalse(tag.unsupportedMetadata());
+        assertEquals(List.of(new TagVariableDescriptor("begin", "java.lang.Integer", true, TagVariableDescriptor.AT_BEGIN)),
+                tag.variables());
+        var variables = tag.variables();
+        assertThrows(UnsupportedOperationException.class, variables::clear);
+    }
+
+    @Test
+    void tagVariableDeclareAcceptsLegacyYesAndNoValues() {
+        var declared = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>"
+                + "<variable><name-given>yesValue</name-given><declare>yes</declare></variable></tag></taglib>");
+        var undeclared = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>"
+                + "<variable><name-given>noValue</name-given><declare>no</declare></variable></tag></taglib>");
+
+        assertTrue(declared.tags().get("x").variables().getFirst().declare());
+        assertFalse(undeclared.tags().get("x").variables().getFirst().declare());
+    }
+
+    @Test
+    void nameFromAttributeVariablesRetainTheirMetadata() {
+        var tag = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>"
+                + "<variable><name-from-attribute>variableName</name-from-attribute><scope>AT_BEGIN</scope></variable>"
+                + "<attribute><name>variableName</name><required>true</required><type>java.lang.String</type></attribute>"
+                + "</tag></taglib>").tags().get("x");
+        assertFalse(tag.unsupportedMetadata());
+        assertEquals(List.of(new TagVariableDescriptor(null, "variableName", "java.lang.String", true, TagVariableDescriptor.AT_BEGIN)),
+                tag.variables());
+    }
+
+    @Test
+    void legacyDoctypeIsAcceptedWithoutFetchingItsExternalDefinition() {
+        var library = parse("""
+                <!DOCTYPE taglib SYSTEM "file:///unavailable/tld.dtd">
+                <taglib><listener><listener-class>example.Startup</listener-class></listener></taglib>
+                """);
+        assertNull(library.uri());
+        assertEquals(List.of("example.Startup"), library.listenerClasses());
+    }
+
+    @Test
+    void invalidOrDuplicateDeclarationsHaveSourceDiagnostics() {
+        for (String body : List.of(
+                "<listener><listener-class>example.Bad()</listener-class></listener>",
+                "<listener/>",
+                "<listener><listener-class>example.A</listener-class><listener-class>example.B</listener-class></listener>",
+                "<validator/>",
+                "<validator><validator-class>example.A</validator-class><validator-class>example.B</validator-class></validator>",
+                "<validator><validator-class>example.A</validator-class><init-param><param-name>x</param-name><param-value>1</param-value></init-param><init-param><param-name>x</param-name><param-value>2</param-value></init-param></validator>",
+                "<validator><validator-class>not a class</validator-class></validator>",
+                "<validator><validator-class>example.A</validator-class><init-param><param-name>x</param-name><param-name>y</param-name><param-value>1</param-value></init-param></validator>",
+                "<validator><validator-class>example.A</validator-class><init-param><param-name>x</param-name><param-value>1</param-value><param-value>2</param-value></init-param></validator>",
+                "<validator><validator-class>example.A</validator-class><init-param><param-name>x</param-name></init-param></validator>",
+                "<validator><validator-class>example.A</validator-class><init-param><param-value>1</param-value></init-param></validator>",
+                "<tag><name>x</name><tag-class>example.Handler</tag-class><icon><small-icon>/a.png</small-icon><small-icon>/b.png</small-icon></icon></tag>",
+                "<tag><name>x</name><tag-class>example.Handler</tag-class><icon><large-icon>/a.png</large-icon><large-icon>/b.png</large-icon></icon></tag>",
+                "<uri>urn:a</uri><uri>urn:b</uri>",
+                "<tag><name>x</name><tag-class>example.Handler</tag-class><variable><name-given>v</name-given><scope>BAD</scope></variable></tag>",
+                "<tag><name>x</name><tag-class>example.Handler</tag-class><variable><name-given>v</name-given></variable><variable><name-given>v</name-given></variable></tag>")) {
+            var failure = assertThrows(PageParseException.class, () -> parse("<taglib>" + body + "</taglib>"));
+            assertTrue(failure.getMessage().contains("/WEB-INF/test.tld"));
+        }
+        assertThrows(PageParseException.class, () -> parse("<taglib xmlns='urn:foreign'/>"));
+        assertThrows(PageParseException.class, () -> parse("<taglib xmlns:x='urn:foreign'><x:listener><x:listener-class>example.A</x:listener-class></x:listener></taglib>"));
+    }
+
+    @Test
+    void malformedXmlAndExternalEntitiesNeverBecomeListenerSourceCode() {
+        assertThrows(PageParseException.class, () -> parse("<taglib><listener>"));
+        assertThrows(PageParseException.class, () -> parse("""
+                <!DOCTYPE taglib [<!ENTITY external SYSTEM "file:///unavailable/listener.txt">]>
+                <taglib><listener><listener-class>&external;</listener-class></listener></taglib>
+                """));
+    }
+}

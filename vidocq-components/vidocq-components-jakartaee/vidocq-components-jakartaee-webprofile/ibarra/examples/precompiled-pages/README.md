@@ -1,0 +1,53 @@
+# Precompiled pages example
+
+This independent application module requires `ibarra-api` and `peano-api`, exports no
+packages, and uses the `ibarra-maven-plugin:precompile` goal at `process-classes`.
+The generated page index is registered in the compiled Java module descriptor.
+The application JAR contains compiled pages, not the compiler or generated Java.
+Its private application package also contains a SimpleTag handler described by
+`tlds/example.tld`, referenced directly from the page without a web.xml alias.
+The page invokes it through direct construction/setters and
+named scalar/fragment attributes and an explicit body; no package exports or opens
+are needed.
+
+The frame label accepts request-time values and omits its ordinary TLD type.
+Its actual String setter is selected from class-file metadata; the named label
+contains compiled EL. The Object metadata default does not require an Object setter.
+The frame implements JspIdConsumer and uses its compiler-provided identifier as
+the section's HTML id. Each tag occurrence has a distinct id that stays constant
+across requests; the handler itself is constructed afresh for each invocation.
+
+The same TLD declares the fixed-arity `example:welcome` function. Its public
+static method is validated from class files and invoked directly by generated
+code; it requires no accessor provider, exports or runtime TLD parsing.
+`${example:welcome(param.name)}` uses the current request parameter.
+Only directly declared external descriptors are read; this resource does not
+create an implicit URI entry in the catalogue. In JSPX, a direct resource would
+use `xmlns:example="urn:jsptld:/tlds/example.tld"`.
+
+The greeting bean uses application scope. Its direct construction and publication
+are coordinated across requests; the `Application greeting created.` paragraph
+appears only for its creator. The body runs after unlocking and is not an atomic
+initialization transaction.
+
+`example:greeting` receives a deferred ValueExpression for `#{param.name}` and a
+literal MethodExpression for `Welcome`. Its handler evaluates them through the
+current EL context. The TLD specifies their expected String types; generated
+expression classes ship with the application, with no runtime parsing or compiler.
+The deferred declarations use the simple name `String`, resolved as
+`java.lang.String` at build time. Non-java.lang types use qualified names.
+
+Run from the Ibarra checkout root with Java 25:
+
+```sh
+./mvnw -ntp install
+./mvnw -ntp -f examples/precompiled-pages/pom.xml clean package
+jar --describe-module --file examples/precompiled-pages/target/ibarra-precompiled-pages-example-0.4.0-SNAPSHOT.jar
+```
+
+The generator's application-JAR test proves discovery and rendering against
+servlet doubles with compiler modules excluded. Deploying this example through
+Foy uses the application module layer through the binding described in the
+Antora Foy reference. Immediate EL compiles through Peano into the application
+JAR. The application explicitly requires peano-api; runtime deployment supplies
+an ExpressionFactory provider. Packaging never enables interpreter preview.

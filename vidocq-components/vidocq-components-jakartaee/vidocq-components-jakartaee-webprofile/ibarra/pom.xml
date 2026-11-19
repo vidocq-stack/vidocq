@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         >
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.ibarra</groupId>
+    <artifactId>ibarra-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Ibarra</name>
+    <description>Jakarta Pages 4.0 (JSP) implementation — zero third-party dependency, strict Java Modules, pages translated and compiled at build time, Expression Language through Peano, servlet container through Foy</description>
+    <url>https://codefloe.com/Vidocq/ibarra</url>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+    </developers>
+
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://codefloe.com/Vidocq/ibarra</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/ibarra.git</connection>
+        <developerConnection>scm:git:git@codefloe.com:Vidocq/ibarra.git</developerConnection>
+    </scm>
+
+    <properties>
+        <!-- Jakarta Pages 4.0 spec API — already modular upstream (module
+             jakarta.servlet.jsp, requires jakarta.servlet + jakarta.el
+             transitively), no Vidocq fork needed. -->
+        <jakarta.pages.version>4.0.0</jakarta.pages.version>
+        <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
+        <jakarta.el.version>6.0.1</jakarta.el.version>
+
+        <!-- Vidocq upstreams (referenced via properties to allow cross-repo PR
+             overrides). Peano is the default EL provider in generation tests;
+             the Foy API hosts the optional JSP-engine binding. -->
+        <peano.version>0.4.0-SNAPSHOT</peano.version>
+        <foy.version>0.4.0-SNAPSHOT</foy.version>
+        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+
+        <!-- Test tooling of ibarra-arquillian (never shipped in an application). -->
+        <arquillian.version>1.8.0.Final</arquillian.version>
+        <shrinkwrap.version>1.2.6</shrinkwrap.version>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            ibarra-coverage (quality profile), so the tests of one module count for the code they
+            exercise in the others.
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/ibarra-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+    </properties>
+
+    <!--
+        Main reactor modules. ibarra-tck joins the reactor only under the `tck`
+        Maven profile (see <profiles> below) — TCK harmonisation, same pattern
+        as every other Vidocq sub-project: a regular `mvn install` neither
+        builds nor downloads the TCK runner. The default reactor does build the
+        published ibarra-arquillian adapter (Arquillian/ShrinkWrap test tooling).
+        Activation: ./mvnw -Ptck -pl ibarra-tck test
+    -->
+    <modules>
+        <module>ibarra-api</module>
+        <module>ibarra-core</module>
+        <module>ibarra-compiler</module>
+        <module>ibarra-maven-plugin</module>
+        <module>ibarra-foy</module>
+        <module>ibarra-arquillian</module>
+        <!-- Test-only, last: it reads the classes of every module above (Vidocq/vidocq#289). -->
+        <module>ibarra-architecture-tests</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-compiler</artifactId>
+                <version>${peano.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-api</artifactId>
+                <version>${peano.version}</version>
+            </dependency>
+            <!-- Jakarta Pages 4.0 + the specs it builds on -->
+            <dependency>
+                <groupId>jakarta.servlet.jsp</groupId>
+                <artifactId>jakarta.servlet.jsp-api</artifactId>
+                <version>${jakarta.pages.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.servlet</groupId>
+                <artifactId>jakarta.servlet-api</artifactId>
+                <version>${jakarta.servlet.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.el</groupId>
+                <artifactId>jakarta.el-api</artifactId>
+                <version>${jakarta.el.version}</version>
+            </dependency>
+
+            <!-- Runtime implementations (Vidocq) -->
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-api</artifactId>
+                <version>${foy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-core</artifactId>
+                <version>${peano.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-core</artifactId>
+                <version>${foy.version}</version>
+            </dependency>
+
+            <!-- Internal Ibarra modules -->
+            <dependency>
+                <groupId>io.vidocq.ibarra</groupId>
+                <artifactId>ibarra-compiler</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ibarra</groupId>
+                <artifactId>ibarra-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ibarra</groupId>
+                <artifactId>ibarra-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ibarra</groupId>
+                <artifactId>ibarra-arquillian</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Arquillian adapter tooling (ibarra-arquillian) -->
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-spi</artifactId>
+                <version>${arquillian.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian.container</groupId>
+                <artifactId>arquillian-container-impl-base</artifactId>
+                <version>${arquillian.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.shrinkwrap</groupId>
+                <artifactId>shrinkwrap-impl-base</artifactId>
+                <version>${shrinkwrap.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <profiles>
+        <!--
+            TCK harmonisation: the official Jakarta Pages 4.0 TCK
+            runner joins the reactor only when this profile is active.
+
+                ./mvnw -Ptck -pl ibarra-tck test                  (runner tests only)
+                ./mvnw -Ptck,tck-official -pl ibarra-tck test     (pulls the official TCK)
+
+            See PLAN.md, "TCK plan".
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>ibarra-tck</module>
+            </modules>
+        </profile>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>ibarra-coverage</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

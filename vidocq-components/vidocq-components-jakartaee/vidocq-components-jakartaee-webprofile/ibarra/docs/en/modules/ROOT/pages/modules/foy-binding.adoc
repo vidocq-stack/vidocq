@@ -1,0 +1,103 @@
+= Foy binding
+:description: Deploy precompiled Ibarra pages in Foy through its optional JSP-engine service.
+
+== Runtime modules
+
+`ibarra-foy` requires its own `ibarra-api`/`ibarra-core` and `foy-api`. It provides
+`io.vidocq.foy.spi.jsp.JspEngine`, exports no packages and opens none.
+Core exposes its binding API only to this module. Foy itself has no Jakarta
+Pages dependency and continues to run without an engine.
+
+Deploy with `WebAppDeployer.deploy(model, options, applicationLayer)`.
+The application's named module requires `io.vidocq.ibarra.api` and carries the
+generated `PageIndex` service declaration. Indexes belong to the supplied
+layer: indexes from its parents are excluded before construction. Use the
+precompiler's constructor-based index providers; static providers returning
+the shared `PageIndex` interface cannot establish layer ownership.
+
+== Routing and ownership
+
+Foy opens the engine before servlet initializers and listeners. It maps the
+container servlet named `jsp` to `*.jsp` and `*.jspx`, subject to existing
+application mappings. `addJspFile` and descriptor `jsp-file` declarations
+create independent page instances with their own servlet names and init
+parameters. Missing compiled pages return HTTP 404; no translation occurs at
+runtime. Direct requests into `WEB-INF` or `META-INF` are refused.
+
+The extension router initializes each requested page once. Concurrent requests
+share the completed initialization task. Unknown paths never grow its cache.
+Foy owns initialization/destruction of named pages; the router owns its cached
+pages. Individual destruction failures are logged without skipping other pages.
+
+The container must serialize installation of the standard global `JspFactory`
+during bootstrap, before concurrent deployments or competing JSP engines.
+Ibarra reuses its container factory, rejects an already installed foreign
+implementation, and releases application contexts independently at undeployment.
+Stop and drain the HTTP server before closing the deployment. Engine close
+runs after servlet and listener destruction; it does not drain active requests.
+
+Foy exposes immutable standard `JspConfigDescriptor` views from root and
+ordered fragment descriptors. Translation still happens at build time using
+the Maven plugin's root descriptor settings; automatic fragment translation
+configuration remains pending. Build-time EL also awaits
+Peano. Production pages compile EL at build time and require Peano's API module;
+their runtime graph excludes both compiler modules. HTTP tests prove private
+application accessor-table dispatch with Peano's reflection fallback denied.
+
+== Build-generated TLD listeners
+
+Directly declared TLD/JAR resources also contribute listeners, including references
+from includes, preludes, codas and forced XML namespace declarations. Metadata is
+captured before normalization removes declaration wrappers. Listener types are
+validated and deduplicated with the implicit/explicit catalogue before generating
+the index; no runtime TLD scan is introduced. See
+xref:modules/tag-handlers.adoc[direct resource and URI resolution].
+
+The precompiler scans loose TLDs recursively under `WEB-INF`, excluding the
+`classes` and `lib` directories, and `META-INF` resources of the application and
+reachable named library modules. Static and unrelated dependency modules are
+excluded. Explicit root `web.xml` mappings can reference TLD files elsewhere
+or a JAR's `META-INF/taglib.tld`. Relative locations resolve from
+`/WEB-INF/web.xml` as required by Pages 4.0 section 7.3.6.1.
+
+`TldParser` retains URI and listener-class metadata in an immutable
+`TagLibraryDescriptor`. It accepts modern/legacy namespaces and legacy DOCTYPE
+declarations without external entity/DTD resolution. Initial tag/attribute contracts
+and build-time URI/resource mapping support xref:modules/tag-handlers.adoc[handler generation].
+Tag validators (run from generated code at initialization), TEI validation and
+variables, TLD variables and tag files are documented in the
+xref:modules/tag-handlers.adoc[tag-handler reference].
+
+Class-File inspection verifies public concrete listener classes, public
+no-argument constructors and supported Servlet listener interfaces. Generated
+factories use class literals and direct constructors, preserve runtime errors
+and wrap checked constructor failures. Discovery never initializes a listener
+class. Public nested classes use canonical constructor source names while
+retaining their binary runtime identity. Library listener packages must be
+accessible to the application's module; no reflective fallback or opens are added.
+
+`PageIndex.listeners()` defaults to an empty list for existing providers. The
+generated index also exists for a listener-only application without JSP pages.
+Foy deduplicates classes before construction, preserves descriptor-declared
+listeners, and registers TLD-only listeners with restricted dynamic
+configuration during context initialization. Context/request/session callbacks
+use the normal container registry; destruction precedes engine close.
+
+== Container verification and test dependencies
+
+The HTTP fixture uses Arquillian's `DeployableContainer` lifecycle and
+ShrinkWrap archives, starts Foy/Chappe in a subprocess, and deploys pages in a
+child Java module layer. It checks JSP/JSPX, includes, named registrations,
+virtual request threads and HTTP 404. Neither `java.compiler` nor
+`io.vidocq.ibarra.compiler` is resolved in that runtime process.
+
+Test-only dependencies are JUnit, Ibarra compiler, Foy core, Chappe core,
+`arquillian-container-spi:1.8.0.Final`, and ShrinkWrap API/implementation
+`1.2.6`. Their transitive tooling dependencies remain outside runtime artifacts.
+Test compilation and the Arquillian control process use a classpath because
+those tooling JARs have incompatible automatic module descriptors. The deployed
+application and server use explicit named modules only.
+
+Foy's published development snapshot contains the JSP-engine SPI and its TLD
+listener extension. PR validation resolves the managed `foy.version` directly;
+no Foy source bootstrap or temporary version override is required.

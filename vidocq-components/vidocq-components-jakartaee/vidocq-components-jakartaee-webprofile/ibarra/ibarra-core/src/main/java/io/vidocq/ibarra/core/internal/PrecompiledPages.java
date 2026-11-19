@@ -1,0 +1,53 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.ibarra.core.internal;
+
+import io.vidocq.ibarra.spi.PageDescriptor;
+import io.vidocq.ibarra.spi.PageIndex;
+import io.vidocq.ibarra.spi.ListenerDescriptor;
+import java.util.*;
+
+/** Immutable deployment catalogue. Page instances remain container-owned. */
+final class PrecompiledPages {
+    private final Map<String, PageDescriptor> pages;
+    private final List<ListenerDescriptor> listeners;
+    PrecompiledPages(Iterable<PageIndex> indexes) {
+        var collected = new TreeMap<String, PageDescriptor>();
+        var listenerTypes = new LinkedHashMap<Class<?>, ListenerDescriptor>();
+        for (var index : indexes) {
+            for (var page : Objects.requireNonNull(index.pages(), "Page index returned null"))
+                if (collected.putIfAbsent(page.path(), page) != null)
+                    throw new IllegalArgumentException("Duplicate precompiled page: " + page.path());
+            for (var listener : Objects.requireNonNull(index.listeners(), "Listener index returned null"))
+                listenerTypes.putIfAbsent(listener.type(), listener);
+        }
+        pages = Map.copyOf(collected);
+        listeners = List.copyOf(listenerTypes.values());
+    }
+    static PrecompiledPages discover(ModuleLayer layer) {
+        Objects.requireNonNull(layer);
+        var indexes = ServiceLoader.load(layer, PageIndex.class).stream()
+                .filter(provider -> layer.modules().contains(provider.type().getModule()))
+                .map(ServiceLoader.Provider::get).toList();
+        return new PrecompiledPages(indexes);
+    }
+    PageDescriptor find(String path) { return pages.get(path); }
+    List<ListenerDescriptor> listeners() { return listeners; }
+}
