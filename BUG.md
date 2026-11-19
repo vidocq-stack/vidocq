@@ -281,8 +281,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261118-05 — An application with the MCP extension generates two classes at each start
 
 - **Date**: 2026-11-18
-- **Status**: OPEN. The MCP calls pass: it costs start time and keeps such an application out of a start ahead of
-  time.
+- **Status**: OPEN for part 2 (Cassini's adapter of `McpEndpoint`, Vidocq/vidocq#662). Part 1 (Vauban's client proxy)
+  is FIXED by Vidocq/vauban#348 and #351, and `McpLaunchShapesTest` now fails on any Vauban fallback. The MCP calls
+  pass: part 2 costs start time and keeps such an application out of a start ahead of time.
 - **Module**: `vidocq-runtime-langchain4j-cdi-mcp-extension`, `vidocq-runtime-cassini-rest-extension-codegen`; Vauban
   for the first class.
 - **Symptom**: every application that depends on the MCP extension prints two `RUNTIME CODE GENERATION FALLBACK`
@@ -326,6 +327,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
     layer holds only the application module, and the langchain4j-cdi jar sits in the runtime layer. Part 1 stays
     OPEN, now as a Vauban gap: a placed proxy for a class outside the Vauban layer (Vauban BUG-20261119-70, filed by
     VAUBAN).
+  - 2026-11-19, reported by VAUBAN: part 1 is fixed. Vauban 0.4.0-SNAPSHOT build 80 (build-info `32497fb1`,
+    vauban#351 and #352 merged), Vidocq `origin/main` `321fcb13`, a private repository: `McpLaunchShapesTest` passes
+    8/8. Each of the six `i1` logs prints one fallback block, Cassini's for `McpEndpoint`; no Vauban block, and
+    `McpCdi41InvokerProvider_ClientProxy` appears nowhere. Both shape tests now assert that no
+    `VAUBAN — RUNTIME CODE GENERATION FALLBACK` block is printed. FOY's rerun on the same snapshot agrees, with one
+    exception: `i2-keys`, a dev launch whose start refuses the build's record (`3 extensions run at start (the record
+    of the build is not this deployment's)`), still generates the proxy at start. The proxy of a synthetic bean comes
+    with the frozen record (vauban#342), so a start that runs its extensions has none: expected, and not asserted.
 
 ## BUG-20261118-04 — The jar of the MCP extension carries a record of frozen extensions, so its applications run theirs at each start
 
