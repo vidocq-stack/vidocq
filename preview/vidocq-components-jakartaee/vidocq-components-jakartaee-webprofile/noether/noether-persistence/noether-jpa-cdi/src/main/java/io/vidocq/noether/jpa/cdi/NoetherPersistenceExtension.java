@@ -1,0 +1,324 @@
+package io.vidocq.noether.jpa.cdi;
+
+import io.vidocq.noether.jpa.core.spi.PersistenceDescriptors;
+import io.vidocq.noether.jpa.core.spi.PersistenceDescriptors.DescriptorReference;
+import io.vidocq.noether.jpa.core.spi.PersistenceDescriptors.UnitInjection;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.event.Startup;
+import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.build.compatible.spi.*;
+import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.lang.model.AnnotationInfo;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import jakarta.persistence.*;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.metamodel.Metamodel;
+import java.lang.annotation.Annotation;
+import java.util.*;
+
+/** CDI 4.1 Lite persistence injection through portable enhancement and synthesis; no entity/member reflection. */
+public final class NoetherPersistenceExtension implements BuildCompatibleExtension {
+    private static final System.Logger LOGGER = System.getLogger(NoetherPersistenceExtension.class.getName());
+    /** The parameters of the synthetic beans, read by their creators; also the members of {@code @PersistenceContext}. */
+    private static final String UNIT = "unit";
+    private static final String CONTEXT_TYPE = "contextType";
+    private static final String SYNCHRONIZATION = "synchronization";
+    /** The binding of a unit's factory: this prefix, then the unit name. */
+    private static final String UNIT_BINDING = "unit:";
+    private record Context(String unit, String type, String synchronization, Map<String,String> properties) {}
+    private final Set<String> units = new LinkedHashSet<>();
+    private final Map<String, Context> contexts = new LinkedHashMap<>();
+    /** A reference a class declares: the kind and the qualifier of the bean its name is bound to, and who declared it. */
+    private record Declared(String kind, String qualifier, String declaredBy) {}
+    private final Map<String, Declared> references = new TreeMap<>();
+    private final Map<String, Context> sharedContexts = new LinkedHashMap<>();
+
+    /**
+     * The binding qualifier lives in this jar, which a container need not index (Quarkus indexes the application, not
+     * every dependency): without this declaration it would not know the annotation that {@link #persistenceFields}
+     * adds to each injection point is a qualifier, and would resolve every persistence injection as {@code @Default}.
+     */
+    @Discovery
+    public void bindingQualifier(MetaAnnotations meta) {
+        meta.addQualifier(PersistenceBinding.class);
+    }
+
+    /** Only the classes that declare persistence injection, not every class of the deployment. */
+    @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = {PersistenceContext.class, PersistenceUnit.class})
+    public void persistenceFields(ClassConfig clazz) {
+        for (FieldConfig field : clazz.fields()) {
+            AnnotationInfo context = field.info().annotation(PersistenceContext.class);
+            AnnotationInfo unitAnnotation = field.info().annotation(PersistenceUnit.class);
+            if (context == null && unitAnnotation == null) continue;
+            if (!field.info().hasAnnotation(Inject.class)) field.addAnnotation(Inject.class);
+            field.addAnnotation(AnnotationBuilder.of(PersistenceBinding.class).value(binding(context, unitAnnotation)).build());
+        }
+        for (MethodConfig method : clazz.methods()) {
+            AnnotationInfo context = method.info().annotation(PersistenceContext.class);
+            AnnotationInfo unit = method.info().annotation(PersistenceUnit.class);
+            if (context == null && unit == null) continue;
+            if (method.info().isStatic() || method.parameters().size() != 1) {
+                throw new jakarta.enterprise.inject.spi.DefinitionException("Persistence injection requires a non-static one-parameter setter: "
+                    + method.info().declaringClass().name() + "." + method.info().name());
+            }
+            if (!method.info().hasAnnotation(Inject.class)) method.addAnnotation(Inject.class);
+            method.parameters().getFirst().addAnnotation(AnnotationBuilder.of(PersistenceBinding.class).value(binding(context, unit)).build());
+        }
+    }
+
+    /**
+     * Jakarta EE 11 Platform §5.13 and §5.14: a persistence context or unit declared on a class, with a name, is a
+     * reference the component looks up under {@code java:comp/env}. Each one has a {@code @Singleton} bean, which a
+     * lookup can return without anyone having to destroy it: the unit's factory, or one transaction-scoped context
+     * that every lookup shares. {@link PersistenceReferences} lists them for a naming service.
+     */
+    @Enhancement(types = Object.class, withSubtypes = true,
+        withAnnotations = {PersistenceContext.class, PersistenceContexts.class, PersistenceUnit.class, PersistenceUnits.class})
+    public void persistenceReferences(ClassConfig clazz) {
+        ClassInfo declaring = clazz.info();
+        for (AnnotationInfo context : declaring.repeatableAnnotation(PersistenceContext.class)) {
+            String name = referenceName(declaring, context, "context");
+            contextReference(name, definition(context), declaring.name() + " declares on its class", declaring.name());
+        }
+        for (AnnotationInfo unit : declaring.repeatableAnnotation(PersistenceUnit.class)) {
+            String name = referenceName(declaring, unit, "unit");
+            declare(name, new Declared(PersistenceReferencesCreator.UNIT, unitBinding(unit), declaring.name()));
+        }
+    }
+
+    /**
+     * Jakarta EE 11 Platform §5.13.1.2 and §5.14.1.2: a {@code persistence-context-ref} or {@code persistence-unit-ref}
+     * of {@code web.xml} is a reference like one a class declares, read through the class loader of the deployment as
+     * {@code persistence.xml} is (BUG-20261118-85). Noether binds the name only: an {@code injection-target} fails the
+     * deployment rather than leave a field empty.
+     */
+    private void descriptorReferences(ClassLoader loader) {
+        for (DescriptorReference reference : PersistenceDescriptors.references(loader)) {
+            String declaredBy = reference.source();
+            if (!reference.injectionTargets().isEmpty()) {
+                throw new DefinitionException("The persistence reference " + reference.name() + " of " + declaredBy
+                    + " has the injection-target " + reference.injectionTargets() + ", which Noether does not inject:"
+                    + " declare @PersistenceContext or @PersistenceUnit on that field or setter instead");
+            }
+            units.add(reference.unitName());
+            switch (reference.kind()) {
+                case UNIT -> declare(reference.name(), new Declared(PersistenceReferencesCreator.UNIT,
+                    UNIT_BINDING + reference.unitName(), declaredBy));
+                case CONTEXT -> contextReference(reference.name(), new Context(reference.unitName(),
+                    reference.type().name(), reference.synchronization().name(), reference.properties()),
+                    declaredBy + " declares", declaredBy);
+            }
+        }
+    }
+
+    /** A context reference: one {@code @Singleton} transaction-scoped context that every lookup of its name shares. */
+    private void contextReference(String name, Context definition, String declares, String declaredBy) {
+        if (PersistenceContextType.EXTENDED.name().equals(definition.type)) {
+            throw new DefinitionException(declares + " the persistence context " + name + " EXTENDED: an extended"
+                + " context belongs to a stateful component, a reference is transaction-scoped (Jakarta Persistence 3.2,"
+                + " §7.6.3)");
+        }
+        String shared = "shared:" + contextBinding(definition.unit, definition.type, definition.synchronization, definition.properties);
+        sharedContexts.putIfAbsent(shared, definition);
+        declare(name, new Declared(PersistenceReferencesCreator.CONTEXT, shared, declaredBy));
+    }
+
+    private static String referenceName(ClassInfo declaring, AnnotationInfo annotation, String what) {
+        String name = string(annotation, "name", "").strip();
+        if (name.isEmpty()) {
+            throw new DefinitionException(declaring.name() + " declares a persistence " + what + " on its class without"
+                + " a name: a reference declared on a class is looked up under java:comp/env by its name"
+                + " (Jakarta EE 11 Platform §5.13)");
+        }
+        return name;
+    }
+
+    /** A name of {@code java:comp/env} is bound once: two classes may declare it only for the same bean. */
+    private void declare(String name, Declared reference) {
+        Declared first = references.putIfAbsent(name, reference);
+        if (first != null && (!first.kind.equals(reference.kind) || !first.qualifier.equals(reference.qualifier))) {
+            throw new DefinitionException("The persistence reference " + name + " is declared by " + first.declaredBy
+                + " and, for another " + reference.kind + ", by " + reference.declaredBy
+                + ": a name of java:comp/env is bound to one bean");
+        }
+    }
+
+    private String binding(AnnotationInfo context, AnnotationInfo unitAnnotation) {
+        if (context == null) return unitBinding(unitAnnotation);
+        Context definition = definition(context);
+        String binding = contextBinding(definition.unit, definition.type, definition.synchronization, definition.properties);
+        contexts.putIfAbsent(binding, definition);
+        return binding;
+    }
+
+    private String unitBinding(AnnotationInfo unitAnnotation) {
+        String unit = string(unitAnnotation, "unitName", "");
+        units.add(unit);
+        return UNIT_BINDING + unit;
+    }
+
+    private Context definition(AnnotationInfo context) {
+        String unit = string(context, "unitName", "");
+        units.add(unit);
+        String type = enumeration(context, "type", "TRANSACTION");
+        String synchronization = enumeration(context, SYNCHRONIZATION, "SYNCHRONIZED");
+        Map<String,String> properties = new TreeMap<>();
+        if (context.hasMember("properties")) {
+            for (var value : context.member("properties").asArray()) {
+                AnnotationInfo property = value.asNestedAnnotation();
+                properties.put(string(property, "name", ""), string(property, "value", ""));
+            }
+        }
+        return new Context(unit, type, synchronization, Map.copyOf(properties));
+    }
+
+    /**
+     * One key per configuration, never shared by two (BUG-20261018-03): every part is written as its length, a colon and
+     * itself, so no character inside a unit name, a property name or a value can be read as a separator. Properties are
+     * sorted, so the same configuration always gives the same key.
+     */
+    static String contextBinding(String unit, String type, String synchronization, Map<String, String> properties) {
+        StringBuilder key = new StringBuilder("context:");
+        part(key, unit);
+        part(key, type);
+        part(key, synchronization);
+        new TreeMap<>(properties).forEach((name, value) -> {
+            part(key, name);
+            part(key, value);
+        });
+        return key.toString();
+    }
+
+    private static void part(StringBuilder key, String value) {
+        key.append(value.length()).append(':').append(value);
+    }
+
+    /**
+     * One factory per unit, shared by the unit's contexts: their creator looks it up programmatically. A container that
+     * removes the beans no injection point uses (Quarkus ArC) would remove the factory of a unit only reached through
+     * {@code @PersistenceContext}; a bean with a name is never removed, so each factory gets one. The name is internal.
+     */
+    @Synthesis
+    public void persistenceBeans(SyntheticComponents components) {
+        ClassLoader loader = PersistenceFactoryCreator.loader();
+        descriptorReferences(loader);
+        List<UnitInjection> declared = PersistenceDescriptors.injections(loader);
+        Set<String> factories = new LinkedHashSet<>(units);
+        for (UnitInjection unit : declared) {
+            String key = factoryKey(unit.name(), units, declared.size());
+            factories.add(key);
+            injectableBeans(components, unit, key, loader);
+        }
+        for (String unit : factories) {
+            components.addBean(EntityManagerFactory.class).type(EntityManagerFactory.class).scope(Singleton.class)
+                .qualifier(AnnotationBuilder.of(PersistenceBinding.class).value(UNIT_BINDING + unit).build())
+                .name(factoryName(unit))
+                .withParam(UNIT, unit).createWith(PersistenceFactoryCreator.class).disposeWith(PersistenceFactoryDisposer.class);
+        }
+        contexts.forEach((binding, definition) -> contextBean(components, binding, definition, Dependent.class));
+        sharedContexts.forEach((binding, definition) -> contextBean(components, binding, definition, Singleton.class));
+        if (!references.isEmpty()) { // one listing per part of the deployment that declares references
+            components.addBean(PersistenceReferences.class).type(PersistenceReferences.class).scope(Singleton.class)
+                .withParam(PersistenceReferencesCreator.NAMES, references.keySet().toArray(String[]::new))
+                .withParam(PersistenceReferencesCreator.KINDS,
+                    references.values().stream().map(Declared::kind).toArray(String[]::new))
+                .withParam(PersistenceReferencesCreator.QUALIFIERS,
+                    references.values().stream().map(Declared::qualifier).toArray(String[]::new))
+                .createWith(PersistenceReferencesCreator.class);
+        }
+        if (!declared.isEmpty()) { // Vauban's annotation processor reads no persistence.xml: nothing to compare then
+            components.addObserver(Startup.class).priority(UnitsStartCheck.PRIORITY)
+                .withParam(UnitsStartCheck.UNITS, declared.stream().map(UnitsStartCheck::describe).toArray(String[]::new))
+                .observeWith(UnitsStartCheck.class);
+        }
+    }
+
+    private static void contextBean(SyntheticComponents components, String binding, Context definition,
+            Class<? extends Annotation> scope) {
+        components.addBean(EntityManager.class).type(EntityManager.class)
+            .scope(scope).qualifier(AnnotationBuilder.of(PersistenceBinding.class).value(binding).build())
+            .withParam(UNIT, definition.unit).withParam(CONTEXT_TYPE, definition.type)
+            .withParam(SYNCHRONIZATION, definition.synchronization)
+            .withParam("propertyNames", definition.properties.keySet().toArray(String[]::new))
+            .withParam("propertyValues", definition.properties.values().toArray(String[]::new))
+            .createWith(PersistenceContextCreator.class).disposeWith(PersistenceContextDisposer.class);
+    }
+
+    /**
+     * The key of the one factory a unit of {@code persistence.xml} runs on: the factory its injection points already
+     * share, the one an injection point without a unit name reaches when the unit is the deployment's only one, otherwise
+     * its own.
+     */
+    static String factoryKey(String unit, Set<String> injected, int declaredUnits) {
+        if (injected.contains(unit)) return unit;
+        return injected.contains("") && declaredUnits == 1 ? "" : unit;
+    }
+
+    /**
+     * Jakarta EE 11 Platform §13.12: every unit of {@code persistence.xml} is injectable with {@code @Inject}, under the
+     * qualifiers its {@code <qualifier>} elements name, or {@code @Default}. The {@code EntityManagerFactory} bean is
+     * application scoped and named after the unit; five dependent beans give its parts. The {@code EntityManager} bean
+     * takes the scope of {@code <scope>}, or {@code @TransactionScoped}; a resource-local unit has none, a
+     * container-managed entity manager being a JTA one (Jakarta Persistence 3.2, §7.6).
+     */
+    private static void injectableBeans(SyntheticComponents components, UnitInjection unit, String key, ClassLoader loader) {
+        List<Class<? extends Annotation>> qualifiers = UnitAnnotations.qualifiers(unit, loader);
+        qualified(components.addBean(EntityManagerFactory.class).type(EntityManagerFactory.class), qualifiers)
+            .scope(ApplicationScoped.class).name(unit.name()).withParam(UNIT, key).createWith(UnitBeans.Factory.class);
+        part(components, CriteriaBuilder.class, UnitBeans.Criteria.class, qualifiers, key);
+        part(components, PersistenceUnitUtil.class, UnitBeans.Util.class, qualifiers, key);
+        part(components, Cache.class, UnitBeans.SecondLevelCache.class, qualifiers, key);
+        part(components, SchemaManager.class, UnitBeans.Schema.class, qualifiers, key);
+        part(components, Metamodel.class, UnitBeans.Model.class, qualifiers, key);
+        if (unit.jta()) {
+            qualified(components.addBean(EntityManager.class).type(EntityManager.class), qualifiers)
+                .scope(UnitAnnotations.scope(unit, loader)).withParam(UNIT, key)
+                .withParam(CONTEXT_TYPE, PersistenceContextType.TRANSACTION.name())
+                .withParam(SYNCHRONIZATION, SynchronizationType.SYNCHRONIZED.name())
+                .createWith(PersistenceContextCreator.class).disposeWith(PersistenceContextDisposer.class);
+        } else if (unit.scopeName() != null) {
+            LOGGER.log(System.Logger.Level.WARNING, "Persistence unit ''{0}'' names the scope {1}, but it is resource-local:"
+                + " only a JTA unit is an injectable EntityManager (Jakarta Persistence 3.2, §7.6)", unit.name(), unit.scopeName());
+        }
+    }
+
+    private static <T> void part(SyntheticComponents components, Class<T> type, Class<? extends SyntheticBeanCreator<T>> creator,
+            List<Class<? extends Annotation>> qualifiers, String key) {
+        qualified(components.addBean(type).type(type), qualifiers).scope(Dependent.class).withParam(UNIT, key).createWith(creator);
+    }
+
+    private static <T> SyntheticBeanBuilder<T> qualified(SyntheticBeanBuilder<T> bean, List<Class<? extends Annotation>> qualifiers) {
+        if (qualifiers.isEmpty()) bean.qualifier(Default.class);
+        qualifiers.forEach(bean::qualifier);
+        return bean;
+    }
+
+    /**
+     * Named after the unit alone, never after its rank among the units (BUG-20261113-01): the boot of an application may
+     * run this extension again over classes it sees in another order than the build did, and a second name registered
+     * a second factory of the same unit. Unique and without dots (a dotted name would clash with any bean named after
+     * its first segment): an ASCII letter or digit stays, any other character becomes its code point in hexadecimal
+     * between underscores, so two units never share a name.
+     */
+    static String factoryName(String unit) {
+        StringBuilder name = new StringBuilder("noetherPersistenceUnit_");
+        unit.codePoints().forEach(c -> {
+            if (c < 128 && Character.isLetterOrDigit(c)) {
+                name.appendCodePoint(c);
+            } else {
+                name.append('_').append(Integer.toHexString(c)).append('_');
+            }
+        });
+        return name.toString();
+    }
+
+    private static String string(AnnotationInfo annotation, String member, String fallback) {
+        return annotation.hasMember(member) ? annotation.member(member).asString() : fallback;
+    }
+    private static String enumeration(AnnotationInfo annotation, String member, String fallback) {
+        return annotation.hasMember(member) ? annotation.member(member).asEnumConstant() : fallback;
+    }
+}

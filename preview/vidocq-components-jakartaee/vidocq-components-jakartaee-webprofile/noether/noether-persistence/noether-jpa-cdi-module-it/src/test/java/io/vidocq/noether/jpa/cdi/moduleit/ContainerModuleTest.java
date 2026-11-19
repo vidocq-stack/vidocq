@@ -1,0 +1,124 @@
+package io.vidocq.noether.jpa.cdi.moduleit;
+
+import io.vidocq.mansart.transactions.cdi.MansartTransactionsProducer;
+import io.vidocq.noether.jpa.cdi.*;
+import io.vidocq.noether.jpa.jta.SynchronizationRegistryIntegration;
+import io.vidocq.vauban.core.container.VaubanContainer;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.persistence.*;
+import jakarta.transaction.TransactionManager;
+import jakarta.transaction.TransactionSynchronizationRegistry;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.*;
+
+/** §7.7/ch.9, real Vauban CDI Lite on the module path plus real H2/Noether transactions. */
+class ContainerModuleTest {
+    /**
+     * BUG-20261113-01: a factory named after its rank among the units changed name with the other units of the
+     * deployment. The boot of a Vidocq application runs the extension again over its classes, sees them in another
+     * order than the build did, and registered a second factory per unit next to the one the build recorded: with two
+     * units, every {@code @PersistenceUnit} was ambiguous.
+     */
+    @Test
+    void aUnitsFactoryHasTheSameNameWhateverOtherUnitsTheDeploymentHas() {
+        String alone = factoryName("container", Repository.class);
+
+        assertThat(factoryName("container", ExplicitInjectionRepository.class, Repository.class)).isEqualTo(alone);
+    }
+
+    private static String factoryName(String unit, Class<?>... repositories) {
+        var builder = VaubanContainer.builder().addBeanClass(NoetherPersistenceExtension.class)
+            .addBeanClass(MansartTransactionsProducer.class).addBeanClass(Services.class);
+        for (Class<?> repository : repositories) builder.addBeanClass(repository);
+        try (var container = builder.build()) {
+            Set<String> names = container.getBeanManager().getBeans(EntityManagerFactory.class, Any.Literal.INSTANCE)
+                .stream().map(Bean::getName).collect(Collectors.toSet());
+            return names.stream().filter(name -> name.endsWith(unit)).findFirst()
+                .orElseThrow(() -> new AssertionError("no factory of " + unit + " among " + names));
+        }
+    }
+
+    @Test
+    void existingInjectionPointsResolveSynthesizedPersistenceFields() throws Exception {
+        try (var container = VaubanContainer.builder().addBeanClass(NoetherPersistenceExtension.class)
+                .addBeanClass(MansartTransactionsProducer.class).addBeanClass(Services.class).addBeanClass(ExplicitInjectionRepository.class).build()) {
+            var repository = container.select(ExplicitInjectionRepository.class);
+            assertThat(repository.manager).isNotNull();
+            assertThat(repository.factory).isNotNull();
+            TransactionManager tm = container.select(TransactionManager.class);
+            tm.begin();
+            Record record = new Record(23);
+            repository.manager.persist(record);
+            assertThat(repository.manager.find(Record.class, 23)).isSameAs(record);
+            tm.commit();
+        }
+    }
+
+    @Test
+    void persistenceSetterParametersReceiveTheirEnhancedQualifier() {
+        try (var container = VaubanContainer.builder().addBeanClass(NoetherPersistenceExtension.class)
+                .addBeanClass(MansartTransactionsProducer.class).addBeanClass(Services.class).addBeanClass(SetterRepository.class).build()) {
+            assertThat(container.select(SetterRepository.class).manager).isNotNull();
+        }
+    }
+
+    @Test
+    void persistenceAnnotationsInjectThroughTheActualContainer() throws Exception {
+        try (var container = VaubanContainer.builder().addBeanClass(NoetherPersistenceExtension.class)
+                .addBeanClass(MansartTransactionsProducer.class).addBeanClass(Services.class).addBeanClass(Repository.class).build()) {
+            Repository repository = container.select(Repository.class);
+            assertThat(repository.manager).isNotNull();
+            assertThat(repository.factory).isNotNull();
+            TransactionManager tm = container.select(TransactionManager.class);
+            tm.begin();
+            repository.manager.persist(new Record(1));
+            tm.commit();
+            assertThat(repository.manager.find(Record.class, 1)).isNotNull();
+        }
+    }
+
+    @Test
+    void actualContainerRegistryDrivesScopedIdentityAndExtendedLifecycle() throws Exception {
+        try (var container = VaubanContainer.builder().addBeanClass(MansartTransactionsProducer.class).addBeanClass(Services.class).build()) {
+            TransactionManager tm = container.select(TransactionManager.class);
+            TransactionSynchronizationRegistry registry = container.select(TransactionSynchronizationRegistry.class);
+            var integration = new SynchronizationRegistryIntegration(registry);
+            try (var factory = container.select(PersistenceUnitBootstrap.class).create("scope-tests", integration)) {
+                var first = new ContainerEntityManager(factory, registry, PersistenceContextType.TRANSACTION,
+                    SynchronizationType.SYNCHRONIZED, java.util.Map.of());
+                var second = new ContainerEntityManager(factory, registry, PersistenceContextType.TRANSACTION,
+                    SynchronizationType.SYNCHRONIZED, java.util.Map.of());
+                assertThatThrownBy(first::close).isInstanceOf(IllegalStateException.class);
+                assertThatThrownBy(() -> first.persist(new Record(1))).isInstanceOf(TransactionRequiredException.class);
+                tm.begin();
+                var record = new Record(1);
+                first.persist(record);
+                assertThat(second.find(Record.class, 1)).isSameAs(record);
+                tm.commit();
+                tm.begin();
+                Record different = first.find(Record.class, 1);
+                assertThat(different).isNotSameAs(record);
+                tm.rollback();
+                var extended = new ContainerEntityManager(factory, registry, PersistenceContextType.EXTENDED,
+                    SynchronizationType.UNSYNCHRONIZED, java.util.Map.of());
+                var deferred = new Record(2);
+                extended.persist(deferred);
+                tm.begin();
+                assertThat(extended.isJoinedToTransaction()).isFalse();
+                tm.commit();
+                assertThat(extended.contains(deferred)).isTrue();
+                tm.begin();
+                extended.joinTransaction();
+                tm.commit();
+                assertThat(extended.find(Record.class, 2)).isSameAs(deferred);
+                extended.destroy();
+                assertThat(extended.isOpen()).isFalse();
+                first.destroy();
+                second.destroy();
+            }
+        }
+    }
+}

@@ -1,0 +1,629 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.session;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import io.vidocq.noether.jpa.core.mapping.MappedEntity;
+import jakarta.persistence.Cache;
+import jakarta.persistence.Cacheable;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PersistenceConfiguration;
+import jakarta.persistence.SharedCacheMode;
+import jakarta.persistence.CacheRetrieveMode;
+import jakarta.persistence.CacheStoreMode;
+import jakarta.persistence.PersistenceException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+import java.util.Map;
+import java.util.stream.Stream;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+/** Jakarta Persistence 3.2, §3.10: shared cache state is committed, isolated and explicitly evictable. */
+class SecondLevelCacheTest {
+
+    private static final AtomicInteger DATABASES = new AtomicInteger();
+    private Connection database;
+    private EntityManagerFactory emf;
+
+    @BeforeEach
+    void open() throws Exception {
+        String url = "jdbc:h2:mem:l2-cache-" + DATABASES.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+        database = DriverManager.getConnection(url, "sa", "");
+        emf = factory(url, SharedCacheMode.ENABLE_SELECTIVE, Map.of());
+    }
+
+    @AfterEach
+    void close() throws Exception {
+        if (emf != null && emf.isOpen()) {
+            emf.close();
+        }
+        database.close();
+    }
+
+    @Test
+    void publicationUsesFlushedStateRatherThanLiveInstancesAfterJdbcCommit() throws Exception {
+        String url = "jdbc:h2:mem:cache-stage-" + DATABASES.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+                Statement ddl = connection.createStatement()) {
+            ddl.execute("create table CacheEntry (id bigint primary key, name varchar(100))");
+        }
+        var live = new java.util.concurrent.atomic.AtomicReference<CacheEntry>();
+        DataSource source = new CountingDataSource(url) {
+            @Override
+            public Connection getConnection() throws SQLException {
+                Connection delegate = super.getConnection();
+                return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                    new Class<?>[] { Connection.class }, (proxy, method, arguments) -> {
+                        try {
+                            Object result = method.invoke(delegate, arguments);
+                            if (method.getName().equals("commit") && live.get() != null) {
+                                live.get().name = "not flushed";
+                            }
+                            return result;
+                        } catch (InvocationTargetException e) {
+                            throw e.getCause();
+                        }
+                    });
+            }
+        };
+        try (EntityManagerFactory staged = new PersistenceConfiguration("cache-stage")
+                .provider("io.vidocq.noether.jpa.core.NoetherPersistenceProvider")
+                .managedClass(CacheEntry.class).property("jakarta.persistence.nonJtaDataSource", source)
+                .sharedCacheMode(SharedCacheMode.ENABLE_SELECTIVE).createEntityManagerFactory();
+                EntityManager writer = staged.createEntityManager()) {
+            writer.getTransaction().begin();
+            CacheEntry entry = new CacheEntry(85L, "flushed");
+            live.set(entry);
+            writer.persist(entry);
+            writer.getTransaction().commit();
+            try (EntityManager reader = staged.createEntityManager()) {
+                assertThat(reader.find(CacheEntry.class, 85L).name).isEqualTo("flushed");
+            }
+        }
+    }
+
+    @Test
+    void classEvictionFencesStaleFillsAndEvictsGraphsReferencingThatClass() {
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        CacheTarget target = new CacheTarget(80L, "target");
+        em.persist(target);
+        em.persist(new CacheOwner(81L, target));
+        em.getTransaction().commit();
+        SecondLevelCache cache = (SecondLevelCache) ((EntityManagerFactoryImpl) emf).cache();
+        long generation = cache.generation();
+        cache.evict(CacheTarget.class);
+        assertThat(cache.contains(CacheOwner.class, 81L)).isFalse();
+        cache.store(target, generation);
+        assertThat(cache.contains(CacheTarget.class, 80L)).isFalse();
+        em.close();
+    }
+
+    @Test
+    void subtypeMissDoesNotPopulateTheContextOrClaimToContainSiblingTypes() {
+        EntityManagerFactoryImpl implementation = (EntityManagerFactoryImpl) emf;
+        SecondLevelCache cache = (SecondLevelCache) implementation.cache();
+        MappedEntity sibling = implementation.mapping().entity(CacheSibling.class).orElseThrow();
+        cache.store(new CacheEntry(82L, "root"), cache.generation());
+        var context = new io.vidocq.noether.jpa.core.context.PersistenceContext();
+        assertThat(cache.restore(sibling, 82L, context)).isEmpty();
+        assertThat(context.entries()).isEmpty();
+        assertThat(cache.contains(CacheSibling.class, 82L)).isFalse();
+        assertThat(cache.contains(CacheEntry.class, 82L)).isTrue();
+    }
+
+    /** An entity manager keeps what a transaction read and wrote for the shared cache only if the cache can hold it. */
+    @Test
+    void aCacheHoldsEntitiesOnlyIfItsModeCachesOneOfTheUnit() {
+        var cacheable = ((EntityManagerFactoryImpl) emf).mapping(); // CacheEntry is @Cacheable, others are not
+        assertThat(new SecondLevelCache(cacheable, SharedCacheMode.NONE).holdsEntities()).isFalse();
+        assertThat(new SecondLevelCache(cacheable, SharedCacheMode.ALL).holdsEntities()).isTrue();
+        assertThat(new SecondLevelCache(cacheable, SharedCacheMode.ENABLE_SELECTIVE).holdsEntities()).isTrue();
+        assertThat(new SecondLevelCache(cacheable, SharedCacheMode.UNSPECIFIED).holdsEntities()).isTrue();
+        assertThat(new SecondLevelCache(cacheable, SharedCacheMode.DISABLE_SELECTIVE).holdsEntities()).isTrue();
+        var plain = io.vidocq.noether.jpa.core.mapping.MappedUnit.of(java.util.List.of(
+            io.vidocq.noether.jpa.core.model.build.fixtures.Customer.class.getName()), getClass().getClassLoader());
+        assertThat(new SecondLevelCache(plain, SharedCacheMode.NONE).holdsEntities()).isFalse();
+        assertThat(new SecondLevelCache(plain, SharedCacheMode.ENABLE_SELECTIVE).holdsEntities()).isFalse();
+        assertThat(new SecondLevelCache(plain, SharedCacheMode.UNSPECIFIED).holdsEntities()).isFalse();
+        assertThat(new SecondLevelCache(plain, SharedCacheMode.DISABLE_SELECTIVE).holdsEntities()).isTrue();
+        assertThat(new SecondLevelCache(plain, SharedCacheMode.ALL).holdsEntities()).isTrue();
+    }
+
+    /** With a cache that holds nothing, reads, writes, bulk updates and evictions behave as with one that does. */
+    @Test
+    void aUnitWhoseCacheHoldsNothingReadsAndWritesAsUsual() throws Exception {
+        emf.close();
+        String url = "jdbc:h2:mem:l2-cache-" + DATABASES.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+        try (var _ = DriverManager.getConnection(url, "sa", "")) { // open for as long as the unit is used
+            emf = factory(url, SharedCacheMode.NONE, Map.of());
+            assertThat(((SecondLevelCache) ((EntityManagerFactoryImpl) emf).cache()).holdsEntities()).isFalse();
+            try (EntityManager em = emf.createEntityManager()) {
+                em.getTransaction().begin();
+                em.persist(new CacheEntry(90L, "first"));
+                em.persist(new CacheEntry(91L, "second"));
+                em.getTransaction().commit();
+            }
+            try (EntityManager em = emf.createEntityManager()) {
+                em.getTransaction().begin();
+                CacheEntry found = em.find(CacheEntry.class, 90L);
+                assertThat(em.createQuery("select e from CacheEntry e order by e.id", CacheEntry.class).getResultList())
+                    .hasSize(2).first().isSameAs(found);
+                found.name = "changed";
+                em.flush();
+                assertThat(em.createQuery("update CacheEntry e set e.name = 'bulk' where e.id = 91").executeUpdate()).isEqualTo(1);
+                em.getTransaction().commit();
+            }
+            assertThat(emf.getCache().contains(CacheEntry.class, 90L)).isFalse();
+            emf.getCache().evictAll();
+            try (EntityManager em = emf.createEntityManager()) {
+                assertThat(em.find(CacheEntry.class, 90L).name).isEqualTo("changed");
+                assertThat(em.find(CacheEntry.class, 91L).name).isEqualTo("bulk");
+                em.getTransaction().begin();
+                em.remove(em.find(CacheEntry.class, 91L));
+                em.getTransaction().rollback();
+                assertThat(em.find(CacheEntry.class, 91L)).isNotNull();
+            }
+        }
+    }
+
+    @Test
+    void storageUsesActualSubtypeAndItsCacheabilityForEverySharedCacheMode() {
+        EntityManagerFactoryImpl implementation = (EntityManagerFactoryImpl) emf;
+        MappedEntity root = implementation.mapping().entity(CacheEntry.class).orElseThrow();
+        MappedEntity child = implementation.mapping().entity(CacheChild.class).orElseThrow();
+        for (SharedCacheMode mode : SharedCacheMode.values()) {
+            SecondLevelCache cache = new SecondLevelCache(implementation.mapping(), mode);
+            CacheChild instance = new CacheChild();
+            instance.id = 83L;
+            instance.name = "child";
+            cache.store(instance, cache.generation());
+            boolean enabled = mode == SharedCacheMode.ALL;
+            assertThat(cache.contains(CacheEntry.class, 83L)).isEqualTo(enabled);
+            assertThat(cache.contains(CacheChild.class, 83L)).isEqualTo(enabled);
+            var context = new io.vidocq.noether.jpa.core.context.PersistenceContext();
+            assertThat(cache.restore(root, 83L, context).isPresent()).isEqualTo(enabled);
+            if (enabled) {
+                assertThat(cache.restore(child, 83L, context).orElseThrow()).isInstanceOf(CacheChild.class);
+            }
+        }
+    }
+
+    @Test
+    void dirtyTransactionalReadCandidatesAreNotPublishedAsCommittedState() throws Exception {
+        try (Statement insert = database.createStatement()) {
+            insert.executeUpdate("insert into CacheEntry (id, name, DTYPE) values (84, 'committed', 'CacheEntry')");
+        }
+        try (EntityManager em = emf.createEntityManager()) {
+            em.getTransaction().begin();
+            em.setFlushMode(jakarta.persistence.FlushModeType.COMMIT);
+            CacheEntry entry = em.find(CacheEntry.class, 84L);
+            entry.name = "dirty";
+            em.flush();
+            try (EntityManager other = emf.createEntityManager()) {
+                assertThat(other.find(CacheEntry.class, 84L).name).isEqualTo("committed");
+            }
+            entry.name = "last committed";
+            em.getTransaction().commit();
+        }
+        try (EntityManager em = emf.createEntityManager()) {
+            assertThat(em.find(CacheEntry.class, 84L).name).isEqualTo("last committed");
+        }
+    }
+
+    @Test
+    void publishesOnlyCommittedDeepCopiesAndEvictsByHierarchyIdentity() {
+        EntityManager first = emf.createEntityManager();
+        CacheEntry entry = new CacheEntry(1L, "committed");
+        first.getTransaction().begin();
+        first.persist(entry);
+        assertThat(emf.getCache().contains(CacheEntry.class, 1L)).isFalse();
+        first.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 1L)).isTrue();
+
+        entry.name = "uncommitted in-memory mutation";
+        first.clear();
+        EntityManager second = emf.createEntityManager();
+        assertThat(second.find(CacheEntry.class, 1L).name).isEqualTo("committed");
+        second.close();
+
+        Cache cache = emf.getCache();
+        cache.evict(CacheEntry.class, 1L);
+        assertThat(cache.contains(CacheEntry.class, 1L)).isFalse();
+        first.close();
+    }
+
+    @Test
+    void cachedArraysAreCopiedWhenPublishedAndWhenRead() throws Exception {
+        EntityManager writer = emf.createEntityManager();
+        CacheBlob blob = new CacheBlob(1L, new byte[] {1, 2}, new Character[] {'a', 'b'});
+        writer.getTransaction().begin();
+        writer.persist(blob);
+        writer.getTransaction().commit();
+        blob.payload[0] = 9;
+        blob.letters[0] = 'z';
+        writer.close();
+        try (Statement sql = database.createStatement()) {
+            sql.execute("delete from CacheBlob"); // from now on, only the cache holds the row
+        }
+
+        EntityManager reader = emf.createEntityManager();
+        CacheBlob read = reader.find(CacheBlob.class, 1L);
+        assertThat(read.payload).containsExactly(1, 2);
+        assertThat(read.letters).containsExactly('a', 'b');
+        read.payload[1] = 8;
+        read.letters[1] = 'y';
+        reader.close();
+
+        EntityManager again = emf.createEntityManager();
+        CacheBlob reread = again.find(CacheBlob.class, 1L);
+        assertThat(reread.payload).containsExactly(1, 2);
+        assertThat(reread.letters).containsExactly('a', 'b');
+        again.close();
+    }
+
+    static Stream<Object> arraysOfEachKind() {
+        return Stream.of(new byte[] {1}, new char[] {'a'}, new short[] {2}, new int[] {3}, new long[] {4L},
+            new float[] {5f}, new double[] {6d}, new boolean[] {true},
+            Arguments.of((Object) new String[] {"seven"})); // an Object[] alone would be spread into arguments
+    }
+
+    @ParameterizedTest
+    @MethodSource("arraysOfEachKind")
+    void anArrayIsCopiedIntoANewArrayOfTheSameType(Object array) {
+        Object copy = SecondLevelCache.copyArray(array);
+        assertThat(copy).isNotSameAs(array).isExactlyInstanceOf(array.getClass()).isEqualTo(array);
+    }
+
+    @Test
+    void aValueThatIsNotAnArrayIsNotCopiedAsOne() {
+        assertThatThrownBy(() -> SecondLevelCache.copyArray("text")).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void doesNotPublishBeforeCommitOrAfterRollback() {
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(2L, "rolled back"));
+        em.getTransaction().rollback();
+        assertThat(emf.getCache().contains(CacheEntry.class, 2L)).isFalse();
+        em.close();
+    }
+
+    @Test
+    void cacheEntriesAreScopedToTheirEntityManagerFactory() throws Exception {
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(3L, "factory one"));
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 3L)).isTrue();
+
+        String otherUrl = "jdbc:h2:mem:l2-cache-isolated-" + DATABASES.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+        try (EntityManagerFactory other = factory(otherUrl, SharedCacheMode.ENABLE_SELECTIVE, Map.of())) {
+            assertThat(other.getCache().contains(CacheEntry.class, 3L)).isFalse();
+            EntityManager second = other.createEntityManager();
+            second.getTransaction().begin();
+            second.persist(new CacheEntry(3L, "factory two"));
+            second.getTransaction().commit();
+            assertThat(other.getCache().contains(CacheEntry.class, 3L)).isTrue();
+            assertThat(emf.getCache().contains(CacheEntry.class, 3L)).isTrue();
+            second.close();
+        }
+        em.close();
+    }
+
+    @Test
+    void cachedAssociationGraphsUseIdentityReferencesAndRestoreThePersistenceContext() {
+        EntityManager em = emf.createEntityManager();
+        CacheTarget target = new CacheTarget(10L, "committed target");
+        CacheOwner owner = new CacheOwner(11L, target);
+        em.getTransaction().begin();
+        em.persist(target);
+        em.persist(owner);
+        em.getTransaction().commit();
+
+        target.name = "later in-memory mutation";
+        em.clear();
+        CacheOwner restored = em.find(CacheOwner.class, 11L);
+        assertThat(restored.target.name).isEqualTo("committed target");
+        assertThat(em.find(CacheTarget.class, 10L)).isSameAs(restored.target);
+        em.close();
+    }
+
+    @Test
+    void cacheModesAndBulkUpdatesControlRetrievalStorageAndInvalidation() {
+        EntityManager em = emf.createEntityManager(Map.of("jakarta.persistence.cache.storeMode", CacheStoreMode.BYPASS));
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(20L, "original"));
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 20L)).isFalse();
+        em.close();
+
+        em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(21L, "original"));
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 21L)).isTrue();
+
+        try (Statement update = database.createStatement()) {
+            update.executeUpdate("update CacheEntry set name='database value' where id=21");
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+        EntityManager bypass = emf.createEntityManager();
+        bypass.setCacheRetrieveMode(CacheRetrieveMode.BYPASS);
+        assertThat(bypass.find(CacheEntry.class, 21L).name).isEqualTo("database value");
+        bypass.close();
+
+        em.getTransaction().begin();
+        em.createQuery("update CacheEntry c set c.name = :name").setParameter("name", "bulk value").executeUpdate();
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 21L)).isFalse();
+        em.clear();
+        assertThat(em.find(CacheEntry.class, 21L).name).isEqualTo("bulk value");
+        em.close();
+    }
+
+    @Test
+    void refreshedFindReplacesCachedStateAndFlushedChangesAreVisibleWithinTheTransaction() {
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(22L, "original"));
+        em.getTransaction().commit();
+
+        try (Statement update = database.createStatement()) {
+            update.executeUpdate("update CacheEntry set name='database refresh' where id=22");
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+        EntityManager refresh = emf.createEntityManager();
+        refresh.setCacheStoreMode(CacheStoreMode.REFRESH);
+        assertThat(refresh.find(CacheEntry.class, 22L).name).isEqualTo("database refresh");
+        refresh.close();
+        EntityManager cached = emf.createEntityManager();
+        assertThat(cached.find(CacheEntry.class, 22L).name).isEqualTo("database refresh");
+        cached.getTransaction().begin();
+        CacheEntry changed = cached.find(CacheEntry.class, 22L);
+        changed.name = "transaction update";
+        cached.flush();
+        cached.clear();
+        assertThat(cached.find(CacheEntry.class, 22L).name).isEqualTo("transaction update");
+        cached.getTransaction().rollback();
+        cached.close();
+
+        EntityManager unchanged = emf.createEntityManager();
+        assertThat(unchanged.find(CacheEntry.class, 22L).name).isEqualTo("database refresh");
+        unchanged.close();
+    }
+
+    @Test
+    void rolledBackNativeBulkUpdatesRetainCommittedCacheEntries() {
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(23L, "committed"));
+        em.getTransaction().commit();
+        em.getTransaction().begin();
+        em.createNativeQuery("update CacheEntry set name='rolled back' where id=23").executeUpdate();
+        em.getTransaction().rollback();
+        assertThat(emf.getCache().contains(CacheEntry.class, 23L)).isTrue();
+        em.clear();
+        assertThat(em.find(CacheEntry.class, 23L).name).isEqualTo("committed");
+        em.close();
+    }
+
+    @Test
+    void committedNativeBulkUpdatesInvalidateSharedEntries() {
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(27L, "original"));
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 27L)).isTrue();
+
+        em.getTransaction().begin();
+        em.createNativeQuery("update CacheEntry set name='native value' where id=27").executeUpdate();
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 27L)).isFalse();
+        em.clear();
+        assertThat(em.find(CacheEntry.class, 27L).name).isEqualTo("native value");
+        em.close();
+    }
+
+    @Test
+    void publishesTransactionalReadsOnlyAfterCommitAndFencesStaleFills() throws Exception {
+        try (Statement insert = database.createStatement()) {
+            insert.executeUpdate("insert into CacheEntry (id, name) values (24, 'database row')");
+        }
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        assertThat(em.find(CacheEntry.class, 24L).name).isEqualTo("database row");
+        assertThat(emf.getCache().contains(CacheEntry.class, 24L)).isFalse();
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 24L)).isTrue();
+        em.close();
+
+        EntityManagerFactoryImpl implementation = (EntityManagerFactoryImpl) emf;
+        SecondLevelCache cache = (SecondLevelCache) implementation.cache();
+        long generation = cache.generation();
+        cache.invalidateAll();
+        cache.store(new CacheEntry(25L, "stale database read"), generation);
+        assertThat(emf.getCache().contains(CacheEntry.class, 25L)).isFalse();
+    }
+
+    @Test
+    void runsCacheCompletionAfterCommitWhenConnectionReleaseFails() throws Exception {
+        String url = "jdbc:h2:mem:cache-release-" + DATABASES.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+        try (Connection keepAlive = DriverManager.getConnection(url, "sa", "");
+                Statement ddl = keepAlive.createStatement()) {
+            ddl.execute("create table CacheEntry (id bigint primary key, name varchar(100))");
+        }
+        AtomicBoolean failClose = new AtomicBoolean(true);
+        DataSource source = new CountingDataSource(url) {
+            @Override
+            public Connection getConnection() throws SQLException {
+                Connection delegate = super.getConnection();
+                return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                    new Class<?>[] { Connection.class }, (proxy, method, arguments) -> {
+                        try {
+                            Object result = method.invoke(delegate, arguments);
+                            if (method.getName().equals("close") && failClose.compareAndSet(true, false)) {
+                                throw new SQLException("simulated connection release failure");
+                            }
+                            return result;
+                        } catch (InvocationTargetException e) {
+                            throw e.getCause();
+                        }
+                    });
+            }
+        };
+        EntityManagerFactory failingEmf = new PersistenceConfiguration("cache-release")
+            .provider("io.vidocq.noether.jpa.core.NoetherPersistenceProvider")
+            .managedClass(CacheEntry.class)
+            .property("jakarta.persistence.nonJtaDataSource", source)
+            .sharedCacheMode(SharedCacheMode.ENABLE_SELECTIVE)
+            .createEntityManagerFactory();
+        try {
+            EntityManager em = failingEmf.createEntityManager();
+            em.getTransaction().begin();
+            em.persist(new CacheEntry(26L, "committed"));
+            var transaction = em.getTransaction();
+            assertThatThrownBy(transaction::commit).isInstanceOf(PersistenceException.class);
+            assertThat(failingEmf.getCache().contains(CacheEntry.class, 26L)).isTrue();
+            em.close();
+        } finally {
+            failingEmf.close();
+        }
+    }
+
+    @Test
+    void sharedCacheModesRespectCacheableDefaults() throws Exception {
+        String url = "jdbc:h2:mem:cache-modes-" + DATABASES.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+        emf.close();
+        emf = factory(url, SharedCacheMode.NONE, Map.of());
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.persist(new CacheEntry(30L, "disabled"));
+        em.getTransaction().commit();
+        assertThat(emf.getCache().contains(CacheEntry.class, 30L)).isFalse();
+        em.close();
+    }
+
+    private EntityManagerFactory factory(String url, SharedCacheMode mode, Map<String, Object> overrides) throws Exception {
+        try (Connection connection = DriverManager.getConnection(url, "sa", ""); Statement ddl = connection.createStatement()) {
+            ddl.execute("create table CacheEntry (id bigint primary key, name varchar(100), DTYPE varchar(31) default 'CacheEntry')");
+            ddl.execute("create table CacheTarget (id bigint primary key, name varchar(100))");
+            ddl.execute("create table CacheOwner (id bigint primary key, target_id bigint)");
+            ddl.execute("create table CacheBlob (id bigint primary key, payload varbinary(16), letters varchar(16))");
+        }
+        PersistenceConfiguration configuration = new PersistenceConfiguration("cache-" + DATABASES.get())
+            .provider("io.vidocq.noether.jpa.core.NoetherPersistenceProvider")
+            .managedClass(CacheEntry.class).managedClass(CacheChild.class).managedClass(CacheSibling.class)
+            .managedClass(CacheOwner.class).managedClass(CacheTarget.class).managedClass(CacheBlob.class)
+            .property(PersistenceConfiguration.JDBC_URL, url)
+            .property(PersistenceConfiguration.JDBC_USER, "sa")
+            .sharedCacheMode(mode);
+        overrides.forEach(configuration::property);
+        return configuration.createEntityManagerFactory();
+    }
+
+    @Entity
+    @Cacheable
+    public static class CacheEntry {
+        @Id
+        public Long id;
+        public String name;
+
+        public CacheEntry() {
+        }
+
+        CacheEntry(Long id, String name) {
+            this.id = id;
+            this.name = name;
+        }
+    }
+
+    @Entity
+    @Cacheable
+    public static class CacheTarget {
+        @Id
+        public Long id;
+        public String name;
+
+        public CacheTarget() {
+        }
+
+        CacheTarget(Long id, String name) {
+            this.id = id;
+            this.name = name;
+        }
+    }
+
+    @Entity
+    @Cacheable(false)
+    public static class CacheChild extends CacheEntry {
+    }
+
+    @Entity
+    @Cacheable
+    public static class CacheSibling extends CacheEntry {
+    }
+
+    @Entity
+    @Cacheable
+    public static class CacheOwner {
+        @Id
+        public Long id;
+        @ManyToOne
+        public CacheTarget target;
+
+        public CacheOwner() {
+        }
+
+        CacheOwner(Long id, CacheTarget target) {
+            this.id = id;
+            this.target = target;
+        }
+    }
+
+    @Entity
+    @Cacheable
+    public static class CacheBlob {
+        @Id
+        public Long id;
+        public byte[] payload;
+        public Character[] letters;
+
+        public CacheBlob() {
+        }
+
+        CacheBlob(Long id, byte[] payload, Character[] letters) {
+            this.id = id;
+            this.payload = payload;
+            this.letters = letters;
+        }
+    }
+}

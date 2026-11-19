@@ -1,0 +1,598 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.session;
+
+import io.vidocq.noether.jpa.core.context.EntityKey;
+import io.vidocq.noether.jpa.core.context.ManagedEntity;
+import io.vidocq.noether.jpa.core.context.PersistenceContext;
+import io.vidocq.noether.jpa.core.mapping.CollectionMapping;
+import io.vidocq.noether.jpa.core.mapping.IndexMapping;
+import io.vidocq.noether.jpa.core.mapping.LazyCollection;
+import io.vidocq.noether.jpa.core.mapping.MappedEntity;
+import io.vidocq.noether.jpa.core.mapping.MappedUnit;
+import io.vidocq.noether.jpa.core.model.AssociationAttribute;
+import io.vidocq.noether.jpa.core.model.AttributeModel;
+import io.vidocq.noether.jpa.core.model.BasicAttribute;
+import io.vidocq.noether.jpa.core.model.ElementCollectionAttribute;
+import io.vidocq.noether.jpa.core.model.EmbeddedAttribute;
+import io.vidocq.noether.jpa.core.model.EmbeddableModel;
+import jakarta.persistence.Cache;
+import jakarta.persistence.PersistenceException;
+import jakarta.persistence.SharedCacheMode;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.temporal.Temporal;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.UnaryOperator;
+
+/** A factory-scoped, thread-safe cache of immutable entity-state graphs (§3.10). */
+final class SecondLevelCache implements Cache {
+
+    private static final System.Logger LOG = System.getLogger(SecondLevelCache.class.getName());
+
+    private record EntityReference(EntityKey key) {
+    }
+
+    private record CollectionState(boolean map, boolean set, List<Object> keys, List<Object> values) {
+    }
+
+    /** A LAZY collection that was not loaded: it is restored unloaded, its elements are not in the cache. */
+    private enum Unloaded {
+        COLLECTION
+    }
+
+    private record Node(Class<?> type, List<Object> attributes) {
+    }
+
+    private record Graph(EntityKey root, Map<EntityKey, Node> nodes) {
+    }
+
+    record Publication(Map<EntityKey, Graph> graphs, Set<EntityKey> changed, long expectedGeneration) {
+    }
+
+    private final MappedUnit mapping;
+    private final SharedCacheMode mode;
+    private final boolean holdsEntities;
+    private final ConcurrentMap<EntityKey, Graph> entries = new ConcurrentHashMap<>();
+    private final AtomicLong generation = new AtomicLong();
+
+    SecondLevelCache(MappedUnit mapping, SharedCacheMode mode) {
+        this.mapping = mapping;
+        this.mode = mode == SharedCacheMode.UNSPECIFIED ? SharedCacheMode.ENABLE_SELECTIVE : mode;
+        boolean any = false;
+        if (this.mode != SharedCacheMode.NONE) {
+            for (var entity : mapping.model().entities()) {
+                any |= enabled(mapping.entity(entity.javaType()).orElseThrow());
+            }
+        }
+        this.holdsEntities = any;
+    }
+
+    /**
+     * Whether the mode of this cache (§3.10.1) caches an entity of the unit. Without one, it stores and restores
+     * nothing, whatever the cache modes of an operation: an entity manager has nothing to keep for it about what its
+     * transaction read and wrote.
+     */
+    boolean holdsEntities() {
+        return holdsEntities;
+    }
+
+    boolean enabled(MappedEntity type) {
+        if (mode == SharedCacheMode.NONE) {
+            return false;
+        }
+        if (mode == SharedCacheMode.ALL) {
+            return true;
+        }
+        Boolean explicit = inheritedCacheable(type.model().javaType());
+        return mode == SharedCacheMode.DISABLE_SELECTIVE ? !Boolean.FALSE.equals(explicit) : Boolean.TRUE.equals(explicit);
+    }
+
+    private Boolean inheritedCacheable(Class<?> type) {
+        var model = mapping.entity(type).orElseThrow().model();
+        if (model.cacheable() != null) {
+            return model.cacheable();
+        }
+        return model.superEntity().map(this::inheritedCacheable).orElse(null);
+    }
+
+    Optional<Object> restore(MappedEntity requested, Object id, PersistenceContext context) {
+        if (!enabled(requested)) {
+            return Optional.empty();
+        }
+        EntityKey key = new EntityKey(requested.root(), id);
+        Graph graph = entries.get(key);
+        if (graph == null || !matches(requested, graph) || reachesUnloadedReference(graph, context)) {
+            return Optional.empty();
+        }
+        try {
+            Object result = restoreGraph(graph, context);
+            return result != null && requested.model().javaType().isInstance(result) ? Optional.of(result) : Optional.empty();
+        } catch (UnsupportedState unsupported) {
+            entries.remove(key, graph);
+            LOG.log(System.Logger.Level.DEBUG, "Discarding unsupported cached state for " + key, unsupported);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Whether a node of {@code graph} is managed as an unloaded reference: a cached graph must not leave an EAGER edge
+     * pointing at it. The restore falls back before creating any nodes; the ordinary loader hydrates that same managed
+     * instance.
+     */
+    private static boolean reachesUnloadedReference(Graph graph, PersistenceContext context) {
+        return graph.nodes().keySet().stream().anyMatch(node -> context.find(node)
+            .map(managed -> io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(managed.instance())).orElse(false));
+    }
+
+    /**
+     * Restores the nodes of {@code graph} that {@code context} does not manage yet, registers them as loaded and
+     * schedules their {@code PostLoad} callbacks; the instance of its root.
+     */
+    private Object restoreGraph(Graph graph, PersistenceContext context) {
+        Map<EntityKey, Object> instances = new LinkedHashMap<>();
+        Map<EntityKey, MappedEntity> types = new LinkedHashMap<>();
+        Set<EntityKey> created = new LinkedHashSet<>();
+        for (Map.Entry<EntityKey, Node> entry : graph.nodes().entrySet()) {
+            MappedEntity type = mapping.entity(entry.getValue().type()).orElseThrow();
+            Optional<ManagedEntity> known = context.find(entry.getKey())
+                .filter(managed -> managed.status() == ManagedEntity.Status.MANAGED);
+            instances.put(entry.getKey(), known.map(ManagedEntity::instance).orElseGet(type.access()::instantiate));
+            types.put(entry.getKey(), type);
+            if (known.isEmpty()) {
+                created.add(entry.getKey());
+            }
+        }
+        // the collections last: a sorted one compares elements whose state is restored
+        for (boolean collections : new boolean[] {false, true}) {
+            for (EntityKey node : created) {
+                restoreAttributes(types.get(node), instances.get(node), graph.nodes().get(node), collections, instances,
+                    context);
+            }
+        }
+        for (EntityKey node : created) {
+            MappedEntity type = types.get(node);
+            Object instance = instances.get(node);
+            Object[] state = new Object[type.model().attributes().size()];
+            type.access().read(instance, state);
+            context.loaded(instance, type, node.id(), type.state().snapshot(state));
+        }
+        for (EntityKey node : created) {
+            MappedEntity type = types.get(node);
+            Object instance = instances.get(node);
+            context.postLoad(() -> type.callback("PostLoad", instance));
+        }
+        return instances.get(graph.root());
+    }
+
+    /** Sets the attributes of the restored {@code instance} of {@code node}: its collections, or its other attributes. */
+    private void restoreAttributes(MappedEntity type, Object instance, Node node, boolean collections,
+            Map<EntityKey, Object> instances, PersistenceContext context) {
+        List<AttributeModel> attributes = type.model().attributes();
+        for (int i = 0; i < attributes.size(); i++) {
+            Object encoded = node.attributes().get(i);
+            if (collections != (encoded instanceof CollectionState || encoded instanceof Unloaded)) {
+                continue;
+            }
+            Object value = encoded instanceof Unloaded
+                ? LazyCollection.of(attributes.get(i).javaType(), instance, i, attributes.get(i).name(), context.lazyLoader())
+                : decode(attributes.get(i), encoded, instances);
+            if (encoded instanceof Unloaded && value == null) {
+                throw new UnsupportedState();
+            }
+            type.access().set(instance, i, value);
+        }
+    }
+
+    long generation() {
+        return generation.get();
+    }
+
+    /** Stores {@code instance} under the entity its class maps, which can be a subclass of the one it was read as. */
+    void store(Object instance, long expectedGeneration) {
+        try {
+            MappedEntity type = mapped(instance);
+            if (!enabled(type)) {
+                return;
+            }
+            store(graph(type, instance), expectedGeneration);
+        } catch (UnsupportedState unsupported) {
+            LOG.log(System.Logger.Level.DEBUG, "Skipping unsupported cache state for "
+                + instance.getClass().getName(), unsupported);
+        }
+    }
+
+    private Graph graph(MappedEntity type, Object instance) {
+        Map<EntityKey, Node> nodes = new LinkedHashMap<>();
+        capture(type, instance, nodes);
+        return new Graph(key(type, instance), Map.copyOf(nodes));
+    }
+
+    private void store(Graph graph, long expectedGeneration) {
+        if (generation.get() == expectedGeneration) {
+            entries.put(graph.root(), graph);
+            if (generation.get() != expectedGeneration) {
+                entries.remove(graph.root(), graph);
+            }
+        }
+    }
+
+    /** Captures the flushed state before JDBC/JTA commit, without making it visible to other sessions. */
+    Publication stage(PersistenceContext context, CacheStoreModeSetting storeMode, Set<EntityKey> bypassStore,
+            Set<EntityKey> changed, Set<EntityKey> candidates, long expectedGeneration) {
+        Map<EntityKey, Graph> graphs = new LinkedHashMap<>();
+        List<ManagedEntity> managed = context.entries();
+        for (ManagedEntity entry : managed) {
+            EntityKey key = entry.key();
+            if (key == null || !candidates.contains(key) && !changed.contains(key)) {
+                continue;
+            }
+            if (entry.status() == ManagedEntity.Status.MANAGED
+                    && storeMode != CacheStoreModeSetting.BYPASS && !bypassStore.contains(key) && enabled(entry.type())) {
+                try {
+                    graphs.put(key, graph(entry.type(), entry.instance()));
+                } catch (UnsupportedState unsupported) {
+                    LOG.log(System.Logger.Level.DEBUG, "Skipping unsupported staged cache state for " + key, unsupported);
+                }
+            }
+        }
+        return new Publication(Map.copyOf(graphs), Set.copyOf(changed), expectedGeneration);
+    }
+
+    void publish(Publication publication) {
+        if (publication == null) {
+            return;
+        }
+        if (!publication.changed().isEmpty()) {
+            generation.incrementAndGet();
+            entries.entrySet().removeIf(entry -> entry.getValue().nodes().keySet().stream()
+                .anyMatch(publication.changed()::contains));
+        }
+        long publishGeneration = publication.expectedGeneration() + (publication.changed().isEmpty() ? 0 : 1);
+        publication.graphs().values().forEach(graph -> store(graph, publishGeneration));
+    }
+
+    void invalidate(EntityKey key) {
+        generation.incrementAndGet();
+        entries.entrySet().removeIf(entry -> entry.getValue().nodes().containsKey(key));
+    }
+
+    void invalidateAll() {
+        generation.incrementAndGet();
+        entries.clear();
+    }
+
+    @Override
+    public boolean contains(Class<?> cls, Object primaryKey) {
+        MappedEntity type = entity(cls);
+        if (type == null || primaryKey == null || !enabled(type)) {
+            return false;
+        }
+        Graph graph = entries.get(new EntityKey(type.root(), type.key(primaryKey)));
+        return graph != null && matches(type, graph);
+    }
+
+    private boolean matches(MappedEntity requested, Graph graph) {
+        Node root = graph.nodes().get(graph.root());
+        return root != null && requested.model().javaType().isAssignableFrom(root.type())
+            && graph.nodes().values().stream().allMatch(node -> enabled(mapping.entity(node.type()).orElseThrow()));
+    }
+
+    @Override
+    public void evict(Class<?> cls, Object primaryKey) {
+        MappedEntity type = entity(cls);
+        if (type != null && primaryKey != null) {
+            invalidate(new EntityKey(type.root(), type.key(primaryKey)));
+        }
+    }
+
+    @Override
+    public void evict(Class<?> cls) {
+        MappedEntity type = entity(cls);
+        if (type == null) {
+            return;
+        }
+        Class<?> root = type.root();
+        generation.incrementAndGet();
+        entries.entrySet().removeIf(entry -> entry.getValue().nodes().keySet().stream()
+            .anyMatch(key -> key.root() == root));
+    }
+
+    @Override
+    public void evictAll() {
+        invalidateAll();
+    }
+
+    @Override
+    public <T> T unwrap(Class<T> cls) {
+        if (cls.isInstance(this)) {
+            return cls.cast(this);
+        }
+        throw new PersistenceException("Unsupported unwrap type " + cls.getName());
+    }
+
+    private MappedEntity entity(Class<?> type) {
+        return type == null ? null : mapping.entity(type).orElse(null);
+    }
+
+    private EntityKey key(MappedEntity type, Object instance) {
+        Object id = type.id(instance);
+        if (id == null) {
+            throw new UnsupportedState();
+        }
+        return new EntityKey(type.root(), id);
+    }
+
+    private void capture(MappedEntity type, Object instance, Map<EntityKey, Node> nodes) {
+        if (io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(instance)) throw new UnsupportedState();
+        if (!enabled(type)) {
+            throw new UnsupportedState();
+        }
+        EntityKey key = key(type, instance);
+        if (nodes.containsKey(key)) {
+            return;
+        }
+        List<Object> values = new ArrayList<>(type.model().attributes().size());
+        for (int i = 0; i < type.model().attributes().size(); i++) {
+            values.add(null);
+        }
+        nodes.put(key, new Node(type.model().javaType(), values));
+        for (int i = 0; i < values.size(); i++) {
+            AttributeModel attribute = type.model().attributes().get(i);
+            Object value = type.access().get(instance, i);
+            values.set(i, encode(attribute, value, nodes));
+        }
+        nodes.put(key, new Node(type.model().javaType(), immutableList(values)));
+    }
+
+    private Object encode(AttributeModel attribute, Object value, Map<EntityKey, Node> nodes) {
+        if (value == null) {
+            return null;
+        }
+        if (LazyCollection.unloaded(value)) {
+            return Unloaded.COLLECTION; // neither loaded nor its persistence context kept: restored unloaded
+        }
+        return switch (attribute) {
+            case AssociationAttribute association -> encodeAssociation(association, value, nodes);
+            case EmbeddedAttribute embedded -> encodeEmbeddable(embedded.embeddable(), value, nodes);
+            case ElementCollectionAttribute collection -> encodeCollection(collection, value, nodes);
+            case BasicAttribute _ -> copyBasic(value);
+        };
+    }
+
+    private Object encodeEmbeddable(EmbeddableModel model, Object value, Map<EntityKey, Node> nodes) {
+        var access = mapping.access(model);
+        if (access == null) {
+            throw new UnsupportedState();
+        }
+        List<Object> values = new ArrayList<>(model.attributes().size());
+        for (int i = 0; i < model.attributes().size(); i++) {
+            values.add(encode(model.attributes().get(i), access.get(value, i), nodes));
+        }
+        return immutableList(values);
+    }
+
+    private Object encodeAssociation(AssociationAttribute association, Object value, Map<EntityKey, Node> nodes) {
+        if (association.singleValued()) {
+            MappedEntity target = mapped(value);
+            EntityKey key = key(target, value);
+            capture(target, value, nodes);
+            return new EntityReference(key);
+        }
+        return collectionState(value, element -> {
+            MappedEntity target = mapped(element);
+            EntityKey key = key(target, element);
+            capture(target, element, nodes);
+            return new EntityReference(key);
+        }, this::copyKey);
+    }
+
+    private Object encodeCollection(ElementCollectionAttribute collection, Object value, Map<EntityKey, Node> nodes) {
+        AttributeModel element = collection.element();
+        return collectionState(value, item -> encode(element, item, nodes), this::copyKey);
+    }
+
+    private CollectionState collectionState(Object value, UnaryOperator<Object> values, UnaryOperator<Object> keys) {
+        if (value instanceof Map<?, ?> map) {
+            List<Object> copiedKeys = new ArrayList<>(map.size());
+            List<Object> copiedValues = new ArrayList<>(map.size());
+            map.forEach((key, item) -> {
+                copiedKeys.add(keys.apply(key));
+                copiedValues.add(values.apply(item));
+            });
+            return new CollectionState(true, false, immutableList(copiedKeys), immutableList(copiedValues));
+        }
+        List<Object> copied = new ArrayList<>();
+        if (value instanceof Iterable<?> iterable) {
+            iterable.forEach(item -> copied.add(values.apply(item)));
+        } else {
+            throw new UnsupportedState();
+        }
+        return new CollectionState(false, value instanceof Set<?>, List.of(), immutableList(copied));
+    }
+
+    private Object decode(AttributeModel attribute, Object encoded, Map<EntityKey, Object> instances) {
+        if (encoded == null) {
+            return null;
+        }
+        return switch (attribute) {
+            case AssociationAttribute association -> decodeAssociation(association, encoded, instances);
+            case EmbeddedAttribute embedded -> decodeEmbeddable(embedded.embeddable(), encoded, instances);
+            case ElementCollectionAttribute collection -> decodeCollection(collection, encoded, instances);
+            case BasicAttribute _ -> copyBasic(encoded);
+        };
+    }
+
+    private Object decodeEmbeddable(EmbeddableModel model, Object encoded, Map<EntityKey, Object> instances) {
+        var access = mapping.access(model);
+        if (access == null) {
+            throw new UnsupportedState();
+        }
+        List<?> encodedValues = (List<?>) encoded;
+        Object[] values = new Object[encodedValues.size()];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = decode(model.attributes().get(i), encodedValues.get(i), instances);
+        }
+        if (access.type().isRecord()) {
+            return access.construct(values);
+        }
+        Object copy = access.instantiate();
+        access.write(copy, values);
+        return copy;
+    }
+
+    private Object decodeAssociation(AssociationAttribute association, Object encoded, Map<EntityKey, Object> instances) {
+        if (association.singleValued()) {
+            return instances.get(((EntityReference) encoded).key());
+        }
+        return collection(association.javaType(), (CollectionState) encoded,
+            item -> instances.get(((EntityReference) item).key()), key -> decodeKey(key, instances));
+    }
+
+    private Object decodeCollection(ElementCollectionAttribute collection, Object encoded, Map<EntityKey, Object> instances) {
+        return collection(collection.javaType(), (CollectionState) encoded,
+            item -> decode(collection.element(), item, instances), key -> decodeKey(key, instances));
+    }
+
+    /** A collection of the declared {@code type} of its attribute: a sorted one sorts again (BUG-20261015-02). */
+    private Object collection(Class<?> type, CollectionState state, UnaryOperator<Object> values,
+            UnaryOperator<Object> keys) {
+        if (state.map()) {
+            Map<Object, Object> map = IndexMapping.newMap(type);
+            for (int i = 0; i < state.keys().size(); i++) {
+                map.put(keys.apply(state.keys().get(i)), values.apply(state.values().get(i)));
+            }
+            return map;
+        }
+        List<Object> items = new ArrayList<>(state.values().size());
+        state.values().forEach(item -> items.add(values.apply(item)));
+        if (state.set() && type.isAssignableFrom(LinkedHashSet.class)) {
+            return new LinkedHashSet<>(items);
+        }
+        if (type.isInstance(items) || !Collection.class.isAssignableFrom(type)) {
+            return items;
+        }
+        Collection<Object> collection = CollectionMapping.newCollection(type);
+        collection.addAll(items);
+        return collection;
+    }
+
+    private Object copyKey(Object key) {
+        if (key != null && mapping.entity(key.getClass()).isPresent()) {
+            MappedEntity type = mapped(key);
+            EntityKey entityKey = key(type, key);
+            return new EntityReference(entityKey);
+        }
+        return copyBasic(key);
+    }
+
+    private Object decodeKey(Object key, Map<EntityKey, Object> instances) {
+        return key instanceof EntityReference(EntityKey entityKey) ? instances.get(entityKey) : copyBasic(key);
+    }
+
+    private MappedEntity mapped(Object instance) {
+        return mapping.entity(instance.getClass()).orElseThrow(UnsupportedState::new);
+    }
+
+    private static Object copyBasic(Object value) {
+        if (value == null || immutable(value.getClass())) {
+            return value;
+        }
+        if (value instanceof Date date) {
+            return date.clone();
+        }
+        if (value instanceof Calendar calendar) {
+            return calendar.clone();
+        }
+        if (value.getClass().isArray()) {
+            return copyArray(value);
+        }
+        if (value instanceof Serializable serializable) {
+            return serializedCopy(serializable);
+        }
+        throw new UnsupportedState();
+    }
+
+    /** A copy of an array: a primitive array is cloned, an object array copied element by element. */
+    static Object copyArray(Object array) {
+        return switch (array) {
+            case Object[] objects -> {
+                Object[] copy = objects.clone(); // keeps the component type, which copyBasic keeps for each element
+                for (int i = 0; i < copy.length; i++) {
+                    copy[i] = copyBasic(copy[i]);
+                }
+                yield copy;
+            }
+            case byte[] bytes -> bytes.clone();
+            case char[] chars -> chars.clone();
+            case short[] shorts -> shorts.clone();
+            case int[] ints -> ints.clone();
+            case long[] longs -> longs.clone();
+            case float[] floats -> floats.clone();
+            case double[] doubles -> doubles.clone();
+            case boolean[] booleans -> booleans.clone();
+            default -> throw new UnsupportedState();
+        };
+    }
+
+    private static boolean immutable(Class<?> type) {
+        return type.isPrimitive() || type.isEnum() || type == String.class || type == Boolean.class
+            || type == Character.class || type == Byte.class || type == Short.class || type == Integer.class
+            || type == Long.class || type == Float.class || type == Double.class || type == UUID.class
+            || Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time")
+            || type == Class.class || type == BigDecimal.class || type == BigInteger.class;
+    }
+
+    private static Object serializedCopy(Serializable value) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+                out.writeObject(value);
+            }
+            try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                return in.readObject();
+            }
+        } catch (IOException | ClassNotFoundException _) {
+            throw new UnsupportedState();
+        }
+    }
+
+    private static <T> List<T> immutableList(List<T> values) {
+        return Collections.unmodifiableList(new ArrayList<>(values));
+    }
+
+    enum CacheStoreModeSetting {
+        USE, REFRESH, BYPASS
+    }
+
+    private static final class UnsupportedState extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+    }
+}

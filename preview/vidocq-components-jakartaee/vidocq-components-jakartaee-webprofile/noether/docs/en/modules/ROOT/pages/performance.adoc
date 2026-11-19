@@ -1,0 +1,349 @@
+= Performance
+:description: Comparative measurements against Hibernate ORM and EclipseLink, the bottlenecks they showed, and how to reproduce them.
+
+[.lead]
+Noether is measured with a JMH harness that runs the same four workloads on Noether, Hibernate ORM and EclipseLink:
+a find by primary key, a JPQL query of 32 rows, a versioned update, and an insert-update-delete cycle. Every figure
+on this page comes from an entry of
+link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[`BENCH.md`], which holds the raw scores, errors
+and allocation.
+
+== In short
+
+* *On in-memory H2, against Hibernate ORM 5.6.15* (BENCH-20261111-07, one session), Noether has the higher
+  throughput on the four workloads — 935,077 against 517,832 finds per second, 130,653 against 67,493 queries — and
+  allocates 0.55x to 0.83x what Hibernate does per operation.
+* *On PostgreSQL 17* (BENCH-20261111-05), a database round trip dominates, and Noether and Hibernate 5.6 come out at
+  parity within the run-to-run variation. Noether allocates 0.61x to 0.78x Hibernate's (BENCH-20261111-08).
+* *Hibernate ORM 7.4 and EclipseLink 5.0 were not measured again* after the optimizations of 2026-11-11. At the
+  last comparison with them (BENCH-20261018-01 to -03, BENCH-20261111-01), before those optimizations, Noether was behind both
+  on every workload.
+
+These are single-fork, single-thread measurements of one entity without relationships: not a production latency,
+scalability or virtual-thread claim. The sections below give the methodology, the profiles and every change they
+led to, in the order they happened.
+
+== Running the harness
+
+The standalone JMH harness is isolated from production dependencies:
+
+[source,sh]
+----
+cd noether-persistence/noether-jpa-bench
+./run-bench.sh noether
+./run-bench.sh hibernate
+./run-bench.sh hibernate5
+./run-bench.sh eclipselink
+----
+
+`hibernate5` is Hibernate ORM 5.6.15 (`hibernate-core-jakarta`, Persistence 3.0). It predates
+`PersistenceConfiguration`, so the harness hands it the same unit as a `PersistenceUnitInfo` through
+`createContainerEntityManagerFactory`.
+
+The modular generated-access Leyden AOT cache smoke is
+`noether-persistence/noether-jpa-processor-module-it/run-aot-smoke.sh`.
+It is not a GraalVM native-image claim.
+
+== Pre-optimization baseline after D43
+
+link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261018-01/02/03]
+records the current measurements and preserves older Mansart evidence verbatim.
+The current code was rebuilt cleanly at `352e684`, on Apple M5 (10 cores,
+24 GiB RAM), Temurin 25.0.4.1 and H2 2.3.232. Hibernate ORM 7.4.12.Final
+and EclipseLink 5.0.2 use isolated test-only profiles.
+The unchanged harness verifies actual versioned writes before timing,
+disables validation and L2/query caches, and creates an entity manager per
+operation. The baseline and a reverse-provider-order repeat ran sequentially.
+
+Baseline throughput, in operations per second, with JMH 99.9% error:
+
+|===
+|Workload |Noether |Hibernate ORM |EclipseLink
+
+|Primary-key find
+|442,564 ± 16,994
+|621,852 ± 42,062
+|782,182 ± 6,364
+
+|JPQL, 32 entity rows
+|29,312 ± 765
+|94,062 ± 1,744
+|75,080 ± 279
+
+|Versioned update
+|209,313 ± 29,543
+|312,809 ± 9,084
+|293,657 ± 4,056
+
+|Insert/update/delete
+|153,425 ± 1,975
+|226,491 ± 11,798
+|181,464 ± 12,233
+|===
+
+At that baseline Noether is behind on these workloads, particularly JPQL. Its JPQL
+allocation is about 144 kB/op, versus 18.5 kB/op for Hibernate and 39.2 kB/op
+for EclipseLink. The reverse-order repeat retains the gap.
+Raw scores, allocation errors and prior-run deltas are in the benchmark log.
+Historical comparisons also differ in JVM patch level; they do not identify
+a responsible commit or establish a general performance regression.
+
+These are short single-fork, single-thread, in-memory measurements, not a
+production ranking, network-database benchmark or virtual-thread scalability
+result. Pool/statement-cache defaults differ between providers. Some confidence
+intervals are wide, particularly on the repeat.
+
+== Measured cause and first implementation
+
+An untimed H2 statement-statistics probe calls the real timed JPQL method
+after its normal setup and preflight. All providers return the same 32 rows.
+Before PERF1, Noether executes *33 data SELECTs*: one query selecting identities, then
+32 full-row reads by primary key. Hibernate and EclipseLink each execute
+*one data SELECT* returning the complete rows.
+This is ordinary result materialization, not a relationship-fetch example.
+
+A separate JFR diagnostic run places `EntityLoader.row` on the dominant
+JPQL allocation stacks and a large share of CPU sample stacks, consistent
+with those repeated reads. It also identifies entity-manager construction,
+reference lookup and flush scratch allocation as investigation targets.
+These are sampled inclusive stacks, not exclusive method timings.
+Profiled scores are not mixed with the unprofiled comparison.
+
+On 2026-10-19, PERF1 implements the first improvement: directly selected
+single-table concrete roots carry their full state in the result rows.
+The existing staged loader registers every captured identity before resolving
+relationships, taking snapshots and invoking PostLoad callbacks. The fixture
+now requires *one data SELECT* for all 32 entities. Managed dirty instances,
+lazy references, converters, versions and shared-cache policies retain their
+existing contracts; ordinary joins do not become fetch joins.
+
+The bounded optimization excludes DISTINCT, grouping/HAVING, set operations
+and query locks. Secondary-table roots without eligible fetch joins,
+polymorphic ranges, business-key references and relationship-bearing element
+collections retain their previous loading paths. It is not a claim that
+all entity queries or eager graphs execute one SELECT.
+
+=== PERF1 measurement
+
+BENCH-20261019-01/02 use the unchanged harness, JVM and provider versions,
+with one campaign in each provider order. Noether's JPQL throughput is
+*36,954 ± 528 ops/s* in the first run, compared with *29,257 ± 633 ops/s*
+in the most recent pre-optimization run: *+26.31%*. Allocation falls from
+*144,432 to 108,824 B/op* (*-24.65%*). The reverse-order repeat measures
+36,104 ± 7,397 ops/s and 107,200 B/op; its throughput uncertainty is wider.
+An independent probe of the actual benchmark confirms the one-SELECT shape.
+
+The first new campaign still places Hibernate at 92,561 ± 892 ops/s and
+EclipseLink at 74,432 ± 359 ops/s for JPQL. This is a useful first gain, not
+parity: materialization/query work still allocates substantially more.
+The before/after comparison is across dates, not a same-session controlled
+A/B experiment. No improvements are claimed for unchanged find/write paths.
+Full raw results, allocation errors, repeats, binary provenance and caveats
+are recorded in BENCH.md; none of these numbers is a production guarantee.
+
+The improvement order remains finite:
+
+. *Hydrate plain entity-query results from the selected rows:* implemented by
+  PERF1 for the bounded eligible case above, using the existing loader and
+  generated access. Complete fallbacks remain for other mappings.
+. *Reuse parameter-independent query work.* Parsing and validation/translation
+  currently repeat on creation/execution. Investigate bounded factory-local
+  immutable templates without capturing mutable bindings, graphs, hints,
+  pagination, lock options or collection-parameter arity. This is secondary
+  to the proven repeated-read cost, not a claimed primary bottleneck.
+. *Reduce measured scratch allocation.* Inspect per-entity-manager helpers,
+  reference metadata lookup and flush workspaces. Preserve reentrancy and
+  snapshots; do not share mutable context state or remove correctness checks.
+
+=== Post-PERF1 profiling changes the next priority
+
+BENCH-20261019-03 records a four-workload JFR capture and a longer JPQL-only
+confirmation. Repeated relationship-metadata lookups stand out, including
+negative lookups for basic attributes, through `EntityOperations.beforeFlush`
+at transaction commit. `EntityStatements.reference` constructs stream
+pipelines; `FlushEngine.hasInverseIndexes` scans collection metadata.
+Flush workspaces are another candidate, although per-site allocation weights
+vary substantially between recordings.
+
+That profile motivates *precomputed/indexed relationship metadata and
+inverse-index presence* (PERF2 below), before query-plan caching.
+Parsing/translation is visible but does not dominate the confirmed profile.
+Then investigate avoidable flush workspace/state allocation. Do not skip
+dirty checking or commit flush merely because the query is a SELECT: mutable
+state, cascades, callbacks, collections and optimistic locks still matter.
+Sample percentages are not achievable speedups; no further optimization is
+implemented by this profiling study. The first capture's throughput is too
+noisy to compare; retain the unprofiled PERF1 runs as the throughput evidence.
+
+=== PERF2: bootstrap-indexed metadata
+
+On 2026-10-22, PERF2 builds a private owned-reference array keyed by
+execution-state attribute slot and an immutable ordered list of inverse
+collections with index-update statements. Both belong to the mapped unit
+and are constructed once. Reference lookups no longer build stream pipelines;
+flush checks the prefiltered list and uses it when writing inverse indexes.
+Inherited, lowered embedded and business-key mappings retain their original
+metadata objects. Missing reference slots and mapping-availability guards
+keep their existing behavior.
+
+This follows the general ORM principle of preparing hot-path metadata at
+bootstrap rather than discovering it repeatedly. Hibernate's
+https://github.com/hibernate/hibernate-orm/blob/7.1/hibernate-core/src/main/java/org/hibernate/tuple/entity/EntityMetamodel.java[7.1 EntityMetamodel]
+also illustrates property-slot arrays; it is a design reference, not copied
+code, a new dependency or a claim about the internals of the measured 7.4 build.
+No session/entity/query state is shared. Commit flush, dirty checking,
+cascades, lifecycle callbacks and optimistic locking remain active.
+
+BENCH-20261022-01/02/03 record one same-session PERF1 baseline followed by two
+unchanged-harness optimized campaigns, with fresh forks:
+
+|===
+|JPQL, 32 entity rows |PERF1 baseline |PERF2 |PERF2 repeat
+
+|Throughput, ops/s (JMH 99.9% error)
+|38,396 +/- 2,334
+|42,427 +/- 2,019
+|43,207 +/- 2,786
+
+|Allocation, B/op
+|108,989
+|77,829
+|77,828
+|===
+
+JPQL throughput point estimates rise *10.50%* and *12.53%*, while allocation
+falls *28.59%* in both campaigns. Other workloads also allocate less in these
+runs; their complete scores and uncertainty are in `BENCH.md`. Baseline
+throughput intervals overlap optimized ones, particularly for find; these
+short single-fork campaigns are not randomized A/B evidence or precise
+speedup guarantees. Allocation reduction is the stronger result.
+Competitors were not rerun: the earlier Hibernate/EclipseLink gap is context,
+not a new cross-provider ranking or proof of parity. Java 25 is common to
+all three providers in that earlier comparison, not an exclusive Noether
+advantage.
+
+The next investigation remains avoidable flush/state and materialization
+allocation, followed by bounded query-template reuse according to a fresh
+profile. Neither is implemented by PERF2.
+
+For each change: failing-first correctness and SQL-count tests, clean
+reactor/TCK validation, then identical repeated JMH runs with allocation
+measurement. A later PostgreSQL/application workload and common-DataSource
+comparison should distinguish database latency and pooling from provider CPU;
+they have not been measured here. Do not manufacture speed by reducing
+the selected columns, returned rows or write/version semantics.
+
+== Hibernate ORM 5.6 comparison (2026-11-11)
+
+link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-01]
+measures Noether, Hibernate ORM 5.6.15 and Hibernate ORM 7.4.12 in one session, on another
+machine than the entries above (Apple M5 Max, Temurin 25.0.3), with unchanged workloads.
+
+[cols="2,>1,>1,>1",options="header"]
+|===
+|Workload (ops/s) |Noether |Hibernate 5.6 |Hibernate 7.4
+|`findById` |466,086 |536,978 |627,351
+|`jpqlQuery` |41,844 |67,387 |89,986
+|`update` |218,329 |284,889 |305,915
+|`createUpdateDelete` |164,213 |250,799 |237,486
+|===
+
+Noether is behind Hibernate 5.6 on every workload (-13% to -38%), with 1.5x to 3x its allocation
+per operation; JPQL materialization is the largest gap. Errors and allocation are in `BENCH.md`.
+
+== Hot paths (2026-11-11)
+
+A profile of those four workloads (BENCH-20261111-02) led to five changes, none of which removes a
+column, a row, a dirty or version check, a callback or a cache rule, or adds a setting:
+
+* a resource-local transaction returns its connection in the auto-commit mode it came with, so the
+  pool no longer resets it with a rollback after the commit. On H2 that rollback cost about 4.8 kB
+  per transaction and emptied the session's statement cache;
+* a flush reads the state of an entity once for the business-key validation and the dirty check,
+  and the persistence context keeps the snapshot it is handed instead of copying it;
+* the factory keeps the parse tree of a query string, its translations that no parameter value
+  shaped, and their rendered SQL (at most 1024 strings). A collection expanded by `IN`, a page, a
+  row lock and an entity graph are still translated by each execution;
+* the identity sets of a flush are sized to what it writes;
+* the rows of an entity without relationships or element collections become managed in one pass
+  instead of three.
+
+link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-04] measures the
+result against Hibernate ORM 5.6.15 in one session (ops/s, JMH 99.9% error; allocation in B/op):
+
+[cols="2,>2,>2,>1,>1",options="header"]
+|===
+|Workload |Noether |Hibernate 5.6 |Noether B/op |Hibernate B/op
+|`findById` |822,141 +/- 21,202 |494,709 +/- 6,013 |5,534 |7,542
+|`jpqlQuery` |79,496 +/- 926 |67,585 +/- 221 |34,976 |26,506
+|`update` |406,857 +/- 7,647 |276,198 +/- 29,429 |12,424 |13,791
+|`createUpdateDelete` |272,638 +/- 12,879 |239,289 +/- 1,796 |22,000 |17,864
+|===
+
+Against BENCH-20261111-01, Noether's throughput rises 66% to 90% and its allocation falls 36% to
+56%; Hibernate's own scores move by -8% to +0.3% between the two sessions. Noether is ahead of
+Hibernate 5.6 on the four workloads in this session, and still allocates more on `jpqlQuery` and
+`createUpdateDelete`: about 29 small objects per result row, and the bookkeeping of three flushes.
+The entity of this harness has no relationship, which is the case the one-pass row load covers. One
+fork per provider, a single thread and in-memory H2: not a production latency or scalability
+claim. Hibernate 7.4 and EclipseLink were not rerun.
+
+=== Allocation
+
+A second profile, of the objects those two workloads still made
+(link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-06]), led to five
+more changes, under the same rule: no column, row, snapshot, dirty or version check, callback, flush
+order, lazy reference or cascade changes.
+
+* The persistence context finds an instance through an identity table whose keys are the instances
+  themselves, and links its entries in the order it met them: no wrapper and no map entry per managed
+  instance. `entries()` answers with the same unmodifiable list until an instance joins or leaves.
+* A flush reads the state of an instance that did not change into one array, reused for the next
+  instance; the array is handed over to the insert, update or inverse-index work that keeps it.
+* A flush makes a work list at its first element, the identity sets of its inserts and deletes when
+  it has some, the visited sets of its cascades for the first entity that cascades; a flush with
+  nothing to write returns after its walk of the context.
+* When the shared cache mode lets the cache hold no entity of the unit (`NONE`, or the default
+  `ENABLE_SELECTIVE` without a `@Cacheable` entity), an entity manager keeps nothing about what its
+  transaction read and wrote, and a commit stages nothing.
+* A row fetched with its select item goes from the result set to the persistence context as one
+  record, which carries the identity key it is looked up and registered with; a simple identifier is
+  its column, without an array; the state read back from a loaded instance becomes its snapshot in
+  place where nothing reads it afterwards.
+
+link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-07], same harness
+and settings, one session:
+
+[cols="2,>2,>2,>1,>1",options="header"]
+|===
+|Workload |Noether |Hibernate 5.6 |Noether B/op |Hibernate B/op
+|`findById` |935,077 +/- 10,404 |517,832 +/- 2,187 |4,126 |7,486
+|`jpqlQuery` |130,653 +/- 912 |67,493 +/- 566 |17,488 |26,658
+|`update` |458,971 +/- 11,120 |287,314 +/- 6,738 |9,896 |13,767
+|`createUpdateDelete` |348,522 +/- 5,271 |236,883 +/- 4,501 |14,824 |17,960
+|===
+
+Noether now allocates less than Hibernate 5.6 on the four workloads (0.55x to 0.83x), and 20% to 50%
+less than in BENCH-20261111-04; its throughput rises 13% to 64% while Hibernate's moves by -1% to
++5% between the two sessions. The allocation of `jpqlQuery` varies by about 5% from one fork to
+another. On PostgreSQL 17 the allocation is 0.61x to 0.78x Hibernate's
+(link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-08]); no throughput
+claim is made there. The shared cache is off for both providers in this harness. What remains per
+result row is the placeholder of the select item and the key that resolves it, and the boxing of
+primitive attributes at each read of the state, which the small identifiers of this harness hide.
+
+=== On PostgreSQL
+
+The harness also runs against a database server: `BENCH_JDBC_URL`, `BENCH_JDBC_DRIVER`,
+`BENCH_JDBC_USER` and `BENCH_JDBC_PASSWORD` replace in-memory H2 for every provider of a run (see
+the bench `README.md`).
+link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-05] runs Noether
+before and after these changes and Hibernate ORM 5.6.15 on PostgreSQL 17, in a container on the
+same machine, three rounds in different orders. A round trip and the commit's `fsync` cost 130 µs to
+1.1 ms per operation, against 1.2 to 13 µs on H2, and the providers come out at parity within the
+run-to-run variation: medians of Noether after these changes +3.5% on `findById`, +1.3% on
+`jpqlQuery` and +1.4% on `createUpdateDelete` against Hibernate 5.6, while Hibernate's own runs
+span 5,579 to 7,500 ops/s on `findById`. `update` is bimodal for every provider and gives no
+ranking. The one difference that holds in every run is `jpqlQuery`, about 9% faster after these
+changes than before. The gains measured on H2 are the provider's own path; they do not carry over
+to a database round trip.

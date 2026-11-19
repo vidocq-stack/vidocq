@@ -1,0 +1,1412 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.flush;
+
+import io.vidocq.noether.jpa.core.model.AssociationAttribute;
+import io.vidocq.noether.jpa.core.model.JoinColumnModel;
+import io.vidocq.noether.jpa.core.context.ManagedEntity;
+import io.vidocq.noether.jpa.core.context.PersistenceContext;
+import io.vidocq.noether.jpa.core.jdbc.type.ValueBinder;
+import io.vidocq.noether.jpa.core.mapping.CollectionMapping;
+import io.vidocq.noether.jpa.core.mapping.ElementCollectionMapping;
+import io.vidocq.noether.jpa.core.mapping.IndexMapping;
+import io.vidocq.noether.jpa.core.mapping.EntityStatements;
+import io.vidocq.noether.jpa.core.mapping.LazyCollection;
+import io.vidocq.noether.jpa.core.mapping.MappedEntity;
+import io.vidocq.noether.jpa.core.mapping.StatePolicy;
+import io.vidocq.noether.jpa.dialect.Dialect;
+import io.vidocq.noether.jpa.dialect.sql.Statement;
+import io.vidocq.noether.jpa.dialect.sql.Insert;
+import io.vidocq.noether.jpa.dialect.sql.Identifier;
+import jakarta.persistence.EntityExistsException;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PersistenceException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+
+/**
+ * Synchronises a persistence context with the database (§3.2.4): the new instances are inserted, the changed ones
+ * updated (their snapshot tells, no enhancement), the removed ones deleted. Statements run in a deterministic order —
+ * inserts, entities after those they reference, then updates, then deletes in reverse — and consecutive statements of
+ * an entity share one batch. A versioned entity is updated and deleted only if its row still has the version it was
+ * read with (§3.4.2), else {@link OptimisticLockException}. Foreign keys that no order satisfies (a cycle, an instance
+ * of the same entity met later) are inserted {@code NULL} and written once every row exists, and cleared before the
+ * deletes of rows that reference each other: the constraints never need to be deferred. Join rows and the rows of
+ * element collections are written once every row of the flush exists, and deleted before their owner.
+ *
+ * <p>One engine per factory, shared by its entity managers: its state is the dialect and the SQL it rendered, cached
+ * without lock contention ({@link ConcurrentHashMap}, pure computation). A flush runs on the calling thread, on the
+ * connection of the transaction: blocking JDBC, no lock held, so a virtual caller parks without pinning its carrier.
+ */
+public final class FlushEngine {
+
+    /** The SQL of a table of an entity, rendered once by the dialect. */
+    record TableSql(String insert, String update, String delete, String select) {
+    }
+
+    /** The SQL of an entity, its primary table first. */
+    record Sql(List<TableSql> tables, String[] generatedKey) {
+        String select() {
+            return tables.getFirst().select();
+        }
+    }
+
+    /** An instance to write, with the state read from it. */
+    private record Work(ManagedEntity entry, Object[] state) {
+        MappedEntity type() {
+            return entry.type();
+        }
+    }
+
+    /** A foreign key written alone, by an update: after the inserts (a cycle), or {@code NULL} before the deletes. */
+    private record ReferenceWrite(Work work, EntityStatements.Reference reference) {
+    }
+
+    /** What a collection of {@code owner} writes in the row of a member: a {@code ForeignKey} or a {@code MappedBy}. */
+    private record CollectionKeyWrite(Work owner, CollectionMapping mapping, Object index) {
+    }
+
+    private static final Comparator<Work> INSERT_ORDER = Comparator.<Work>comparingInt(w -> w.type().rank())
+        .thenComparingLong(w -> w.entry().sequence());
+    private static final Comparator<Work> DELETE_ORDER = INSERT_ORDER.reversed();
+
+    /** What a flush does with a managed instance: plain numbers, a flush makes no object to say it. */
+    private static final int INSERT = 0;
+    private static final int UPDATE = 1;
+    /** Its row is unchanged, an inverse index of one of its collections may not be. */
+    private static final int INDEX = 2;
+    private static final int UNCHANGED = 3;
+    /** Added to {@link #INDEX} or {@link #UNCHANGED}: its version is verified at the end of the flush (§3.5.5). */
+    private static final int CHECK = 4;
+
+    private final Dialect dialect;
+    private final int batchSize;
+    private final Map<MappedEntity, Sql> sqlByType = new ConcurrentHashMap<>();
+    private final Map<Statement, String> rendered = new ConcurrentHashMap<>();
+
+    public FlushEngine(Dialect dialect, int batchSize) {
+        this.dialect = dialect;
+        this.batchSize = Math.max(1, batchSize);
+    }
+
+    public Dialect dialect() {
+        return dialect;
+    }
+
+    /** Writes the changes of {@code context} through {@code connection}, then records them in the context. */
+    public void flush(PersistenceContext context, Connection connection) {
+        flush(context, connection, ignored -> {
+        });
+    }
+
+    /** Flushes after callbacks; {@code validateUpdate} runs only for an entity that is actually being updated. */
+    public void flush(PersistenceContext context, Connection connection, Consumer<ManagedEntity> validateUpdate) {
+        // most flushes write a few instances, of one kind of work or of none: a list exists once it has an element
+        List<Work> inserts = List.of();
+        List<Work> updates = List.of();
+        List<Work> deletes = List.of();
+        List<ManagedEntity> checks = List.of();
+        List<Work> indexes = List.of();
+        Object[] unchanged = null;
+        for (ManagedEntity entry : context.entries()) {
+            if (io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(entry.instance())) continue;
+            validateMapsId(entry);
+            if (entry.status() == ManagedEntity.Status.REMOVED) {
+                deletes = removed(entry, context, deletes);
+            } else {
+                // most instances did not change: their state is read into one array, which the next one reuses
+                Object[] state = read(entry.type(), entry.instance(), unchanged);
+                unchanged = null; // the array belongs to this entry until it is known to need none
+                int change = change(entry, state, validateUpdate);
+                if ((change & CHECK) != 0) checks = added(checks, entry);
+                switch (change & ~CHECK) {
+                    case INSERT -> inserts = added(inserts, new Work(entry, state));
+                    case UPDATE -> updates = added(updates, new Work(entry, state));
+                    case INDEX -> indexes = added(indexes, new Work(entry, state));
+                    default -> unchanged = state; // nothing keeps it
+                }
+            }
+        }
+        write(context, connection, inserts, updates, deletes, checks, indexes);
+    }
+
+    /** §2.4: the derived identity of an instance that has an identity was not reassigned or cleared. */
+    private static void validateMapsId(ManagedEntity entry) {
+        if (entry.key() != null) {
+            entry.type().validateMapsId(entry.instance(), entry.key().id());
+        }
+    }
+
+    /**
+     * What a flush does with the managed {@code entry} whose state was just read into {@code state}: {@link #INSERT},
+     * {@link #UPDATE}, {@link #INDEX} or {@link #UNCHANGED}, the last two with {@link #CHECK} when its version is to be
+     * verified. The callback and the validation of an update run here, and the state is read again after them.
+     */
+    private static int change(ManagedEntity entry, Object[] state, Consumer<ManagedEntity> validateUpdate) {
+        MappedEntity type = entry.type();
+        if (!entry.inserted()) {
+            return INSERT;
+        }
+        if (type.state().dirty(entry.snapshot(), state)) {
+            // §3.6.3: PreUpdate may change the instance, its changes are written with the others
+            type.callback("PreUpdate", entry.instance());
+            type.validateMapsId(entry.instance(), entry.key().id());
+            validateUpdate.accept(entry);
+            type.access().read(entry.instance(), state);
+            return UPDATE;
+        }
+        if (Locks.forcesIncrement(entry.lockMode())) {
+            return UPDATE; // §3.5: a new version, without a change
+        }
+        int check = entry.lockMode() == LockModeType.OPTIMISTIC || entry.lockMode() == LockModeType.READ ? CHECK : 0;
+        // an inverse index changes nothing of its owner's row
+        return (type.statements().inverseIndexes().isEmpty() ? UNCHANGED : INDEX) | check;
+    }
+
+    /** {@code deletes} with the removed {@code entry}, if its row exists; else the context forgets it at once. */
+    private static List<Work> removed(ManagedEntity entry, PersistenceContext context, List<Work> deletes) {
+        MappedEntity type = entry.type();
+        if (entry.inserted()) {
+            return added(deletes, new Work(entry, read(type, entry.instance())));
+        }
+        context.deleted(entry); // removed before its insert: the database never saw it
+        type.callback("PostRemove", entry.instance());
+        return deletes;
+    }
+
+    /** Writes the work a flush found, in the order of the class comment, then records it in the context. */
+    private void write(PersistenceContext context, Connection connection, List<Work> inserts, List<Work> updates,
+            List<Work> deletes, List<ManagedEntity> checks, List<Work> indexes) {
+        if (inserts.isEmpty() && updates.isEmpty() && deletes.isEmpty() && checks.isEmpty() && indexes.isEmpty()) {
+            return; // nothing changed, as at the commit of a transaction that only read
+        }
+        if (inserts.size() > 1) inserts.sort(INSERT_ORDER);
+        orderRequiredInserts(inserts);
+        if (deletes.size() > 1) deletes.sort(DELETE_ORDER);
+        orderRequiredDeletes(deletes);
+        // read, never written, when the flush has no insert or no delete: the empty set then
+        Set<Object> pending = inserts.isEmpty() ? Collections.emptySet() : identitySet(inserts.size());
+        Set<Object> removed = deletes.isEmpty() ? Collections.emptySet() : identitySet(deletes.size());
+        for (int i = 0; i < deletes.size(); i++) removed.add(deletes.get(i).entry().instance());
+        for (int i = 0; i < inserts.size(); i++) pending.add(inserts.get(i).entry().instance());
+        insertRows(inserts, context, connection, pending, collectionInserts(context, inserts, pending));
+        for (int i = 0; i < updates.size(); i++) clearChangedToOneTables(updates.get(i), connection);
+        for (int i = 0; i < deletes.size(); i++) deleteJoinRows(deletes.get(i), connection);
+        for (int i = 0; i < updates.size(); i++) {
+            writeCollectionKeys(updates.get(i), updates.get(i).entry().snapshot(), connection, removed, true);
+        }
+        for (int i = 0; i < deletes.size(); i++) clearCollectionKeys(deletes.get(i), connection, removed);
+        for (int i = 0; i < inserts.size(); i++) { // the join rows reference rows of both sides: every row exists now
+            Work work = inserts.get(i);
+            writeJoinRows(work, null, connection);
+            writeCollectionKeys(work, null, connection, removed, false);
+            writeElements(work, true, connection);
+            writeInverseIndexes(work, null, connection);
+        }
+        updateRows(updates, context, connection, removed);
+        writeUnchangedIndexes(indexes, context, connection);
+        deleteRows(deletes, context, connection);
+        checkVersions(checks, connection);
+    }
+
+    /**
+     * The key a foreign-key collection, or an inverse side that keeps its index in the table of its elements, gives a
+     * member being inserted, by member: nothing to find without an insert. The shared empty map becomes a map of its own
+     * with its first key.
+     */
+    private static Map<Object, List<CollectionKeyWrite>> collectionInserts(PersistenceContext context, List<Work> inserts,
+            Set<Object> pending) {
+        Map<Object, List<CollectionKeyWrite>> collectionInserts = Collections.emptyMap();
+        if (inserts.isEmpty()) {
+            return collectionInserts;
+        }
+        for (ManagedEntity entry : context.entries()) {
+            if (!ownsMemberKeyingCollection(entry)) continue; // its state is not read for nothing
+            Work owner = new Work(entry, read(entry.type(), entry.instance()));
+            for (CollectionMapping mapping : owner.type().statements().collections()) {
+                // not loaded: no new member to find in it
+                if (keysItsMembers(mapping) && !LazyCollection.unloaded(owner.state()[mapping.attribute()])) {
+                    collectionInserts = memberKeys(owner, mapping, pending, inserts.size(), collectionInserts);
+                }
+            }
+        }
+        return collectionInserts;
+    }
+
+    /** Whether {@code entry} is a loaded, managed instance of an entity with a collection that keys its members' rows. */
+    private static boolean ownsMemberKeyingCollection(ManagedEntity entry) {
+        return !io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(entry.instance())
+            && entry.status() == ManagedEntity.Status.MANAGED
+            && hasMemberKeyingCollection(entry.type());
+    }
+
+    /**
+     * Whether {@code mapping} writes columns in the row of each member as it is inserted: a foreign-key collection (its
+     * owner key and index), an inverse side its index, when it is insertable. Written with the row, a key column the
+     * database requires is never {@code NULL} first (BUG-20261118-82).
+     */
+    private static boolean keysItsMembers(CollectionMapping mapping) {
+        return mapping instanceof CollectionMapping.ForeignKey
+            || mapping instanceof CollectionMapping.MappedBy inverse && inverse.indexUpdate() != null
+                && inverse.index().insertable();
+    }
+
+    /** {@code collectionInserts} with the keys of the members of one collection of {@code owner} that are in {@code pending}. */
+    private static Map<Object, List<CollectionKeyWrite>> memberKeys(Work owner, CollectionMapping mapping,
+            Set<Object> pending, int inserts, Map<Object, List<CollectionKeyWrite>> collectionInserts) {
+        Object current = owner.state()[mapping.attribute()];
+        List<Object> members = CollectionMapping.elements(current);
+        List<Object> keys = CollectionMapping.keys(current);
+        for (int e = 0; e < members.size(); e++) {
+            if (pending.contains(members.get(e))) {
+                if (collectionInserts.isEmpty()) collectionInserts = new IdentityHashMap<>(inserts);
+                collectionInserts.computeIfAbsent(members.get(e), _ -> new ArrayList<>())
+                    .add(new CollectionKeyWrite(owner, mapping, keys.get(e)));
+            }
+        }
+        return collectionInserts;
+    }
+
+    /** The inserts, group by group, then the foreign keys they could not write yet. */
+    private void insertRows(List<Work> inserts, PersistenceContext context, Connection connection, Set<Object> pending,
+            Map<Object, List<CollectionKeyWrite>> collectionInserts) {
+        if (inserts.isEmpty()) {
+            return;
+        }
+        List<ReferenceWrite> later = new ArrayList<>();
+        List<List<Work>> groups = groups(inserts);
+        for (int g = 0; g < groups.size(); g++) {
+            insert(groups.get(g), context, connection, pending, later, collectionInserts);
+        }
+        writeReferences(later, false, connection);
+    }
+
+    /** The updates, group by group: the collections of the instances of a group, then their rows. */
+    private void updateRows(List<Work> updates, PersistenceContext context, Connection connection, Set<Object> removed) {
+        if (updates.isEmpty()) {
+            return;
+        }
+        List<List<Work>> groups = groups(updates);
+        for (int g = 0; g < groups.size(); g++) {
+            List<Work> group = groups.get(g);
+            for (int i = 0; i < group.size(); i++) {
+                Work work = group.get(i);
+                writeJoinRows(work, work.entry().snapshot(), connection);
+                writeCollectionKeys(work, work.entry().snapshot(), connection, removed, false);
+                writeElements(work, false, connection);
+                writeInverseIndexes(work, work.entry().snapshot(), connection);
+            }
+            update(group, context, connection);
+        }
+    }
+
+    /** The inverse indexes of the instances whose own row did not change. */
+    private void writeUnchangedIndexes(List<Work> indexes, PersistenceContext context, Connection connection) {
+        for (int i = 0; i < indexes.size(); i++) {
+            Work work = indexes.get(i);
+            if (writeInverseIndexes(work, work.entry().snapshot(), connection)) {
+                context.updated(work.entry(), work.type().state().snapshot(work.state()));
+            }
+        }
+    }
+
+    /** The deletes: the foreign keys between them cleared, their join and collection rows, then their rows by group. */
+    private void deleteRows(List<Work> deletes, PersistenceContext context, Connection connection) {
+        if (deletes.isEmpty()) {
+            return;
+        }
+        writeReferences(referencesBetween(deletes), true, connection);
+        for (int i = 0; i < deletes.size(); i++) {
+            Work work = deletes.get(i);
+            deleteJoinRows(work, connection);
+            for (ElementCollectionMapping elements : work.type().statements().elementCollections()) {
+                deleteElements(work, elements, connection);
+            }
+        }
+        List<List<Work>> groups = groups(deletes);
+        for (int g = 0; g < groups.size(); g++) {
+            delete(groups.get(g), context, connection);
+        }
+    }
+
+    /** §3.5.5 OPTIMISTIC: the rows read under that lock and not written must not have changed since. */
+    private void checkVersions(List<ManagedEntity> checks, Connection connection) {
+        if (checks.isEmpty()) {
+            return;
+        }
+        Locks locks = new Locks(this);
+        for (ManagedEntity entry : checks) {
+            locks.checkVersion(entry.type(), entry, connection);
+        }
+    }
+
+    /** {@code list} with {@code element} added: the shared empty list becomes a list of its own at its first element. */
+    private static <T> List<T> added(List<T> list, T element) {
+        if (list.isEmpty()) {
+            list = new ArrayList<>(4);
+        }
+        list.add(element);
+        return list;
+    }
+
+    private static boolean hasMemberKeyingCollection(MappedEntity type) {
+        List<CollectionMapping> collections = type.statements().collections();
+        for (int i = 0; i < collections.size(); i++) {
+            if (keysItsMembers(collections.get(i))) return true;
+        }
+        return false;
+    }
+
+    // ---- inserts ------------------------------------------------------------------------------------------
+
+    /** Required business and MapsId foreign keys must never be deferred to SQL NULL. */
+    private static void orderRequiredInserts(List<Work> inserts) {
+        if (inserts.isEmpty()) return;
+        if (!anyRequiredReference(inserts)) return;
+        List<Work> remaining = new ArrayList<>(inserts);
+        Set<Object> pending = identitySet();
+        remaining.forEach(w -> pending.add(w.entry().instance()));
+        inserts.clear();
+        while (!remaining.isEmpty()) {
+            Work next = remaining.stream().filter(w -> w.type().statements().references().stream()
+                .filter(r -> requiredReference(w.type(), r))
+                .noneMatch(r -> w.state()[r.attribute()] != w.entry().instance()
+                    && pending.contains(w.state()[r.attribute()]))).findFirst().orElseThrow(() ->
+                        new PersistenceException("Cannot insert a non-null business-key cycle or MapsId cycle without deferred database constraints"));
+            remaining.remove(next);
+            pending.remove(next.entry().instance());
+            inserts.add(next);
+        }
+    }
+
+    /** Whether a work of {@code works} has a reference that cannot wait: without one, their order stands. */
+    private static boolean anyRequiredReference(List<Work> works) {
+        for (int w = 0; w < works.size(); w++) {
+            MappedEntity type = works.get(w).type();
+            List<EntityStatements.Reference> references = type.statements().references();
+            for (int r = 0; r < references.size(); r++) {
+                if (requiredReference(type, references.get(r))) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean requiredReference(MappedEntity type, EntityStatements.Reference reference) {
+        var association = (AssociationAttribute) type.model().attributes().get(reference.attribute());
+        if (association.mapsId() != null) return true;
+        if (!reference.businessKey()) return false;
+        return !association.optional() || association.joinColumns().stream().anyMatch(j -> !j.nullable());
+    }
+
+    private static void orderRequiredDeletes(List<Work> deletes) {
+        if (deletes.isEmpty()) return;
+        if (!anyRequiredReference(deletes)) return;
+        List<Work> remaining = new ArrayList<>(deletes);
+        deletes.clear();
+        while (!remaining.isEmpty()) {
+            Work next = remaining.stream().filter(candidate -> remaining.stream().noneMatch(owner -> owner != candidate
+                && owner.type().statements().references().stream()
+                    .filter(r -> requiredReference(owner.type(), r))
+                    .anyMatch(r -> owner.entry().snapshot()[r.attribute()] == candidate.entry().instance())))
+                .findFirst().orElseThrow(() -> new PersistenceException("Cannot delete a non-null business-key cycle or MapsId cycle"));
+            remaining.remove(next);
+            deletes.add(next);
+        }
+    }
+
+    /**
+     * Inserts the rows of {@code group}. A foreign key referencing an instance of {@code pending}, whose row comes later
+     * in this flush (a cycle, or an instance of the same entity met later), is inserted {@code NULL} and added to
+     * {@code later}, written once every row exists.
+     */
+    private void insert(List<Work> group, PersistenceContext context, Connection connection, Set<Object> pending,
+            List<ReferenceWrite> later, Map<Object, List<CollectionKeyWrite>> collectionInserts) {
+        MappedEntity type = group.getFirst().type();
+        EntityStatements statements = type.statements();
+        Sql sql = sql(type);
+        int version = versionAttribute(type);
+        if (!collectionInserts.isEmpty()
+                && group.stream().anyMatch(w -> collectionInserts.containsKey(w.entry().instance()))) {
+            for (Work work : group) {
+                initialVersion(type, work, version);
+                insertWithCollectionKeys(work, connection, pending, later,
+                    collectionInserts.getOrDefault(work.entry().instance(), List.of()));
+                context.inserted(work.entry(), type.id(work.entry().instance()), type.state().snapshot(work.state()));
+                type.callback("PostPersist", work.entry().instance());
+            }
+            return;
+        }
+        try {
+            if (sql.generatedKey() != null) {
+                insertGeneratingKeys(group, sql, version, connection, pending, later);
+            } else {
+                insertBatched(group, sql, version, connection, pending, later);
+            }
+            // the rows of the secondary tables, keyed by the identifier now known
+            for (int t = 1; t < sql.tables().size(); t++) {
+                EntityStatements.TableStatements table = statements.tables().get(t);
+                try (PreparedStatement statement = connection.prepareStatement(sql.tables().get(t).insert())) {
+                    for (Work work : group) {
+                        bind(statement, table.insertParameters(), statements, statements.values(work.state()), null);
+                        statement.addBatch();
+                    }
+                    statement.executeBatch();
+                }
+            }
+        } catch (SQLException e) {
+            throw insertFailure(type, e);
+        }
+        for (Work work : group) {
+            context.inserted(work.entry(), type.id(work.entry().instance()), type.state().snapshot(work.state()));
+            type.callback("PostPersist", work.entry().instance());
+        }
+    }
+
+    /** The failure of an insert: an {@link EntityExistsException} when the identifier is in the database already (§3.2.2). */
+    private RuntimeException insertFailure(MappedEntity type, SQLException e) {
+        if (dialect.isDuplicateKey(e)) {
+            return new EntityExistsException("An instance of " + type.model().entityName() + " with the same identifier "
+                + "already exists in the database: " + e.getMessage(), e);
+        }
+        return failure("insert", type, e);
+    }
+
+    /** The primary rows of {@code group}, one statement each: the database generates their identifier, read back. */
+    private void insertGeneratingKeys(List<Work> group, Sql sql, int version, Connection connection, Set<Object> pending,
+            List<ReferenceWrite> later) throws SQLException {
+        MappedEntity type = group.getFirst().type();
+        EntityStatements statements = type.statements();
+        int id = type.idAttributes()[0];
+        EntityStatements.Column idColumn = statements.columns().stream().filter(EntityStatements.Column::id).findFirst()
+            .orElseThrow();
+        try (PreparedStatement statement = connection.prepareStatement(sql.tables().getFirst().insert(), sql.generatedKey())) {
+            for (Work work : group) {
+                initialVersion(type, work, version);
+                bind(statement, statements.insertParameters(), statements, insertValues(work, pending, later), null);
+                pending.remove(work.entry().instance());
+                statement.executeUpdate();
+                try (ResultSet keys = statement.getGeneratedKeys()) {
+                    if (!keys.next()) {
+                        throw new PersistenceException("The database returned no generated identifier for "
+                            + type.model().entityName());
+                    }
+                    Object value = idColumn.binder().read(keys, 1);
+                    type.access().set(work.entry().instance(), id, value);
+                    work.state()[id] = value;
+                }
+            }
+        }
+    }
+
+    /** The primary rows of {@code group}, their identifier known, in batches. */
+    private void insertBatched(List<Work> group, Sql sql, int version, Connection connection, Set<Object> pending,
+            List<ReferenceWrite> later) throws SQLException {
+        MappedEntity type = group.getFirst().type();
+        EntityStatements statements = type.statements();
+        try (PreparedStatement statement = connection.prepareStatement(sql.tables().getFirst().insert())) {
+            int batched = 0;
+            for (Work work : group) {
+                initialVersion(type, work, version);
+                bind(statement, statements.insertParameters(), statements, insertValues(work, pending, later), null);
+                pending.remove(work.entry().instance()); // a batch runs its rows in order
+                statement.addBatch();
+                if (++batched == batchSize) {
+                    statement.executeBatch();
+                    batched = 0;
+                }
+            }
+            if (batched > 0) {
+                statement.executeBatch();
+            }
+        }
+    }
+
+    private void insertWithCollectionKeys(Work work, Connection connection, Set<Object> pending, List<ReferenceWrite> later,
+            List<CollectionKeyWrite> writes) {
+        MappedEntity type = work.type();
+        EntityStatements statements = type.statements();
+        Object[] values = insertValues(work, pending, later);
+        for (int t = 0; t < statements.tables().size(); t++) {
+            var table = statements.tables().get(t);
+            List<Identifier> columns = new ArrayList<>(table.insert().columns());
+            List<ValueBinder> binders = new ArrayList<>();
+            List<Object> parameters = new ArrayList<>();
+            for (var parameter : table.insertParameters()) {
+                binders.add(statements.columns().get(parameter.column()).binder());
+                parameters.add(values[parameter.column()]);
+            }
+            for (CollectionKeyWrite write : writes) {
+                var mapping = write.mapping();
+                if (write.owner().type().statements().targetTable(work.entry().instance(),
+                        mapping.association().targetEntity(), memberTable(mapping)).equals(table.insert().table())) {
+                    addCollectionKey(write, pending, columns, binders, parameters);
+                }
+            }
+            Insert insert = new Insert(table.insert().table(), columns, table.insert().generatedKey());
+            if (insertRow(work, insert, binders, parameters, connection)) {
+                values = statements.values(work.state());
+            }
+        }
+        pending.remove(work.entry().instance());
+    }
+
+    /** The table of the members in which {@code mapping}, one {@link #keysItsMembers} accepts, writes. */
+    private static io.vidocq.noether.jpa.dialect.sql.Table memberTable(CollectionMapping mapping) {
+        return mapping instanceof CollectionMapping.ForeignKey foreign ? foreign.table()
+            : ((CollectionMapping.MappedBy) mapping).indexUpdate().table();
+    }
+
+    /**
+     * Adds to the insert of a member of the collection of {@code write} what it writes there, each column once: the
+     * index columns of an inverse side; the owner key columns of a foreign-key collection — unless the owner's row comes
+     * later and they can wait as {@code NULL} — and its index columns.
+     */
+    private static void addCollectionKey(CollectionKeyWrite write, Set<Object> pending, List<Identifier> columns,
+            List<ValueBinder> binders, List<Object> parameters) {
+        EntityStatements statements = write.owner().type().statements();
+        if (write.mapping() instanceof CollectionMapping.MappedBy inverse) {
+            addIndex(inverse.index(), write.index(), statements, columns, binders, parameters);
+            return;
+        }
+        var foreign = (CollectionMapping.ForeignKey) write.mapping();
+        boolean deferred = pending.contains(write.owner().entry().instance())
+            && foreign.joins().stream().allMatch(JoinColumnModel::nullable);
+        Object[] owner = statements.keyValues(write.owner().type().id(write.owner().entry().instance()));
+        for (int k = 0; k < foreign.joins().size(); k++) {
+            if (deferred || !foreign.joins().get(k).insertable() || columns.contains(foreign.ownerColumns().get(k))) continue;
+            columns.add(foreign.ownerColumns().get(k));
+            binders.add(foreign.ownerBinders().get(k));
+            parameters.add(owner[k]);
+        }
+        if (foreign.index() != null && foreign.index().insertable()) {
+            addIndex(foreign.index(), write.index(), statements, columns, binders, parameters);
+        }
+    }
+
+    /** Adds the columns of {@code index} holding {@code key}, those not added yet. */
+    private static void addIndex(IndexMapping index, Object key, EntityStatements statements, List<Identifier> columns,
+            List<ValueBinder> binders, List<Object> parameters) {
+        Object[] values = index.values(key, statements);
+        for (int k = 0; k < values.length; k++) {
+            if (columns.contains(index.columns().get(k))) continue;
+            columns.add(index.columns().get(k));
+            binders.add(index.binders().get(k));
+            parameters.add(values[k]);
+        }
+    }
+
+    /** Inserts a row of {@code work}; whether the database generated its identifier, now set on the instance and state. */
+    private boolean insertRow(Work work, Insert insert, List<ValueBinder> binders, List<Object> parameters,
+            Connection connection) {
+        MappedEntity type = work.type();
+        try (PreparedStatement statement = insert.generatedKey() == null
+                ? connection.prepareStatement(render(insert))
+                : connection.prepareStatement(render(insert), sql(type).generatedKey())) {
+            for (int p = 0; p < parameters.size(); p++) binders.get(p).bind(dialect, statement, p + 1, parameters.get(p));
+            statement.executeUpdate();
+            if (insert.generatedKey() == null) {
+                return false;
+            }
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                if (!keys.next()) throw new PersistenceException("No generated identifier for " + type.model().entityName());
+                var idColumn = type.statements().keyColumns().getFirst();
+                Object id = idColumn.binder().read(keys, 1);
+                type.access().set(work.entry().instance(), type.idAttributes()[0], id);
+                work.state()[type.idAttributes()[0]] = id;
+                return true;
+            }
+        } catch (SQLException e) {
+            throw insertFailure(type, e);
+        }
+    }
+
+    /** The column values of the row of {@code work}, foreign keys to rows not inserted yet left {@code NULL}. */
+    private static Object[] insertValues(Work work, Set<Object> pending, List<ReferenceWrite> later) {
+        if (work.type().hasMapsId()) {
+            work.type().deriveId(work.entry().instance());
+            if (work.type().id(work.entry().instance()) == null) {
+                throw new PersistenceException("@MapsId requires an assigned parent identity and all remaining identifier parts");
+            }
+            work.type().access().read(work.entry().instance(), work.state());
+        }
+        EntityStatements statements = work.type().statements();
+        Object[] values = statements.values(work.state());
+        for (EntityStatements.Reference reference : statements.references()) {
+            Object target = work.state()[reference.attribute()];
+            if (target != null && pending.contains(target)
+                    && !(reference.businessKey() && target == work.entry().instance())) {
+                for (int c : reference.columns()) {
+                    values[c] = null;
+                }
+                later.add(new ReferenceWrite(work, reference));
+            }
+        }
+        return values;
+    }
+
+    /**
+     * The foreign keys of rows about to be deleted that reference rows deleted before them in the same flush (a cycle,
+     * or an order the ranks cannot give): written {@code NULL} first, so that the deletes satisfy the constraints. A
+     * row deleted before the row it references keeps its key: a {@code NOT NULL} foreign key stays valid (BUG-20261009-19).
+     */
+    private static List<ReferenceWrite> referencesBetween(List<Work> deletes) {
+        if (deletes.size() < 2) {
+            return List.of();
+        }
+        Map<Object, Integer> order = new IdentityHashMap<>();
+        for (int i = 0; i < deletes.size(); i++) {
+            order.put(deletes.get(i).entry().instance(), i);
+        }
+        List<ReferenceWrite> writes = new ArrayList<>();
+        for (int i = 0; i < deletes.size(); i++) {
+            Work work = deletes.get(i);
+            Object[] row = work.entry().snapshot(); // what the row holds
+            for (EntityStatements.Reference reference : work.type().statements().references()) {
+                Object target = row[reference.attribute()];
+                Integer targetOrder = target == null || target == work.entry().instance() ? null : order.get(target);
+                if (targetOrder != null && targetOrder < i) {
+                    writes.add(new ReferenceWrite(work, reference));
+                }
+            }
+        }
+        return writes;
+    }
+
+    /** Writes foreign keys alone: their current values, or {@code NULL} ({@code clear}). */
+    private void writeReferences(List<ReferenceWrite> writes, boolean clear, Connection connection) {
+        for (ReferenceWrite write : writes) {
+            MappedEntity type = write.work().type();
+            EntityStatements statements = type.statements();
+            Object[] values = statements.values(write.work().state());
+            if (clear) {
+                for (int c : write.reference().columns()) {
+                    values[c] = null;
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement(render(statements.referenceUpdate(write.reference())))) {
+                bind(statement, statements.referenceUpdateParameters(write.reference()), statements, values, null);
+                statement.executeUpdate();
+            } catch (SQLException e) {
+                throw failure("update of a foreign key", type, e);
+            }
+        }
+    }
+
+    // ---- join tables (§2.10, §11.1.27) --------------------------------------------------------------------
+
+    /**
+     * Writes the join rows of the owned collections of {@code work}: the elements gained since {@code snapshot} are
+     * inserted, those lost deleted ({@code snapshot} {@code null}: a new owner, every element is inserted).
+     */
+    private void writeJoinRows(Work work, Object[] snapshot, Connection connection) {
+        for (CollectionMapping mapping : work.type().statements().collections()) {
+            if (mapping instanceof CollectionMapping.JoinTable table) {
+                if (table.association().singleValued()) {
+                    writeToOneTable(work, snapshot, table, connection);
+                } else {
+                    writeJoinTable(work, snapshot, table, connection);
+                }
+            }
+        }
+    }
+
+    /** {@link #writeJoinRows} for the collection of {@code table}: its rows gained and lost, or all of them again. */
+    private void writeJoinTable(Work work, Object[] snapshot, CollectionMapping.JoinTable table, Connection connection) {
+        MappedEntity type = work.type();
+        EntityStatements statements = type.statements();
+        Object[] owner = statements.keyValues(type.id(work.entry().instance()));
+        Object current = work.state()[table.attribute()];
+        try {
+            if (snapshot != null && !type.state().collectionChanged(table.attribute(), snapshot[table.attribute()], current)) {
+                return; // unchanged, an unloaded LAZY collection among them
+            }
+            List<Object> before = CollectionMapping.elements(
+                snapshot == null ? null : StatePolicy.snapshotValue(snapshot[table.attribute()]));
+            Set<Object> unique = identitySet();
+            boolean repeated = before.stream().anyMatch(element -> !unique.add(element));
+            if (table.indexed() || repeated) {
+                // A target-key delete cannot remove just one occurrence of a duplicate bag row.
+                rewriteJoinRows(table, owner, snapshot != null, current, statements, connection);
+                return;
+            }
+            List<Object> now = CollectionMapping.elements(current);
+            joinRows(render(table.deleteRow()), table, owner, minus(before, now), null, statements, connection);
+            joinRows(render(table.insert()), table, owner, minus(now, before), null, statements, connection);
+        } catch (SQLException e) {
+            throw failure("write of the join table of " + table.association().name() + " of", type, e);
+        }
+    }
+
+    /** Writes every join row of {@code owner} again: deletes those it had ({@code existing}), inserts the current ones. */
+    private void rewriteJoinRows(CollectionMapping.JoinTable table, Object[] owner, boolean existing, Object current,
+            EntityStatements statements, Connection connection) throws SQLException {
+        if (existing) {
+            try (PreparedStatement delete = connection.prepareStatement(render(table.deleteOwner()))) {
+                bindOwner(delete, table.ownerBinders(), owner);
+                delete.executeUpdate();
+            }
+        }
+        joinRows(render(table.insert()), table, owner, CollectionMapping.elements(current),
+            table.indexed() ? CollectionMapping.keys(current) : null, statements, connection);
+    }
+
+    private void writeToOneTable(Work work, Object[] snapshot, CollectionMapping.JoinTable table, Connection connection) {
+        Object current = work.state()[table.attribute()];
+        Object previous = snapshot == null ? null : snapshot[table.attribute()];
+        if (snapshot != null && previous == current || snapshot == null && current == null) return;
+        EntityStatements statements = work.type().statements();
+        Object[] owner = statements.keyValues(work.type().id(work.entry().instance()));
+        Object[] target = current == null ? null : statements.targetKey(current, table.association().targetEntity());
+        if (current != null && target == null) throw new PersistenceException("The relationship " + table.association().name()
+            + " references an entity without an identifier");
+        try {
+            if (snapshot != null && updatedToOneRow(table, owner, target, current == null, connection)) {
+                return;
+            }
+            insertToOneRow(table, owner, target, snapshot == null, connection);
+        } catch (SQLException e) {
+            throw failure("write of the join table of " + table.association().name() + " of", work.type(), e);
+        }
+    }
+
+    /**
+     * Changes the join row a to-one relationship had: deletes it when the relationship is {@code cleared} and every
+     * target column is updatable, else updates the updatable target columns. Whether that is all: {@code false} when no
+     * row was there to update, and the new target needs a row of its own.
+     */
+    private boolean updatedToOneRow(CollectionMapping.JoinTable table, Object[] owner, Object[] target, boolean cleared,
+            Connection connection) throws SQLException {
+        if (cleared && table.targetJoins().stream().allMatch(JoinColumnModel::updatable)) {
+            try (PreparedStatement statement = connection.prepareStatement(render(table.deleteOwner()))) {
+                bindOwner(statement, table.ownerBinders(), owner);
+                statement.executeUpdate();
+            }
+            return true;
+        }
+        List<Identifier> assignments = new ArrayList<>();
+        for (int k = 0; k < table.targetColumns().size(); k++) {
+            if (table.targetJoins().get(k).updatable()) assignments.add(table.targetColumns().get(k));
+        }
+        if (assignments.isEmpty()) return true;
+        var update = new io.vidocq.noether.jpa.dialect.sql.Update(table.table(), assignments, table.ownerColumns());
+        try (PreparedStatement statement = connection.prepareStatement(render(update))) {
+            int parameter = 1;
+            for (int k = 0; k < table.targetColumns().size(); k++) {
+                if (table.targetJoins().get(k).updatable()) {
+                    table.targetBinders().get(k).bind(dialect, statement, parameter++, target == null ? null : target[k]);
+                }
+            }
+            for (int k = 0; k < owner.length; k++) table.ownerBinders().get(k).bind(dialect, statement, parameter++, owner[k]);
+            return statement.executeUpdate() != 0 || cleared;
+        }
+    }
+
+    /**
+     * Inserts the join row of a to-one relationship: the insertable owner columns, and the target columns insertable for
+     * a new owner ({@code inserted}), else updatable.
+     */
+    private void insertToOneRow(CollectionMapping.JoinTable table, Object[] owner, Object[] target, boolean inserted,
+            Connection connection) throws SQLException {
+        List<Identifier> columns = new ArrayList<>();
+        List<ValueBinder> binders = new ArrayList<>();
+        List<Object> values = new ArrayList<>();
+        for (int k = 0; k < owner.length; k++) {
+            if (!table.ownerJoins().get(k).insertable()) continue;
+            columns.add(table.ownerColumns().get(k)); binders.add(table.ownerBinders().get(k)); values.add(owner[k]);
+        }
+        for (int k = 0; k < target.length; k++) {
+            if (!(inserted ? table.targetJoins().get(k).insertable() : table.targetJoins().get(k).updatable())) continue;
+            columns.add(table.targetColumns().get(k)); binders.add(table.targetBinders().get(k)); values.add(target[k]);
+        }
+        if (columns.isEmpty()) return;
+        try (PreparedStatement statement = connection.prepareStatement(render(new Insert(table.table(), columns, null)))) {
+            for (int p = 0; p < values.size(); p++) binders.get(p).bind(dialect, statement, p + 1, values.get(p));
+            statement.executeUpdate();
+        }
+    }
+
+    private void clearChangedToOneTables(Work work, Connection connection) {
+        for (CollectionMapping mapping : work.type().statements().collections()) {
+            if (!(mapping instanceof CollectionMapping.JoinTable table) || !table.association().singleValued()
+                    || !table.targetJoins().stream().allMatch(j -> j.updatable())
+                    || work.state()[table.attribute()] == work.entry().snapshot()[table.attribute()]) continue;
+            try (PreparedStatement statement = connection.prepareStatement(render(table.deleteOwner()))) {
+                bindOwner(statement, table.ownerBinders(),
+                    work.type().statements().keyValues(work.type().id(work.entry().instance())));
+                statement.executeUpdate();
+            } catch (SQLException e) {
+                throw failure("unlink of the join table of " + table.association().name() + " of", work.type(), e);
+            }
+        }
+    }
+
+    private void writeCollectionKeys(Work work, Object[] snapshot, Connection connection, Set<Object> removed, boolean clearPhase) {
+        for (CollectionMapping mapping : work.type().statements().collections()) {
+            if (mapping instanceof CollectionMapping.ForeignKey foreign) {
+                writeCollectionKeys(work, foreign, snapshot, connection, removed, clearPhase);
+            }
+        }
+    }
+
+    /**
+     * {@link #writeCollectionKeys} for the collection of {@code foreign}, if it changed: in the clear phase, the keys of
+     * the members it lost are cleared; else every member gets its key again.
+     */
+    private void writeCollectionKeys(Work work, CollectionMapping.ForeignKey foreign, Object[] snapshot, Connection connection,
+            Set<Object> removed, boolean clearPhase) {
+        Object current = work.state()[foreign.attribute()];
+        if (snapshot != null && !work.type().state().collectionChanged(foreign.attribute(),
+                snapshot[foreign.attribute()], current)) return;
+        List<Object> now = CollectionMapping.elements(current);
+        List<Object> before = CollectionMapping.elements(
+            snapshot == null ? null : StatePolicy.snapshotValue(snapshot[foreign.attribute()]));
+        if (clearPhase) {
+            collectionKeys(work, foreign, minus(before, now).stream().filter(e -> !removed.contains(e)).toList(),
+                null, false, true, connection);
+        } else {
+            // Rewrite retained members too: list positions and stored map keys may have changed.
+            collectionKeys(work, foreign, now, CollectionMapping.keys(current), snapshot == null, false, connection);
+        }
+    }
+
+    private void clearCollectionKeys(Work work, Connection connection, Set<Object> removed) {
+        for (CollectionMapping mapping : work.type().statements().collections()) {
+            if (mapping instanceof CollectionMapping.ForeignKey foreign) {
+                // a LAZY collection not loaded is loaded here: its members are the rows whose key is cleared
+                collectionKeys(work, foreign, CollectionMapping.elements(
+                        StatePolicy.snapshotValue(work.entry().snapshot()[foreign.attribute()])).stream()
+                        .filter(e -> !removed.contains(e)).toList(),
+                    null, false, true, connection);
+            }
+        }
+    }
+
+    private void collectionKeys(Work work, CollectionMapping.ForeignKey foreign, List<Object> elements, List<Object> keys,
+            boolean inserted, boolean clear, Connection connection) {
+        var update = foreign.update(inserted);
+        if (update == null || elements.isEmpty()) return;
+        EntityStatements statements = work.type().statements();
+        Object[] owner = statements.keyValues(work.type().id(work.entry().instance()));
+        Object[] ownerValues = clear ? null : owner;
+        boolean writesIndex = writesIndex(foreign, inserted);
+        for (var group : targetTables(statements, elements, foreign.association().targetEntity(), update.table()).entrySet()) {
+            var concrete = new io.vidocq.noether.jpa.dialect.sql.Update(group.getKey(), update.assignments(), update.conditions());
+            try (PreparedStatement statement = connection.prepareStatement(render(concrete))) {
+                for (int e : group.getValue()) {
+                    int parameter = bindCollectionOwner(statement, foreign, inserted, ownerValues);
+                    if (writesIndex) {
+                        parameter = clear ? bindNulls(statement, parameter, foreign.index().binders())
+                            : bindIndex(statement, parameter, foreign.index(), keys.get(e), statements);
+                    }
+                    bindCollectionMember(statement, parameter, foreign, elements.get(e), statements);
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+            } catch (SQLException e) {
+                throw failure("write of the collection foreign key of " + foreign.association().name() + " of", work.type(), e);
+            }
+        }
+    }
+
+    /** Whether a collection key update writes the order or map key column: insertable for a new owner, else updatable. */
+    private static boolean writesIndex(CollectionMapping.ForeignKey foreign, boolean inserted) {
+        return foreign.index() != null && (inserted ? foreign.index().insertable() : foreign.index().updatable());
+    }
+
+    /**
+     * Binds, from parameter 1, the owner key columns a collection key update writes — those insertable for a new owner
+     * ({@code inserted}), else updatable — {@code NULL} when {@code owner} is {@code null}; returns the next parameter index.
+     */
+    private int bindCollectionOwner(PreparedStatement statement, CollectionMapping.ForeignKey foreign, boolean inserted,
+            Object[] owner) throws SQLException {
+        int parameter = 1;
+        for (int k = 0; k < foreign.joins().size(); k++) {
+            var join = foreign.joins().get(k);
+            if (inserted ? join.insertable() : join.updatable()) {
+                foreign.ownerBinders().get(k).bind(dialect, statement, parameter++, owner == null ? null : owner[k]);
+            }
+        }
+        return parameter;
+    }
+
+    /** Binds {@code NULL} with each of {@code binders} from {@code parameter}; returns the next parameter index. */
+    private int bindNulls(PreparedStatement statement, int parameter, List<ValueBinder> binders) throws SQLException {
+        int next = parameter;
+        for (ValueBinder binder : binders) binder.bind(dialect, statement, next++, null);
+        return next;
+    }
+
+    /** Binds the key of the {@code member} whose row a collection key update writes, from {@code parameter}. */
+    private void bindCollectionMember(PreparedStatement statement, int parameter, CollectionMapping.ForeignKey foreign,
+            Object member, EntityStatements statements) throws SQLException {
+        Object[] target = statements.targetKey(member, foreign.association().targetEntity());
+        if (target == null) throw new PersistenceException("An element of " + foreign.association().name() + " has no identifier");
+        for (int k = 0; k < target.length; k++) {
+            foreign.targetBinders().get(k).bind(dialect, statement, parameter + k, target[k]);
+        }
+    }
+
+    private static Map<io.vidocq.noether.jpa.dialect.sql.Table, List<Integer>> targetTables(EntityStatements statements,
+            List<Object> elements, Class<?> target, io.vidocq.noether.jpa.dialect.sql.Table table) {
+        Map<io.vidocq.noether.jpa.dialect.sql.Table, List<Integer>> groups = new java.util.LinkedHashMap<>();
+        for (int e = 0; e < elements.size(); e++) {
+            groups.computeIfAbsent(statements.targetTable(elements.get(e), target, table), _ -> new ArrayList<>()).add(e);
+        }
+        return groups;
+    }
+
+    /**
+     * One batch of {@code sql} — the owner key, the element key, then its index ({@code keys}: the map key or the
+     * position of each element, {@code null} for none) — per element.
+     */
+    private void joinRows(String sql, CollectionMapping.JoinTable table, Object[] owner, List<Object> elements, List<Object> keys,
+            EntityStatements statements, Connection connection) throws SQLException {
+        if (elements.isEmpty()) {
+            return;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int e = 0; e < elements.size(); e++) {
+                Object element = elements.get(e);
+                Object[] target = statements.targetKey(element, table.association().targetEntity());
+                if (target == null) {
+                    throw new PersistenceException("An element of " + table.association().name() + " of "
+                        + table.association().declaringClass().getName() + " has no identifier");
+                }
+                int index = 1;
+                for (int k = 0; k < owner.length; k++) {
+                    table.ownerBinders().get(k).bind(dialect, statement, index++, owner[k]);
+                }
+                for (int k = 0; k < target.length; k++) {
+                    table.targetBinders().get(k).bind(dialect, statement, index++, target[k]);
+                }
+                if (keys != null) {
+                    bindIndex(statement, index, table.index(), keys.get(e), statements);
+                }
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    /** Binds the index columns for {@code key}, a map key or a position, from parameter {@code index}; returns the next. */
+    private int bindIndex(PreparedStatement statement, int index, IndexMapping mapping, Object key, EntityStatements statements)
+            throws SQLException {
+        Object[] values = mapping.values(key, statements);
+        for (int k = 0; k < values.length; k++) {
+            mapping.binders().get(k).bind(dialect, statement, index++, values[k]);
+        }
+        return index;
+    }
+
+    // ---- the indexes an inverse side writes (§11.1.33, §11.1.42) --------------------------------------------
+
+    /**
+     * Writes the keys or positions that the inverse collections of {@code work} keep in the table of their elements:
+     * all of them for a new owner ({@code snapshot} {@code null}) unless they are not insertable, those of a collection
+     * changed since the snapshot unless they are not updatable. Whether anything was written.
+     */
+    private boolean writeInverseIndexes(Work work, Object[] snapshot, Connection connection) {
+        MappedEntity type = work.type();
+        boolean written = false;
+        for (CollectionMapping.MappedBy inverse : type.statements().inverseIndexes()) {
+            Object current = work.state()[inverse.attribute()];
+            boolean write = snapshot == null ? inverse.index().insertable()
+                : inverse.index().updatable() && type.state().collectionChanged(inverse.attribute(), snapshot[inverse.attribute()], current);
+            if (write && writeInverseIndex(type, inverse, current, connection)) {
+                written = true;
+            }
+        }
+        return written;
+    }
+
+    /** Writes the key or position of each element of the inverse collection {@code current}; whether it has any. */
+    private boolean writeInverseIndex(MappedEntity type, CollectionMapping.MappedBy inverse, Object current,
+            Connection connection) {
+        List<Object> elements = CollectionMapping.elements(current);
+        if (elements.isEmpty()) {
+            return false;
+        }
+        List<Object> keys = CollectionMapping.keys(current);
+        Class<?> target = inverse.association().targetEntity();
+        for (var group : targetTables(type.statements(), elements, target, inverse.indexUpdate().table()).entrySet()) {
+            var update = new io.vidocq.noether.jpa.dialect.sql.Update(group.getKey(),
+                inverse.indexUpdate().assignments(), inverse.indexUpdate().conditions());
+            try (PreparedStatement statement = connection.prepareStatement(render(update))) {
+                for (int e : group.getValue()) {
+                    int index = bindIndex(statement, 1, inverse.index(), keys.get(e), type.statements());
+                    Object[] key = type.statements().targetKey(elements.get(e), target);
+                    for (int k = 0; k < key.length; k++) {
+                        inverse.targetBinders().get(k).bind(dialect, statement, index++, key[k]);
+                    }
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+            } catch (SQLException e) {
+                throw failure("write of the index of " + inverse.association().name() + " of", type, e);
+            }
+        }
+        return true;
+    }
+
+    /** Deletes every join row of the owned collections of a row about to be deleted. */
+    private void deleteJoinRows(Work work, Connection connection) {
+        MappedEntity type = work.type();
+        EntityStatements statements = type.statements();
+        for (CollectionMapping mapping : statements.collections()) {
+            if (mapping instanceof CollectionMapping.JoinTable table) {
+                Object[] owner = statements.keyValues(work.entry().key().id());
+                try (PreparedStatement statement = connection.prepareStatement(render(table.deleteOwner()))) {
+                    for (int k = 0; k < owner.length; k++) {
+                        table.ownerBinders().get(k).bind(dialect, statement, k + 1, owner[k]);
+                    }
+                    statement.executeUpdate();
+                } catch (SQLException e) {
+                    throw failure("delete of the join rows of " + table.association().name() + " of", type, e);
+                }
+            }
+        }
+    }
+
+    // ---- element collections (§2.7, §11.1.8) ---------------------------------------------------------------
+
+    /**
+     * Writes the element collections of {@code work}: all of them for a new owner ({@code inserted}), else those that
+     * changed since the snapshot, written again whole — their elements have no identity to update one row by.
+     */
+    private void writeElements(Work work, boolean inserted, Connection connection) {
+        MappedEntity type = work.type();
+        List<ElementCollectionMapping> mappings = type.statements().elementCollections();
+        if (mappings.isEmpty()) {
+            return;
+        }
+        List<Integer> changes = inserted ? List.of() : type.state().changes(work.entry().snapshot(), work.state());
+        for (ElementCollectionMapping elements : mappings) {
+            if (inserted || changes.contains(elements.attribute())) {
+                if (!inserted) {
+                    deleteElements(work, elements, connection);
+                }
+                insertElements(work, elements, connection);
+            }
+        }
+    }
+
+    /** Inserts the rows of the element collection {@code elements} of the owner of {@code work}, one per element. */
+    private void insertElements(Work work, ElementCollectionMapping elements, Connection connection) {
+        MappedEntity type = work.type();
+        List<Object> values = CollectionMapping.elements(work.state()[elements.attribute()]);
+        if (values.isEmpty()) {
+            return;
+        }
+        Object[] owner = type.statements().keyValues(type.id(work.entry().instance()));
+        try (PreparedStatement statement = connection.prepareStatement(render(elements.insert()))) {
+            List<Object> keys = CollectionMapping.keys(work.state()[elements.attribute()]);
+            for (int v = 0; v < values.size(); v++) {
+                Object value = values.get(v);
+                int index = bindOwner(statement, elements.ownerBinders(), owner);
+                if (elements.index() != null) {
+                    index = bindIndex(statement, index, elements.index(), keys.get(v), type.statements());
+                }
+                Object[] columns = elements.values(value, type.statements()::targetKey);
+                for (int c = 0; c < columns.length; c++) {
+                    elements.columns().get(c).binder().bind(dialect, statement, index++, columns[c]);
+                }
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        } catch (SQLException e) {
+            throw failure("write of the element collection " + elements.model().name() + " of", type, e);
+        }
+    }
+
+    /** Deletes the rows of the element collection {@code elements} of the owner of {@code work}. */
+    private void deleteElements(Work work, ElementCollectionMapping elements, Connection connection) {
+        MappedEntity type = work.type();
+        Object[] owner = type.statements().keyValues(work.entry().key().id());
+        try (PreparedStatement statement = connection.prepareStatement(render(elements.deleteOwner()))) {
+            bindOwner(statement, elements.ownerBinders(), owner);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw failure("delete of the element collection " + elements.model().name() + " of", type, e);
+        }
+    }
+
+    /** Binds the key of an owner from parameter 1; returns the next parameter index. */
+    private int bindOwner(PreparedStatement statement, List<ValueBinder> binders, Object[] owner) throws SQLException {
+        for (int k = 0; k < owner.length; k++) {
+            binders.get(k).bind(dialect, statement, k + 1, owner[k]);
+        }
+        return owner.length + 1;
+    }
+
+    /** The elements of {@code from} that {@code removed} does not hold, compared by identity, as many times as left. */
+    private static List<Object> minus(List<Object> from, List<Object> removed) {
+        Map<Object, Integer> counts = new IdentityHashMap<>();
+        removed.forEach(element -> counts.merge(element, 1, Integer::sum));
+        List<Object> rest = new ArrayList<>();
+        for (Object element : from) {
+            Integer count = counts.get(element);
+            if (count == null || count == 0) {
+                rest.add(element);
+            } else {
+                counts.put(element, count - 1);
+            }
+        }
+        return rest;
+    }
+
+    /** The SQL of a statement, rendered once by the dialect. */
+    String render(Statement statement) {
+        return rendered.computeIfAbsent(statement, dialect::render);
+    }
+
+    private static Set<Object> identitySet() {
+        return Collections.newSetFromMap(new IdentityHashMap<>());
+    }
+
+    /** An identity set for about {@code expected} instances: the default table holds 21, most flushes write a few. */
+    private static Set<Object> identitySet(int expected) {
+        return Collections.newSetFromMap(new IdentityHashMap<>(expected));
+    }
+
+    // ---- updates ------------------------------------------------------------------------------------------
+
+    private void update(List<Work> group, PersistenceContext context, Connection connection) {
+        MappedEntity type = group.getFirst().type();
+        EntityStatements statements = type.statements();
+        Sql sql = sql(type);
+        int version = versionAttribute(type);
+        if (version >= 0) {
+            for (Work work : group) {
+                Object next = nextVersion(type, work.entry().snapshot()[version]);
+                type.access().set(work.entry().instance(), version, next);
+                work.state()[version] = next;
+            }
+        }
+        try {
+            for (int t = 0; t < sql.tables().size(); t++) {
+                EntityStatements.TableStatements table = statements.tables().get(t);
+                if (sql.tables().get(t).update() == null) {
+                    continue; // nothing in that table can change
+                }
+                try (PreparedStatement statement = connection.prepareStatement(sql.tables().get(t).update())) {
+                    for (Work work : group) {
+                        bind(statement, table.updateParameters(), statements, statements.values(work.state()), work.entry().snapshot());
+                        statement.addBatch();
+                    }
+                    int[] counts = statement.executeBatch();
+                    if (t == 0) {
+                        check(counts, group, version >= 0, "updated"); // the version lives in the primary row
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw failure("update", type, e);
+        }
+        for (Work work : group) {
+            updated(work, type, context);
+        }
+    }
+
+    /** Records the row of {@code work} as updated, then runs its {@code PostUpdate} callbacks (§3.6.3). */
+    private static void updated(Work work, MappedEntity type, PersistenceContext context) {
+        context.updated(work.entry(), type.state().snapshot(work.state()));
+        type.callback("PostUpdate", work.entry().instance());
+        LockModeType mode = work.entry().lockMode();
+        if (Locks.forcesIncrement(mode)) {
+            // incremented once per transaction: the lock stays, without forcing another version
+            context.lock(work.entry(), mode == LockModeType.PESSIMISTIC_FORCE_INCREMENT ? LockModeType.PESSIMISTIC_WRITE
+                : LockModeType.OPTIMISTIC);
+        }
+    }
+
+    // ---- deletes ------------------------------------------------------------------------------------------
+
+    private void delete(List<Work> group, PersistenceContext context, Connection connection) {
+        MappedEntity type = group.getFirst().type();
+        EntityStatements statements = type.statements();
+        Sql sql = sql(type);
+        try {
+            // the rows of the secondary tables first: they reference the primary row
+            for (int t = sql.tables().size() - 1; t >= 0; t--) {
+                EntityStatements.TableStatements table = statements.tables().get(t);
+                try (PreparedStatement statement = connection.prepareStatement(sql.tables().get(t).delete())) {
+                    for (Work work : group) {
+                        bind(statement, table.deleteParameters(), statements, statements.values(work.state()), work.entry().snapshot());
+                        statement.addBatch();
+                    }
+                    int[] counts = statement.executeBatch();
+                    if (t == 0) {
+                        check(counts, group, versionAttribute(type) >= 0, "deleted");
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw failure("delete", type, e);
+        }
+        for (Work work : group) {
+            context.deleted(work.entry());
+            type.callback("PostRemove", work.entry().instance());
+        }
+    }
+
+    // ---- helpers ------------------------------------------------------------------------------------------
+
+    /** Consecutive works of the same entity: one statement, one batch. */
+    private static List<List<Work>> groups(List<Work> works) {
+        if (works.isEmpty()) {
+            return List.of();
+        }
+        MappedEntity only = works.getFirst().type();
+        int same = 1;
+        while (same < works.size() && works.get(same).type() == only) same++;
+        if (same == works.size()) {
+            return List.of(works); // one entity, as in most flushes: the works are their own group
+        }
+        List<List<Work>> groups = new ArrayList<>();
+        for (Work work : works) {
+            if (groups.isEmpty() || groups.getLast().getFirst().type() != work.type()) {
+                groups.add(new ArrayList<>());
+            }
+            groups.getLast().add(work);
+        }
+        return groups;
+    }
+
+    Sql sql(MappedEntity type) {
+        Sql known = sqlByType.get(type); // rendered at the first flush of the entity: no function to make for the others
+        if (known != null) {
+            return known;
+        }
+        return sqlByType.computeIfAbsent(type, t -> {
+            EntityStatements statements = t.statements();
+            List<TableSql> tables = new ArrayList<>();
+            for (EntityStatements.TableStatements table : statements.tables()) {
+                tables.add(new TableSql(dialect.render(table.insert()), table.update() == null ? null : dialect.render(table.update()),
+                    dialect.render(table.delete()), dialect.render(table.select())));
+            }
+            var key = statements.insert().generatedKey();
+            return new Sql(List.copyOf(tables), key == null ? null : new String[] {dialect.generatedKeyName(key)});
+        });
+    }
+
+    private static Object[] read(MappedEntity type, Object instance) {
+        return read(type, instance, null);
+    }
+
+    /**
+     * The state of {@code instance}, read into {@code reusable} when it has the size of that state, else into a new
+     * array: a read writes every attribute, so nothing of what the array held before remains.
+     */
+    private static Object[] read(MappedEntity type, Object instance, Object[] reusable) {
+        int size = type.model().attributes().size();
+        Object[] state = reusable != null && reusable.length == size ? reusable : new Object[size];
+        type.access().read(instance, state);
+        return state;
+    }
+
+    private void bind(PreparedStatement statement, List<EntityStatements.Parameter> parameters, EntityStatements statements,
+            Object[] values, Object[] snapshot) throws SQLException {
+        for (int i = 0; i < parameters.size(); i++) {
+            EntityStatements.Parameter parameter = parameters.get(i);
+            EntityStatements.Column column = statements.columns().get(parameter.column());
+            Object value = parameter.previous() ? snapshot[column.attribute()] : values[parameter.column()];
+            column.binder().bind(dialect, statement, i + 1, value);
+        }
+    }
+
+    /** §3.4.2: a versioned row that matched nothing was changed or deleted by another transaction. */
+    private static void check(int[] counts, List<Work> group, boolean versioned, String what) {
+        if (!versioned) {
+            return;
+        }
+        for (int i = 0; i < counts.length; i++) {
+            if (counts[i] == 0) { // Statement.SUCCESS_NO_INFO (-2): the driver cannot tell, nothing to check
+                Object instance = group.get(i).entry().instance();
+                throw new OptimisticLockException("The row of " + group.get(i).type().model().entityName() + " "
+                    + group.get(i).entry().key().id() + " was not " + what + ": another transaction changed or deleted it", null,
+                    instance);
+            }
+        }
+    }
+
+    private static int versionAttribute(MappedEntity type) {
+        return type.model().version().map(v -> type.model().attributes().indexOf(v)).orElse(-1);
+    }
+
+    /** A version still {@code null} at insert starts at 0, or now for a timestamp (§3.4.2). */
+    private static void initialVersion(MappedEntity type, Work work, int version) {
+        if (version >= 0 && work.state()[version] == null) {
+            Object initial = nextVersion(type, null);
+            type.access().set(work.entry().instance(), version, initial);
+            work.state()[version] = initial;
+        }
+    }
+
+    /**
+     * The version after {@code current}: numbers count, timestamps take the time, truncated to the millisecond that
+     * every database keeps (a finer one would not match the row read back).
+     */
+    private static Object nextVersion(MappedEntity type, Object current) {
+        Class<?> versionType = type.model().version().orElseThrow().javaType();
+        // numbers wrap around rather than Math.addExact: optimistic locking only compares the version for equality,
+        // and an exception would stop an entity updated 2^31 times
+        if (versionType == int.class || versionType == Integer.class) {
+            return current == null ? 0 : (Integer) current + 1;
+        }
+        if (versionType == long.class || versionType == Long.class) {
+            return current == null ? 0L : (Long) current + 1;
+        }
+        if (versionType == short.class || versionType == Short.class) {
+            return current == null ? (short) 0 : (short) ((Short) current + 1);
+        }
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        if (versionType == Timestamp.class) {
+            return Timestamp.from(now);
+        }
+        if (versionType == Instant.class) {
+            return now;
+        }
+        if (versionType == LocalDateTime.class) {
+            return LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        }
+        throw new PersistenceException("The version attribute of " + type.model().entityName() + " has type "
+            + versionType.getName() + ", which is not a version type (§2.2: int, short, long, their wrappers, Timestamp)");
+    }
+
+    private static PersistenceException failure(String what, MappedEntity type, SQLException e) {
+        return new PersistenceException("The " + what + " of " + type.model().entityName() + " failed: " + e.getMessage(), e);
+    }
+}

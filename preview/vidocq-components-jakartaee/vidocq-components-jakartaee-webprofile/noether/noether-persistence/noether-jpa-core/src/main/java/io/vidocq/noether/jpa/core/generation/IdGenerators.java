@@ -1,0 +1,423 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.generation;
+
+import io.vidocq.noether.jpa.core.jdbc.ConnectionSource;
+import io.vidocq.noether.jpa.core.jdbc.ConnectionSources;
+import io.vidocq.noether.jpa.core.mapping.MappedEntity;
+import io.vidocq.noether.jpa.core.model.EntityModel;
+import io.vidocq.noether.jpa.core.model.GenerationModel;
+import io.vidocq.noether.jpa.core.model.IdModel;
+import io.vidocq.noether.jpa.core.model.SequenceGeneratorModel;
+import io.vidocq.noether.jpa.core.model.TableGeneratorModel;
+import io.vidocq.noether.jpa.dialect.Dialect;
+import io.vidocq.noether.jpa.dialect.sql.Identifier;
+import io.vidocq.noether.jpa.dialect.sql.Increment;
+import io.vidocq.noether.jpa.dialect.sql.Insert;
+import io.vidocq.noether.jpa.dialect.sql.NextValue;
+import io.vidocq.noether.jpa.dialect.sql.Select;
+import io.vidocq.noether.jpa.dialect.sql.Table;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.PersistenceConfiguration;
+import jakarta.persistence.PersistenceException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * The identifier generators of a factory (§11.1.20, §11.1.51, §11.1.52): one per sequence or table row, shared by its
+ * entity managers. Values are handed out from blocks of {@code allocationSize} without a lock: a block is an immutable
+ * range swapped by compare-and-set, and the database round trip that fetches the next block runs outside any critical
+ * section — two threads that fetch at once each keep their own block (identifiers may have gaps, never duplicates).
+ *
+ * <p>{@code AUTO} is a table generator on the defaults of the reference implementation — table {@code SEQUENCE},
+ * columns {@code SEQ_NAME} and {@code SEQ_COUNT}, row {@code SEQ_GEN}, blocks of 50 — or {@code UUID} for a
+ * {@code UUID} identifier; a sequence without a name is the sequence named after its generator.
+ *
+ * <p>A table generator allocates on a connection of its own, as Hibernate and EclipseLink do: the generator row stays
+ * locked only for the allocation, and a block shared by the whole factory is safe because its allocation is committed
+ * on its own, whatever becomes of the transaction that asked for it. A unit with a table generator therefore needs at
+ * least two connections at once (BUG-20261018-04, {@link #checkConnections}). A JTA unit allocates through its
+ * non-JTA data source instead: the container enlists every connection of the JTA data source in the transaction and
+ * refuses the allocation's own commit (BUG-20261111-04, {@link #checkAllocations}).
+ */
+public final class IdGenerators {
+
+    private static final int DEFAULT_ALLOCATION = 50;
+    /** The fewest connections a unit with a table generator needs: one for the transaction, one for the allocation. */
+    private static final int TABLE_CONNECTIONS = 2;
+
+    /** A source of identifier values. */
+    private interface Generator {
+        Object next(Connection caller, Class<?> type);
+    }
+
+    /** Fetches a new block: its first and last values. */
+    @FunctionalInterface
+    private interface Fetch {
+        long[] block(Connection caller) throws SQLException;
+    }
+
+    /** A block the database could not hand out; {@link #next} names the entity, the strategy and the ways out. */
+    private static final class AllocationFailure extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        private final String source;
+        private final String kind;
+
+        AllocationFailure(String source, String kind, SQLException cause) {
+            super(cause);
+            this.source = source;
+            this.kind = kind;
+        }
+    }
+
+    /** Hands out the values of blocks, lock-free. */
+    private static final class Blocks implements Generator {
+        private record Block(long next, long last) {
+        }
+
+        private final AtomicReference<Block> current = new AtomicReference<>();
+        private final String source;
+        private final String kind;
+        private final Fetch fetch;
+
+        /** {@code source} says where the blocks come from, {@code kind} what to create: a sequence or a table. */
+        Blocks(String source, String kind, Fetch fetch) {
+            this.source = source;
+            this.kind = kind;
+            this.fetch = fetch;
+        }
+
+        @Override
+        public Object next(Connection caller, Class<?> type) {
+            return convert(nextValue(caller), type);
+        }
+
+        private long nextValue(Connection caller) {
+            while (true) {
+                Block block = current.get();
+                if (block != null && block.next() <= block.last()) {
+                    if (current.compareAndSet(block, new Block(block.next() + 1, block.last()))) {
+                        return block.next();
+                    }
+                    continue;
+                }
+                long[] fresh;
+                try {
+                    fresh = fetch.block(caller); // the round trip, outside any critical section
+                } catch (SQLException e) {
+                    throw new AllocationFailure(source, kind, e);
+                }
+                current.compareAndSet(block, new Block(fresh[0] + 1, fresh[1])); // else another block won: keep ours
+                return fresh[0];
+            }
+        }
+
+        /** A generated value as the identifier type: §2.4 integral types, their wrappers, BigInteger, BigDecimal. */
+        private static Object convert(long value, Class<?> type) {
+            if (type == long.class || type == Long.class) {
+                return value;
+            }
+            if (type == int.class || type == Integer.class) {
+                return Math.toIntExact(value);
+            }
+            if (type == short.class || type == Short.class) {
+                return (short) Math.toIntExact(value);
+            }
+            if (type == BigInteger.class) {
+                return BigInteger.valueOf(value);
+            }
+            if (type == BigDecimal.class) {
+                return BigDecimal.valueOf(value);
+            }
+            if (type == String.class) {
+                return Long.toString(value);
+            }
+            throw new PersistenceException("A generated identifier cannot be a " + type.getName());
+        }
+    }
+
+    private final Dialect dialect;
+    /** Where the table generators allocate: {@link ConnectionSources#allocations}. */
+    private final ConnectionSource allocations;
+    private final java.util.function.Function<String, Identifier> identifiers;
+    private final Map<String, Generator> generators = new ConcurrentHashMap<>();
+
+    public IdGenerators(Dialect dialect, ConnectionSource allocations) {
+        this(dialect, allocations, Identifier::of);
+    }
+
+    public IdGenerators(Dialect dialect, ConnectionSource allocations,
+            java.util.function.Function<String, Identifier> identifiers) {
+        this.dialect = dialect;
+        this.allocations = allocations;
+        this.identifiers = identifiers;
+    }
+
+    /**
+     * Whether the identifier of {@code type} is generated before the insert: by a sequence, a table or as a UUID
+     * ({@code IDENTITY} identifiers are generated by the insert itself).
+     */
+    public static boolean generatesBeforeInsert(MappedEntity type) {
+        return type.model().id() instanceof IdModel.Single single
+            && single.generation().map(g -> g.strategy() != GenerationType.IDENTITY).orElse(false);
+    }
+
+    /**
+     * Refuses, when the factory is created, a unit whose table generators could not allocate (BUG-20261018-04): a
+     * Noether pool of fewer than two connections, which the transaction would hold while the allocation waits for a
+     * second one until its acquisition times out. A source whose size Noether does not know
+     * ({@link ConnectionSource#maxSize()}) is not checked; it needs two connections as well.
+     *
+     * @throws PersistenceException naming the unit, its table generators and the pool property
+     */
+    public static void checkConnections(String unitName, List<EntityModel> entities, ConnectionSource connections) {
+        OptionalInt maxSize = connections.maxSize();
+        if (maxSize.isEmpty() || maxSize.getAsInt() >= TABLE_CONNECTIONS) {
+            return;
+        }
+        List<String> tableGenerators = tableGenerators(entities);
+        if (!tableGenerators.isEmpty()) {
+            throw new PersistenceException("Persistence unit " + unitName + " sets " + ConnectionSources.POOL_MAX_SIZE + "="
+                + maxSize.getAsInt() + ", but a TABLE identifier generator needs at least " + TABLE_CONNECTIONS
+                + " connections: one for the transaction, one for the allocation of identifiers, which it commits on its own "
+                + "connection. TABLE generators of the unit: " + String.join(", ", tableGenerators) + ". Set "
+                + ConnectionSources.POOL_MAX_SIZE + " to " + TABLE_CONNECTIONS + " or more.");
+        }
+    }
+
+    /**
+     * Refuses, when the factory is created, a JTA unit with table generators and no non-JTA data source to allocate
+     * through (BUG-20261111-04, {@link ConnectionSources#allocations}): the container enlists every connection of the
+     * JTA data source in the transaction, and refuses the commit of the allocation.
+     *
+     * @param allocations where the unit's table generators allocate; empty when the unit has nowhere to
+     * @throws PersistenceException naming the unit, its table generators and the two ways out
+     */
+    public static void checkAllocations(String unitName, List<EntityModel> entities, Optional<ConnectionSource> allocations) {
+        if (allocations.isPresent()) {
+            return;
+        }
+        List<String> tableGenerators = tableGenerators(entities);
+        if (!tableGenerators.isEmpty()) {
+            throw new PersistenceException("Persistence unit " + unitName + " is JTA and has TABLE identifier generators, "
+                + "but no non-JTA data source to allocate through. A TABLE generator commits each allocation on a "
+                + "connection of its own, and the container enlists every connection of the JTA data source in the "
+                + "transaction. TABLE generators of the unit: " + String.join(", ", tableGenerators) + ". Declare a "
+                + "<non-jta-data-source> for the unit (on Quarkus, a datasource with "
+                + "quarkus.datasource.\"name\".jdbc.transactions=disabled), or use SEQUENCE or IDENTITY identifiers.");
+        }
+    }
+
+    private static List<String> tableGenerators(List<EntityModel> entities) {
+        return entities.stream().map(IdGenerators::tableGenerator).flatMap(Optional::stream).toList();
+    }
+
+    /** The entity and its generator, when a generator table allocates its identifiers. */
+    private static Optional<String> tableGenerator(EntityModel entity) {
+        if (!(entity.id() instanceof IdModel.Single(var attribute, var idGeneration))) {
+            return Optional.empty();
+        }
+        return idGeneration.filter(generation -> allocatesFromTable(generation, attribute.javaType()))
+            .map(generation -> entity.entityName() + " (" + generation.strategy() + ", "
+                + (generation.generatorName() != null ? "generator " + generation.generatorName() : "default table generator")
+                + ")");
+    }
+
+    /**
+     * Whether a generator table allocates the identifiers: {@code TABLE}, and {@code AUTO} unless the identifier is a
+     * UUID or the generator is a sequence, as {@link #generator} resolves it.
+     */
+    private static boolean allocatesFromTable(GenerationModel generation, Class<?> idType) {
+        return switch (generation.strategy()) {
+            case TABLE -> true;
+            case AUTO -> idType != UUID.class && generation.sequence().isEmpty();
+            default -> false;
+        };
+    }
+
+    /** A new identifier for an instance of {@code type}; {@code caller} is the connection a sequence is read through. */
+    public Object next(MappedEntity type, Connection caller) {
+        IdModel.Single id = (IdModel.Single) type.model().id();
+        Class<?> idType = id.attribute().javaType();
+        GenerationModel generation = id.generation().orElseThrow();
+        try {
+            return generator(generation, idType).next(caller, idType);
+        } catch (AllocationFailure failure) {
+            throw new PersistenceException("Unable to generate the identifier of " + type.model().entityName()
+                + ": GenerationType." + generation.strategy() + " allocates from " + failure.source
+                + ", which failed: " + failure.getCause().getMessage() + ". " + remedy(failure.kind, generation.strategy()),
+                failure.getCause());
+        }
+    }
+
+    /**
+     * The ways out of a failed allocation: create the sequence or table, let schema generation create it, and for
+     * {@code AUTO} — a generator table, unless a sequence is named — an identifier the database generates itself.
+     */
+    private static String remedy(String kind, GenerationType strategy) {
+        String create = "Create that " + kind + ", or let schema generation create it ("
+            + PersistenceConfiguration.SCHEMAGEN_DATABASE_ACTION + ")";
+        if (strategy == GenerationType.AUTO) {
+            return create + ", or map an identifier the database generates with GenerationType.IDENTITY.";
+        }
+        return create + ".";
+    }
+
+    /** {@code name}, after its schema and catalog when the generator names them. */
+    private static String qualified(String catalog, String schema, String name) {
+        StringBuilder qualified = new StringBuilder();
+        for (String part : new String[] {catalog, schema}) {
+            if (part != null && !part.isEmpty()) {
+                qualified.append(part).append('.');
+            }
+        }
+        return qualified.append(name).toString();
+    }
+
+    private Generator generator(GenerationModel generation, Class<?> idType) {
+        return switch (generation.strategy()) {
+            case UUID -> uuid();
+            case SEQUENCE -> sequence(generation.sequence().orElseGet(() -> defaultSequence(generation)));
+            case TABLE -> table(generation.table().orElseGet(() -> defaultTable(generation.generatorName())));
+            case AUTO -> auto(generation, idType);
+            case IDENTITY -> throw new IllegalStateException("An IDENTITY identifier is generated by the insert");
+        };
+    }
+
+    /** {@code AUTO}: a UUID for a UUID identifier, otherwise the sequence it names, otherwise a generator table. */
+    private Generator auto(GenerationModel generation, Class<?> idType) {
+        if (idType == UUID.class) {
+            return uuid();
+        }
+        return generation.sequence().map(this::sequence)
+            .orElseGet(() -> table(generation.table().orElseGet(() -> defaultTable(null))));
+    }
+
+    private static Generator uuid() {
+        return (caller, type) -> type == String.class ? UUID.randomUUID().toString() : UUID.randomUUID();
+    }
+
+    private static SequenceGeneratorModel defaultSequence(GenerationModel generation) {
+        String name = generation.generatorName() != null ? generation.generatorName() : "SEQ_GEN_SEQUENCE";
+        return new SequenceGeneratorModel(name, null, null, null, 1, DEFAULT_ALLOCATION);
+    }
+
+    private static TableGeneratorModel defaultTable(String generatorName) {
+        return new TableGeneratorModel(generatorName, null, null, null, null, null, null, 1, DEFAULT_ALLOCATION);
+    }
+
+    /** A sequence incremented by {@code allocationSize}: the value read starts a block of that size. */
+    private Generator sequence(SequenceGeneratorModel model) {
+        String name = model.sequenceName() != null ? model.sequenceName() : model.name();
+        String sql = dialect.render(new NextValue(identifier(name), identifier(model.schema()), identifier(model.catalog())));
+        int allocation = Math.max(1, model.allocationSize());
+        String source = "the sequence " + qualified(model.catalog(), model.schema(), name);
+        return generators.computeIfAbsent("sequence:" + sql, k -> new Blocks(source, "sequence", caller -> {
+            try (PreparedStatement next = caller.prepareStatement(sql); ResultSet value = next.executeQuery()) {
+                value.next();
+                long first = value.getLong(1);
+                return new long[] {first, first + allocation - 1};
+            }
+        }));
+    }
+
+    /**
+     * A row of a generator table moved forward by {@code allocationSize} in a transaction of its own, on a connection of
+     * its own from {@link #allocations} (a rollback of the caller must not hand the same values out again); a missing
+     * row is created at {@code initialValue}.
+     */
+    private Generator table(TableGeneratorModel model) {
+        String tableName = model.table() != null ? model.table() : "SEQUENCE";
+        String keyName = model.pkColumnName() != null ? model.pkColumnName() : "SEQ_NAME";
+        String valueName = model.valueColumnName() != null ? model.valueColumnName() : "SEQ_COUNT";
+        Table table = new Table(identifier(tableName), identifier(model.schema()), identifier(model.catalog()));
+        Identifier key = identifier(keyName);
+        Identifier value = identifier(valueName);
+        String row = rowName(model);
+        String source = "the generator table " + qualified(model.catalog(), model.schema(), tableName) + " (columns "
+            + keyName + ", " + valueName + "), row " + row;
+        String increment = dialect.render(new Increment(table, value, key));
+        String select = dialect.render(new Select(table, List.of(value), List.of(key)));
+        String insert = dialect.render(new Insert(table, List.of(key, value), null));
+        int allocation = Math.max(1, model.allocationSize());
+        int initial = model.initialValue();
+        return generators.computeIfAbsent("table:" + increment + "/" + row, k -> new Blocks(source, "table", caller -> {
+            try (Connection own = allocations.acquire()) {
+                own.setAutoCommit(false);
+                try {
+                    long[] block = tableBlock(own, increment, select, insert, row, initial, allocation);
+                    own.commit();
+                    return block;
+                } catch (SQLException | RuntimeException e) {
+                    own.rollback();
+                    throw e;
+                }
+            }
+        }));
+    }
+
+    /** The generator row: {@code pkColumnValue}, else the generator name, else the default {@code SEQ_GEN}. */
+    private static String rowName(TableGeneratorModel model) {
+        if (model.pkColumnValue() != null) {
+            return model.pkColumnValue();
+        }
+        return model.name() != null ? model.name() : "SEQ_GEN";
+    }
+
+    private static long[] tableBlock(Connection own, String increment, String select, String insert, String row, int initial,
+            int allocation) throws SQLException {
+        try (PreparedStatement move = own.prepareStatement(increment)) {
+            move.setLong(1, allocation);
+            move.setString(2, row);
+            if (move.executeUpdate() == 0) {
+                try (PreparedStatement create = own.prepareStatement(insert)) {
+                    create.setString(1, row);
+                    create.setLong(2, (long) initial - 1 + allocation);
+                    create.executeUpdate();
+                }
+                return new long[] {initial, (long) initial + allocation - 1};
+            }
+        }
+        try (PreparedStatement read = own.prepareStatement(select)) {
+            read.setString(1, row);
+            try (ResultSet value = read.executeQuery()) {
+                value.next();
+                long last = value.getLong(1);
+                return new long[] {last - allocation + 1, last};
+            }
+        }
+    }
+
+    private Identifier identifier(String name) {
+        return name == null || name.isBlank() ? null : identifiers.apply(name);
+    }
+}

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent><groupId>io.vidocq.noether</groupId><artifactId>noether-jpa</artifactId><version>0.4.0-SNAPSHOT</version></parent>
+    <artifactId>noether-jpa-cdi-module-it</artifactId>
+    <name>Noether :: Persistence :: Vauban module-path integration tests</name>
+    <!-- SonarQube: test vehicle, its main code only exists to be exercised by its tests (Vidocq/vidocq#284). -->
+    <properties><maven.deploy.skip>true</maven.deploy.skip><maven.javadoc.skip>true</maven.javadoc.skip><maven.source.skip>true</maven.source.skip><gpg.skip>true</gpg.skip><sonar.skip>true</sonar.skip></properties>
+    <dependencies>
+        <dependency><groupId>io.vidocq.noether</groupId><artifactId>noether-jpa-cdi</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>io.vidocq.noether</groupId><artifactId>noether-jpa-core</artifactId></dependency>
+        <!-- Decision D7: the pool of the jakarta.persistence.jdbc.* units, bound as a service (not required). -->
+        <dependency><groupId>io.vidocq.noether</groupId><artifactId>noether-jpa-pool-mansart</artifactId><scope>runtime</scope></dependency>
+        <!-- What a container assembles for a JTA unit (the Vidocq runtime extension will): a transaction manager and data
+             sources that enlist their connections. noether-jpa-cdi itself depends on no Mansart module. -->
+        <dependency><groupId>io.vidocq.mansart</groupId><artifactId>mansart-transactions-core</artifactId><version>${mansart.version}</version></dependency>
+        <dependency><groupId>io.vidocq.mansart</groupId><artifactId>mansart-transactions-jdbc</artifactId><version>${mansart.version}</version></dependency>
+        <!-- The transaction manager and registry beans, and the @TransactionScoped context of the EntityManager beans
+             persistence.xml declares (Platform §13.12.1). -->
+        <dependency><groupId>io.vidocq.mansart</groupId><artifactId>mansart-transactions-cdi</artifactId><version>${mansart.version}</version></dependency>
+        <!-- This is a non-release application test vehicle, not a production integration dependency. -->
+        <dependency><groupId>io.vidocq.vauban</groupId><artifactId>vauban-core</artifactId><version>${vauban.version}</version></dependency>
+        <dependency><groupId>io.vidocq.vauban</groupId><artifactId>vauban-classloader-spi</artifactId><version>${vauban.version}</version><scope>runtime</scope></dependency>
+        <dependency><groupId>jakarta.enterprise</groupId><artifactId>jakarta.enterprise.cdi-api</artifactId><version>4.1.0</version></dependency>
+        <dependency><groupId>jakarta.inject</groupId><artifactId>jakarta.inject-api</artifactId><version>2.0.1</version></dependency>
+        <dependency><groupId>jakarta.transaction</groupId><artifactId>jakarta.transaction-api</artifactId><version>2.0.1</version></dependency>
+        <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>io.vidocq.noether</groupId><artifactId>noether-jpa-dialect-h2</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.assertj</groupId><artifactId>assertj-core</artifactId><scope>test</scope></dependency>
+    </dependencies>
+    <build><plugins><plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+            <!-- What a Vauban application declares: the Vauban processor and the build compatible extension it runs at build time. -->
+            <annotationProcessorPaths>
+                <path><groupId>io.vidocq.vauban</groupId><artifactId>vauban-processor</artifactId><version>${vauban.version}</version></path>
+                <path><groupId>io.vidocq.noether</groupId><artifactId>noether-jpa-cdi</artifactId><version>${project.version}</version></path>
+            </annotationProcessorPaths>
+        </configuration>
+        <executions><execution><id>default-testCompile</id><configuration><proc>none</proc></configuration></execution></executions>
+    </plugin><plugin>
+        <groupId>org.sonatype.central</groupId><artifactId>central-publishing-maven-plugin</artifactId>
+        <configuration><skipPublishing>true</skipPublishing></configuration>
+    </plugin></plugins></build>
+</project>

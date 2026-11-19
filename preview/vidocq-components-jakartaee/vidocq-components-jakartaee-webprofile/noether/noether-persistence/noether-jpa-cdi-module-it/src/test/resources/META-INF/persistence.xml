@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Units without a container bootstrap: noether-jpa-cdi hands a JTA unit the container's DataSource bean, the
+    @Default one or the one @Named after its jta-data-source, the DataSource bean @Named after its non-jta-data-source,
+    and its TransactionSynchronizationRegistry bean.
+-->
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <persistence-unit name="xml-default" transaction-type="JTA">
+        <class>io.vidocq.noether.jpa.cdi.moduleit.Record</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+    <!-- Platform §13.12: @Inject @Ledger EntityManager and @Inject @Ledger EntityManagerFactory reach this unit. -->
+    <persistence-unit name="xml-ledger" transaction-type="JTA">
+        <qualifier>io.vidocq.noether.jpa.cdi.moduleit.Ledger</qualifier>
+        <jta-data-source>ledger</jta-data-source>
+        <class>io.vidocq.noether.jpa.cdi.moduleit.Record</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+    <persistence-unit name="xml-vouchers" transaction-type="JTA">
+        <non-jta-data-source>allocations</non-jta-data-source>
+        <class>io.vidocq.noether.jpa.cdi.moduleit.Voucher</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+    <!-- An application-scoped EntityManager in place of the transaction-scoped one (§8.2.1.6). -->
+    <persistence-unit name="xml-archive" transaction-type="JTA">
+        <qualifier>io.vidocq.noether.jpa.cdi.moduleit.Archive</qualifier>
+        <scope>jakarta.enterprise.context.ApplicationScoped</scope>
+        <class>io.vidocq.noether.jpa.cdi.moduleit.Record</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+    <!-- Another provider than Noether (§9.1): the container hands the unit to its createContainerEntityManagerFactory. -->
+    <persistence-unit name="xml-recorded" transaction-type="JTA">
+        <qualifier>io.vidocq.noether.jpa.cdi.moduleit.Recorded</qualifier>
+        <provider>io.vidocq.noether.jpa.cdi.moduleit.RecordingProvider</provider>
+        <jta-data-source>ledger</jta-data-source>
+        <class>io.vidocq.noether.jpa.cdi.moduleit.Record</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="vendor.flag" value="on"/>
+        </properties>
+    </persistence-unit>
+    <!-- A resource-local unit has no EntityManager bean: its scope is logged as ignored (Jakarta Persistence 3.2, §7.6). -->
+    <persistence-unit name="xml-local" transaction-type="RESOURCE_LOCAL">
+        <scope>jakarta.enterprise.context.RequestScoped</scope>
+        <class>io.vidocq.noether.jpa.cdi.moduleit.Record</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="jakarta.persistence.jdbc.url" value="jdbc:h2:mem:moduleit-local;DB_CLOSE_DELAY=-1"/>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+</persistence>

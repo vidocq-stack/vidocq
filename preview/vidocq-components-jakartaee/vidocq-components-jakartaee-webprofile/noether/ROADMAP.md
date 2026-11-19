@@ -1,0 +1,582 @@
+# Noether — Roadmap
+
+Noether owns the implementations extracted from Mansart on 2026-10-11.
+
+| Building block | Status | Detailed roadmap |
+| --- | --- | --- |
+| Jakarta Persistence 3.2 | P0–P12 delivered under the historical scope-based engineering gate, plus dated bounded follow-ups (D5, D9–D43); backlog below; Jakarta Persistence 3.2 certification is a target (Vidocq 1.0.0), not yet claimed | [Persistence](noether-persistence/ROADMAP.md) |
+| Jakarta Validation 3.1 | V0–V2 provisional local test/TCK stopgap; not published | [Validation](noether-validation/ROADMAP.md) |
+
+The extraction changes repository, artifact, package and provider names, not
+persistence semantics or the documented conformance scope. Pool, Transactions
+and Data remain owned by Mansart. Data/JPA integration and generation
+mutualisation remain deferred. Original evidence is preserved in the extracted
+modules, labelled historical; current commands are in `README.md`.
+
+## Closure contract — D43 baseline, 2026-10-18
+
+**Scope review complete; release readiness remains blocked.** P0–P12 and
+D5/D9–D43 are the frozen engineering baseline, not a promise that every
+portable JPA mapping works. The dated history below records delivered work;
+the future backlog is not an instruction to keep adding combinations until
+it is empty. No D44 mapping extension is part of this closure lot.
+
+The intended first Noether release is a bounded **JVM/Java Modules Persistence
+provider**, with APT-generated access for application sources and documented
+bootstrap generation/`opens` for opaque entities. H2 and PostgreSQL are the
+supported dialects. Validation is a non-published local test/TCK stopgap.
+Persistence 3.2 certification is a stated target (Vidocq targets Web Profile 11
+certification since 2026-11-09; first certified release planned in Vidocq 1.0.0),
+but this closure lot claims no untouched-TCK result and no certification, nor full
+portable-mapping coverage, GraalVM native-image, precompiled-JAR Maven generator or
+Data/JPA bridge.
+
+| Exit criterion | Evidence / remaining action | Status |
+| --- | --- | --- |
+| C1 — Finite functional contract | Delivered scope and boundary matrix in the Persistence roadmap; portable refusals are named, not relabelled optional | Documented |
+| C2 — Correctness of delivered paths | Fix and add tracked regressions for Persistence BUG-20261018-03 (CDI configuration collision) and -04 (TABLE allocation/pool capacity). Resolve or explicitly gate affected behavior; a surprising timeout is not an accepted fallback | Blocking |
+| C3 — Close review risks | Reproduce or dismiss table-generator initialization race, resource-local JDBC execution policy and early-bootstrap resource ownership risks. The Java 25 review supplied static evidence, not three additional proven bugs | Pending triage |
+| C4 — Published dependency gate | Select released parent/Mansart coordinates and rerun standalone/container gates without relying on locally installed development snapshots. Revalidate the Vauban integration against the selected published version | Blocking publication |
+| C5 — Verification and performance evidence | Clean reactor passes 1151 tests. D43 TCK evidence remains 2135 / 2131 passed / 0 failures / 0 errors / 4 skips with local TCK-BUG-001. Current comparative JMH, reverse-order repeat and JFR/SQL diagnostics are recorded in BENCH-20261018-01/02/03 | Baseline recorded; rerun correctness gates after C2/C3 changes |
+
+Dependency availability checked on 2026-10-18 via Maven Central metadata:
+`io.vidocq:vidocq-parent`, `io.vidocq.mansart:mansart-pool-core`,
+`io.vidocq.mansart:mansart-transactions-jdbc` and
+`io.vidocq.vauban:vauban-core` each advertise **0.3.0** as the latest release.
+This checkout uses **0.4.0-SNAPSHOT**. The Noether core Central metadata URL
+returns **404**. These observations do not establish binary compatibility
+with 0.3.0 or availability on every other registry; do not blindly downgrade.
+Vauban is an integration-test dependency here, not a direct core runtime dependency.
+The exact installed snapshot is not proof that a published release contains
+the required upstream fix.
+
+The Validation path-cache bug (Validation BUG-20261018-01) remains tracked
+and must not be hidden by the green suite; it does not make Validation a
+publication target. Producer-owned Data BUG-20261009-09 stays outside the
+standalone Persistence release contract.
+
+**Separate performance work, not a mapping prerequisite:** the new comparison
+still shows a gap, especially ordinary JPQL entity materialization.
+An untimed probe finds one identity SELECT followed by one full-row SELECT
+per result, while the competitors return full rows directly. The first
+bounded optimization proposal is result-row hydration through the existing
+loader; query-template caching and allocation reduction come afterwards.
+Details, raw results, caveats and proposed acceptance gates are in
+`noether-persistence/BENCH.md` and the Antora Performance page.
+No performance gain has been implemented or claimed by this closure lot.
+
+## Performance follow-up 1 — Query-row hydration, 2026-10-19
+
+The first requested optimization is implemented separately from mapping
+extensions: eligible plain JPQL/Criteria root selections now carry full state
+in the query rows instead of reloading each result by its identity. The
+32-entity fixture executes one data SELECT rather than 33. The existing
+staged loader registers all captured identities before resolving relationships,
+snapshots and PostLoad callbacks; existing managed dirty state, lazy references,
+versions, converters and shared-cache policies are retained.
+
+Eligibility remains bounded: directly selected single-table concrete roots
+under the existing hydration guards, without DISTINCT, grouping/HAVING, set
+operations or a query lock. Secondary-table roots without eligible fetch joins,
+polymorphic ranges, business-key references and relationship-bearing element
+collections keep the previous loading path. This neither makes every query
+one SELECT nor widens supported mappings. Existing optimized fetch/graph rows
+also use the staged assembler across the complete result.
+
+The full reactor has **1165 tests**; the locally patched TCK retains
+**2135 / 2131 passed / 0 failures / 0 errors / 4 skips**, with all test
+identities/outcomes unchanged from D43. Evidence is in `noether-persistence/TCK.md`;
+new comparison results belong in `noether-persistence/BENCH.md`.
+BENCH-20261019-01/02 record the two completed comparisons: the first measures
+JPQL throughput +26.31% and allocation -24.65% versus BENCH-20261018-02.
+The repeat retains the direction with wider throughput uncertainty; provider
+parity is not reached.
+The closure blockers C2–C4 above remain unchanged. Query-template caching and
+allocation tuning are not included in this follow-up.
+
+## Performance follow-up 2 — Metadata indexing, 2026-10-22
+
+PERF2 follows the post-PERF1 JFR evidence (BENCH-20261019-03). At mapping
+construction, `EntityStatements` builds a private reference array indexed by
+execution-state attribute slot, and an immutable ordered list of inverse
+collections with index-update statements. Reference lookup no longer scans
+or constructs stream pipelines. The flush uses the prefiltered list both to
+detect inverse-index work and to execute it.
+
+Indexes are local to the mapped unit, include inherited and lowered embedded
+relationship slots, and retain the original mapping objects and order.
+Missing/out-of-range reference slots still return empty; unsupported mappings
+still fail through the existing guard. No entity state, transaction work or
+query plan is cached. Dirty checking, callbacks, cascades, versions and commit
+flush remain unchanged. This is not a new mapping decision or closure blocker.
+Measurements and validation are recorded in `noether-persistence/BENCH.md`
+and `noether-persistence/TCK.md`.
+
+## Delivered follow-up history
+
+The 2026-10-14 Persistence follow-up adds to-one join-table mappings and
+unidirectional one-to-many target-table foreign keys (annotation and XML), including
+lifecycle and query execution. Other relational mapping boundaries remain documented
+in the detailed roadmap; this does not extend the certification claim.
+
+On 2026-10-15, decision D5 approves the optional `TABLE_PER_CLASS` strategy.
+The implementation adds concrete inherited tables and SQL-union polymorphic ranges
+to the existing metadata, generated access, schema, loading, JPQL/Criteria and bulk
+mutation paths. Shared identifiers exclude `IDENTITY`; scalar pessimistic union queries
+are refused, while entity queries use concrete-row follow-on locking. Existing
+unsupported mapping shapes and broader lazy loading remain outside this follow-up.
+
+Also on 2026-10-15 (decision D9), LAZY collections are delivered: `@OneToMany`,
+`@ManyToMany` and `@ElementCollection` load on first access through typed wrappers
+assigned by the generated access, keep persistence-context, flush, orphan-removal,
+merge and cache semantics, report exact `isLoaded` state and fail with
+`PersistenceException` once detached or closed. EAGER, fetch joins and entity graphs
+initialize them. Batching and SQL fetch joins remained open at that date (to-one SQL
+fetch joins were delivered later by D11).
+
+Decision D10 (2026-10-15) adds bounded lazy owning to-one foreign-key properties through
+JDK Class-File API subclasses, generated by APT in closed application modules or at
+bootstrap for opaque archives. References are registered once and hydrated in place:
+simple identifier access needs no SQL; other intercepted methods initialize once.
+Flush/merge, lifecycle, eager fetch requirements and load-state utilities preserve their
+contracts. Unsupported owner/target forms remain eager (including field access, final
+methods/classes, inverse one-to-one, inheritance and composite/derived keys); final
+entities are an eager-only, non-portable extension. Unloaded reference graphs bypass
+shared-cache storage. See the detailed Persistence roadmap for all eligibility rules.
+
+Decision D11 (2026-10-16) delivers SQL to-one fetch joins: JPQL `JOIN FETCH`/`LEFT JOIN
+FETCH` and Criteria `fetch` of single-valued relationships add the fetched targets' columns
+to the query and hydrate them through the existing loader from the same row (one managed
+instance per identity, unloaded references hydrated in place, managed instances never
+overwritten). `DISTINCT`, grouping, locking, set/subqueries, collection fetches, polymorphic
+or joined/table-per-class targets, entity graph hints and `find` keep the existing follow-up
+selects. This is not a general fetch-join optimization: see the D11 section of the detailed
+roadmap for the exact eligibility and fallbacks.
+
+Decision D12 (2026-10-15) adds SQL hydration of **one collection fetch** per query:
+JPQL and Criteria inner/left fetches of concrete-root entity or element collections,
+including `DISTINCT`, stored list positions, basic map keys and derived `@MapKey` keys.
+All identities are registered before relationships are resolved; complete collections,
+snapshots and callbacks are published only after all rows are assembled. Existing dirty
+entities/initialized collections are retained, and unloaded wrappers initialize in place.
+The existing mapping, dialect AST, generated accesses, assembly and cache paths are reused.
+Multiple/nested fetches, extra joins, collection-alias restrictions, grouping, locking,
+set/subqueries, polymorphic/`JOINED`/`TABLE_PER_CLASS` owners or targets, embedded fetch
+paths and entity/embeddable map keys retain secondary loading. Entity graph hints and
+`find` are not rewritten. Explicit pagination of a single-root entity selection with
+scalar-root ordering uses **SQL distinct-owner pagination, then complete secondary loading**;
+grouped/locked/complex projections or element ordering throw `PersistenceException`.
+No joined-row limit or hidden in-memory pagination can truncate a collection.
+Unbounded single-result queries read all fetch rows.
+The D11 date/evidence above is retained as recorded; D12 uses the actual local delivery date.
+
+Decision D13 (2026-10-15) fixes BUG-20261015-09 in the shared collection assembler,
+then adds bounded lazy collection and D10 to-one-reference loading. Pending compatible
+managed identities are grouped on first access, through the dialect SQL AST and the
+existing full-state hydration/collection pipeline. The factory property
+`io.vidocq.noether.jpa.fetch.batch-size` defaults to **16**, accepts **1–256**,
+and **1** disables grouping. A conservative **512-key-parameter** ceiling also bounds
+composite-owner groups. Lists/bags/maps retain null rows, duplicates, positions and empty
+owners; entity collection targets use bounded full-state reads, not per-element `find`.
+Managed dirty state is retained and references hydrate in place.
+
+Eligible owners/targets are single-table and non-polymorphic. Element collections,
+owning join-table/foreign-key collections and target-FK inverse collections batch;
+entity-valued map keys, inverse join tables, secondary tables, inheritance and replaced
+snapshot wrappers retain ordinary complete loading. D10 eligibility is unchanged.
+Active transaction connections, no-auto-flush semantics, cache storage restrictions,
+snapshots/callbacks and detach/clear/close behavior are preserved. Graphs, EAGER contracts
+and SQL fetch eligibility are not extended. Earlier delivery history remains unchanged.
+
+Decision D14 (2026-10-15) makes query entity graphs drive SQL to-one loading for
+JPQL and Criteria single-root entity selections. Explicit graph to-ones and their nested
+to-one subgraphs become LEFT fetch joins through D11's SQL AST and hydration. LOAD also
+includes eligible mapped eager to-ones with cycle-guarded expansion; FETCH requests only
+explicit nodes in SQL, but the existing loader may still overfetch omitted eager state
+(permitted by the specification). No eager requirement is suppressed. Hints and mutable
+graphs are reread on every execution. Explicit fetch joins, SQL filtering, ordering and
+pagination retain their semantics; dirty state, identity and unloaded references use the
+existing loader. Collections still load completely through follow-up reads, not graph SQL.
+Distinct/grouped/locked/set/multi-selection queries, conditional/treated joins,
+embedded graph paths and polymorphic/inherited unsupported types keep their established
+loading paths. `find` with a graph is unchanged. See the detailed D14 contract.
+
+Decision D15 (2026-10-16) completes the bounded graph-aware `find` follow-up.
+Eligible non-locking cache misses reuse D14's LEFT to-one graph joins, D11 statement
+columns and the existing staged loader. Direct/nested to-ones, converted secondary-table
+state and composite root identifiers use the same metadata and binders. LOAD includes
+mapped eager to-ones; FETCH may overfetch eager state. Managed roots and L2 cache hits
+retain their fast paths and graph completion, unloaded references hydrate in place,
+dirty state is preserved, and find never becomes an auto-flushing query. The 3.2 graph
+overload follows the same route. Graph/hint mutation and find's existing merged-hint
+behavior remain intact. Plain/locking finds, unsupported types/paths and collection graph
+nodes keep complete ordinary loading. Cache, lock/timeout and refresh contracts are
+unchanged. D5/D9–D14 above remain historical delivery records.
+
+Decision D16 (2026-10-16) optimizes a graph-requested **single leaf root collection**
+before nested/multiple collection fetching. JPQL/Criteria single-root entity selections,
+including DISTINCT, with no existing joins/group/lock/set operations reuse D12's LEFT
+collection collector; eligible non-locking database finds reuse D15. No duplicate roots
+are introduced and empty owners, nulls, duplicate bags, order/index/map keys, dirty managed
+state, in-place wrappers/targets, callbacks/snapshots/cache and find's no-auto-flush
+contract are preserved. SQL owner pagination keeps complete secondary loads.
+Subgraphs (including nested to-ones), multiple collection nodes, explicit to-one graph
+nodes, filtering/extra joins, unsupported map keys and complex/polymorphic mappings keep
+existing complete fallbacks. Explicit fetch joins and D14/D15 mixed graph SQL are unchanged.
+Focused verification: 144/144; detailed support and full evidence are recorded below.
+D5/D9–D15 above remain historical delivery records.
+
+Follow-up fix (2026-10-16): BUG-20261016-01, the ordinary-loader `PostLoad` reentry into a
+collection still being loaded, is fixed by deferring `PostLoad` to the outermost
+`EntityLoader` load scope; no feature scope changes. Details in the detailed roadmap and
+`noether-persistence/BUG.md`.
+
+Decision D17 (2026-10-16) adds **one root collection with to-one subgraphs** (e.g.
+`Order -> lines -> product -> supplier`) on top of D16: the element subgraph's direct and
+nested to-ones of concrete entities become LEFT fetch joins from the collection alias and
+are hydrated from the same rows (D11/D12 assembly, D14 planning, D15 find routing,
+BUG-20261016-01 callback scope). D16's semantics (empty owners, null targets/elements, bags,
+list/map keys, identity, dirty state, in-place references, callbacks/cache, SQL owner
+pagination with complete secondary loads, no find auto-flush) are preserved. Multiple
+collections, nested collection subgraphs, root to-ones beside the collection and
+polymorphic/complex paths keep the existing complete fallback. D5/D9–D16 and
+BUG-20261016-01 above remain historical delivery records.
+
+Decision D18 (2026-10-16) combines **one root collection with direct/nested root to-one
+branches**, including D17's element to-one subgraphs. D14 graph synthesis uses one alias
+sequence across both branches and D11/D12's existing row hydration: LEFT semantics,
+duplicate bag/list/map entries and shared managed identity are preserved. LOAD expands
+eager to-ones on both branches; FETCH may overfetch. Eligible JPQL/Criteria and non-locking
+database finds preserve complete callbacks/snapshots/cache, dirty state, in-place
+wrappers/references, mutable graph/hint planning and no find auto-flush. Pagination keeps
+SQL distinct-owner paging plus complete secondary loading. Multiple/nested collections,
+unsupported map keys, complex/polymorphic queries and explicit fetch joins retain their
+established fallbacks/refusals. D5/D9–D17 and BUG-20261016-01 remain historical above.
+
+Decision D19 (2026-10-16) delivers **multiple graph-requested root collections** through
+separate D16–D18 SQL collectors, grouped by the selected owner identities. JPQL/Criteria
+use an owner-ID SELECT plus one read per collection per owner batch; eligible non-locking
+database finds use the collectors directly. Root/element to-ones retain LEFT hydration,
+including eager expansion (permitted FETCH overfetch). All collections/identities are
+staged together before relationships, snapshots and callbacks under the BUG-20261016-01
+load scope. Bags, lists/maps, null/empty state, identity, dirty managed state, in-place
+wrappers/references, cache, graph mutation and no find auto-flush are preserved.
+SQL distinct-owner pagination precedes complete split reads, never in-memory pagination.
+The batch bound is `min(configured fetch batch size, floor(512 / owner-key width))`;
+size 1 disables owner grouping. Nested collection subgraphs, nested mapped eager
+collections, unsupported graph/query/mapping shapes and explicit fetch joins retain
+their established complete fallbacks/refusals. D5/D9–D18 and BUG-20261016-01 above remain
+historical deliveries; details and exact count qualifications are in the detailed roadmap.
+
+Decision D20 (2026-10-16) adds **two collection edges per graph path**, beginning
+with a root collection: `Order.lines.discounts`, or `Order.lines.product.tags`.
+D19's split planner now builds at most two collection stages. Each nested
+owner-type/collection request is merged, distinct owner identities are taken from
+the first stage's full-state rows, and each collector uses its own D13 bound
+(`min(batch-size, floor(512 / key-width))`, default 16, range 1–256). Independent
+root branches and root/element to-one chains remain supported. Supported entity
+and element collection leaves preserve duplicates, nulls, positions and map keys.
+SQL root pagination precedes both complete stages; all rows are captured before
+relationships/snapshots/cache/callbacks. Managed dirty state, in-place completion,
+no find auto-flush and complete managed/cache fast hits are retained.
+BUG-20261016-02 fixes duplicate bag occurrence removal exposed by this gate.
+Third collection edges, collections reached only through root to-ones, unsupported
+eager closures and the established complex/polymorphic/query/map-key boundaries
+retain complete fallback or explicit refusal. D5/D9–D19 and BUG01 remain historical.
+
+Decision D21 (2026-10-16) extends the same bounded collectors to **collections
+reached through finite root to-one chains**, for example `Order.customer.addresses`
+and `Order.customer.favorite.tags`. A separate D14/D18 LEFT to-one seed read
+discovers intermediate owner identities; grouped D19/D20 collection reads use
+distinct identities, not one collection read per order. Independent root branches,
+element to-one subgraphs and at most **two collection edges per graph path** remain
+supported. A seed read is not another collection edge. Compatible owner requests
+shared between depths are merged at the later stage before callbacks.
+
+Eligible JPQL/Criteria and non-locking find, FETCH/LOAD, preserve dirty state,
+in-place wrappers/references, complete managed/cache fast hits and no find
+auto-flush. Null to-ones retain roots without inventing collection owners. Queries
+still page root identities only in SQL and complete every requested collection.
+At D21, explicit cyclic paths and a third collection edge retained complete
+fallback or established refusal; D33 and D34 later raise the separate staged
+routes to three collection edges. Unsupported eager closures, polymorphic/
+complex mappings and broader query shapes retain their existing boundaries.
+Explicit fetch joins and D14–D20 eligibility remain unchanged. Exact count bounds
+and independently verified evidence are in
+the detailed roadmap and `noether-persistence/TCK.md`; D5/D9–D20 and BUG records
+above remain historical.
+
+## Remaining Persistence work
+
+Decision D22 (2026-10-16) pauses graph optimization and delivers owning to-one
+joins to single/composite unique non-ID BASIC columns through the existing
+annotation/XML, access/binder, SQL AST, schema, loading and query architecture.
+Writes use business values; lookups resolve actual JPA identity before managing
+targets. Many-to-one and owning/inverse one-to-one include converters,
+cascade/orphan removal, reassignment/null, required instance ordering and nullable
+cycles. Immutable non-null keys and declared uniqueness are mandatory; invalid
+references and unsupported mapping combinations are refused. Business owners
+retain ordinary eager/graph/fetch loading, not ID-based optimized hydration or
+lazy batching. Detailed support/refusal rules and independent verification are
+in the Persistence roadmap and `TCK.md`; D5/D9–D21 and BUG history remain intact.
+
+Decision D23 (2026-10-16) strengthens the existing P5 MapsId support for simple
+parent identifiers: unnamed shared simple PK/FK on owning one-to-one, and a named
+direct BASIC component of an embedded ID on owning many-to-one/one-to-one,
+annotations and metadata-complete
+XML. Cascaded/generated IDs, insert dependencies, physical incoming key metadata,
+identity immutability, ordinary updates/deletes, JPQL/Criteria, eager graph/lazy
+fallbacks, cache and callbacks are covered. Invalid names/types, chained/nested/
+overlapping mappings and unsupported partial shapes fail explicitly. Existing P5
+flat composite-parent examples remain supported, without a broader composite claim.
+See the detailed roadmap and `TCK.md` for independently aggregated evidence.
+
+Decision D24 (2026-10-16) delivers owning many-to-one/one-to-one relationships
+inside embeddable element-collection values, annotation and metadata-complete XML,
+including map value overrides, nested values and records. Collection rows own FKs
+to eligible simple-ID targets; owner-key deletion and complete collection rewrites
+preserve duplicate occurrences, list positions and stored map keys without
+inventing embeddable identity. Managed target resolution, cascades, reassignment,
+snapshots, owner versions and caches share the existing machinery. Basic joined
+attributes, map keys and list indexes are tested. D27 adds bounded JPQL/Criteria
+navigation, identity comparison and projections for these to-ones, including
+explicit inner/left joins and nested embeddable values. D28 adds projections of
+whole relationship-bearing collection embeddables, resolving each to-one through
+the actual managed target identity. Graph/fetch/lazy-batch optimization is not
+widened; complete ordinary loading remains the fallback.
+Inverse/orphan/composite/business/derived/join-table and unsupported owner/index
+shapes remain explicit bootstrap errors. D5/D9–D23 and prior BUG/TCK records stay
+historical; D24 evidence is in the detailed roadmap and `TCK.md`.
+
+Decision D25 (2026-10-17) bounds the proposed inverse collection-element lot to
+bootstrap validation. Persistence 3.2 §2.7 forbids treating embeddables as entity
+targets; §2.8 requires owning to-ones inside collection values. `ManyToOne` has no
+`mappedBy`, and an inverse toward containing entities cannot be inferred from
+collection-row identity/uniqueness. Annotation/XML `mappedBy` paths crossing element
+collections now fail before schema generation, rather than bootstrap successfully
+and fail only when loaded. Ordinary single-embedded inverses and D24 owning values
+remain intact. This does not declare every possible inverse entity-owner contract
+illegal: a separately proven cardinality/mapping contract is required. No new FK,
+inverse loading/cascade/query semantics or orphan removal is delivered.
+See BUG-20261017-01 and the detailed D25/TCK evidence; D5/D9–D24 stay historical.
+
+Decision D26 (2026-10-17) extends D22 to one immutable, non-null, declared unique
+BASIC column in a target secondary table, annotation/XML, with one target PK and
+one secondary PK join. Persistence 3.2 §11.1.26 makes non-PK references optional
+and nonportable; Table 24 and §11.1.47 allow unambiguous target-column/table
+resolution without reinterpreting the owner-side `JoinColumn.table`.
+DDL targets the real secondary unique constraint; reads resolve actual target
+identity through the secondary PK join. Generated field/property access,
+converters, lifecycle, JPQL/Criteria, bulk association SET, cache and complete
+ordinary eager graph/fetch fallback are verified, including actual PostgreSQL 17
+DDL. No wider lazy/batch/collector or cycle-ordering contract is introduced.
+Composite secondary references/PK joins, owner secondary FKs, inheritance and
+other D22 exclusions remain refused. D5/D9–D25 and BUG/TCK history remain intact.
+
+Decision D27 (2026-10-17) adds bounded JPQL/Criteria navigation and projections
+for D24 owning to-ones inside element-collection embeddables. It supports target
+attribute paths, entity identity comparison/projection, and explicit inner/left
+joins, including nested value paths and metadata-complete XML. Direct entity
+projection reads the collection-row FK as the target identity; target navigation
+and joins use the existing SQL AST. D28 adds whole relationship-bearing value
+projections without widening mapping shapes or collection fetch/lazy/batch
+optimization. Detailed test evidence and boundaries are in the Persistence
+roadmap.
+
+Decision D28 (2026-10-17) allows JPQL/Criteria to project an entire D24 embeddable
+collection value containing owning to-one relationships. Basic and nested
+embeddable components are reconstructed through generated access; relationship
+components resolve through collection-row foreign-key identities to managed
+targets, preserving nulls, repeated targets and duplicate values. Annotation and
+metadata-complete XML mappings are covered. Whole-value comparisons, unrelated
+entity-embedded projections and broader loading optimizations are not implied.
+
+Decision D29 (2026-10-17) extends D24 collection-element owning to-ones to
+direct composite primary-key targets using `@EmbeddedId` or `@IdClass` whose
+components are supported BASIC attributes. Annotation and metadata-complete XML
+preserve explicit join-column ordering; writes and reads handle the full key
+tuple, and schema generation creates grouped composite foreign keys and
+one-to-one uniqueness. Null tuples remain null associations; partial-null tuples
+fail explicitly. D27 navigation and D28 projections resolve managed target
+identity as before. Derived composite forms beyond D31's direct BASIC
+`@EmbeddedId` boundary, composite non-BASIC keys, business-key, polymorphic and
+unsupported mappings, as well as collection fetch/lazy/batch optimization,
+remain outside scope. D30 separately adds simple shared-ID MapsId targets.
+Detailed evidence and exclusions are in the Persistence roadmap; no TCK or
+certification claim is made.
+
+Decision D30 (2026-10-17) extends D24 element-value owning to-ones to targets
+whose simple `@Id` is shared through one owning `@OneToOne @MapsId` to a
+non-polymorphic simple-ID parent. It reuses D23's derived physical-key and
+lifecycle metadata with D29's collection-row key handling; annotation and
+metadata-complete XML are covered. Composite/nested/chained derived identities,
+business keys, polymorphism and loading optimizations remain outside scope.
+Detailed evidence and exclusions are in the Persistence roadmap; no TCK or
+certification claim is made.
+
+Decision D31 (2026-10-18) extends D24 element-value owning to-ones to a target
+with a direct BASIC `@EmbeddedId` containing one named component derived by
+`@MapsId` through an owning `@ManyToOne` or `@OneToOne` to a non-polymorphic
+simple-ID parent. It reuses D23 derived-identity and D29 tuple handling;
+annotation and metadata-complete XML are covered. Nested/non-BASIC/multiple or
+chained derived identities, composite parents, business keys, polymorphism and
+loading optimizations remain outside scope. Detailed evidence and exclusions
+are in the Persistence roadmap; no TCK or certification claim is made.
+
+Decision D32 (2026-10-18) extends D24 element-value owning to-ones to an
+`@IdClass` target with exactly one relationship-valued `@Id` part pointing to a
+non-polymorphic simple-ID parent; other key parts are BASIC. The association
+itself is the identifier component, not a `@MapsId` mapping. Annotations cover
+the full target identity; metadata-complete ORM XML covers the collection
+owner/value while leaving that target identifier annotation-mapped, because
+the ORM 3.2 XML `id` element cannot contain a relationship. Composite parent
+identities, multiple relationship parts (extended separately by D35), polymorphism and loading optimizations
+remain outside scope. Detailed evidence and exclusions are in the Persistence
+roadmap; no TCK or certification claim is made.
+
+Decision D33 (2026-10-18) extends D19/D20 staged collection graph reads to at
+most three collection edges along a nested path beginning at a root collection.
+JPQL, Criteria and non-locking `find` FETCH/LOAD graphs reuse separate bounded
+collectors, distinct intermediate owner identities and SQL-only root pagination.
+D21's root-to-one collection path keeps its two-edge limit; type-revisiting
+cycles, fourth edges, unsupported eager closures and complex mappings retain
+complete fallbacks. The existing loader, identity, callback and cache ordering
+are unchanged; this does not add collection joins or broaden unrelated graph
+eligibility. The TCK and certification claim are not changed.
+
+Decision D34 (2026-10-18) extends the separate D21 root-to-one staged route to at
+most three collection edges per graph path. Its collection-free to-one seed and
+bounded collection collectors retain root-only SQL pagination, distinct-owner
+grouping and staged lifecycle ordering for JPQL, Criteria and non-locking
+find FETCH/LOAD graphs. Type-revisiting cycles, a fourth edge, unsupported eager
+closures and complex mappings keep their established fallbacks. No collection
+joins or unrelated graph eligibility are added.
+
+Decision D35 (2026-10-18) extends D32 element-value to-one targets to multiple
+relationship-valued IdClass parts, each an owning FK to a non-polymorphic parent
+with a simple, non-derived ID; remaining parts are BASIC. Existing physical-key
+ordering, generated access and managed identity handle the complete tuple.
+Annotation and owner/value XML cover reversed parent roles, duplicate/null
+references, JPQL/Criteria, collection rewrites, merge, removal, FK enforcement
+and partial-null refusal. Composite/chained-derived parents, business/join-table/
+polymorphic mappings and loading optimizations remain outside scope.
+The clean reactor passes 1115 tests; the full locally patched TCK remains
+2135 tests / 2131 passed / 0 failures / 0 errors / 4 official skips, identical
+to the D26 baseline. This is local regression evidence, not certification.
+
+Decision D36 (2026-10-18) extends those element-value IdClass targets to owning
+identifier relationships with non-polymorphic parents using direct all-BASIC
+`@EmbeddedId` or `@IdClass` keys. Composite and simple parents may coexist.
+The collection FK flattens their physical key parts through the existing
+planner and generated identity accesses. Annotation and owner/value XML cover
+five-column tuples, reordered joins, managed identity, JPQL/Criteria, rewrites,
+merge/refresh/removal, partial-null refusal and grouped FK enforcement.
+Default joins, cache identity and nested/chained/polymorphic parent refusals
+are covered separately. MapsId and fetch/lazy/batch eligibility are unchanged.
+Full clean install: 1119 tests passed. The locally patched TCK remains
+2135 / 2131 / 0 / 0 / 4, with all results identical to D26 and D35;
+this is local regression evidence, not certification.
+
+Decision D37 (2026-10-18) extends D31 element-value to-one targets with direct
+all-BASIC `@EmbeddedId` keys to multiple distinct named `@MapsId` components,
+each derived through an owning FK to a non-polymorphic simple-ID parent.
+Existing generated access, parent-ID derivation and physical tuple handling
+are reused. Full annotation/metadata-complete XML coverage checks generated
+parents, reversed roles, query/identity/lifecycle/cache semantics and partial-null
+refusal. Overlapping mappings, nested/composite/chained parents, polymorphism
+and fetch/lazy/batch extensions remain outside this lot. Full clean install:
+1122 tests passed; the full locally patched TCK remains 2135 / 2131 / 0 / 0 / 4,
+identical to D26 and D36. This is local regression evidence, not certification.
+
+Decision D38 (2026-10-18) adds element-value to-one targets sharing their whole
+direct all-BASIC `@EmbeddedId` with a non-polymorphic parent of the same key
+type through one owning `@OneToOne @MapsId`. Existing whole-key derivation,
+physical PK/FK tuples, generated access and ordinary loading are reused.
+Full annotation/XML scenarios cover physical/reordered FKs, identity,
+JPQL/Criteria, lifecycle/cache and partial-null semantics; parent reassignment
+and polymorphic parents remain refused. Named-component composite parents,
+nested/chained keys and unrelated fetch/lazy/batch eligibility stay outside scope.
+Full clean install: 1125 tests passed; full locally patched TCK:
+2135 / 2131 / 0 / 0 / 4, identical to D26 and D37, not certification.
+
+Decision D39 (2026-10-18) extends whole EmbeddedId MapsId element targets to
+non-polymorphic direct all-BASIC IdClass parents using the same key class.
+BUG-20261018-01 fixes whole-key copying through generated attribute access
+instead of parent physical tuple positions; differing declaration orders now
+preserve key values. Annotation/XML lifecycle, query, cache and explicit refusal
+checks pass. Full clean install: 1129 tests passed; full locally patched TCK:
+2135 / 2131 / 0 / 0 / 4, every case identical to D26 and D38, not certification.
+
+Decision D40 (2026-10-18) adds element-value to-one targets with one named
+embedded MapsId component derived from a non-polymorphic direct BASIC
+EmbeddedId parent, with remaining BASIC key parts. Physical FK planning now
+expands that component to the complete parent tuple; generated lifecycle and
+ordinary query/loading paths are reused. Annotation/XML scenarios cover nested
+identifier navigation, lifecycle/cache and explicit refusals; record keys and
+default joins are covered. Full clean install: 1133 tests passed; full locally
+patched TCK: 2135 / 2131 / 0 / 0 / 4, every case identical to D26 and D39,
+not certification. Multiple composite components, named IdClass parents and
+general nested/chained identities remain separate lots.
+
+Decision D41 (2026-10-18) extends D40's named embedded MapsId component to
+non-polymorphic direct BASIC IdClass parents using the component's Java type.
+Existing generated access and physical FK planning preserve values even when
+parent declaration order differs from the embedded component's order.
+Annotation/XML checks cover physical tuples, query/lifecycle/cache identity,
+records/default joins and explicit refusal boundaries. Full clean install:
+1137 tests passed; full locally patched TCK: 2135 / 2131 / 0 / 0 / 4, every
+case identical to D26 and D40, not certification. Multiple composite components,
+unmapped nested remainder and relationship-valued/chained parents remain outside scope.
+
+Decision D42 (2026-10-18) extends named embedded MapsId element targets to
+multiple composite components, each from a non-polymorphic direct BASIC
+EmbeddedId/IdClass parent, alongside assigned or simple-parent-derived BASIC
+parts. Existing generated identity access and physical tuples are reused.
+BUG-20261018-02 fixes record-key hydration by reading derived scalar components
+from actual FK columns before construction. Full annotation/XML, mixed
+record/default joins, lifecycle/cache and refusal checks pass. Full clean
+install: 1143 tests passed; full locally patched TCK: 2135 / 2131 / 0 / 0 / 4,
+every case identical to D26 and D41, not certification. Unmapped/deeper keys
+and relationship-valued/chained/polymorphic parents remain outside scope.
+
+Decision D43 (2026-10-18) extends D26 to composite immutable, non-null BASIC
+business tuples in one declared target secondary table, with that table's
+exact unique constraint and a single target PK/secondary PK join. Existing
+generated access, binders, physical FKs, identity lookup, JPQL/Criteria,
+lifecycle/cache and complete eager fallbacks are reused. Annotation/XML,
+closed-module APT property access and a separate PostgreSQL 17 probe pass.
+Full clean install: 1151 tests passed; full locally patched TCK:
+2135 / 2131 / 0 / 0 / 4, every case identical to D26 and D42, not certification.
+Cross-table tuples, composite PK joins and other D26 boundaries stay separate.
+
+Future development backlog, **not release exit criteria**. Each item requires
+its own approved bounded lot after the closure criteria above; details and
+current fallbacks are in the Persistence roadmap:
+
+1. Remaining relational mapping shapes beyond D23/D24/D29/D30/D31/D32/D35/D36/D37/D38/D39/D40/D41/D42's bounded contracts:
+   derived/nested identity targets and composite forms beyond D29's direct BASIC
+   `@EmbeddedId`/`@IdClass`, D38/D39's whole shared BASIC `@EmbeddedId`
+   with EmbeddedId/IdClass parents,
+   D40/D41/D42's named embedded components from BASIC EmbeddedId/IdClass parents,
+   D30's simple shared `@MapsId` contract and D37's
+   direct BASIC `@EmbeddedId` with multiple derived components and D36's direct BASIC
+   simple/composite-parent relationship-valued `@IdClass` parts, business joins
+   through join tables or inheritance, cross-table secondary business tuples/
+   composite PK joins beyond D26/D43, inverse business collections,
+   embedded business association paths and safely mutable referenced keys;
+   inverse many-to-many indexes and broader collection-table embeddable relationships
+   (business/derived/join-table mappings, unsupported composite forms and broader
+   query paths).
+   Inverse entity-owner relationships need a separate normative/cardinality contract
+   after D25; inverse collection embeddables and entity targets that are embeddables
+   are not a feature backlog. Orphan removal remains separate.
+   Null basic collection elements were fixed by D13 (BUG-20261015-09).
+2. More than three collection edges and broader cyclic graph optimization remain
+   separate bounded lots.
+   Broader SQL fetch eligibility: same-query owner pagination,
+   entity/embeddable map keys; polymorphic/`JOINED`/`TABLE_PER_CLASS` targets,
+   broader to-one `DISTINCT` and locking queries, embedded/treated graph paths and complex graph queries.
+3. Broader lazy to-one support beyond the D10 eligible shapes, and batching beyond D13's
+   single-table/non-polymorphic scope (secondary tables, inheritance, inverse join tables,
+   entity-valued map keys).
+4. Deferred Data/JPA integration and generation mutualisation with Mansart.

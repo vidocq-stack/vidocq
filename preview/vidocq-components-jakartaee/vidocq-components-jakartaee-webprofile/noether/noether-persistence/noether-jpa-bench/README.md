@@ -1,0 +1,71 @@
+# noether-jpa-bench
+
+> Pre-extraction measurements in `../BENCH.md` were made on Mansart and retain
+> original provenance. Commands below reproduce the renamed Noether harness;
+> they do not establish a new performance result.
+
+The pre-optimization post-D43 runs are recorded as **BENCH-20261018-01/02/03**: unchanged
+three-provider comparison, reverse-order repeat, and separate JFR/SQL-count
+diagnostics. The Antora Performance page explains the observed plain-entity
+JPQL materialization overhead and proposed improvements; no production
+optimization is included in those measurements. PERF1 (2026-10-19) implements
+the first proposed result-row hydration improvement; its new measurements are
+recorded separately in `../BENCH.md`, without changing these workloads.
+
+Standalone JMH harness (outside the Noether reactor) comparing Noether, Hibernate ORM (7.x and
+5.6) and EclipseLink on identical H2 workloads. Methodology and limitations:
+`docs/en/modules/ROOT/pages/performance.adoc`. Recorded results: `../BENCH.md`.
+
+## Run
+
+```bash
+export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem PATH=$JAVA_HOME/bin:$PATH
+cd noether/main
+./mvnw -ntp -pl noether-persistence/noether-jpa-processor-module-it -am install -DskipTests
+cd noether-persistence/noether-jpa-bench
+export BENCH_RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)   # optional; groups the three providers
+./run-bench.sh noether
+./run-bench.sh hibernate
+./run-bench.sh hibernate5    # Hibernate ORM 5.6 (Persistence 3.0): PersistenceUnitInfo bootstrap
+./run-bench.sh eclipselink
+```
+
+JMH settings: `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`. With `-foe true` a
+failing setup, preflight or benchmark exits non-zero and the runner prints the full JMH log.
+
+## On PostgreSQL
+
+The same workloads run against any database the providers can reach: `BENCH_JDBC_URL`,
+`BENCH_JDBC_DRIVER`, `BENCH_JDBC_USER` and `BENCH_JDBC_PASSWORD` replace the in-memory H2 default for
+every provider of the run. The setup drops and recreates `bench_record`, so use a disposable database:
+
+```bash
+docker run -d --rm --name noether-bench-pg -e POSTGRES_PASSWORD=bench -e POSTGRES_DB=bench \
+  -p 127.0.0.1:55432:5432 postgres:17-alpine
+export BENCH_JDBC_URL=jdbc:postgresql://127.0.0.1:55432/bench BENCH_JDBC_DRIVER=org.postgresql.Driver \
+  BENCH_JDBC_USER=postgres BENCH_JDBC_PASSWORD=bench
+./run-bench.sh noether && ./run-bench.sh hibernate5
+docker stop noether-bench-pg
+```
+
+Noether needs `noether-jpa-dialect-postgresql` installed with the other modules (a full
+`./mvnw -ntp install -DskipTests` from the root). Its units are configured by `jakarta.persistence.jdbc.*`,
+so the `noether` profile adds `noether-jpa-pool-mansart` (decision D7): without it Noether would open one
+connection per transaction. `run-bench.sh` stops when that module is missing from the class path. The database name is recorded in
+`target/bench-reports/<run-id>/<provider>/database.txt`.
+
+## Output locations
+
+- Build per provider: `target/<provider>/` (POM property `bench.build.directory`); the runner
+  cleans only this directory.
+- Raw evidence, never cleaned or overwritten by the runner:
+  `target/bench-reports/<run-id>/<provider>/` containing `jmh.log`, `jmh.json`, `maven.log`,
+  `java-version.txt`, `database.txt`, `test-dependencies.txt` and `test-classpath.txt`.
+
+## Preflight
+
+Before timing, setup checks fixture counts, insert/update/delete persistence, and runs the timed
+`update` method twice on row 1, verifying through JDBC that each call changed the label and
+incremented the `@Version` column, and that the returned value is the persisted version.
+
+Every published figure must have a `../BENCH.md` entry (skill `/log-bench`).

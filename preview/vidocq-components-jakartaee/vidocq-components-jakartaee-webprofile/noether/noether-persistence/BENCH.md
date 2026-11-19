@@ -1,0 +1,1339 @@
+> Historical evidence: recorded before the 2026-10-11 extraction from Mansart.
+> Original names, commands, source revisions and measurements are retained verbatim;
+> they are not results measured on Noether. See the repository README for current commands.
+
+# BENCH.md — mansart-persistence
+
+Performance history for Jakarta Persistence. Convention: see `../CLAUDE.md`.
+
+Every published performance figure must point to an entry here. The numbers below are local
+measurements, not a general provider ranking or a production-performance guarantee.
+
+---
+
+## BENCH-20261010-01 — JPA provider CRUD, find, query and write comparison
+
+- **Date**: 2026-10-10
+- **Commit**: `393327a` (`persistence-work`); benchmark harness and P12 documentation are uncommitted working-tree changes
+- **JVM**: Temurin 25.0.4+7-LTS; 64-Bit Server VM; default JVM flags, with JMH's `-Dbench.provider=<provider>` selection
+- **Hardware**: Apple M5 / 10 cores (4 performance + 6 efficiency) / 24 GB RAM
+- **OS**: Darwin 27.0.0, arm64 (`MacBook-Pro-ASD.local`)
+- **Exact command**:
+  ```bash
+  cd mansart/main && \
+    ./mvnw -ntp -pl mansart-persistence/mansart-jpa-processor-module-it -am install -DskipTests && \
+    cd mansart-persistence/mansart-jpa-bench && \
+    ./run-bench.sh mansart && \
+    ./run-bench.sh hibernate && \
+    ./run-bench.sh eclipselink
+  ```
+- **Configuration**:
+  - JMH 1.37; one fork and one thread; 3 x 2 s warmup and 5 x 2 s measurement iterations; throughput mode; `-prof gc`.
+  - Mansart 0.4.0-SNAPSHOT, Hibernate ORM 7.4.12.Final and EclipseLink 5.0.2, each isolated to its own test-only provider profile and selected by provider class name.
+  - Java 25.0.4; H2 2.3.232 in memory; 128 seeded rows, one manually created schema, the same benchmark entity and version field, resource-local transactions, validation mode `NONE`, second-level/query caches disabled, and a new entity manager per operation.
+  - Workloads: primary-key `find`, JPQL query/materialization (32 rows), versioned update, and insert/update/delete (three flushed DML operations in one transaction). Before timing, the runner checks exact database/query counts and exercises/rechecks persisted insert, update and delete behavior.
+- **Results** (throughput ± JMH 99.9% error, and normalized allocation ± error):
+
+  | Workload | Mansart | Hibernate ORM | EclipseLink |
+  |---|---:|---:|---:|
+  | `findById` | 506,276 ± 13,699 ops/s; 9,958.382 ± 0.003 B/op | 549,280 ± 291,298 ops/s; 6,533.825 ± 0.053 B/op | 769,249 ± 74,412 ops/s; 7,046.567 ± 0.001 B/op |
+  | `jpqlQuery` | 33,273 ± 2,059 ops/s; 108,808.142 ± 0.051 B/op | 91,840 ± 8,715 ops/s; 18,331.080 ± 0.363 B/op | 73,647 ± 860 ops/s; 39,200.049 ± 0.011 B/op |
+  | `update` | 433,871 ± 257,800 ops/s; 9,878.384 ± 0.008 B/op | 594,332 ± 53,483 ops/s; 6,821.825 ± 0.059 B/op | 756,393 ± 86,594 ops/s; 7,102.567 ± 0.001 B/op |
+  | `createUpdateDelete` | 175,820 ± 43,165 ops/s; 29,448.035 ± 0.069 B/op | 215,548 ± 41,564 ops/s; 19,984.040 ± 0.149 B/op | 185,598 ± 15,036 ops/s; 31,352.033 ± 0.069 B/op |
+
+- **Comparison with previous run**: first comparable run for each provider; no prior baseline.
+- **Invalidated — `update` row (2026-10-10, see BENCH-20261010-03)**: the timed `update` workload
+  set the label to `updated-<id>`, which is identical on every visit to a row after the first 128
+  invocations. From then on each provider's dirty check found no change, so the measurement was
+  mostly a no-op find/commit with no `UPDATE` statement, not a write. The `update` scores above are
+  therefore **INVALID** as a write comparison and are kept only as raw history. The other rows are
+  unaffected by this flaw; BENCH-20261010-03 replaces this comparison.
+- **Notes**: This short, single-machine in-memory H2 run is a reproducible comparison of these specific operations, not an application-level workload or broad performance ranking. Several 99.9% confidence intervals are wide (notably Hibernate `findById` and Mansart `update`), so the observed point scores do not support a firm ranking; use longer repeated runs before making optimization or product claims. JMH's experimental compiler blackhole was enabled consistently across providers. Java 25 execution was exercised for all selected provider versions; this is not a vendor certification claim. Each run writes its full JMH output, JSON, dependency tree and classpath under the benchmark project's ignored `target/`; the next provider run cleans that directory, while this summary retains the results.
+
+## BENCH-20261010-02 — Mansart harness invocation recheck
+
+- **Date**: 2026-10-10
+- **Commit**: `393327a` (`persistence-work`); benchmark harness and P12 documentation are uncommitted working-tree changes
+- **JVM**: Temurin 25.0.4+7-LTS; 64-Bit Server VM; default JVM flags, with JMH's `-Dbench.provider=mansart` selection
+- **Hardware**: Apple M5 / 10 cores (4 performance + 6 efficiency) / 24 GB RAM
+- **OS**: Darwin 27.0.0, arm64 (`MacBook-Pro-ASD.local`)
+- **Exact command**:
+  ```bash
+  mansart/main/mansart-persistence/mansart-jpa-bench/run-bench.sh mansart
+  ```
+- **Results** (throughput ± JMH 99.9% error; normalized allocation):
+  ```
+  JpaProviderBenchmark.createUpdateDelete  160127.073 ± 66499.478 ops/s; 29616.039 ± 0.077 B/op
+  JpaProviderBenchmark.findById            508170.897 ± 19837.853 ops/s; 10006.382 ± 0.004 B/op
+  JpaProviderBenchmark.jpqlQuery             33974.175 ±   954.050 ops/s; 108744.140 ± 0.051 B/op
+  JpaProviderBenchmark.update               486405.604 ±  5733.082 ops/s; 10302.383 ± 0.004 B/op
+  ```
+- **Comparison with previous run**: against Mansart in BENCH-20261010-01, throughput point estimates changed by `findById` +0.37%, `jpqlQuery` +2.11%, `update` +12.11%, and `createUpdateDelete` -8.93%. The `createUpdateDelete` allocation estimate changed from 29448.035 to 29616.039 B/op; the other allocation estimates remain close to the prior values. The 99.9% error intervals of this run and of BENCH-20261010-01 overlap for all four workloads (for example `update` 433,871 ± 257,800 vs 486,405 ± 5,733 and `createUpdateDelete` 175,820 ± 43,165 vs 160,127 ± 66,499), so no change is established; this single repeat is not enough to establish a trend.
+- **Invalidated — `update` row (2026-10-10, see BENCH-20261010-03)**: same no-op `update` workload flaw as BENCH-20261010-01 (fixed label, no `UPDATE` after the first 128 invocations). The `update` score is **INVALID** as a write measurement and kept only as raw history.
+- **Notes**: This was a bounded recheck of the runner after switching it to the repository Maven wrapper; only the Mansart provider was rerun. It does not replace or extend the three-provider comparison. Workload, H2, warmup/measurement schedule, and validation/cache settings match BENCH-20261010-01.
+
+## BENCH-20261010-03 — JPA provider comparison rerun with a real versioned `update` workload
+
+- **Date**: 2026-10-10
+- **Commit**: `393327a` (`persistence-work`); benchmark harness, runner and P12 documentation are uncommitted working-tree changes
+- **JVM**: Temurin 25.0.4+7-LTS (`~/.sdkman/candidates/java/25.0.4-tem`, set explicitly as `JAVA_HOME` and first on `PATH`); 64-Bit Server VM; default JVM flags, with JMH's `-Dbench.provider=<provider>` selection
+- **Hardware**: Apple M5 / 10 cores (4 performance + 6 efficiency) / 24 GB RAM
+- **OS**: Darwin 27.0.0, arm64 (`MacBook-Pro-ASD.local`)
+- **Exact command** (the AOT smoke script performs the Mansart `install -DskipTests` of the
+  persistence reactor up to `mansart-jpa-processor-module-it`; the benchmark then resolves those
+  snapshots):
+  ```bash
+  export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem PATH=$HOME/.sdkman/candidates/java/25.0.4-tem/bin:$PATH
+  cd mansart/main/mansart-persistence/mansart-jpa-processor-module-it && ./run-aot-smoke.sh
+  cd ../mansart-jpa-bench && export BENCH_RUN_ID=20261010T065740Z && \
+    ./run-bench.sh mansart && ./run-bench.sh hibernate && ./run-bench.sh eclipselink
+  ```
+- **Raw files** (ignored, under `mansart-persistence/mansart-jpa-bench/`):
+  `target/bench-reports/20261010T065740Z/{mansart,hibernate,eclipselink}/` — `jmh.log`, `jmh.json`,
+  `maven.log`, `java-version.txt`, `test-dependencies.txt`, `test-classpath.txt`.
+- **Configuration**: identical JMH settings to BENCH-20261010-01 (JMH 1.37; `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1`;
+  throughput; `-prof gc`) plus `-foe true`. Same providers (Mansart 0.4.0-SNAPSHOT, Hibernate ORM
+  7.4.12.Final, EclipseLink 5.0.2), H2 2.3.232 in memory, 128 seeded rows, manual schema, validation
+  mode `NONE`, second-level/query caches disabled, a new entity manager per operation. Only change in
+  the workloads: `update` now sets `updated-<id>-r<revision + 1>` and returns the persisted version,
+  so every invocation is a dirty versioned `UPDATE`. Setup now runs the timed `update` method twice on
+  row 1 and checks via plain JDBC that each call changed the label and incremented `revision` by one,
+  and that the returned value is the persisted version (this check runs before timing only).
+- **Results** (raw JMH summary lines, throughput ± 99.9% error; `gc.alloc.rate.norm` ± error):
+  ```
+  mansart
+  JpaProviderBenchmark.createUpdateDelete  177523.466 ± 19294.417 ops/s; 29448.035 ± 0.070 B/op
+  JpaProviderBenchmark.findById            498991.465 ± 77505.039 ops/s;  9950.382 ± 0.005 B/op
+  JpaProviderBenchmark.jpqlQuery            33654.620 ±   593.762 ops/s; 109144.141 ± 0.055 B/op
+  JpaProviderBenchmark.update              227786.501 ± 46897.076 ops/s; 19359.618 ± 0.265 B/op
+  hibernate
+  JpaProviderBenchmark.createUpdateDelete  229083.299 ± 19346.882 ops/s; 20128.038 ± 0.139 B/op
+  JpaProviderBenchmark.findById            636594.321 ± 17262.440 ops/s;  6741.824 ± 0.052 B/op
+  JpaProviderBenchmark.jpqlQuery            93638.005 ±  1754.670 ops/s; 18242.079 ± 0.358 B/op
+  JpaProviderBenchmark.update              299008.350 ± 15079.231 ops/s; 14390.909 ± 0.158 B/op
+  eclipselink
+  JpaProviderBenchmark.createUpdateDelete  184457.161 ± 34714.273 ops/s; 31344.026 ± 0.055 B/op
+  JpaProviderBenchmark.findById            778762.615 ± 12713.606 ops/s;  7046.567 ± 0.001 B/op
+  JpaProviderBenchmark.jpqlQuery            72936.374 ±  1094.433 ops/s; 39200.050 ± 0.011 B/op
+  JpaProviderBenchmark.update              290427.274 ±  1699.464 ops/s; 17448.521 ± 0.047 B/op
+  ```
+- **Comparison with previous run** (point estimates vs BENCH-20261010-01, same provider):
+  Mansart `findById` -1.44%, `jpqlQuery` +1.15%, `createUpdateDelete` +0.97%; Hibernate ORM
+  `findById` +15.90%, `jpqlQuery` +1.96%, `createUpdateDelete` +6.28%; EclipseLink `findById`
+  +1.24%, `jpqlQuery` -0.96%, `createUpdateDelete` -0.61%. `update` has **no valid baseline**: the
+  BENCH-20261010-01/02 `update` rows measured a mostly no-op workload and are invalid, so no delta is
+  computed. This entry replaces the BENCH-20261010-01 comparison.
+- **Notes**: Single fork, single machine, short in-memory H2 run of these specific operations — not
+  an application-level workload, not a CI-wide or general provider ranking; no winner is claimed.
+  Several error intervals remain wide (Mansart `findById` and `update`, EclipseLink
+  `createUpdateDelete`). Provider defaults still differ beyond the shared settings: each provider uses
+  its own connection pool from the `jakarta.persistence.jdbc.*` properties (Mansart: `mansart-pool`,
+  decision D7; Hibernate: built-in `DriverManagerConnectionProvider`, min 1 / max 20, logged as not
+  intended for production; EclipseLink: its internal default pool), and their internal
+  statement/metadata caches are left at defaults. No production optimization was made for this run. The red preflight run before the fix is
+  kept in `target/bench-reports/red-preflight-20261010T065710Z/mansart/` (JMH exits 1 with
+  `-foe true`; a control run without `-foe` on the same build exits 0, `jmh-without-foe-control.log`).
+
+## BENCH-20261018-01 — D43 closure comparison with unchanged workloads
+
+- **Date**: 2026-10-18
+- **Commit**: `352e684efe8b35f510e9d955e66d662c0ea73283`
+  (`feat/secondary-composite-business-keys`); only bug-journal changes were
+  uncommitted when the reactor and harness were built. No production optimization.
+  Tested core jar SHA-256:
+  `b909fd4c03c64e50337dc6d565bf7d8a26cbde63b73a7dd40b4ef09411067cc1`.
+- **JVM**: Temurin 25.0.4.1+1-LTS, 64-Bit Server VM, default JVM flags.
+- **Hardware**: Apple M5 / 10 cores / 24 GiB RAM.
+- **OS**: Darwin 27.0.0 arm64.
+- **Exact command**, from the workspace:
+  ```sh
+  cd noether/main
+  ./mvnw -ntp clean install
+  cd noether-persistence/noether-jpa-bench
+  export BENCH_RUN_ID=20261018-closure-baseline
+  ./run-bench.sh noether
+  ./run-bench.sh hibernate
+  ./run-bench.sh eclipselink
+  ```
+- **Configuration**: unchanged JMH 1.37 harness and corrected versioned-update
+  preflight; `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+  Noether 0.4.0-SNAPSHOT, Hibernate ORM 7.4.12.Final, EclipseLink 5.0.2,
+  H2 2.3.232; identical manual schema, 128 rows, 32-row JPQL result,
+  validation NONE, L2/query caches off, new entity manager per operation.
+  Providers ran sequentially, not concurrently. Pool/statement-cache defaults
+  remain provider-specific, as in BENCH-20261010-03.
+- **Raw results**: throughput ± JMH 99.9% error; allocation ± error in B/op.
+  ```text
+  noether
+  createUpdateDelete 153425.285 ±  1974.784 ops/s;  36224.041 ± 0.094 B/op
+  findById           442563.659 ± 16994.195 ops/s;  12262.758 ± 0.004 B/op
+  jpqlQuery           29311.922 ±   764.775 ops/s; 144024.160 ± 0.063 B/op
+  update             209312.979 ± 29543.366 ops/s;  22079.795 ± 3.614 B/op
+  hibernate
+  createUpdateDelete 226491.270 ± 11798.225 ops/s;  20032.038 ± 0.140 B/op
+  findById           621852.411 ± 42061.979 ops/s;   6645.824 ± 0.052 B/op
+  jpqlQuery           94061.862 ±  1744.339 ops/s;  18483.079 ± 0.353 B/op
+  update             312809.389 ±  9084.123 ops/s;  14150.908 ± 0.101 B/op
+  eclipselink
+  createUpdateDelete 181463.791 ± 12232.568 ops/s;  31376.034 ± 0.072 B/op
+  findById           782182.170 ±  6363.592 ops/s;   7046.567 ± 0.001 B/op
+  jpqlQuery           75079.502 ±   279.390 ops/s;  39216.048 ± 0.011 B/op
+  update             293656.854 ±  4056.193 ops/s;  17512.521 ± 0.050 B/op
+  ```
+- **Comparison with previous matching run**, BENCH-20261010-03; workload order
+  `createUpdateDelete / findById / jpqlQuery / update`:
+  - Noether versus historical Mansart: throughput
+    **-13.57% / -11.31% / -12.90% / -8.11%**; allocation
+    **+23.01% / +23.24% / +31.96% / +14.05%**.
+  - Hibernate: throughput **-1.13% / -2.32% / +0.45% / +4.62%**;
+    allocation **-0.48% / -1.42% / +1.32% / -1.67%**.
+  - EclipseLink: throughput **-1.62% / +0.44% / +2.94% / +1.11%**;
+    allocation **+0.10% / +0.00% / +0.04% / +0.37%**.
+  Historical and current JVM patch levels differ; some confidence intervals
+  overlap. These are descriptive point-estimate deltas, not attribution to
+  a specific follow-up or proof of a statistically established regression.
+- **Interpretation**: Noether is still behind both competitors on these local
+  workloads. The largest robust gap is JPQL: roughly 3.21x lower throughput
+  than Hibernate and 2.56x lower than EclipseLink, with roughly 7.79x and
+  3.67x their allocation respectively. This is not a general provider ranking,
+  a network-database measurement or a virtual-thread scalability benchmark.
+- **Raw evidence**:
+  `noether-jpa-bench/target/bench-reports/20261018-closure-baseline/{noether,hibernate,eclipselink}/`
+  contains full JMH logs/JSON, Maven logs, JVM, dependencies and classpaths.
+  A second copy is retained in session artifacts under `closure-bench-evidence`.
+
+## BENCH-20261018-02 — Reverse-order repeat of D43 closure comparison
+
+- **Date / commit / JVM / hardware / OS / configuration**: identical to
+  BENCH-20261018-01. Same binaries and workloads, separate JMH forks;
+  providers ran sequentially in reverse order.
+- **Exact command**, from `noether/main/noether-persistence/noether-jpa-bench`:
+  ```sh
+  export BENCH_RUN_ID=20261018-closure-repeat
+  ./run-bench.sh eclipselink
+  ./run-bench.sh hibernate
+  ./run-bench.sh noether
+  ```
+- **Raw results**: throughput ± JMH 99.9% error; allocation ± error in B/op.
+  ```text
+  noether
+  createUpdateDelete 156699.259 ±  16779.120 ops/s;  36216.040 ± 0.082 B/op
+  findById           451487.274 ±  17678.732 ops/s;  12102.758 ± 0.004 B/op
+  jpqlQuery           29257.200 ±    632.725 ops/s; 144432.167 ± 0.060 B/op
+  update             217987.265 ±  15868.735 ops/s;  22064.080 ± 1.132 B/op
+  hibernate
+  createUpdateDelete 216235.619 ±  57811.260 ops/s;  20128.042 ± 0.169 B/op
+  findById           625637.963 ±  12734.937 ops/s;   6781.824 ± 0.053 B/op
+  jpqlQuery           94500.093 ±   1147.178 ops/s;  18242.078 ± 0.350 B/op
+  update             306064.830 ±  19529.270 ops/s;  14030.908 ± 0.131 B/op
+  eclipselink
+  createUpdateDelete 186395.210 ±  20920.081 ops/s;  31328.033 ± 0.068 B/op
+  findById           750836.935 ± 103947.988 ops/s;   7046.567 ± 0.001 B/op
+  jpqlQuery           70576.042 ±  20105.396 ops/s;  39200.051 ± 0.021 B/op
+  update             289921.984 ±   8557.974 ops/s;  17448.521 ± 0.049 B/op
+  ```
+- **Comparison with previous matching run**, BENCH-20261018-01; workload order
+  `createUpdateDelete / findById / jpqlQuery / update`:
+  - Noether throughput **+2.13% / +2.02% / -0.19% / +4.14%**;
+    allocation **-0.02% / -1.30% / +0.28% / -0.07%**.
+  - Hibernate throughput **-4.53% / +0.61% / +0.47% / -2.16%**;
+    allocation **+0.48% / +2.05% / -1.30% / -0.85%**.
+  - EclipseLink throughput **+2.72% / -4.01% / -6.00% / -1.27%**;
+    allocation **-0.15% / +0.00% / -0.04% / -0.37%**.
+- **Interpretation**: changing provider order does not remove Noether's gap.
+  Several intervals are wide, especially EclipseLink JPQL/find and Hibernate
+  CRUD on the repeat. Do not pool iteration samples as independent machines
+  or claim a universal ranking. JPQL allocation and Hibernate's JPQL throughput
+  remain clearly separated from Noether in both runs.
+- **Raw evidence**:
+  `noether-jpa-bench/target/bench-reports/20261018-closure-repeat/{noether,hibernate,eclipselink}/`,
+  also copied to session `closure-bench-evidence`; computed deltas are in
+  `closure-bench-comparison.json`.
+
+## BENCH-20261018-03 — Diagnostic JFR and SQL-count probes, not a new ranking
+
+- **Date / commit / JVM / hardware / OS**: identical to BENCH-20261018-01.
+- **Exact JFR command**, from the benchmark directory; `ARTIFACTS` denotes the
+  session's `files` directory:
+  ```sh
+  ARTIFACTS=/Users/antoine/.copilot/session-state/f0e6bb7b-2f1f-4ac2-b65c-74a0b1d54081/files
+  java -Dbench.provider=io.vidocq.noether.jpa.core.NoetherPersistenceProvider \
+    -cp "target/noether/test-classes:target/noether/classes:$(cat target/noether/test-classpath.txt)" \
+    org.openjdk.jmh.Main 'io.vidocq.noether.jpa.bench.JpaProviderBenchmark.*' \
+    -wi 3 -i 3 -w 2s -r 3s -f 1 -t 1 -foe true -prof gc \
+    -prof "jfr:dir=$ARTIFACTS/closure-jfr;stackDepth=96" \
+    -rf json -rff "$ARTIFACTS/closure-jfr-results.json"
+  ```
+- **Raw profiled results**, throughput ± JMH 99.9% error; allocation ± error:
+  ```text
+  createUpdateDelete 149900.110 ± 13037.684 ops/s;  36675.104 ±  313.263 B/op
+  findById           437616.188 ± 11121.015 ops/s;  12170.531 ±  106.852 B/op
+  jpqlQuery           28572.296 ±  1688.573 ops/s; 147562.173 ± 1644.448 B/op
+  update             210867.372 ± 40969.499 ops/s;  22055.800 ±  214.248 B/op
+  ```
+- **Comparison**: first matching JFR run; no same-configuration predecessor.
+  The profiling configuration and instrumentation differ from entries 01/02;
+  these scores are diagnostic, not an optimization delta or comparison winner.
+- **CPU/allocation observations**: among recorded benchmark-worker samples,
+  JPQL's first Noether frame is `EntityLoader.row` in 250/652 CPU samples;
+  `JpqlQuery.execute` in 100 and `EntityStatements.reference` in 55.
+  Approximately 60% of sampled allocation weight is attributed to stacks
+  whose first Noether frame is `EntityLoader.row`. This includes JDBC/H2 work
+  below that frame; it is not exclusive CPU time in the Java method.
+  Find allocation also includes `EntityManagerImpl` construction; write
+  allocation is concentrated under `FlushEngine.flush/update`.
+  Sampling weight is an estimate, not exact allocated bytes or GC-pause time.
+- **Untimed SQL probe**: after the harness's normal fixture/write preflight,
+  enable H2 `SET QUERY_STATISTICS TRUE`, invoke the actual benchmark
+  `jpqlQuery` once, then read `INFORMATION_SCHEMA.QUERY_STATISTICS`.
+  Each provider returns the same **32 rows**:
+  ```text
+  noether:    1 x SELECT t0.id ... WHERE t0.category = ? ORDER BY t0.id
+             32 x SELECT id, category, label, revision ... WHERE id = ?
+  hibernate:  1 x SELECT id, category, label, revision ... category = ? ORDER BY id
+  eclipselink:1 x SELECT ID, CATEGORY, LABEL, REVISION ... CATEGORY = ? ORDER BY ID
+  ```
+  Count data SELECTs only; connection/COMMIT/ROLLBACK control statements are
+  reported separately in raw logs. This is **33 data SELECTs versus 1**,
+  an ordinary entity-query N+1 materialization path, not an association graph.
+  `JpqlQuery.resolve` calls `runtime.find` for each selected identity; plain
+  entity selection currently carries key binders rather than complete state.
+- **Probe reproduction**, from the benchmark directory for each provider and
+  its corresponding provider class (as in `run-bench.sh`):
+  ```sh
+  CP="target/$provider/test-classes:target/$provider/classes:$(cat target/$provider/test-classpath.txt)"
+  javac -cp "$CP" -d "$ARTIFACTS/closure-query-probe" \
+    "$ARTIFACTS/closure-query-probe/QueryStatementProbe.java"
+  java "-Dbench.provider=$provider_class" \
+    -cp "$ARTIFACTS/closure-query-probe:$CP" \
+    io.vidocq.noether.jpa.bench.QueryStatementProbe
+  ```
+- **Prioritized proposals, not implemented gains**:
+  1. Hydrate eligible plain entity selections from their result row through
+     the existing staged loader. Gate the 32-row case at one data SELECT and
+     preserve identity, dirty state, callback ordering, versions, cache,
+     converters and complete association loading.
+  2. Cache parameter-independent JPQL parsing/validation/SQL templates within
+     a factory, with bounded retention. Creation currently translates for
+     validation and execution translates again. Keep parameters, graph/hint
+     mutation, IN-list arity, pagination and locking execution-specific.
+     Profiling supports investigating it, not calling it the main cost.
+  3. Reduce per-entity-manager, reference lookup and flush scratch allocation
+     using bootstrap metadata and operation-local reuse where safe. Keep
+     snapshots, callback/reentrancy and thread-safety contracts; do not disable
+     correctness checks or share mutable entity-manager state.
+  Validate each separately with failing-first correctness/SQL-count tests,
+  the clean reactor and TCK gate, then repeated identical benchmarks.
+- **Evidence**: session `closure-jfr` recordings, `closure-jfr-results.json`,
+  `closure-jfr.log`, `closure-profile-summary.json`, analysis script
+  `closure-bench-analyze.py`, and `closure-query-probe/QueryStatementProbe.java`
+  with `closure-query-{noether,hibernate,eclipselink}.log`.
+  No runtime code, dependency, benchmark workload or runner was changed.
+
+## BENCH-20261019-01 — PERF1 result-row hydration comparison
+
+- **Date**: 2026-10-19.
+- **Commit**: `352e684efe8b35f510e9d955e66d662c0ea73283` plus uncommitted
+  PERF1 production changes in `Translator` and `JpqlQuery`; branch
+  `feat/secondary-composite-business-keys`. Exact production diff retained as
+  session `row-hydration-production.patch`. Tested core jar SHA-256:
+  `00b47af94dd961f6e4f9e05b3b1649840d2aaf146d7237637840d3c6d12bcd1e`.
+- **JVM / hardware / OS**: Temurin 25.0.4.1+1-LTS, default flags;
+  Apple M5, 10 cores, 24 GiB RAM; Darwin 27.0.0 arm64.
+- **Exact commands**, from the Noether root:
+  ```sh
+  ./mvnw -ntp clean install
+  cd noether-persistence/noether-jpa-bench
+  BENCH_RUN_ID=20261019-row-hydration ./run-bench.sh noether
+  BENCH_RUN_ID=20261019-row-hydration ./run-bench.sh hibernate
+  BENCH_RUN_ID=20261019-row-hydration ./run-bench.sh eclipselink
+  ```
+- **Configuration**: unchanged harness/preflight, JMH 1.37,
+  `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+  H2 2.3.232, Hibernate ORM 7.4.12.Final, EclipseLink 5.0.2,
+  Noether 0.4.0-SNAPSHOT. Same 128-row fixture, 32-row query, actual versioned
+  update, manual schema, validation/L2/query caches off, fresh entity manager
+  per operation. Provider-specific pool/cache defaults remain unchanged.
+  Providers ran sequentially after the reactor and TCK completed.
+- **Raw results**: throughput ± JMH 99.9% error; allocation ± error:
+  ```text
+  noether
+  createUpdateDelete 144551.762 ±   9581.774 ops/s;  36216.044 ± 0.103 B/op
+  findById           431938.102 ±   8244.165 ops/s;  12150.759 ± 0.004 B/op
+  jpqlQuery           36954.210 ±    528.358 ops/s; 108824.125 ± 0.045 B/op
+  update             210735.977 ±  12102.378 ops/s;  21983.815 ± 3.429 B/op
+  hibernate
+  createUpdateDelete 221024.461 ±   2106.439 ops/s;  20008.039 ± 0.146 B/op
+  findById           611616.168 ±  42090.106 ops/s;   6717.825 ± 0.055 B/op
+  jpqlQuery           92561.282 ±    891.613 ops/s;  18282.080 ± 0.361 B/op
+  update             294766.902 ±   2869.628 ops/s;  14230.908 ± 0.142 B/op
+  eclipselink
+  createUpdateDelete 184274.659 ±  10275.641 ops/s;  31472.034 ± 0.072 B/op
+  findById           769363.467 ±  13258.634 ops/s;   7046.567 ± 0.001 B/op
+  jpqlQuery           74431.720 ±    358.545 ops/s;  39200.049 ± 0.011 B/op
+  update             208651.952 ± 159616.906 ops/s;  17336.525 ± 0.065 B/op
+  ```
+- **Delta versus most recent matching run**, BENCH-20261018-02, order
+  `createUpdateDelete / findById / jpqlQuery / update`:
+  - Noether throughput **-7.75% / -4.33% / +26.31% / -3.33%**;
+    allocation **+0.00% / +0.40% / -24.65% / -0.36%**.
+  - Hibernate throughput **+2.21% / -2.24% / -2.05% / -3.69%**;
+    allocation **-0.60% / -0.94% / +0.22% / +1.43%**.
+  - EclipseLink throughput **-1.14% / +2.47% / +5.46% / -28.03%**;
+    allocation **+0.46% / -0.00% / -0.00% / -0.64%**.
+  These are descriptive point-estimate deltas, not controlled same-session
+  A/B attribution. Unchanged find/write paths are not claimed to improve or
+  regress; some intervals are wide, especially EclipseLink update.
+- **SQL-shape verification**: reran the untimed BENCH-20261018-03 probe
+  unchanged against the rebuilt Noether harness:
+  ```text
+  Provider=io.vidocq.noether.jpa.core.NoetherPersistenceProvider resultRows=32
+  1 x SELECT t0.id, t0.id, t0.category, t0.label, t0.revision
+      FROM bench_record t0 WHERE t0.category = ? ORDER BY t0.id
+  ```
+  One data SELECT, not the former identity query plus 32 row reloads;
+  transaction-control statements excluded. Duplicate ID selection preserves
+  existing item/hydration offsets; no new mapping representation.
+- **Interpretation**: JPQL throughput rises from 29257.200 to 36954.210 ops/s,
+  with allocation falling from 144432.167 to 108824.125 B/op.
+  Hibernate remains about 2.50x faster and EclipseLink about 2.01x faster on
+  this query; Noether still allocates about 5.95x/2.78x their bytes per op.
+  Eliminating reloads does not eliminate the remaining query/materialization
+  allocation. No projection, write semantics or result cardinality was reduced.
+- **Evidence**: ignored benchmark `target/bench-reports/20261019-row-hydration/`
+  per-provider JMH JSON/logs and environment/dependency records, copied to session
+  `row-hydration-bench-evidence`; `row-hydration-query-noether.log` and
+  `row-hydration-bench-comparison.json`. Probe source/command is unchanged
+  from BENCH-20261018-03. All measurements remain local single-thread H2
+  microbenchmarks, not network latency or production scalability results.
+
+## BENCH-20261019-02 — Reverse-order repeat of PERF1 comparison
+
+- **Date / commit / tested jar / JVM / hardware / OS / configuration**:
+  identical to BENCH-20261019-01; separate forks, reverse provider order.
+- **Exact commands**, from the benchmark directory:
+  ```sh
+  BENCH_RUN_ID=20261019-row-hydration-repeat ./run-bench.sh eclipselink
+  BENCH_RUN_ID=20261019-row-hydration-repeat ./run-bench.sh hibernate
+  BENCH_RUN_ID=20261019-row-hydration-repeat ./run-bench.sh noether
+  ```
+- **Raw results**: throughput ± JMH 99.9% error; allocation ± error:
+  ```text
+  noether
+  createUpdateDelete 147858.017 ±  12914.975 ops/s;  36784.042 ± 0.095 B/op
+  findById           397248.407 ± 283543.868 ops/s;  12086.760 ± 0.009 B/op
+  jpqlQuery           36104.460 ±   7396.533 ops/s; 107200.127 ± 0.035 B/op
+  update             217735.519 ±   7106.169 ops/s;  21903.979 ± 2.032 B/op
+  hibernate
+  createUpdateDelete 207415.612 ±  31929.291 ops/s;  19696.041 ± 0.149 B/op
+  findById           581790.666 ±  35253.938 ops/s;   6749.825 ± 0.056 B/op
+  jpqlQuery           87239.886 ±  21450.963 ops/s;  18147.082 ± 0.352 B/op
+  update             291332.252 ±  75624.263 ops/s;  14134.910 ± 0.167 B/op
+  eclipselink
+  createUpdateDelete 175144.308 ±  12290.840 ops/s;  31160.035 ± 0.074 B/op
+  findById           754287.557 ±  29681.719 ops/s;   7046.567 ± 0.001 B/op
+  jpqlQuery           69485.694 ±   4947.134 ops/s;  39200.052 ± 0.012 B/op
+  update             264497.434 ±  41095.242 ops/s;  17524.519 ± 0.053 B/op
+  ```
+- **Delta versus BENCH-20261019-01**, order
+  `createUpdateDelete / findById / jpqlQuery / update`:
+  - Noether throughput **+2.29% / -8.03% / -2.30% / +3.32%**;
+    allocation **+1.57% / -0.53% / -1.49% / -0.36%**.
+  - Hibernate throughput **-6.16% / -4.88% / -5.75% / -1.17%**;
+    allocation **-1.56% / +0.48% / -0.74% / -0.67%**.
+  - EclipseLink throughput **-4.95% / -1.96% / -6.65% / +26.76%**;
+    allocation **-0.99% / +0.00% / +0.00% / +1.08%**.
+- **Interpretation**: Noether JPQL remains around 36–37k ops/s and
+  107–109 kB/op across both new runs, versus around 29.3k and 144 kB/op in
+  both pre-optimization runs. The repeat has wide intervals (notably Noether
+  find and Hibernate JPQL/update); do not average iteration samples into a
+  false multi-machine confidence interval or infer unchanged-path regressions.
+  The exact SQL-count improvement is independently established; performance
+  improvements remain specific to this workload, runtime and configuration.
+- **Evidence**: `target/bench-reports/20261019-row-hydration-repeat/`,
+  copied to session `row-hydration-bench-evidence`; the comparison script
+  `row-hydration-bench-analyze.py` and its JSON preserve all scores and deltas.
+
+## BENCH-20261019-03 — Post-PERF1 JFR: flush and metadata allocation
+
+- **Date**: 2026-10-19.
+- **Commit**: `352e684efe8b35f510e9d955e66d662c0ea73283` plus the same
+  uncommitted PERF1 changes as BENCH-20261019-01/02. Tested core SHA-256:
+  `00b47af94dd961f6e4f9e05b3b1649840d2aaf146d7237637840d3c6d12bcd1e`.
+  No production or harness change during profiling.
+- **Environment**: Apple M5, 10 cores, 24 GiB RAM; Darwin 27.0.0 arm64;
+  Temurin 25.0.4.1+1-LTS, JMH 1.37, H2 2.3.232. Same fixtures,
+  cache-disabled configuration and operation semantics as entry 01.
+- **Exact command**, from `noether-persistence/noether-jpa-bench`:
+  ```sh
+  ARTIFACTS=/Users/antoine/.copilot/session-state/f0e6bb7b-2f1f-4ac2-b65c-74a0b1d54081/files
+  java -Dbench.provider=io.vidocq.noether.jpa.core.NoetherPersistenceProvider \
+    -cp "target/noether/test-classes:target/noether/classes:$(cat target/noether/test-classpath.txt)" \
+    org.openjdk.jmh.Main 'io.vidocq.noether.jpa.bench.JpaProviderBenchmark.*' \
+    -wi 3 -i 3 -w 2s -r 3s -f 1 -t 1 -foe true -prof gc \
+    -prof "jfr:dir=$ARTIFACTS/perf1-jfr;stackDepth=96" \
+    -rf json -rff "$ARTIFACTS/perf1-jfr-results.json" \
+    > "$ARTIFACTS/perf1-jfr.log" 2>&1
+  ```
+- **Raw instrumented results**, throughput ± JMH 99.9% error; allocation ± error:
+  ```text
+  createUpdateDelete 137069.886 ± 340278.146 ops/s;  37054.111 ±  407.781 B/op
+  findById           433745.356 ±  51219.299 ops/s;  12282.539 ±  106.898 B/op
+  jpqlQuery           31807.540 ±  87641.833 ops/s; 108879.104 ± 1607.090 B/op
+  update             160014.270 ± 657126.486 ops/s;  22265.523 ±  267.041 B/op
+  ```
+- **Delta versus matching pre-PERF1 JFR configuration**, BENCH-20261018-03,
+  order `createUpdateDelete / findById / jpqlQuery / update`:
+  throughput **-8.56% / -0.88% / +11.32% / -24.12%**; allocation
+  **+1.03% / +0.92% / -26.21% / +0.95%**.
+  Throughput intervals are extremely wide: do not interpret these
+  point-estimate deltas as a speed comparison. Use entries 01/02 for the
+  unprofiled comparison. The allocation reduction is consistent with PERF1.
+- **Initial JPQL profile**: 599 workload CPU samples, approximately 10.5%
+  on stacks containing parser/translator work, 1.8% dialect/render and
+  20.2% entity-loader (disjoint categories, in that precedence order).
+  Estimated allocation weight includes 40.4% under
+  `FlushEngine.identitySet` and 14.0% under `EntityStatements.reference`.
+  The identity-set stacks originate in transaction commit's ordinary flush,
+  not query SQL execution. These weights are sampling estimates, not exact
+  bytes/op, exclusive method costs or promised removable overhead.
+- **Targeted confirmation**, same directory/environment, longer JPQL-only run:
+  ```sh
+  java -Dbench.provider=io.vidocq.noether.jpa.core.NoetherPersistenceProvider \
+    -cp "target/noether/test-classes:target/noether/classes:$(cat target/noether/test-classpath.txt)" \
+    org.openjdk.jmh.Main 'io.vidocq.noether.jpa.bench.JpaProviderBenchmark.jpqlQuery' \
+    -wi 3 -i 5 -w 2s -r 3s -f 1 -t 1 -foe true -prof gc \
+    -prof "jfr:dir=$ARTIFACTS/perf1-jfr-confirm;stackDepth=96" \
+    -rf json -rff "$ARTIFACTS/perf1-jfr-confirm-results.json" \
+    > "$ARTIFACTS/perf1-jfr-confirm.log" 2>&1
+  ```
+  ```text
+  jpqlQuery 35662.053 ± 1622.793 ops/s; 108852.368 ± 222.797 B/op
+  ```
+  First run of this longer profiling configuration; do not infer a speed delta
+  from the previous three-iteration run. Its allocation and throughput are
+  consistent with the unprofiled PERF1 runs within instrumentation/uncertainty.
+- **Confirmed stack interpretation**: 1018 workload CPU samples;
+  parser/translator 10.6%, dialect/render 2.6%, entity-loader 19.1%.
+  Of the filtered estimated allocation weight, `EntityStatements.reference`
+  accounts for 28.7%, `JpqlQuery.execute` 12.9%, `EntityLoader.loadRows` 8.9%,
+  `FlushEngine.hasInverseIndexes` 5.5% and `JpqlQuery.fetched` 4.8%.
+  Parse/translation categories total 12.1% of weight and render 3.2%.
+  `reference`'s dominant stacks run through
+  `EntityOperations.beforeFlush -> EntityManagerImpl.flush -> beforeCommit`.
+  It creates a stream/filter/findFirst even for a scalar attribute with no
+  relationship. `hasInverseIndexes` similarly scans collection metadata.
+  Both execute during commit of this read-only benchmark transaction.
+  The first run's identity-set share does not reproduce in the second run:
+  allocation sampling is site-sensitive; do not extrapolate an exact
+  per-site saving or rank identity sets alone above the repeated metadata signal.
+- **Next optimization recommendation**: precompute/index immutable relationship
+  metadata by attribute and inverse-index presence; avoid stream pipelines on
+  repeated negative lookups. Then investigate lazy allocation of flush
+  workspaces and redundant state copies on genuinely empty work lists.
+  Preserve ordinary dirty checking, callbacks, cascades, mutable values,
+  optimistic checks, forced increments and collection changes: a read query
+  does not justify skipping transaction commit's flush.
+  A bounded query-plan cache remains a candidate, but the profiles do not
+  establish it as the main cost. No speedup is predicted from sample shares.
+- **Analysis and evidence**: four `perf1-jfr` recordings plus
+  `perf1-jfr-confirm` recording, raw logs/JSON and exported ExecutionSample/
+  ObjectAllocationSample JSON in session artifacts. Reproduce summaries with
+  `python3 "$ARTIFACTS/perf1-profile-analyze.py"` and
+  `python3 "$ARTIFACTS/perf1-profile-analyze.py" perf1-jfr-confirm`.
+  Summary files are `perf1-jfr-profile-summary.json` and
+  `perf1-jfr-confirm-profile-summary.json`. Analysis keeps benchmark-worker
+  threads only and requires the actual workload method in each stack:
+  JMH barrier/bookkeeping allocations on the same thread are excluded.
+  Categories include descendants; JIT inlining and sample variation limit
+  precise attribution. Recordings cover the profiled measurement window,
+  not a production traffic sample. No implementation was changed by this study.
+
+## BENCH-20261022-01 — PERF2 same-session PERF1 baseline
+
+- **Date**: 2026-10-22.
+- **Commit**: `8af6b60` (`perf/query-row-hydration`), before PERF2 production
+  edits. PERF1 is present; the benchmark harness is unchanged.
+- **JVM**: Temurin 25.0.4.1+1-LTS, default JVM/GC flags.
+- **Hardware**: Apple M5 / 10 cores / 24 GiB RAM.
+- **OS**: Darwin 27.2.0.
+- **Exact command**, from the Noether root:
+  ```sh
+  ./mvnw -ntp -q clean install -DskipTests
+  cd noether-persistence/noether-jpa-bench
+  BENCH_RUN_ID=20261022-perf2-before ./run-bench.sh noether
+  ```
+  The runner uses `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Results**, JMH 99.9% error:
+  ```text
+  createUpdateDelete 155405.012 +/-   3786.594 ops/s;  36480.040 +/-   0.083 B/op
+  findById           407660.315 +/- 195291.841 ops/s;  12414.759 +/-   0.004 B/op
+  jpqlQuery           38395.991 +/-   2333.792 ops/s; 108988.846 +/- 109.551 B/op
+  update             211107.488 +/-  28074.710 ops/s;  22111.824 +/-   3.335 B/op
+  ```
+- **Delta versus BENCH-20261019-02**, same workload order:
+  throughput **+5.10% / +2.62% / +6.35% / -3.04%**; allocation
+  **-0.83% / +2.71% / +1.67% / +0.95%**. No production code differs from
+  that PERF1 state; these changes illustrate run/JIT/environment variation,
+  not a new optimization. In particular the find throughput interval is wide.
+- **Evidence**: `noether-jpa-bench/target/bench-reports/20261022-perf2-before/noether/`
+  contains raw JSON, JMH log, JVM version and dependency/classpath records.
+  Session artifacts use `perf2-before-`. No build, test suite or other
+  benchmark was launched concurrently by this session during measurement.
+  The runner's normal write/version preflight remains enabled. H2 2.3.232,
+  fresh entity manager per operation, L2/query caches disabled; these short
+  single-fork, single-thread results are not a production scalability claim.
+
+## BENCH-20261022-02 — PERF2 indexed metadata, first comparison
+
+- **Date / JVM / hardware / OS / workload**: identical to BENCH-20261022-01.
+- **Commit**: `8af6b60` plus uncommitted PERF2 metadata indexing and tests.
+  Tested `noether-jpa-core` jar SHA-256:
+  `67de77d779a4c178419101fd3ffa586e3b376f059626674d6f6b9cd54dba8fbe`.
+- **Exact command**, from the Noether root:
+  ```sh
+  ./mvnw -ntp -q clean install
+  TCK_FIXTURES=patched TCK_VALIDATION=off \
+    ./noether-persistence/noether-jpa-tck/run-official-tck-persistence-3.2.sh
+  cd noether-persistence/noether-jpa-bench
+  BENCH_RUN_ID=20261022-perf2-after ./run-bench.sh noether
+  ```
+  Reactor and TCK finish before the benchmark. JMH settings are unchanged:
+  `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Results**, JMH 99.9% error:
+  ```text
+  createUpdateDelete 165615.010 +/-  9963.106 ops/s; 34512.038 +/-   0.075 B/op
+  findById           453642.628 +/- 39570.584 ops/s; 11790.758 +/-   0.003 B/op
+  jpqlQuery           42426.712 +/-  2019.375 ops/s; 77829.209 +/- 438.278 B/op
+  update             226993.104 +/- 15067.289 ops/s; 21376.112 +/-   0.852 B/op
+  ```
+- **Delta versus same-session BENCH-20261022-01**, same workload order:
+  throughput **+6.57% / +11.28% / +10.50% / +7.52%**; allocation
+  **-5.39% / -5.03% / -28.59% / -3.33%**.
+- **Interpretation**: the largest allocation reduction is in JPQL, where
+  each operation commits 32 managed entities. Bootstrap-indexed references
+  eliminate the repeated stream lookup for every basic attribute, and the
+  prefiltered inverse-index list eliminates the per-entity stream predicate.
+  The benchmark still runs commit flush and dirty checking; no columns,
+  result rows, writes, version checks or preflight are removed. No query-plan
+  cache, read-only transaction shortcut or provider setting is introduced.
+  Throughput improves in these point estimates, but 99.9% intervals overlap
+  the baseline (especially find); do not treat percentages as precise or
+  statistically established speedups. Allocation reduction is clearer.
+- **Evidence / limitations**:
+  `noether-jpa-bench/target/bench-reports/20261022-perf2-after/noether/`;
+  session `perf2-after-bench.log`, `perf2-comparison.json` and
+  `perf2-compare.py`. No concurrent build/test/benchmark was launched by this
+  session during measurement. The clean reactor and locally patched TCK
+  retain their contracts (`TCK.md`). Hibernate/EclipseLink were not rerun in
+  this experiment: comparisons to their 2026-10-19 scores are cross-date
+  context, not a newly measured provider ranking.
+
+## BENCH-20261022-03 — PERF2 indexed metadata, independent-fork repeat
+
+- **Date / commit / binary / JVM / hardware / OS**: identical to
+  BENCH-20261022-02. No source change between these two campaigns.
+- **Exact command**, from `noether-persistence/noether-jpa-bench`:
+  ```sh
+  BENCH_RUN_ID=20261022-perf2-after-repeat ./run-bench.sh noether
+  ```
+  Same JMH settings as entries 01/02, new forks, after campaign 02 completes.
+- **Results**, JMH 99.9% error:
+  ```text
+  createUpdateDelete 162483.852 +/-  3285.420 ops/s; 34520.039 +/-   0.080 B/op
+  findById           467966.885 +/- 21168.670 ops/s; 11478.758 +/-   0.003 B/op
+  jpqlQuery           43207.439 +/-  2785.894 ops/s; 77828.206 +/- 309.133 B/op
+  update             230642.463 +/-  7945.563 ops/s; 21080.112 +/-   0.842 B/op
+  ```
+- **Delta versus preceding BENCH-20261022-02**, same workload order:
+  throughput **-1.89% / +3.16% / +1.84% / +1.61%**; allocation
+  **+0.02% / -2.65% / -0.001% / -1.38%**.
+- **Delta versus pre-PERF2 BENCH-20261022-01**:
+  throughput **+4.56% / +14.79% / +12.53% / +9.25%**; allocation
+  **-5.37% / -7.54% / -28.59% / -4.67%**.
+- **Interpretation / limitations**: JPQL allocation repeats at approximately
+  77.8 kB/op instead of 109.0 kB/op. All workload throughput point estimates
+  remain above baseline, but this is one baseline campaign followed by two
+  optimized campaigns, not randomized multi-fork A/B evidence. Wide baseline
+  intervals and the find/update allocation variation across optimized forks
+  limit exact attribution. Do not claim parity with Hibernate, production
+  latency/scalability gains, or a universal gain from these short H2 runs.
+- **Evidence**:
+  `noether-jpa-bench/target/bench-reports/20261022-perf2-after-repeat/noether/`.
+  All three raw report directories and the core patch are also copied to
+  session `perf2-bench-evidence`; `perf2-compare.py` computes deltas from the
+  raw JSON without rounding intermediate scores.
+
+## BENCH-20261111-01 — Hibernate ORM 5.6 joins the comparison (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commit**: `f7746b6` (`fix-proposals`, identical to `main`) plus the uncommitted `hibernate5` harness
+  profile of branch `bench/hibernate-5`. Noether jars installed by `./mvnw -ntp install` of that commit.
+- **JVM**: Temurin 25.0.3 (2026-04-21 LTS), 64-Bit Server VM, default flags.
+- **Hardware**: Apple M5 Max / 18 cores / 128 GB RAM. **Not the machine of the earlier entries**
+  (Apple M5 / 10 cores / 24 GB): cross-entry deltas are context only.
+- **OS**: macOS 27.2, arm64.
+- **Providers**: Noether 0.4.0-SNAPSHOT; Hibernate ORM **5.6.15.Final** (`hibernate-core-jakarta`, the
+  Persistence 3.0 build of 5.6, with Byte Buddy replaced by 1.17.8 because its own 1.12 cannot read
+  Java 25 class files); Hibernate ORM 7.4.12.Final. H2 2.3.232 in memory, same entity, schema, seeded rows,
+  settings and preflight checks for every provider. Hibernate 5.6 predates `PersistenceConfiguration`
+  (3.2): the harness hands it the same unit as a `PersistenceUnitInfo` through
+  `createContainerEntityManagerFactory` (`-Dbench.bootstrap=unit-info`), with Hibernate's own
+  `hibernate.connection.*` keys added; both Hibernate lines use their built-in 20-connection pool
+  (`HHH10001002`), Noether its `mansart-pool` pool.
+- **Exact command**, from the Noether root:
+  ```sh
+  ./mvnw -ntp install
+  cd noether-persistence/noether-jpa-bench
+  export BENCH_RUN_ID=20261111-baseline
+  ./run-bench.sh hibernate5 && ./run-bench.sh noether && ./run-bench.sh hibernate
+  ```
+  JMH settings unchanged: `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Results**, JMH 99.9% error, normalized allocation:
+  ```text
+  noether
+  createUpdateDelete 164213.383 +/-  3884.010 ops/s; 34600.038 +/-   0.078 B/op
+  findById           466085.882 +/- 10499.548 ops/s; 11390.758 +/-   0.004 B/op
+  jpqlQuery           41843.872 +/-  1184.590 ops/s; 78757.358 +/- 114.208 B/op
+  update             218329.098 +/- 23406.159 ops/s; 21360.130 +/-   0.703 B/op
+  hibernate5 (5.6.15.Final)
+  createUpdateDelete 250798.545 +/-  5027.971 ops/s; 17864.036 +/-   0.143 B/op
+  findById           536978.356 +/-  8054.610 ops/s;  7525.827 +/-   0.069 B/op
+  jpqlQuery           67386.726 +/-   998.652 ops/s; 26674.322 +/-   0.177 B/op
+  update             284889.000 +/-  4986.130 ops/s; 13670.912 +/-   0.164 B/op
+  hibernate (7.4.12.Final)
+  createUpdateDelete 237486.403 +/-  1566.256 ops/s; 19976.036 +/-   0.136 B/op
+  findById           627351.368 +/- 28047.362 ops/s;  7021.824 +/-   0.054 B/op
+  jpqlQuery           89985.802 +/- 12024.165 ops/s; 18379.080 +/-   0.356 B/op
+  update             305915.200 +/-  8553.596 ops/s; 14318.907 +/-   0.101 B/op
+  ```
+- **Noether versus Hibernate 5.6**, same session (throughput; allocation ratio):
+  `createUpdateDelete` **-34.5%** (x1.94 B/op), `findById` **-13.2%** (x1.51), `jpqlQuery` **-37.9%**
+  (x2.95), `update` **-23.4%** (x1.56). Versus Hibernate 7.4: -30.9% / -25.7% / -53.5% / -28.6%.
+  The 99.9% intervals do not overlap on any workload.
+- **Comparison with previous run**: Noether versus BENCH-20261022-03 (same code paths, other machine and
+  JDK patch): +1.06% / -0.40% / -3.16% / -5.34%, within that entry's intervals except `update`; no
+  change is claimed. First Hibernate 5.6 measurement.
+- **Notes**: Noether allocates 1.5x to 3x Hibernate 5.6 per operation; the JPQL gap (32 managed rows per
+  operation) is the largest. Hibernate 5.6 is measured as shipped, without bytecode enhancement, like the
+  other providers. Raw evidence:
+  `noether-jpa-bench/target/bench-reports/20261111-baseline/{hibernate5,noether,hibernate}/`.
+
+## BENCH-20261111-02 — Hot-path profile after BENCH-20261111-01, diagnostic only (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commit**: `45880aa` (`bench/hibernate-5`), the code of BENCH-20261111-01; no production change.
+- **JVM / hardware / OS**: Temurin 25.0.3, Apple M5 Max / 18 cores / 128 GB RAM, macOS 27.2 arm64.
+- **Exact command**, from `noether-jpa-bench` after `./mvnw -ntp install -DskipTests` and a `noether`
+  profile build of the harness (`$CP` = worktree `target/classes` of core and dialects, then the harness
+  classes and `target/noether/test-classpath.txt`):
+  ```sh
+  java -Dbench.provider=io.vidocq.noether.jpa.core.NoetherPersistenceProvider -Dbench.bootstrap=configuration \
+    -cp "$CP" org.openjdk.jmh.Main 'io.vidocq.noether.jpa.bench.JpaProviderBenchmark.(.*)' \
+    -prof "jfr:dir=$OUT/jfr;stackDepth=128;configName=$OUT/alloc.jfc" -jvmArgsAppend -XX:-UseTLAB \
+    -wi 2 -i 2 -w 2s -r 5s -f 1 -t 1 -foe true -prof gc -rf json -rff "$OUT/jmh.json"
+  ```
+  `alloc.jfc` is the JDK `profile.jfc` with `jdk.ObjectAllocationSample` throttled at 5000/s.
+- **Method note**: with TLABs, `jdk.ObjectAllocationSample` is taken where a TLAB is refilled. Each
+  operation allocates the same sequence, so the samples alias on a few sites (one run put 33% of the
+  weight on a 24-byte array, another 43% on the JPQL lexer). `-XX:-UseTLAB` makes every allocation a
+  candidate and the throttle picks a subset: the shares below are **counts of allocations**, not bytes,
+  about 48,000 samples per workload. Throughput under this flag (0.5k to 4k ops/s) means nothing.
+- **Raw instrumented results** (allocation only is meaningful):
+  ```text
+  createUpdateDelete 34753.099 B/op
+  findById           11527.141 B/op
+  jpqlQuery          77330.830 B/op
+  update             21673.948 B/op
+  ```
+- **Hot spots, share of allocation count (inclusive frames)**:
+  - `findById`: `PooledConnection.prepareStatement` 27.1% (H2 parses the statement at every call),
+    `ResourceLocalTransaction.end` 13.2% (the release of the connection), `EntityManagerImpl.flush` 20.3%,
+    `createEntityManager` 7.1%.
+  - `createUpdateDelete`: `EntityManagerImpl.flush` 83.2% (three flushes), of which
+    `PooledConnection.prepareStatement` 27.2%; `ResourceLocalTransaction.end` 4.4%; six
+    `PersistenceContext.entries()` copies and six identity hash maps per flush.
+  - `jpqlQuery`: about 45 allocations per result row (72.3% under `JpqlQuery.execute`, 35.3% under
+    `hydrateCollections`, 29.1% under `EntityLoader.loadRows`); `Translator.translate` 10.1% and
+    `Parser.parse` 4.8% (the string is parsed once and translated twice per query);
+    `PooledConnection.prepareStatement` 9.7%; commit flush 8.0%, four reads of each entity's state.
+  - `update`: same shape as `findById` plus one `FlushEngine.update`.
+  - CPU (`jdk.ExecutionSample`, TLAB run, 804 samples on `jpqlQuery`): 17.2% in `executeQuery`, 9.8% in
+    `prepareStatement`, 7.3% leaf in `Long` boxing of `ManagedAccess.read`, 10.2% in `createQuery`.
+- **H2 probe** (plain JDBC, same table, 10,000 measured iterations after 20,000 of warm-up,
+  `ThreadMXBean.getThreadAllocatedBytes`), `java -cp h2-2.3.232.jar H2Probe.java`:
+  ```text
+  autocommit select by id:                                              1680 B/op
+  setAutoCommit(false), select, commit, rollback, setAutoCommit(true):  7325 B/op
+  setAutoCommit(false), select, commit, setAutoCommit(true):            2504 B/op
+  ```
+  The second line is what a Noether transaction did through `mansart-pool`: the pool resets a
+  connection returned out of auto-commit mode with `rollback()` then `setAutoCommit(true)`. On H2 that
+  rollback costs about 4.8 kB and empties the session's query cache, hence the statement parsing above.
+- **`JdbcExecution.call`**: no sample of any workload contains it. The four workloads run inside a
+  resource-local transaction, which goes through `ResourceLocalTransaction.onConnection`. It is on the
+  path of non-transactional reads, `runWithConnection` / `callWithConnection`, schema generation and
+  the JTA integration of `noether-jpa-cdi`. Probe from a platform thread, 200,000 calls of a constant
+  task, third round (`java -cp "$CP" CallProbe.java`):
+  ```text
+  JdbcExecution.call from a platform thread:         6924 ns/op, 760 B/op on the caller
+  one virtual thread and a FutureTask, no executor:  6763 ns/op, 431 B/op on the caller
+  ```
+  The cost is the hand-off to another thread and back, not the executor: about 7 µs, five times a whole
+  `findById` operation of this harness. Not changed here (see BENCH-20261111-04, remaining gaps).
+- **Comparison with previous run**: allocation within 2% of BENCH-20261111-01 on every workload; this
+  entry is a diagnostic, not a ranking.
+
+## BENCH-20261111-03 — Hot-path optimizations, allocation after each commit (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commits** (`perf/hot-paths`, on top of `45880aa`):
+  `61855a0` the transaction connection goes back in auto-commit mode;
+  `3eff983` entity state read and copied once per load and flush;
+  `e35457e` parse, translation and SQL of a query string reused;
+  `b10c563` identity sets of a flush sized to what it writes, and
+  `bf4a3cb` rows of an entity without relationships loaded in one pass (measured together).
+- **JVM / hardware / OS**: as BENCH-20261111-02. Another session ran Maven builds on the machine during
+  some of these runs: throughput is indicative, normalized allocation is the signal.
+- **Exact command**: the command of BENCH-20261111-02 without the JFR profiler and `-XX:-UseTLAB`, with
+  `-wi 3 -i 3 -w 1s -r 2s -f 1 -t 1 -foe true -prof gc`, the worktree classes compiled by
+  `./mvnw -ntp -q -o compile -pl <core and dialects>` ahead of the installed jars.
+- **Results**, ops/s +/- JMH 99.9% error (3 iterations); B/op:
+  ```text
+  61855a0
+  createUpdateDelete 258868.817 +/-  26465.547 ops/s; 26400.031 B/op
+  findById           748928.028 +/- 119871.688 ops/s;  7686.755 B/op
+  jpqlQuery           53054.598 +/-   6223.148 ops/s; 64068.314 B/op
+  update             364988.164 +/- 120745.975 ops/s; 14535.373 B/op
+  3eff983
+  createUpdateDelete 261735.019 +/-   7675.518 ops/s; 25864.031 B/op
+  findById           771609.622 +/-  71632.461 ops/s;  7150.380 B/op
+  jpqlQuery           58623.635 +/-   3562.430 ops/s; 54488.069 B/op
+  update             378329.348 +/-  57776.554 ops/s; 14295.075 B/op
+  e35457e
+  createUpdateDelete 269670.415 +/-   3704.326 ops/s; 26024.030 B/op
+  findById           751958.618 +/-  83001.331 ops/s;  7238.380 B/op
+  jpqlQuery           71514.751 +/-   3211.777 ops/s; 41001.403 B/op
+  update             394319.216 +/-  33632.935 ops/s; 14255.216 B/op
+  b10c563 + bf4a3cb
+  createUpdateDelete 276686.735 +/-  16573.615 ops/s; 22088.029 B/op
+  findById           830705.035 +/-  79808.698 ops/s;  5486.380 B/op
+  jpqlQuery           80623.648 +/-   4126.106 ops/s; 33488.047 B/op
+  update             404054.356 +/-  54291.428 ops/s; 12463.329 B/op
+  ```
+- **Delta versus BENCH-20261111-01**, allocation, order
+  `createUpdateDelete / findById / jpqlQuery / update`:
+  `61855a0` **-23.7% / -32.5% / -18.7% / -32.0%**;
+  `3eff983` **-25.2% / -37.2% / -30.8% / -33.1%**;
+  `e35457e` **-24.8% / -36.5% / -47.9% / -33.3%**;
+  `b10c563` + `bf4a3cb` **-36.2% / -51.8% / -57.5% / -41.6%**.
+  The +0.6% and +1.2% of `e35457e` on `createUpdateDelete` and `findById`, which it does not touch, is
+  the fork-to-fork variation of these short runs.
+- **Interpretation**: the first commit is the largest step on every workload and is not a Noether
+  hot spot in the usual sense: one JDBC call per transaction (the pool's reset rollback) and the H2
+  statement cache it emptied. The others remove provider work: repeated reads of entity state and
+  defensive snapshot copies, a parse and two translations per query, default-sized identity maps per
+  flush, two of three passes over the rows of an entity without relationships. Throughput intervals of
+  these 3-iteration runs are wide and overlap from one commit to the next; see BENCH-20261111-04 for the
+  campaign. No column, row, dirty check, version check, callback, flush ordering or cache semantics is
+  removed, and no provider setting is added; `./mvnw -ntp install` passes (core: 897 tests).
+
+## BENCH-20261111-04 — Hot-path optimizations, final campaign against Hibernate ORM 5.6 (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commit**: `bf4a3cb` (`perf/hot-paths`), installed by `./mvnw -ntp install` right before the run; the
+  SHA-256 of the installed `noether-jpa-core` jar was the worktree's before and after the Noether run.
+- **JVM**: Temurin 25.0.3 (2026-04-21 LTS), 64-Bit Server VM, default flags.
+- **Hardware**: Apple M5 Max / 18 cores / 128 GB RAM.
+- **OS**: macOS 27.2, arm64.
+- **Providers / configuration**: as BENCH-20261111-01 (Noether 0.4.0-SNAPSHOT, Hibernate ORM 5.6.15.Final,
+  H2 2.3.232, unchanged harness and preflight checks).
+- **Exact command**, from the Noether root:
+  ```sh
+  ./mvnw -ntp install
+  cd noether-persistence/noether-jpa-bench
+  export BENCH_RUN_ID=20261111-hot-paths
+  ./run-bench.sh noether && ./run-bench.sh hibernate5
+  ```
+  JMH settings unchanged: `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Results**, JMH 99.9% error, normalized allocation:
+  ```text
+  noether
+  createUpdateDelete 272638.018 +/- 12879.227 ops/s; 22000.023 +/- 0.053 B/op
+  findById           822140.937 +/- 21201.665 ops/s;  5534.379 +/- 0.002 B/op
+  jpqlQuery           79495.962 +/-   926.126 ops/s; 34976.047 +/- 0.026 B/op
+  update             406857.003 +/-  7646.871 ops/s; 12423.826 +/- 0.025 B/op
+  hibernate5
+  createUpdateDelete 239289.043 +/-  1796.078 ops/s; 17864.038 +/- 0.150 B/op
+  findById           494709.122 +/-  6012.950 ops/s;  7541.828 +/- 0.075 B/op
+  jpqlQuery           67585.005 +/-   221.418 ops/s; 26506.322 +/- 0.178 B/op
+  update             276198.405 +/- 29428.916 ops/s; 13790.913 +/- 0.177 B/op
+  ```
+- **Delta versus BENCH-20261111-01**, order `createUpdateDelete / findById / jpqlQuery / update`:
+  - Noether throughput **+66.0% / +76.4% / +90.0% / +86.4%**; allocation
+    **-36.4% / -51.4% / -55.6% / -41.8%**. The 99.9% intervals of the two campaigns do not overlap on
+    any workload.
+  - Hibernate 5.6 throughput **-4.6% / -7.9% / +0.3% / -3.1%**; allocation within 0.9%. Its code is the
+    same: this is the variation between two sessions of this machine, and the scale against which the
+    Noether deltas are to be read.
+- **Noether versus Hibernate 5.6, this session**: throughput **+13.9% / +66.2% / +17.6% / +47.3%**, the
+  99.9% intervals do not overlap on any workload; allocation **1.23x / 0.73x / 1.32x / 0.90x** Hibernate's.
+  In BENCH-20261111-01 Noether was -34.5% / -13.2% / -37.9% / -23.4%.
+- **Remaining gaps**: Noether still allocates more than Hibernate 5.6 on `jpqlQuery` (+8.5 kB/op) and
+  `createUpdateDelete` (+4.1 kB/op).
+  - `jpqlQuery`: about 29 small objects per row remain (the row's key, values and nulls arrays, two
+    records, three identity keys, the entries of four maps, two state arrays at flush and their boxed
+    `long`s). Fewer of them means one row representation from the result set to the persistence
+    context instead of three (`Fetched`, `FetchedEntity`, `Row`), and one read of the state per flush
+    shared by the entity manager and the flush engine.
+  - `createUpdateDelete`: three flushes per operation, each with six copies of the context's entries,
+    its lists and iterators, and the `Long` boxes of `ManagedAccess.read`; H2 itself is 32% of the
+    allocation count.
+  - Every transaction still pays one H2 commit for `setAutoCommit(true)` (about 0.57 kB): the pool only
+    skips its reset rollback for a connection in auto-commit mode. A pool that knew the connection was
+    committed could skip both; that is a `mansart-pool` change.
+  - `JdbcExecution.call` (BENCH-20261111-02) is not measured by this harness and costs about 7 µs per
+    call from a platform thread.
+- **Limitations**: one fork per provider, single thread, in-memory H2, a new entity manager per
+  operation, the entity has no relationship (the one-pass row load of `bf4a3cb` applies to exactly that
+  case). Not a production latency or scalability claim. Hibernate 7.4 and EclipseLink were not rerun.
+  Raw evidence: `noether-jpa-bench/target/bench-reports/20261111-hot-paths/{noether,hibernate5}/`.
+
+## BENCH-20261111-05 — Before and after the hot-path optimizations, against Hibernate ORM 5.6, on PostgreSQL 17 (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Code**: "after" = `00074aa` (`bench/postgresql`: `c74687f` of #52 plus the configurable-database harness);
+  "before" = `45880aa` (#46, without the optimizations) with the harness of `00074aa` applied on top,
+  uncommitted. Each version was installed into its own scratch local repository
+  (`-Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=~/.m2/repository`), handed to `run-bench.sh`
+  through `MAVEN_ARGS`; `~/.m2` was not written.
+- **JVM**: Temurin 25.0.3 (2026-04-21 LTS), 64-Bit Server VM, default flags.
+- **Hardware**: Apple M5 Max / 18 cores / 128 GB RAM.
+- **OS**: macOS 27.2, arm64.
+- **Database**: PostgreSQL 17.11 (`postgres:17-alpine`, default settings: `shared_buffers` 128 MB, `fsync`
+  and `synchronous_commit` on) in a disposable OrbStack container (Docker 29.8.2) on `127.0.0.1:55432`,
+  sharing the machine with the JVM; PostgreSQL JDBC driver 42.7.4. Every JMH trial drops and recreates
+  `bench_record`.
+- **Providers**: as BENCH-20261111-01 (Noether 0.4.0-SNAPSHOT, Hibernate ORM 5.6.15.Final). Noether runs
+  with `noether-jpa-dialect-postgresql`; Hibernate 5.6 detects its dialect.
+- **Exact command**, from `noether-persistence/noether-jpa-bench`:
+  ```sh
+  docker run -d --rm --name noether-bench-pg -e POSTGRES_PASSWORD=bench -e POSTGRES_DB=bench \
+    -p 127.0.0.1:55432:5432 postgres:17-alpine
+  export BENCH_JDBC_URL=jdbc:postgresql://127.0.0.1:55432/bench BENCH_JDBC_DRIVER=org.postgresql.Driver \
+    BENCH_JDBC_USER=postgres BENCH_JDBC_PASSWORD=bench
+  export MAVEN_ARGS="-Dmaven.repo.local=<scratch repository of the version> -Dmaven.repo.local.tail=$HOME/.m2/repository"
+  BENCH_RUN_ID=<run> ./run-bench.sh noether   # or hibernate5
+  ```
+  JMH settings unchanged: `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Order**: three rounds, ten runs. Round 1: after, Hibernate 5.6, before, Hibernate 5.6. Round 2: before,
+  after, Hibernate 5.6. Round 3: Hibernate 5.6, after, before. Hibernate 5.6 is the same code in both
+  trees, so its four runs are one configuration.
+- **Results**, mean of the 5 measured iterations of each run, ops/s, rounds 1 / 2 / 3:
+  ```text
+                      Noether before          Noether after           Hibernate 5.6
+  findById            5,715 / 6,908 / 7,650   7,433 / 7,548 / 7,601   5,579 + 6,077 / 7,500 / 7,462
+  jpqlQuery           6,243 / 5,595 / 5,291   6,435 / 6,451 / 6,432   6,514 + 4,801 / 6,324 / 6,349
+  update              1,293 / 1,002 / 1,285   1,339 /   884 / 1,343     872 +   882 / 1,186 / 1,151
+  createUpdateDelete  1,047 /   998 / 1,241   1,125 / 1,053 / 1,222   1,131 +   842 / 1,128 / 1,172
+  ```
+  All measured iterations pooled (15 per Noether version, 20 for Hibernate 5.6), median ± standard deviation:
+  ```text
+                      Noether before   Noether after   Hibernate 5.6
+  findById            6,882 ± 968      7,528 ± 109     7,273 ± 1,060
+  jpqlQuery           5,894 ± 542      6,440 ±  74     6,356 ±   748
+  update              1,254 ± 175      1,325 ± 302       956 ±   209
+  createUpdateDelete  1,091 ± 122      1,147 ± 107     1,132 ±   145
+  ```
+  Normalized allocation, B/op (the same in every run within 3%):
+  ```text
+                      Noether before   Noether after   Hibernate 5.6
+  findById             6,370            4,202           4,682-4,738
+  jpqlQuery           71,617           41,561          30,867-31,074
+  update               8,798            6,992           6,438-6,629
+  createUpdateDelete  18,132           13,499           8,583-8,630
+  ```
+- **Comparison**: medians of the pooled iterations, order `findById / jpqlQuery / update /
+  createUpdateDelete`: after versus before **+9.4% / +9.3% / +5.7% / +5.2%**; after versus Hibernate 5.6
+  **+3.5% / +1.3% / +38.6% / +1.4%**; before versus Hibernate 5.6 -5.4% / -7.3% / +31.1% / -3.6%.
+  Allocation after versus before -34.0% / -42.0% / -20.5% / -25.6%.
+- **Reading**:
+  - The database dominates: 130 µs to 1.1 ms per operation here, against 1.2 to 13 µs on in-memory H2
+    (BENCH-20261111-04). The CPU and allocation differences between providers become a few percent.
+  - Only one difference holds in every run: on `jpqlQuery` every "after" run (6,432 to 6,451) is above every
+    "before" run (5,291 to 6,243). Everywhere else the runs of the configurations overlap; Hibernate 5.6
+    alone spans 5,579 to 7,500 on `findById` across its four runs.
+  - `update` is bimodal for every configuration (about 880 or about 1,340 ops/s per run) and the mode
+    follows when the run happened, not the provider (round 2: Noether after 884, Hibernate 5.6 1,186). The
+    +38.6% median is not a ranking.
+  - Noether after #52 is the steadiest configuration on reads (standard deviation 109 on `findById` and 74
+    on `jpqlQuery`, against 968 and 542 before and 1,060 and 748 for Hibernate 5.6). Not explained by this
+    entry.
+  - Conclusion: on this PostgreSQL set-up, Noether before or after #52 and Hibernate 5.6 are at parity
+    within the run-to-run variation. The +14% to +66% of BENCH-20261111-04 measures the provider's own path
+    on H2 and does not carry over to a database round trip. Noether still allocates more than
+    Hibernate 5.6 except on `findById`.
+- **Noise**: shared machine. Sampled once during round 1: load averages 6.85 / 5.45 / 4.69 (1 / 5 / 15
+  min), `mediaanalysisd` at about 68% CPU, the container runtime at about 124%.
+- **Limitations**: one fork per run, single thread, one entity without relationships, the database on the
+  same machine behind a virtual machine (no physical network). Hibernate 7.4 and EclipseLink not run. Not a
+  production latency or scalability claim.
+- **Raw evidence**, in the `bench/postgresql` worktree, `noether-jpa-bench/target/bench-reports/`:
+  `20261111-pg-after/`, `20261111-pg-r2/`, `20261111-pg-r3/` (the "after" tree, and the Hibernate 5.6
+  runs started from it); `20261111-pg-before/`, `20261111-pg-r2-before-code/`,
+  `20261111-pg-r3-before-code/` (the "before" tree, and the Hibernate 5.6 runs started from it). Each
+  provider directory has `database.txt` naming the PostgreSQL URL.
+
+## BENCH-20261111-06 — Allocation of the persistence context, the flush and the fetched rows, after each commit (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commits** (`perf/allocation`, on top of `8d941a4`, the code of BENCH-20261111-05 "after"):
+  `cc7dedf` the instances of a persistence context kept without a key and an entry each;
+  `2da5489` the state of the unchanged instances of a flush read into one array;
+  `77203ed` the lists and identity sets of a flush made when it has work for them;
+  `6e688b1` nothing kept for a shared cache that can hold no entity of the unit;
+  `6970119` a fetched row carried from the result set to the persistence context in one form.
+- **JVM / hardware / OS**: Temurin 25.0.3, Apple M5 Max / 18 cores / 128 GB RAM, macOS 27.2 arm64. Shared
+  machine, other sessions building: throughput of these short runs is indicative, normalized allocation is
+  the signal.
+- **Exact command**: the command of BENCH-20261111-03 (`-wi 3 -i 3 -w 1s -r 2s -f 1 -t 1 -foe true -prof gc`,
+  in-memory H2, the worktree classes compiled by `./mvnw -ntp -q -o compile -pl <dialect SPI, dialect H2, core>`
+  ahead of the jars), Noether installed in a scratch local repository
+  (`-Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=~/.m2/repository`); `~/.m2` was not written.
+- **Profile first** (the command of BENCH-20261111-02, JFR `jdk.ObjectAllocationSample` at 5000/s with
+  `-XX:-UseTLAB`, on `8d941a4`; shares are counts of allocations, about 44,000 samples per workload):
+  - `jpqlQuery`: 24 allocation sites at 3.0% to 3.4% of the samples each, one object per result row (32 rows):
+    the entity, its `ManagedEntity`, five identity keys (`JpqlQuery.EntityKey`, then `EntityKey` in
+    `hydrateCollections`, `find`, `EntityLoader.loadRows` and `PersistenceContext.loaded`), three row forms
+    (`Fetched` and its array, `FetchedEntity`, `Row`), the values, nulls and two key arrays, the state and its
+    snapshot copy, two state arrays at the commit flush (`EntityManagerImpl.readState`, `FlushEngine.read`), the
+    context's identity wrapper and its `LinkedHashMap` entry, the loader's pending-map entry, and a map entry and
+    a set node for the shared cache, which was off. No boxed `long`: the identifiers of this harness are below 128.
+  - `createUpdateDelete`: about half of the allocations are inside H2 (`executeBatch`, commit,
+    `setAutoCommit`). Of Noether's: `PersistenceContext.entries()` 14 times per operation (a list and two arrays
+    each), about 18 identity sets or maps per operation (`FlushEngine.identitySet`,
+    `EntityOperations.flushVisited` and `visited`, `EntityManagerImpl.flush`), about 20 lists and about 45
+    iterators over the three flushes.
+- **Results**, ops/s +/- JMH 99.9% error (3 iterations); B/op:
+  ```text
+  8d941a4 (before)
+  createUpdateDelete 255860.300 +/- 128228.836 ops/s; 21864.031 B/op
+  findById           808968.880 +/- 116262.687 ops/s;  5518.380 B/op
+  jpqlQuery           73477.695 +/-  46169.348 ops/s; 33600.052 B/op
+  update             366705.978 +/- 130483.845 ops/s; 12431.040 B/op
+  cc7dedf
+  createUpdateDelete 285748.180 +/-  61858.695 ops/s; 21000.028 B/op
+  findById           816704.657 +/- 153223.046 ops/s;  5254.380 B/op
+  jpqlQuery           78673.289 +/-   6747.932 ops/s; 31048.048 B/op
+  update             395691.775 +/- 127431.976 ops/s; 12111.103 B/op
+  2da5489
+  createUpdateDelete 265794.118 +/- 110326.866 ops/s; 20952.030 B/op
+  findById           814916.702 +/- 233328.830 ops/s;  5150.380 B/op
+  jpqlQuery           81095.396 +/-  17483.612 ops/s; 28960.047 B/op
+  update             399604.484 +/-  49923.780 ops/s; 12055.206 B/op
+  77203ed
+  createUpdateDelete 334969.272 +/-  37645.645 ops/s; 15432.024 B/op
+  findById           901060.428 +/- 169034.966 ops/s;  4534.379 B/op
+  jpqlQuery           85828.288 +/-   6100.590 ops/s; 28144.044 B/op
+  update             439205.673 +/- 163441.546 ops/s; 10599.605 B/op
+  6e688b1
+  createUpdateDelete 320198.301 +/-  55388.472 ops/s; 14792.025 B/op
+  findById           904908.522 +/- 192911.395 ops/s;  4214.379 B/op
+  jpqlQuery           97028.636 +/-   8444.702 ops/s; 23771.679 B/op
+  update             450580.011 +/-  72823.285 ops/s; 10007.646 B/op
+  6970119
+  createUpdateDelete 347292.744 +/-  54833.590 ops/s; 14792.023 B/op
+  findById           948984.678 +/- 259267.514 ops/s;  4150.379 B/op
+  jpqlQuery          134992.103 +/-  22243.358 ops/s; 16705.277 B/op
+  update             480064.199 +/-  98457.718 ops/s;  9935.797 B/op
+  ```
+- **Delta of each commit**, B/op, order `createUpdateDelete / findById / jpqlQuery / update`:
+  `cc7dedf` **-864 / -264 / -2,552 / -320**;
+  `2da5489` **-48 / -104 / -2,088 / -56**;
+  `77203ed` **-5,520 / -616 / -816 / -1,456**;
+  `6e688b1` **-640 / -320 / -4,372 / -592**;
+  `6970119` **0 / -64 / -7,067 / -72**.
+  Together, against `8d941a4`: **-32.3% / -24.8% / -50.3% / -20.1%**.
+- **Comparison with previous run**: the "before" run is within 0.6% of the Noether allocation of
+  BENCH-20261111-04 on `createUpdateDelete`, `findById` and `update`, and 3.9% below it on `jpqlQuery`
+  (33,600 against 34,976, the fork-to-fork variation of that workload, see BENCH-20261111-07).
+- **Interpretation**: the largest steps are the bookkeeping of a flush that has little or nothing to write
+  (`77203ed`, three flushes per `createUpdateDelete`), and the forms a row took on its way to the persistence
+  context (`6970119`), where the 7.1 kB are more than the objects removed by hand: with fewer of them the JIT
+  also removes others. `6e688b1` depends on the shared cache mode: the harness sets it to `NONE` for every
+  provider, and the default mode without a `@Cacheable` entity gets the same path. Throughput intervals of
+  these 3-iteration runs overlap from one commit to the next, except `jpqlQuery` after `6970119`. No column,
+  row, snapshot, dirty check, version check, callback, flush ordering, lazy reference or cascade is changed;
+  `./mvnw -ntp clean verify` passes on `6970119` (core: 903 tests, six of them new). The official TCK was
+  not rerun.
+
+## BENCH-20261111-07 — Allocation changes, final campaign against Hibernate ORM 5.6 (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commit**: `6970119` (`perf/allocation`), installed in a scratch local repository right before the run
+  (`./mvnw -ntp install -DskipTests -Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=~/.m2/repository`);
+  the SHA-256 of the installed `noether-jpa-core` jar is the worktree's, and `test-classpath.txt` of the
+  Noether run names the scratch jar.
+- **JVM**: Temurin 25.0.3 (2026-04-21 LTS), 64-Bit Server VM, default flags.
+- **Hardware**: Apple M5 Max / 18 cores / 128 GB RAM.
+- **OS**: macOS 27.2, arm64.
+- **Providers / configuration**: as BENCH-20261111-01 (Noether 0.4.0-SNAPSHOT, Hibernate ORM 5.6.15.Final,
+  H2 2.3.232, unchanged harness and preflight checks).
+- **Exact command**, from `noether-persistence/noether-jpa-bench`:
+  ```sh
+  export MAVEN_ARGS="-Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=$HOME/.m2/repository"
+  export BENCH_RUN_ID=20261111-allocation
+  ./run-bench.sh noether && ./run-bench.sh hibernate5
+  ```
+  JMH settings unchanged: `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Results**, JMH 99.9% error, normalized allocation:
+  ```text
+  noether
+  createUpdateDelete 348522.345 +/-  5271.039 ops/s; 14824.018 +/- 0.037 B/op
+  findById           935077.108 +/- 10403.807 ops/s;  4126.379 +/- 0.002 B/op
+  jpqlQuery          130653.075 +/-   911.786 ops/s; 17488.028 +/- 0.012 B/op
+  update             458971.204 +/- 11120.243 ops/s;  9895.823 +/- 0.025 B/op
+  hibernate5
+  createUpdateDelete 236883.079 +/-  4501.488 ops/s; 17960.038 +/- 0.153 B/op
+  findById           517831.607 +/-  2186.504 ops/s;  7485.828 +/- 0.073 B/op
+  jpqlQuery           67493.000 +/-   566.403 ops/s; 26658.322 +/- 0.177 B/op
+  update             287313.921 +/-  6738.224 ops/s; 13766.911 +/- 0.158 B/op
+  ```
+- **Delta versus BENCH-20261111-04**, order `createUpdateDelete / findById / jpqlQuery / update`:
+  - Noether throughput **+27.8% / +13.7% / +64.4% / +12.8%**; allocation
+    **-32.6% / -25.4% / -50.0% / -20.3%**. The 99.9% intervals of the two campaigns do not overlap on any
+    workload.
+  - Hibernate 5.6 throughput -1.0% / +4.7% / -0.1% / +4.0%; allocation within 0.7%. Its code is the same:
+    this is the variation between two sessions of this machine, and the scale against which the Noether
+    deltas are to be read: the +13.7% and +12.8% of Noether on `findById` and `update` are about three times
+    that scale.
+- **Noether versus Hibernate 5.6, this session**: allocation **0.83x / 0.55x / 0.66x / 0.72x** Hibernate's
+  (it was 1.23x / 0.73x / 1.32x / 0.90x): Noether allocates less on the four workloads. Throughput
+  **+47.1% / +80.6% / +93.6% / +59.7%**, the 99.9% intervals do not overlap on any workload.
+- **Noise**: shared machine; load averages 3.94 / 3.29 / 3.78 before the Noether run, 2.31 / 2.93 / 3.60
+  before the Hibernate run, 2.26 / 2.85 / 3.52 after it.
+- **Fork-to-fork variation of the allocation**: `jpqlQuery` is 17,488 B/op here and 16,705 B/op in the run
+  of the same code in BENCH-20261111-06 (4.7%). Within a fork the figure is constant (+/- 0.012); between
+  forks the JIT does not always remove the same temporary objects. The other workloads move by less than 0.6%.
+- **Remaining**:
+  - H2 itself is half of the allocations of `createUpdateDelete`, and every transaction still pays the H2
+    commit of `setAutoCommit(true)` (BENCH-20261111-04): a `mansart-pool` change.
+  - Per result row, `jpqlQuery` still makes the placeholder of the select item (`JpqlQuery.EntityKey`) and
+    the `EntityKey` of `find` that resolves it, next to the row's own key: the select item and the fetched
+    columns of the same entity are read as two things. A `boolean[]` of nulls per row could be a bit mask.
+  - `ManagedAccess.read` boxes primitive attributes at each read; this harness hides most of it
+    (identifiers and versions below 128). Comparing without boxing needs generated typed comparisons, a
+    change of the generated access.
+  - The first snapshot of a find by identifier is still a copy of the state array.
+  - `JdbcExecution.call` (BENCH-20261111-02) is unchanged and not measured by this harness.
+- **Limitations**: one fork per provider, single thread, in-memory H2, a new entity manager per operation,
+  an entity without relationships, the shared cache off for both providers. Not a production latency or
+  scalability claim. Hibernate 7.4 and EclipseLink were not rerun.
+  Raw evidence: `noether-jpa-bench/target/bench-reports/20261111-allocation/{noether,hibernate5}/`.
+
+## BENCH-20261111-08 — Allocation changes on PostgreSQL 17, allocation only (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commit**: `6970119` (`perf/allocation`), the scratch installation of BENCH-20261111-07.
+- **JVM / hardware / OS**: as BENCH-20261111-07.
+- **Database**: PostgreSQL 17.11 (`postgres:17-alpine`, default settings) in a disposable container (Docker
+  29.9.2) on `127.0.0.1:55432`, sharing the machine with the JVM; PostgreSQL JDBC driver 42.7.4. Stopped
+  after the run.
+- **Exact command**: the command of BENCH-20261111-05 with `BENCH_RUN_ID=20261111-allocation-pg`, one run
+  of `./run-bench.sh noether` then one of `./run-bench.sh hibernate5`. JMH settings unchanged.
+- **Results**, JMH 99.9% error, normalized allocation:
+  ```text
+  noether
+  createUpdateDelete 1140.361 +/-  53.126 ops/s;  6571.233 +/-   1.687 B/op
+  findById           7439.808 +/- 218.600 ops/s;  2841.557 +/-   0.207 B/op
+  jpqlQuery          6170.673 +/- 242.833 ops/s; 24008.596 +/-   0.289 B/op
+  update             1357.879 +/- 170.975 ops/s;  4441.697 +/- 320.693 B/op
+  hibernate5
+  createUpdateDelete 1187.023 +/- 225.614 ops/s;  8669.708 +/- 123.319 B/op
+  findById           7032.142 +/- 204.989 ops/s;  4689.621 +/-   5.389 B/op
+  jpqlQuery          5894.881 +/- 197.361 ops/s; 30875.250 +/-   1.859 B/op
+  update             1342.265 +/- 183.334 ops/s;  6502.129 +/- 214.674 B/op
+  ```
+- **Delta versus BENCH-20261111-05**, Noether "after", allocation, order
+  `findById / jpqlQuery / update / createUpdateDelete`: 4,202 to 2,842 (**-32.4%**), 41,561 to 24,009
+  (**-42.2%**), 6,992 to 4,442 (**-36.5%**), 13,499 to 6,571 (**-51.3%**). Hibernate 5.6 is within 0.5% of
+  its range of BENCH-20261111-05 on the four workloads.
+- **Noether versus Hibernate 5.6**: allocation **0.61x / 0.78x / 0.68x / 0.76x** Hibernate's, same order;
+  it was 0.89x / 1.34x / 1.07x / 1.57x. Noether allocates less on the four workloads on PostgreSQL too.
+- **Throughput**: one run per provider, the 99.9% intervals overlap on the four workloads. BENCH-20261111-05
+  showed that a single run on this set-up ranks nothing; no throughput claim is made here.
+- **Limitations**: as BENCH-20261111-05; one run per provider.
+  Raw evidence: `noether-jpa-bench/target/bench-reports/20261111-allocation-pg/{noether,hibernate5}/`.
+
+## BENCH-20261111-09 — Hot paths split into methods for the SonarQube gate, before and after (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commits**: before `f706085` (`fix-proposals`); after `828bf08` (`fix/sonar-pr56`), twelve commits that
+  split `FlushEngine.flush` and `insert`, `EntityLoader.loadRows` and `completeRows`, the execution of a JPQL
+  query, the constructor, flush and find of `EntityManagerImpl` and `EntityOperations.beforeFlush` into private
+  methods, without a change of behavior. Each side installed in a scratch local repository
+  (`./mvnw -ntp install -DskipTests -Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=~/.m2/repository`) and
+  kept; the SHA-256 of the `noether-jpa-core` jar starts with `a68377618c9e` before and `02c0a3444a59` after,
+  and `test-classpath.txt` of each run names the scratch jar. `~/.m2` was not written.
+- **JVM**: Temurin 25.0.3+9 (2026-04-21 LTS), 64-Bit Server VM, default flags.
+- **Hardware**: Apple M5 Max / 18 cores / 128 GB RAM.
+- **OS**: macOS 27.2, arm64.
+- **Providers / configuration**: Noether 0.4.0-SNAPSHOT alone, H2 2.3.232 in memory, unchanged harness and
+  preflight checks.
+- **Exact command**, from `noether-persistence/noether-jpa-bench`, three times per side, the sides alternating
+  from the second run on (before 1, after 1, before 2, after 2, before 3, after 3), the artifacts of the side
+  copied into the scratch repository before each run:
+  ```sh
+  export MAVEN_ARGS="-Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=$HOME/.m2/repository"
+  BENCH_RUN_ID=20261111-sonar-<side>[-<run>] ./run-bench.sh noether
+  ```
+  JMH settings unchanged: `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Results**, ops/s +/- JMH 99.9% error; normalized allocation (+/- 0.04 B/op or less within a fork):
+  ```text
+  f706085 (before), runs 1 / 2 / 3
+  createUpdateDelete 339411.114 +/-  3723.173 | 347287.404 +/- 2050.178 | 345209.949 +/-  1952.806 ops/s; 14824.018 | 14752.018 | 14776.018 B/op
+  findById           900194.358 +/- 11421.777 | 921648.986 +/- 2615.935 | 911341.260 +/-  4184.280 ops/s;  4278.379 |  4190.379 |  4174.379 B/op
+  jpqlQuery          129129.481 +/-   331.279 | 127761.714 +/- 1066.704 | 128463.189 +/-   852.047 ops/s; 17448.028 | 17416.029 | 17496.028 B/op
+  update             474057.121 +/-  5836.079 | 462927.912 +/- 2943.849 | 470396.219 +/- 10961.367 ops/s; 10007.823 | 10023.824 | 10031.822 B/op
+  828bf08 (after), runs 1 / 2 / 3
+  createUpdateDelete 349259.646 +/-  5637.271 | 349813.968 +/-  963.144 | 344147.704 +/-  2553.140 ops/s; 14576.018 | 14576.018 | 14576.018 B/op
+  findById           912261.115 +/- 35374.754 | 894594.428 +/- 3952.138 | 916056.640 +/-  5908.770 ops/s;  4174.379 |  4158.379 |  4158.379 B/op
+  jpqlQuery          134017.195 +/-   335.802 | 130532.758 +/- 1441.868 | 132891.480 +/-   602.647 ops/s; 17592.027 | 17560.028 | 17592.028 B/op
+  update             472261.761 +/-  1897.584 | 463305.110 +/- 6754.611 | 472674.555 +/-  4927.163 ops/s;  9991.822 |  9991.823 |  9975.822 B/op
+  ```
+- **Delta**, mean of the three runs, after against before, order
+  `createUpdateDelete / findById / jpqlQuery / update`:
+  - throughput 343,969 to 347,741 (**+1.1%**), 911,061 to 907,637 (**-0.4%**), 128,451 to 132,480 (**+3.1%**),
+    469,127 to 469,414 (**+0.1%**). The runs of one side differ by up to 2.4% (`findById`, 900,194 to 921,649
+    before): only `jpqlQuery`, whose three runs after are all above its three runs before, is outside that.
+  - allocation 14,784 to 14,576 B/op (**-1.4%**), 4,214 to 4,164 (**-1.2%**), 17,453 to 17,581 (**+0.7%**),
+    10,021 to 9,987 (**-0.3%**).
+- **The +128 B/op of `jpqlQuery` is the JIT's, not the code's**: the diff of the production sources adds no
+  allocation site and no lambda, and removes two sites (the list of the two entity graph hint names of a find,
+  now a constant, and the `EntityItem` made per row for an entity inside an embeddable result). Checked with
+  the scalar replacement of the JIT off, where the figure no longer depends on what the JIT removes
+  (`-wi 3 -i 3 -w 1s -r 1s -f 1 -t 1 -foe true -prof gc -jvmArgsAppend -XX:-EliminateAllocations`, the
+  `noether-jpa-core` jar of each commit ahead of the installed one, three forks each, the same figure in the
+  three forks to 0.003 B/op):
+  ```text
+  f706085  createUpdateDelete 19496.038 B/op; jpqlQuery 20656.060 B/op
+  828bf08  createUpdateDelete 19416.039 B/op; jpqlQuery 20640.058 B/op
+  ```
+  The code allocates 80 B/op less on `createUpdateDelete` and 16 B/op less on `jpqlQuery`; which objects these
+  are was not looked for. With the default flags the JIT therefore removes about 140 B/op less of the temporary
+  objects of `jpqlQuery` than it did; the likely reason, methods of another size to inline, was not verified.
+  Commit by commit (same short settings, default flags, three forks each, B/op):
+  `f706085` 16,680 to 16,752 (nine forks); `f75d188` (EntityLoader) 16,776 to 16,800; `b7c9455` (FlushEngine) 16,696 to
+  16,800; `853626b` (JpqlQuery) 16,800 to 16,832; `190bbde` (EntityManagerImpl) 16,824 to 16,848; `e8b7171`
+  (EntityOperations) 16,816 to 16,872. Two other shapes of `EntityLoader.loadRows` were measured the same way
+  and discarded: the loop over the rows kept in `loadRows` (16,808 to 16,824), and the loop with the making of
+  a new instance in it, as in `f706085` (16,800 to 16,848). Neither gives the objects back, so the shape with
+  the lowest complexity stays.
+- **Final code**, `ad9fe8d`: three more conditions moved to methods of their own after the campaign
+  (`FlushEngine.validateMapsId`, `JpqlQuery.uniqueOwners`, `EntityManagerImpl.added`). Two more alternating
+  runs, same command (`BENCH_RUN_ID=20261111-sonar-<side>-4` and `-5`), jar `13beee7e52db` after:
+  ```text
+  f706085 (before), runs 4 / 5
+  createUpdateDelete 345522.805 +/- 4045.820 | 336361.124 +/- 3502.269 ops/s; 14824.018 | 14728.019 B/op
+  findById           920304.986 +/- 5599.649 | 902397.951 +/- 2724.177 ops/s;  4206.379 |  4206.379 B/op
+  jpqlQuery          128672.860 +/-  259.921 | 129547.944 +/-  122.493 ops/s; 17520.028 | 17464.028 B/op
+  update             457756.136 +/- 3486.028 | 461210.092 +/- 4389.625 ops/s; 10111.824 | 10023.823 B/op
+  ad9fe8d (after), runs 4 / 5
+  createUpdateDelete 353098.930 +/- 3648.950 | 333760.864 +/- 1052.997 ops/s; 14576.018 | 14888.019 B/op
+  findById           904105.492 +/- 2991.801 | 917025.046 +/- 4600.407 ops/s;  4158.379 |  4174.379 B/op
+  jpqlQuery          133424.036 +/-  786.776 | 134110.606 +/-  500.817 ops/s; 17592.028 | 17616.027 B/op
+  update             465758.306 +/- 2982.283 | 474519.509 +/- 4053.151 ops/s; 10007.822 | 10055.823 B/op
+  ```
+  The same picture: `jpqlQuery` +3.6% in throughput and +0.6% in allocation (mean of the two runs), the other
+  workloads inside the variation of one side. Run 5 of `createUpdateDelete` after allocates 14,888 B/op where
+  the four other runs after give 14,576: 312 B/op between two forks of the same jar, more than any delta of
+  this entry.
+- **Comparison with previous run**: against the Noether figures of BENCH-20261111-07 (`6970119`), the "before"
+  mean of runs 1 to 3 is -1.3% / -2.6% / -1.7% / +2.2% in throughput and -0.3% / +2.1% / -0.2% / +1.3% in
+  allocation: the commits of `fix-proposals` after `6970119` and another session of the machine.
+- **Noise**: shared machine, other sessions building; load averages (1 min) 3.14 before the first run, 4.18
+  before "after 1", then 5.58 / 5.61 / 5.81 / 6.49 before the alternating runs 2 and 3, and
+  6.33 / 4.34 / 3.50 / 3.02 before runs 4 and 5.
+- **Interpretation**: splitting the hot methods costs no throughput on the four workloads; `jpqlQuery` is 2.2%
+  to 3.8% faster in each of the five pairs of runs. Its allocation is 0.6% to 0.7% higher, an effect of what the JIT
+  removes and not of an object the code makes, below the 4.7% that workload moves between two forks of the same
+  code in BENCH-20261111-07. The allocation of the three other workloads stays inside what two forks of the
+  same jar give. `./mvnw -ntp clean verify` passes on `ad9fe8d` (1215 tests, as on `f706085`). The official
+  TCK was not rerun.
+- **Limitations**: as BENCH-20261111-07; Noether alone, no other provider rerun. The commit-by-commit and the
+  `-XX:-EliminateAllocations` figures come from shorter runs and are not comparable with the campaign figures.
+  Raw evidence: `noether-jpa-bench/target/bench-reports/20261111-sonar-{before,after}[-2|-3|-4|-5]/noether/`.
+
+## BENCH-20261111-10 — The pool moves to noether-jpa-pool-mansart, before and after (Vidocq/noether#45)
+
+- **Date**: 2026-11-11
+- **Commits**: before `628d5e1` (`fix-proposals`: `noether-jpa-core` requires `mansart-pool-core` and pools a
+  `jakarta.persistence.jdbc.*` unit itself); after `feat/optional-pool` (audit finding F7: the core finds a
+  `ConnectionPoolFactory` through `ServiceLoader`, `noether-jpa-pool-mansart` provides one with the same
+  `MansartDataSource`, and the `noether` profile of the harness adds that module). Each side installed in its own
+  scratch local repository (`-Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=~/.m2/repository`); the SHA-256
+  of the `noether-jpa-core` jar starts with `924b68ae7a10` before and `df8964011a10` after, the one of
+  `noether-jpa-pool-mansart` with `bdb6a312ddee`. `~/.m2` was not written.
+- **The bench still pools**: `test-classpath.txt` of the "after" run names `noether-jpa-pool-mansart` and
+  `mansart-pool-core`; `jmh.log` of both runs holds no "has no connection pool" line (the line the core logs when
+  it finds no factory) and no "not visible to DriverManager" line. `run-bench.sh noether` now stops when the
+  module is missing from the class path.
+- **JVM**: Temurin 25.0.3+9 (2026-04-21 LTS), 64-Bit Server VM, default flags.
+- **Hardware**: Apple M5 Max / 18 cores / 128 GB RAM.
+- **OS**: macOS 27.2, arm64.
+- **Providers / configuration**: Noether 0.4.0-SNAPSHOT alone, H2 2.3.232 in memory, unchanged harness and
+  preflight checks.
+- **Exact command**, from `noether-persistence/noether-jpa-bench` of each side, once per side (before first):
+  ```sh
+  export MAVEN_ARGS="-Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=$HOME/.m2/repository"
+  BENCH_RUN_ID=20261111-optional-pool-<side> ./run-bench.sh noether
+  ```
+  JMH settings unchanged: `-wi 3 -i 5 -w 2s -r 2s -f 1 -t 1 -foe true -prof gc -rf json`.
+- **Results**, ops/s +/- JMH 99.9% error; normalized allocation:
+  ```text
+  628d5e1 (before)
+  createUpdateDelete 340962.587 +/- 10609.770 ops/s; 14576.018 B/op
+  findById           905442.504 +/- 34534.279 ops/s;  4174.379 B/op
+  jpqlQuery          131043.017 +/-  5660.110 ops/s; 17592.028 B/op
+  update             461264.254 +/- 30013.706 ops/s; 10055.824 B/op
+  feat/optional-pool (after)
+  createUpdateDelete 344212.985 +/-  7408.343 ops/s; 14576.018 B/op
+  findById           900478.761 +/-  8465.320 ops/s;  4238.379 B/op
+  jpqlQuery          133113.342 +/-  1698.395 ops/s; 17592.028 B/op
+  update             452803.536 +/-  3437.922 ops/s;  9999.824 B/op
+  ```
+- **Delta**, after against before, order `createUpdateDelete / findById / jpqlQuery / update`: throughput
+  **+1.0% / -0.5% / +1.6% / -1.8%**, allocation **0 / +64 B/op (+1.5%) / 0 / -56 B/op (-0.6%)**.
+- **Checks on `findById` and `update`**, shorter runs from the same two builds
+  (`java -cp <test-classes>:<classes>:<test-classpath> org.openjdk.jmh.Main
+  'JpaProviderBenchmark.(findById|update)$' -wi 2 -i 3 -w 1s -r 1s -t 1 -foe true -prof gc`):
+  ```text
+  -f 3, before then after
+  findById 931266.302 +/- 25621.078 | 904367.379 +/- 45940.915 ops/s; B/op per fork 4206/4158/4222 | 4174/4142/4158
+  update   481706.014 +/- 10015.741 | 450949.746 +/-  9904.932 ops/s; B/op per fork 9974/10054/9974 | 10022/10030/9974
+  -f 3, after, before, after
+  findById 924302.730 +/- 15440.125 | 917727.134 +/- 15410.241 | 925599.786 +/- 6629.736 ops/s
+  update   473450.343 +/- 11337.056 | 474806.717 +/-  9988.233 | 472335.330 +/- 12420.770 ops/s
+  -f 2 -jvmArgsAppend -XX:-EliminateAllocations, before then after
+  findById 5686.759 | 5686.759 B/op; update 13004.971 | 13004.698 B/op
+  ```
+  With the scalar replacement of the JIT off, both sides allocate the same bytes per operation: the `+64` and
+  `-56` B/op of the campaign are what the JIT removes in one fork, and two forks of the same jar differ by up to
+  144 B/op on `findById` (4,158 to 4,302 in the second check). The 6.4% lower `update` of the first check comes from
+  the order of the runs: with the sides alternated, the three runs lie within 0.5% of each other.
+- **Comparison with previous run**: against the "after" side of BENCH-20261111-09 (`828bf08`, runs 1 to 3), the
+  "before" run here is -1.9% / -0.2% / -1.1% / -1.7% in throughput and 0 / +0.3% / +0.1% / +0.7% in allocation:
+  the same hot paths a few commits later, another load on the machine.
+- **Noise**: shared machine, another session building; load averages (1 min) 2.56 before the "before" run, 4.82
+  before the "after" run, 2.19 to 3.88 during the checks.
+- **Interpretation**: moving the pool behind a `ServiceLoader` provider costs nothing measurable. The pooled
+  path adds one interface call per connection acquisition (`ConnectionPool.getConnection`, then
+  `MansartDataSource.getConnection`) and no allocation. `./mvnw -ntp clean verify` passes on the branch. The
+  official TCK was not rerun.
+- **Limitations**: one fork per side for the campaign; the checks are shorter runs and are not comparable with
+  the campaign figures. H2 in memory only, PostgreSQL not rerun. Noether alone, no other provider rerun.
+  Raw evidence: before
+  `<scratch>/optional-pool-before-src/noether-persistence/noether-jpa-bench/target/bench-reports/20261111-optional-pool-before/noether/`
+  (a `git archive` copy of `628d5e1`), after
+  `noether-jpa-bench/target/bench-reports/20261111-optional-pool-after/noether/`; the checks in
+  `<scratch>/logs/optional-pool-alloc-probe{,2}.log`.

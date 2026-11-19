@@ -1,0 +1,148 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.query;
+
+import io.vidocq.noether.jpa.core.mapping.MappedEntity;
+import io.vidocq.noether.jpa.core.mapping.MappedUnit;
+import io.vidocq.noether.jpa.dialect.Dialect;
+import jakarta.persistence.CacheRetrieveMode;
+import jakarta.persistence.CacheStoreMode;
+import jakarta.persistence.FlushModeType;
+import jakarta.persistence.LockModeType;
+import java.sql.Connection;
+import java.util.List;
+import java.util.function.Function;
+
+/** What a query needs from the entity manager that created it. */
+public interface QueryRuntime {
+
+    /**
+     * Initializes on the managed {@code entity} the LAZY collections {@code plan} names, and theirs on their targets, in
+     * the transaction and on the connection of the query that returned it.
+     */
+    default void fetch(Object entity, FetchPlan plan, Connection connection) {
+    }
+
+    /** The attributes the entity graph {@code graph}, a fetch or load graph hint, initializes. */
+    default FetchPlan plan(Object graph) {
+        return new FetchPlan();
+    }
+
+    /** Whether the entity manager is open: the methods of its queries need it (§3.11). */
+    boolean isOpen();
+
+    /** The mapped persistence unit. */
+    MappedUnit mapping();
+
+    /** The parsed and translated query strings of the factory, shared by its entity managers. */
+    QueryPlans plans();
+
+    /** Checks the unit and root context of a fetch/load graph hint before execution. */
+    default void validateGraph(Object graph, Class<?> root) {
+        if (!(graph instanceof jakarta.persistence.EntityGraph<?>)) {
+            throw new IllegalArgumentException("Fetch/load hint must be an EntityGraph");
+        }
+    }
+
+    /**
+     * Runs {@code work} on the connection of the transaction, or on one of its own outside a transaction; first flushes
+     * the persistence context when {@code flushMode} is {@code AUTO} and a transaction is active (§3.10.8). A failure
+     * marks the transaction for rollback (§3.12).
+     */
+    <T> T read(FlushModeType flushMode, Function<Connection, T> work);
+
+    /**
+     * {@link #read(FlushModeType, Function)} with the cache modes of a query in effect while {@code work} loads its
+     * entities, in place of the entity manager's (BUG-20261113-05).
+     */
+    default <T> T read(FlushModeType flushMode, CacheRetrieveMode retrieveMode, CacheStoreMode storeMode,
+            Function<Connection, T> work) {
+        return read(flushMode, work);
+    }
+
+    /**
+     * What a new query starts with: the query and lock timeouts of the entity manager, else of its unit (§8.2.1.9),
+     * and the entity manager's cache modes. The query's hints and setters override them (BUG-20261113-04).
+     */
+    default Defaults defaults() {
+        return Defaults.NONE;
+    }
+
+    /**
+     * The timeouts, in milliseconds or {@code null} for the database's own, and the cache modes a new query starts
+     * with.
+     */
+    record Defaults(Integer queryTimeout, Integer lockTimeout, CacheRetrieveMode retrieveMode, CacheStoreMode storeMode) {
+
+        /** No timeout, and the default cache modes. */
+        public static final Defaults NONE = new Defaults(null, null, CacheRetrieveMode.USE, CacheStoreMode.USE);
+    }
+
+    /**
+     * Runs a bulk statement's {@code work} on the connection of the active transaction —
+     * {@link jakarta.persistence.TransactionRequiredException} without one — after a flush unless {@code flushMode} is
+     * {@code COMMIT} (§3.11.6, §4.10). A failure marks the transaction for rollback (§3.12).
+     */
+    <T> T write(FlushModeType flushMode, Function<Connection, T> work);
+
+    /** Whether a transaction is active: a query with a lock mode needs one (§3.11). */
+    boolean inTransaction();
+
+    /** Records that the managed {@code entity}, which a query returned, holds the lock {@code mode} (§3.5). */
+    void locked(Object entity, LockModeType mode);
+
+    /** Locks a concrete result row when a derived range cannot take a database query lock. */
+    default void lockResult(Object entity, LockModeType mode, Integer timeout, Connection connection) {
+        throw new UnsupportedOperationException("Follow-on entity locking is not available");
+    }
+
+    /** The dialect of the database behind {@code connection}. */
+    Dialect dialect(Connection connection);
+
+    /** The managed instance of {@code type} with identity {@code id}: the persistence context's, else loaded; null if none. */
+    Object find(MappedEntity type, Object id, Connection connection);
+
+    /**
+     * Makes the instance of {@code type} with identity {@code id} managed from the columns a fetch join read for it
+     * ({@code values} and {@code nulls} indexed like the entity's statement columns), unless the persistence context
+     * already manages it: then that instance keeps its state, an unloaded reference being initialized in place.
+     */
+    default void hydrate(MappedEntity type, Object id, Object[] values, boolean[] nulls, Connection connection) {
+        find(type, id, connection);
+    }
+
+    /** Completes one SQL-fetched collection after registering all row identities, before publishing snapshots. */
+    default void hydrateCollection(List<io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedEntity> rows,
+            MappedEntity owner, int attribute,
+            List<io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedElement> elements, Connection connection) {
+        throw new UnsupportedOperationException("SQL collection hydration is not available");
+    }
+
+    /** D13's configured owner batch and parameter ceiling for split graph collectors. */
+    default int graphBatchBound(MappedEntity owner, Connection connection) {
+        return 1;
+    }
+
+    /** Completes all independent graph collectors in a single staged hydration scope. */
+    default void hydrateCollections(List<io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedEntity> rows,
+            List<io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedCollection> collections, Connection connection) {
+        throw new UnsupportedOperationException("Split graph hydration is not available");
+    }
+}

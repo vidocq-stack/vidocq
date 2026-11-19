@@ -1,0 +1,744 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.session;
+
+import io.vidocq.noether.jpa.core.context.EntityKey;
+import io.vidocq.noether.jpa.core.context.ManagedEntity;
+import io.vidocq.noether.jpa.core.context.PersistenceContext;
+import io.vidocq.noether.jpa.core.generation.IdGenerators;
+import io.vidocq.noether.jpa.core.mapping.CollectionMapping;
+import io.vidocq.noether.jpa.core.mapping.ElementCollectionMapping;
+import io.vidocq.noether.jpa.core.mapping.IndexMapping;
+import io.vidocq.noether.jpa.core.mapping.LazyCollection;
+import io.vidocq.noether.jpa.core.mapping.MappedEntity;
+import io.vidocq.noether.jpa.core.mapping.MappedUnit;
+import io.vidocq.noether.jpa.core.mapping.StatePolicy;
+import io.vidocq.noether.jpa.core.model.AssociationAttribute;
+import io.vidocq.noether.jpa.core.model.AttributeModel;
+import io.vidocq.noether.jpa.core.model.BasicAttribute;
+import io.vidocq.noether.jpa.core.model.CollectionIndex;
+import io.vidocq.noether.jpa.core.model.ElementCollectionAttribute;
+import io.vidocq.noether.jpa.core.model.EmbeddableModel;
+import io.vidocq.noether.jpa.core.model.EmbeddedAttribute;
+import io.vidocq.noether.jpa.core.spi.ManagedAccess;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.OptimisticLockException;
+import java.sql.Connection;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
+
+/**
+ * The entity operations of §3.2 on the persistence context of one entity manager — persist, remove, merge, refresh,
+ * detach — with their cascades through the relationships of the object graph (§3.2.2 to §3.2.7), and the orphan
+ * removal (§2.9).
+ */
+final class EntityOperations {
+
+    /** How the entity manager runs work on a connection: the transaction's, or one of its own. */
+    interface Connections {
+        <T> T on(Function<Connection, T> work);
+    }
+
+    /** The §3.6.3 callback before a persist, and the Bean Validation event (§3.6.1.2) of the same moment. */
+    private static final String PRE_PERSIST = "PrePersist";
+    private static final String PRE_PERSIST_EVENT = "pre-persist";
+
+    private final EntityManagerFactoryImpl factory;
+    private final PersistenceContext context;
+    private final Connections connections;
+
+    EntityOperations(EntityManagerFactoryImpl factory, PersistenceContext context, Connections connections) {
+        this.factory = factory;
+        this.context = context;
+        this.connections = connections;
+    }
+
+    MappedEntity type(Object instance) {
+        if (instance == null) {
+            throw new IllegalArgumentException("The entity cannot be null");
+        }
+        return factory.mapping().entity(instance.getClass()).orElseThrow(() -> new IllegalArgumentException(
+            instance.getClass().getName() + " is not an entity of persistence unit " + factory.getName()));
+    }
+
+    // ---- persist (§3.2.2) ---------------------------------------------------------------------------------
+
+    void persist(Object entity) {
+        persist(entity, visited());
+    }
+
+    private void persist(Object entity, Set<Object> visited) {
+        if (!visited.add(entity)) {
+            return;
+        }
+        MappedEntity type = type(entity);
+        Optional<ManagedEntity> known = context.entry(entity);
+        if (known.isEmpty()) {
+            type.callback(PRE_PERSIST, entity); // §3.6.3: before the persist operation, so before the identifier
+            factory.validator().validate(PRE_PERSIST_EVENT, entity);
+            generateId(type, entity);
+            type.deriveId(entity); // §2.4.1: what an @MapsId maps is the parent's key
+            context.persist(entity, type); // a detached instance fails at flush: its identity exists (§3.2.2)
+        } else if (known.get().status() == ManagedEntity.Status.REMOVED) {
+            type.callback(PRE_PERSIST, entity);
+            factory.validator().validate(PRE_PERSIST_EVENT, entity);
+            context.persist(entity, type);
+        }
+        cascade(entity, type, CascadeType.PERSIST, target -> persist(target, visited));
+        if (type.hasMapsId() && !context.entry(entity).orElseThrow().inserted()) {
+            type.deriveId(entity);
+            context.identify(context.entry(entity).orElseThrow(), type.id(entity));
+        }
+    }
+
+    /** §11.1.20: a generated identifier not assigned yet is assigned now, unless the insert generates it (IDENTITY). */
+    private void generateId(MappedEntity type, Object entity) {
+        if (IdGenerators.generatesBeforeInsert(type) && type.id(entity) == null) {
+            Object id = connections.on(connection -> factory.idGenerators(connection).next(type, connection));
+            type.access().set(entity, type.idAttributes()[0], id);
+        }
+    }
+
+    // ---- remove (§3.2.3) ----------------------------------------------------------------------------------
+
+    void remove(Object entity) {
+        remove(entity, visited());
+    }
+
+    private void remove(Object entity, Set<Object> visited) {
+        if (!visited.add(entity)) {
+            return;
+        }
+        MappedEntity type = type(entity);
+        Optional<ManagedEntity> known = context.entry(entity);
+        if (known.isPresent()) {
+            if (known.get().status() == ManagedEntity.Status.MANAGED) {
+                type.callback("PreRemove", entity);
+                factory.validator().validate("pre-remove", entity);
+                context.remove(entity);
+                cascade(entity, type, CascadeType.REMOVE, target -> remove(target, visited));
+            }
+            return; // removing a removed instance changes nothing
+        }
+        Object id = type.id(entity);
+        if (id != null && connections.on(connection -> factory.loader(connection).exists(type, id, connection))) {
+            throw new IllegalArgumentException("The instance of " + type.model().entityName() + " " + id
+                + " is detached: merge it before removing it (§3.2.3)");
+        }
+        // a new instance is ignored, but the remove still cascades from it
+        cascade(entity, type, CascadeType.REMOVE, target -> remove(target, visited));
+    }
+
+    // ---- merge (§3.2.7.1) ---------------------------------------------------------------------------------
+
+    <T> T merge(T entity) {
+        @SuppressWarnings("unchecked")
+        T merged = (T) merge(entity, new IdentityHashMap<>());
+        return merged;
+    }
+
+    private Object merge(Object entity, Map<Object, Object> merged) {
+        if (io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(entity)) return managedReference(entity);
+        Object done = merged.get(entity);
+        if (done != null) {
+            return done;
+        }
+        MappedEntity type = type(entity);
+        Optional<ManagedEntity> known = context.entry(entity);
+        if (known.isPresent()) {
+            return mergeManaged(entity, known.get(), type, merged);
+        }
+        Object managed = managedOfIdentity(type, entity);
+        if (managed == null) {
+            managed = persistedCopy(type, entity);
+        } else {
+            checkVersion(type, entity, managed);
+            copy(type, entity, managed);
+        }
+        merged.put(entity, managed);
+        cascadeMerge(entity, managed, type, merged);
+        if (type.hasMapsId() && !context.entry(managed).orElseThrow().inserted()) {
+            type.deriveId(managed);
+            context.identify(context.entry(managed).orElseThrow(), type.id(managed));
+        }
+        return managed;
+    }
+
+    /** §3.2.7.1: a managed instance merges into itself, through its cascades; a removed one cannot be merged. */
+    private Object mergeManaged(Object entity, ManagedEntity entry, MappedEntity type, Map<Object, Object> merged) {
+        if (entry.status() == ManagedEntity.Status.REMOVED) {
+            throw new IllegalArgumentException("The instance of " + type.model().entityName() + " is removed (§3.2.7.1)");
+        }
+        merged.put(entity, entity);
+        cascadeMerge(entity, entity, type, merged);
+        return entity;
+    }
+
+    /**
+     * The managed instance of the identity of the detached {@code entity}: the persistence context's, else loaded;
+     * {@code null} for a new instance, without an identifier or a row.
+     */
+    private Object managedOfIdentity(MappedEntity type, Object entity) {
+        Object id = type.id(entity);
+        if (id == null) {
+            return null;
+        }
+        Optional<ManagedEntity> sameIdentity = context.find(new EntityKey(type.root(), id));
+        if (sameIdentity.isEmpty()) {
+            return connections.on(connection -> factory.loader(connection).load(type, id, connection, context));
+        }
+        if (sameIdentity.get().status() == ManagedEntity.Status.REMOVED) {
+            throw new IllegalArgumentException("The instance of " + type.model().entityName() + " " + id + " is removed");
+        }
+        return sameIdentity.get().instance();
+    }
+
+    /** A new instance merged: a new managed copy (§3.2.7.1), persisted. */
+    private Object persistedCopy(MappedEntity type, Object entity) {
+        Object managed = type.access().instantiate();
+        copy(type, entity, managed);
+        type.callback(PRE_PERSIST, managed); // §3.6.3: the managed copy is the instance persisted
+        factory.validator().validate(PRE_PERSIST_EVENT, managed);
+        generateId(type, managed);
+        type.deriveId(managed);
+        context.persist(managed, type);
+        return managed;
+    }
+
+    /** §3.4.2: a detached instance older than its row cannot be merged. */
+    private static void checkVersion(MappedEntity type, Object detached, Object managed) {
+        type.model().version().ifPresent(version -> {
+            int index = type.model().attributes().indexOf(version);
+            Object theirs = type.access().get(detached, index);
+            Object ours = type.access().get(managed, index);
+            if (!Objects.equals(theirs, ours)) {
+                throw new OptimisticLockException("The instance of " + type.model().entityName() + " was read at version " + theirs
+                    + ", its row is at version " + ours, null, detached);
+            }
+        });
+    }
+
+    /** The relationships of {@code managed} cascading MERGE point to the merged targets of {@code entity}'s. */
+    private void cascadeMerge(Object entity, Object managed, MappedEntity type, Map<Object, Object> merged) {
+        List<AttributeModel> attributes = type.model().attributes();
+        for (int i = 0; i < attributes.size(); i++) {
+            if (attributes.get(i) instanceof AssociationAttribute association && association.cascades(CascadeType.MERGE)) {
+                mergeRelationship(entity, managed, type, i, association, merged);
+            }
+        }
+        for (ElementCollectionMapping elements : type.statements().elementCollections()) {
+            mergeElementReferences(entity, managed, type, elements, merged);
+        }
+    }
+
+    /** The relationship {@code attribute} of {@code managed}, cascading MERGE, points to the merged targets of {@code entity}'s. */
+    private void mergeRelationship(Object entity, Object managed, MappedEntity type, int attribute,
+            AssociationAttribute association, Map<Object, Object> merged) {
+        Object value = type.access().get(entity, attribute);
+        if (LazyCollection.unloaded(value) || io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(value)) {
+            return; // §3.2.7.1: not loaded, nothing of it was changed to merge
+        }
+        if (value instanceof Collection<?> collection) {
+            Collection<Object> elements = mapped(association, collection, target -> merge(target, merged));
+            if (managed != entity) {
+                type.access().set(managed, attribute, elements);
+            } else if (!sameElements(collection, elements)) {
+                replace(collection, elements); // a managed instance keeps its collection, with the managed elements
+            }
+        } else if (value instanceof Map<?, ?> map) {
+            Map<Object, Object> entries = mappedMap(association, map, key -> managedKey(association, key),
+                target -> merge(target, merged));
+            if (managed != entity) {
+                type.access().set(managed, attribute, entries);
+            } else {
+                replace(map, entries); // a managed instance keeps its map, with the managed keys and values
+            }
+        } else if (value != null) {
+            type.access().set(managed, attribute, merge(value, merged));
+        }
+    }
+
+    /**
+     * The entities an element collection of {@code managed} references: the merged targets where the reference cascades
+     * MERGE, else their managed instances.
+     */
+    @SuppressWarnings("unchecked")
+    private void mergeElementReferences(Object entity, Object managed, MappedEntity type, ElementCollectionMapping elements,
+            Map<Object, Object> merged) {
+        Object value = type.access().get(managed, elements.attribute());
+        if (value == null || LazyCollection.unloaded(value) || !elements.hasReferences()) return;
+        Object mapped = elements.mapReferences(value, (association, target) ->
+            association.cascades(CascadeType.MERGE) ? merge(target, merged) : managedReference(target));
+        if (managed == entity && value instanceof Map<?, ?> map) {
+            replace(map, (Map<Object, Object>) mapped);
+        } else if (managed == entity && value instanceof Collection<?> collection) {
+            replace(collection, (Collection<Object>) mapped);
+        } else {
+            type.access().set(managed, elements.attribute(), mapped);
+        }
+    }
+
+    /**
+     * Copies the state of {@code from} onto {@code to}: values as they are, embeddables and element collections as new
+     * copies, the target of a
+     * single-valued relationship that does not cascade merge replaced by the managed instance of its identity
+     * (§3.2.7.1); the relationships cascading merge are set by {@link #cascadeMerge}.
+     */
+    private void copy(MappedEntity type, Object from, Object to) {
+        Object[] state = new Object[type.model().attributes().size()];
+        type.access().read(from, state);
+        List<AttributeModel> attributes = type.model().attributes();
+        for (int i = 0; i < state.length; i++) {
+            if (state[i] == null) {
+                continue;
+            }
+            // §3.2.7.1: a LAZY collection that was not loaded is not merged, the managed instance keeps its own
+            state[i] = LazyCollection.unloaded(state[i]) || io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(state[i])
+                ? type.access().get(to, i)
+                : copied(attributes.get(i), state[i]);
+        }
+        type.access().write(to, state);
+    }
+
+    /** The loaded, non-null {@code value} of {@code attribute} as {@link #copy} sets it on the managed instance. */
+    private Object copied(AttributeModel attribute, Object value) {
+        return switch (attribute) {
+            case EmbeddedAttribute embedded -> copy(embedded.embeddable(), value);
+            case ElementCollectionAttribute elements -> copiedElements(elements, value);
+            case AssociationAttribute association -> managedTargets(association, value);
+            case BasicAttribute _ -> value;
+        };
+    }
+
+    /** Values, not instances: an element collection of its own, its embeddables copied. */
+    private Object copiedElements(ElementCollectionAttribute elements, Object value) {
+        UnaryOperator<Object> element = v -> v != null && elements.element() instanceof EmbeddedAttribute embedded
+            ? copy(embedded.embeddable(), v) : v;
+        if (value instanceof Collection<?> values) {
+            Collection<Object> copy = CollectionMapping.newCollection(elements.javaType());
+            values.forEach(v -> copy.add(element.apply(v)));
+            return copy;
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<Object, Object> copy = IndexMapping.newMap(elements.javaType());
+            map.forEach((k, v) -> copy.put(elements.index()
+                instanceof CollectionIndex.ByEmbedded(EmbeddedAttribute key)
+                    ? copy(key.embeddable(), k) : k, element.apply(v)));
+            return copy;
+        }
+        return value;
+    }
+
+    /**
+     * The targets of a relationship: a single-valued one that does not cascade merge replaced by the managed instance of
+     * its identity; a collection of its own, of the managed instances of its elements, or of the merged ones (set by
+     * {@link #cascadeMerge}).
+     */
+    private Object managedTargets(AssociationAttribute association, Object value) {
+        boolean cascades = association.cascades(CascadeType.MERGE);
+        if (association.singleValued()) {
+            return cascades ? value : managedReference(value);
+        }
+        UnaryOperator<Object> elements = cascades ? element -> element : this::managedReference;
+        if (value instanceof Collection<?> collection) {
+            return mapped(association, collection, elements);
+        }
+        if (value instanceof Map<?, ?> map) {
+            return mappedMap(association, map, key -> managedKey(association, key), elements);
+        }
+        return value;
+    }
+
+    /** A new collection of the declared type of {@code association}, of the elements of {@code collection} mapped. */
+    private static Collection<Object> mapped(AssociationAttribute association, Collection<?> collection,
+            UnaryOperator<Object> mapping) {
+        Collection<Object> mapped = CollectionMapping.newCollection(association.javaType());
+        for (Object element : List.copyOf(collection.stream().filter(Objects::nonNull).toList())) {
+            mapped.add(mapping.apply(element));
+        }
+        return mapped;
+    }
+
+    /**
+     * A new map of the declared type of {@code association}, of the entries of {@code map}, keys and values mapped.
+     */
+    private static Map<Object, Object> mappedMap(AssociationAttribute association, Map<?, ?> map, UnaryOperator<Object> keys,
+            UnaryOperator<Object> values) {
+        Map<Object, Object> mapped = IndexMapping.newMap(association.javaType());
+        for (Map.Entry<?, ?> entry : List.copyOf(map.entrySet())) {
+            mapped.put(keys.apply(entry.getKey()), entry.getValue() == null ? null : values.apply(entry.getValue()));
+        }
+        return mapped;
+    }
+
+    /** A managed entity key, a copied embeddable key, or an unchanged basic key. */
+    private Object managedKey(AssociationAttribute association, Object key) {
+        if (association.index() instanceof CollectionIndex.ByEmbedded(EmbeddedAttribute embedded)) {
+            return copy(embedded.embeddable(), key);
+        }
+        return key != null && factory.mapping().entity(key.getClass()).isPresent() ? managedReference(key) : key;
+    }
+
+    private static boolean sameElements(Collection<?> collection, Collection<Object> elements) {
+        List<?> before = List.copyOf(collection.stream().filter(Objects::nonNull).toList());
+        List<Object> after = List.copyOf(elements);
+        for (int i = 0; i < before.size(); i++) {
+            if (before.get(i) != after.get(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void replace(Map<?, ?> map, Map<Object, Object> entries) {
+        map.clear();
+        ((Map<Object, Object>) map).putAll(entries);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void replace(Collection<?> collection, Collection<Object> elements) {
+        collection.clear();
+        ((Collection<Object>) collection).addAll(elements);
+    }
+
+    /**
+     * The managed instance with the identity of {@code target}: itself if managed, else the context's or the one
+     * loaded; {@code target} unchanged if it is new (the flush then tells, §3.2.4).
+     */
+    private Object managedReference(Object target) {
+        if (context.entry(target).isPresent()) {
+            return target;
+        }
+        MappedEntity type = type(target);
+        Object id = type.id(target);
+        if (id == null) {
+            return target;
+        }
+        Optional<ManagedEntity> known = context.find(new EntityKey(type.root(), id));
+        if (known.isPresent()) {
+            return known.get().instance();
+        }
+        Object loaded = connections.on(connection -> factory.loader(connection).load(type, id, connection, context));
+        return loaded != null ? loaded : target;
+    }
+
+    private Object copy(EmbeddableModel embeddable, Object value) {
+        MappedUnit unit = factory.mapping();
+        ManagedAccess access = unit.access(embeddable);
+        Object[] state = new Object[embeddable.attributes().size()];
+        access.read(value, state);
+        for (int i = 0; i < state.length; i++) {
+            if (embeddable.attributes().get(i) instanceof EmbeddedAttribute nested && state[i] != null) {
+                state[i] = copy(nested.embeddable(), state[i]);
+            }
+        }
+        if (embeddable.isRecord()) {
+            return access.construct(state);
+        }
+        Object copy = access.instantiate();
+        access.write(copy, state);
+        return copy;
+    }
+
+    // ---- refresh (§3.2.5) and detach (§3.2.6) -------------------------------------------------------------
+
+    void refresh(Object entity) {
+        refresh(entity, visited());
+    }
+
+    private void refresh(Object entity, Set<Object> visited) {
+        if (!visited.add(entity)) {
+            return;
+        }
+        MappedEntity type = type(entity);
+        ManagedEntity entry = context.entry(entity).filter(e -> e.status() == ManagedEntity.Status.MANAGED)
+            .orElseThrow(() -> new IllegalArgumentException("Only a managed instance can be refreshed (§3.2.5)"));
+        Object id = entry.key().id();
+        Object[] snapshot;
+        if (io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(entity)) {
+            io.vidocq.noether.jpa.core.spi.LazyReference.initialize(entity);
+            snapshot = entry.snapshot();
+        } else {
+            snapshot = connections.on(connection -> factory.loader(connection).refresh(type, id, entity, connection, context));
+        }
+        if (snapshot == null) {
+            throw new EntityNotFoundException("The row of " + type.model().entityName() + " " + id + " no longer exists");
+        }
+        context.updated(entry, snapshot);
+        cascade(entity, type, CascadeType.REFRESH, target -> {
+            if (context.contains(target)) {
+                refresh(target, visited);
+            }
+        });
+    }
+
+    void detach(Object entity) {
+        detach(entity, visited());
+    }
+
+    private void detach(Object entity, Set<Object> visited) {
+        if (!visited.add(entity)) {
+            return;
+        }
+        MappedEntity type = type(entity);
+        context.detach(entity);
+        cascade(entity, type, CascadeType.DETACH, target -> detach(target, visited));
+    }
+
+    // ---- flush (§3.2.4) -----------------------------------------------------------------------------------
+
+    /**
+     * What a flush does before writing (§3.2.4): the persist cascades again from every managed instance, reaching what
+     * its relationships gained since; an instance it reaches through a relationship, owning or inverse, that does not
+     * cascade persist must be managed or detached, a new one is an {@link IllegalStateException}.
+     */
+    void beforeFlush() {
+        removeOrphans();
+        Set<Object> visited = null; // only a cascade adds to it: made for the first entity that has one
+        for (ManagedEntity entry : context.entries()) {
+            if (io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(entry.instance())
+                    || entry.status() != ManagedEntity.Status.MANAGED) {
+                continue;
+            }
+            Object entity = entry.instance();
+            MappedEntity type = entry.type();
+            if (cascades(type, CascadeType.PERSIST)) {
+                if (visited == null) visited = flushVisited();
+                Set<Object> reached = visited;
+                cascade(entity, type, CascadeType.PERSIST, target -> persist(target, reached));
+            }
+            checkRelationships(entity, type);
+            checkElementCollections(entity, type);
+        }
+    }
+
+    /**
+     * The relationships of a managed {@code entity} at a flush: a detached target of a business-key reference gives
+     * way to its managed instance, and no relationship that does not cascade persist may hold a new instance.
+     */
+    private void checkRelationships(Object entity, MappedEntity type) {
+        List<AttributeModel> attributes = type.model().attributes();
+        for (int i = 0; i < attributes.size(); i++) {
+            var reference = type.statements().reference(i).orElse(null);
+            if (reference != null && reference.businessKey()) {
+                manageBusinessKeyTarget(entity, type, i, reference);
+            }
+            // any relationship from X, the inverse side as well as the owning one
+            if (attributes.get(i) instanceof AssociationAttribute association && !association.cascades(CascadeType.PERSIST)
+                    && !LazyCollection.unloaded(type.access().get(entity, i))) {
+                targets(type.access().get(entity, i), target -> requireNotNew(entity, association, target));
+            }
+        }
+    }
+
+    /**
+     * Replaces the target of the business-key {@code reference} at {@code attribute}, when the context does not hold
+     * it, with the managed instance of its identity, whose business-key values must be the ones the target has.
+     */
+    private void manageBusinessKeyTarget(Object entity, MappedEntity type, int attribute,
+            io.vidocq.noether.jpa.core.mapping.EntityStatements.Reference reference) {
+        Object target = type.access().get(entity, attribute);
+        if (target == null || context.entry(target).isPresent()) {
+            return;
+        }
+        Object managed = managedReference(target);
+        if (managed == target) {
+            return;
+        }
+        MappedEntity targetType = factory.mapping().entity(reference.target()).orElseThrow();
+        io.vidocq.noether.jpa.core.spi.LazyReference.initialize(managed);
+        for (var column : type.statements().referencedColumns(reference)) {
+            int referenced = column.attribute();
+            if (!java.util.Objects.deepEquals(
+                    targetType.state().copy(referenced, targetType.access().get(target, referenced)),
+                    targetType.state().copy(referenced, targetType.access().get(managed, referenced)))) {
+                throw new jakarta.persistence.PersistenceException(
+                    "Detached business-key values contradict the target's JPA identity");
+            }
+        }
+        type.access().set(entity, attribute, managed);
+    }
+
+    /** No entity an element collection of a managed {@code entity} references without cascading persist may be new. */
+    private void checkElementCollections(Object entity, MappedEntity type) {
+        for (var elements : type.statements().elementCollections()) {
+            Object value = type.access().get(entity, elements.attribute());
+            if (LazyCollection.unloaded(value)) continue;
+            elements.references(value, (association, target) -> {
+                if (!association.cascades(CascadeType.PERSIST)) requireNotNew(entity, association, target);
+            });
+        }
+    }
+
+    /**
+     * §2.9: what a relationship with {@code orphanRemoval} held at the last flush, and no longer holds — its target, or
+     * elements of its collection — is removed. Done before the persist cascade, so that an orphan given to another
+     * owner that cascades persist is managed again.
+     */
+    private void removeOrphans() {
+        Set<Object> visited = null; // only the removal of an orphan adds to it: made for the first one
+        for (ManagedEntity entry : context.entries()) {
+            if (entry.status() != ManagedEntity.Status.MANAGED || entry.snapshot() == null) {
+                continue;
+            }
+            List<AttributeModel> attributes = entry.type().model().attributes();
+            for (int i = 0; i < attributes.size(); i++) {
+                if (attributes.get(i) instanceof AssociationAttribute association && association.orphanRemoval()) {
+                    visited = removeOrphans(entry, i, association.singleValued(), visited);
+                }
+            }
+        }
+    }
+
+    /**
+     * Removes what the orphan-removal relationship at {@code attribute} of {@code entry} held at the last flush and no
+     * longer holds. Gives the visited set of the flush: {@code visited}, or the one made for the first orphan.
+     */
+    private Set<Object> removeOrphans(ManagedEntity entry, int attribute, boolean singleValued, Set<Object> visited) {
+        Object current = entry.type().access().get(entry.instance(), attribute);
+        Set<Object> reached = visited;
+        if (singleValued) {
+            Object previous = entry.snapshot()[attribute];
+            if (previous != null && previous != current && context.contains(previous)) {
+                reached = removeOrphan(previous, reached);
+            }
+            return reached;
+        }
+        if (LazyCollection.unloaded(current) && current == entry.snapshot()[attribute]) {
+            return reached; // not loaded, hence not changed
+        }
+        Set<Object> kept = visited();
+        kept.addAll(CollectionMapping.elements(current));
+        for (Object previous : CollectionMapping.elements(StatePolicy.snapshotValue(entry.snapshot()[attribute]))) {
+            if (previous != null && !kept.contains(previous) && context.contains(previous)) {
+                reached = removeOrphan(previous, reached);
+            }
+        }
+        return reached;
+    }
+
+    private Set<Object> removeOrphan(Object orphan, Set<Object> visited) {
+        Set<Object> reached = visited == null ? flushVisited() : visited;
+        remove(orphan, reached);
+        return reached;
+    }
+
+    private void requireNotNew(Object owner, AssociationAttribute association, Object target) {
+        if (context.contains(target) || factory.mapping().entity(target.getClass()).isEmpty()) {
+            return;
+        }
+        MappedEntity type = type(target);
+        Object id = type.id(target);
+        boolean detached = id != null && connections.on(connection -> factory.loader(connection).exists(type, id, connection));
+        if (!detached) {
+            throw new IllegalStateException("The relationship " + association.name() + " of " + owner.getClass().getName()
+                + " references a new instance of " + type.model().entityName() + " and does not cascade persist (§3.2.4)");
+        }
+    }
+
+    // ---- cascades -----------------------------------------------------------------------------------------
+
+    /**
+     * Whether a relationship or an element collection of {@code type} cascades {@code operation}: without one,
+     * {@link #cascade} reaches nothing and has nothing to do, the initialization of an unloaded reference included.
+     */
+    private static boolean cascades(MappedEntity type, CascadeType operation) {
+        List<AttributeModel> attributes = type.model().attributes();
+        for (int i = 0; i < attributes.size(); i++) {
+            if (attributes.get(i) instanceof AssociationAttribute association && association.cascades(operation)) {
+                return true;
+            }
+        }
+        // cascade() decides for each element collection, with what it holds
+        return !type.statements().elementCollections().isEmpty();
+    }
+
+    /** Applies {@code operation} to the instances that the relationships of {@code entity} cascading it reach. */
+    private void cascade(Object entity, MappedEntity type, CascadeType operation, Consumer<Object> apply) {
+        if (io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(entity)) {
+            if (operation == CascadeType.REMOVE || operation == CascadeType.REFRESH) {
+                io.vidocq.noether.jpa.core.spi.LazyReference.initialize(entity);
+            } else return;
+        }
+        List<AttributeModel> attributes = type.model().attributes();
+        for (int i = 0; i < attributes.size(); i++) {
+            if (attributes.get(i) instanceof AssociationAttribute association && association.cascades(operation)) {
+                Object value = type.access().get(entity, i);
+                // an unloaded collection: its elements were not loaded, none of them is new, nor managed through it
+                // (§3.2.2, §3.2.5, §3.2.7)
+                if (operation == CascadeType.REMOVE || !LazyCollection.unloaded(value)) {
+                    targets(value, apply);
+                }
+            }
+        }
+        for (ElementCollectionMapping elements : type.statements().elementCollections()) {
+            cascadeElementReferences(entity, type, elements, operation, apply);
+        }
+    }
+
+    /** Applies {@code operation} to the entities an element collection of {@code entity} references, where it cascades. */
+    private static void cascadeElementReferences(Object entity, MappedEntity type, ElementCollectionMapping elements,
+            CascadeType operation, Consumer<Object> apply) {
+        if (elements.columns().stream().noneMatch(c -> c.foreignKey() != null
+                && elements.association(c).cascades(operation))) return;
+        Object value = type.access().get(entity, elements.attribute());
+        if (!elements.hasReferences() || value == null) return;
+        if (LazyCollection.unloaded(value) && operation != CascadeType.REMOVE && operation != CascadeType.REFRESH) return;
+        elements.references(value, (association, target) -> {
+            if (association.cascades(operation)) apply.accept(target);
+        });
+    }
+
+    /** The instances a relationship value holds: itself, the elements of a collection, the values of a map. */
+    private static void targets(Object value, Consumer<Object> apply) {
+        switch (value) {
+            case null -> {
+                // no instance: nothing to apply the operation to
+            }
+            case Collection<?> collection -> List.copyOf(collection.stream().filter(Objects::nonNull).toList()).forEach(apply);
+            case Map<?, ?> map -> List.copyOf(map.values().stream().filter(Objects::nonNull).toList()).forEach(apply);
+            default -> apply.accept(value);
+        }
+    }
+
+    /**
+     * The visited set of an operation: the instance and what its cascades reach, most often the instance alone, so it
+     * starts small and grows with the cascades instead of starting with the default table of 21 instances.
+     */
+    private static Set<Object> visited() {
+        return Collections.newSetFromMap(new IdentityHashMap<>(4));
+    }
+
+    /** The visited set of a flush: only a cascade or the removal of an orphan adds to it, and it is made for the first. */
+    private static Set<Object> flushVisited() {
+        return Collections.newSetFromMap(new IdentityHashMap<>(4));
+    }
+}

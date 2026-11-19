@@ -1,0 +1,308 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.session;
+
+import jakarta.persistence.EntityTransaction;
+import jakarta.persistence.PersistenceException;
+import jakarta.persistence.RollbackException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
+
+/**
+ * The resource-local {@link EntityTransaction} of an entity manager (§7.5.2–7.5.4), over one JDBC connection. The
+ * connection is taken when the transaction begins and given back when it ends, so an idle entity manager holds none.
+ *
+ * <p>Used by one thread, like the entity manager that owns it, with one exception: closing the factory abandons the
+ * transaction from another thread. The connection is therefore handed over atomically: whoever takes it out of the
+ * reference (commit, rollback or abandon) is the only one to end the transaction, so it is never rolled back or
+ * closed twice, nor committed after being rolled back.
+ */
+final class ResourceLocalTransaction implements SessionTransaction {
+
+    private final EntityManagerFactoryImpl factory;
+    private final TransactionListener listener;
+    /**
+     * Held by the owning thread while it works on the connection (flush, commit, rollback), and by a closing factory
+     * that abandons the transaction: the connection is never rolled back and released under a running flush. A
+     * {@link ReentrantLock}, not a monitor: a virtual thread waiting for it parks without pinning its carrier.
+     */
+    private final ReentrantLock lock = new ReentrantLock();
+    private final AtomicReference<Connection> connection = new AtomicReference<>();
+    private volatile boolean rollbackOnly;
+    /** Whether {@link #begin()} took the connection out of auto-commit mode: a completed transaction puts it back. */
+    private boolean restoreAutoCommit;
+    private Integer timeout;
+
+    ResourceLocalTransaction(EntityManagerFactoryImpl factory, TransactionListener listener) {
+        this.factory = factory;
+        this.listener = listener;
+    }
+
+    @Override
+    public void begin() {
+        if (connection.get() != null) {
+            throw new IllegalStateException("The transaction is already active");
+        }
+        if (!factory.isOpen()) {
+            throw new IllegalStateException("The EntityManagerFactory is closed");
+        }
+        Connection acquired = null;
+        try {
+            acquired = factory.connections().acquire();
+            restoreAutoCommit = acquired.getAutoCommit();
+            if (restoreAutoCommit) {
+                acquired.setAutoCommit(false);
+            }
+        } catch (SQLException e) {
+            closeQuietly(acquired);
+            throw new PersistenceException("Unable to begin a transaction: " + e.getMessage(), e);
+        }
+        rollbackOnly = false;
+        connection.set(acquired);
+        factory.register(this);
+        // close() flips its flag before abandoning what is registered: either it saw this registration, or this sees the flag
+        if (!factory.isOpen()) {
+            abandon();
+            throw new IllegalStateException("The EntityManagerFactory is closed");
+        }
+    }
+
+    @Override
+    public void commit() {
+        lock.lock();
+        try {
+            if (!rollbackOnly) {
+                flushBeforeCommit();
+            }
+            Connection current = takeConnection();
+            if (rollbackOnly) {
+                throw rollBackMarked(current);
+            }
+            try {
+                current.commit();
+            } catch (SQLException e) {
+                try {
+                    current.rollback();
+                } catch (SQLException rollbackFailure) {
+                    e.addSuppressed(rollbackFailure);
+                }
+                listener.afterRollback();
+                throw end(current, new RollbackException("The commit failed: " + e.getMessage(), e));
+            }
+            restoreAutoCommit(current);
+            completeCommit(current);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** The listener's flush before the commit; when it fails, the transaction is rolled back and ended. */
+    private void flushBeforeCommit() {
+        try {
+            listener.beforeCommit(activeConnection());
+        } catch (IllegalStateException e) {
+            throw e; // no active transaction
+        } catch (RuntimeException e) {
+            Connection current = takeConnection();
+            try {
+                current.rollback();
+            } catch (SQLException rollbackFailure) {
+                e.addSuppressed(rollbackFailure);
+            }
+            listener.afterRollback();
+            throw end(current, new RollbackException("The flush before the commit failed: " + e.getMessage(), e));
+        }
+    }
+
+    /** Rolls back and ends a transaction marked for rollback only; the failure its commit throws. */
+    private RollbackException rollBackMarked(Connection current) {
+        listener.afterRollback();
+        try {
+            current.rollback();
+        } catch (SQLException e) {
+            return end(current, new RollbackException("The transaction was marked for rollback, and the rollback failed", e));
+        }
+        restoreAutoCommit(current);
+        return end(current, new RollbackException("The transaction was marked for rollback only"));
+    }
+
+    /**
+     * Releases the connection of a committed transaction, then tells the listener; a failure of the release wins, the
+     * listener's is added to it.
+     */
+    private void completeCommit(Connection current) {
+        RuntimeException releaseFailure = null;
+        try {
+            end(current, null);
+        } catch (RuntimeException failure) {
+            releaseFailure = failure;
+        }
+        try {
+            listener.afterCommit();
+        } catch (RuntimeException completionFailure) {
+            if (releaseFailure == null) {
+                throw completionFailure;
+            }
+            releaseFailure.addSuppressed(completionFailure);
+        }
+        if (releaseFailure != null) {
+            throw releaseFailure;
+        }
+    }
+
+    @Override
+    public void rollback() {
+        lock.lock();
+        try {
+            Connection current = takeConnection();
+            listener.afterRollback();
+            try {
+                current.rollback();
+            } catch (SQLException e) {
+                throw end(current, new PersistenceException("The rollback failed: " + e.getMessage(), e));
+            }
+            restoreAutoCommit(current);
+            end(current, null);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public void setRollbackOnly() {
+        activeConnection();
+        rollbackOnly = true;
+    }
+
+    @Override
+    public boolean getRollbackOnly() {
+        activeConnection();
+        return rollbackOnly;
+    }
+
+    @Override
+    public boolean isActive() {
+        return connection.get() != null;
+    }
+
+    @Override
+    public void setTimeout(Integer seconds) {
+        this.timeout = seconds;
+    }
+
+    @Override
+    public Integer getTimeout() {
+        return timeout;
+    }
+
+    /** Runs {@code work} on the connection of the active transaction, which no closing factory can release meanwhile. */
+    public <T> T onConnection(Function<Connection, T> work) {
+        lock.lock();
+        try {
+            return work.apply(activeConnection());
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** The connection of the active transaction; the entity manager runs its statements on it. */
+    public Connection connection() {
+        return activeConnection();
+    }
+
+    /** Rolls back and releases an abandoned transaction, when its factory is closed; a no-op if it already ended. */
+    void abandon() {
+        lock.lock();
+        try {
+            Connection current = connection.getAndSet(null);
+            if (current != null) {
+                try {
+                    current.rollback();
+                } catch (SQLException _) {
+                    // the factory is closing: nothing more can be done for this transaction
+                }
+                end(current, null);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private Connection activeConnection() {
+        Connection current = connection.get();
+        if (current == null) {
+            throw new IllegalStateException("The transaction is not active");
+        }
+        return current;
+    }
+
+    /** Takes the connection out: from here on, this thread alone ends the transaction. */
+    private Connection takeConnection() {
+        Connection current = connection.getAndSet(null);
+        if (current == null) {
+            throw new IllegalStateException("The transaction is not active");
+        }
+        return current;
+    }
+
+    /** Ends the transaction whatever happened: the connection goes back, the transaction is no longer active. */
+    private <E extends RuntimeException> E end(Connection current, E failure) {
+        rollbackOnly = false;
+        factory.unregister(this);
+        try {
+            current.close();
+        } catch (SQLException e) {
+            if (failure != null) {
+                failure.addSuppressed(e);
+            } else {
+                throw new PersistenceException("Unable to release the connection: " + e.getMessage(), e);
+            }
+        }
+        return failure;
+    }
+
+    /**
+     * Gives the connection of a transaction that completed, by a commit or a rollback that succeeded, the auto-commit
+     * mode it was acquired with. A pool resets a connection returned out of auto-commit mode with a rollback of its
+     * own, a statement that a completed transaction does not need. After a failed completion the mode is left as it
+     * is: switching it would commit whatever the failure left pending, and the {@code DataSource} decides.
+     */
+    private void restoreAutoCommit(Connection current) {
+        if (!restoreAutoCommit) return;
+        try {
+            current.setAutoCommit(true);
+        } catch (SQLException _) {
+            // the transaction is complete: the DataSource resets or discards the connection it gets back
+        }
+    }
+
+    private static void closeQuietly(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException _) {
+                // already failing
+            }
+        }
+    }
+}

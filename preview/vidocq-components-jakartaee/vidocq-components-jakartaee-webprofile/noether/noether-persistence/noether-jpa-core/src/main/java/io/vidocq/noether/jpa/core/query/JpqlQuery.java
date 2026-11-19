@@ -1,0 +1,1496 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.core.query;
+
+import io.vidocq.noether.jpa.core.mapping.MappedEntity;
+import io.vidocq.noether.jpa.core.mapping.EntityStatements;
+import io.vidocq.noether.jpa.core.flush.EntityLoader;
+import io.vidocq.noether.jpa.core.query.jpql.Ast;
+import io.vidocq.noether.jpa.core.query.jpql.Parser;
+import io.vidocq.noether.jpa.dialect.Dialect;
+import io.vidocq.noether.jpa.dialect.sql.Select;
+import jakarta.persistence.CacheRetrieveMode;
+import jakarta.persistence.CacheStoreMode;
+import jakarta.persistence.FlushModeType;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.NonUniqueResultException;
+import jakarta.persistence.Parameter;
+import jakarta.persistence.PersistenceException;
+import jakarta.persistence.TemporalType;
+import jakarta.persistence.TypedQuery;
+import java.lang.invoke.MethodType;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
+
+/**
+ * A query of the Jakarta Persistence query language (§3.11, §4): parsed and checked against the entity model when it
+ * is created — a mistake is an {@link IllegalArgumentException} then — translated to SQL when it runs, with the values
+ * bound to its parameters. Not thread-safe, as the entity manager that creates it (§7.2).
+ *
+ * @param <X> the type of its results
+ */
+public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
+
+    /** What a criteria query has in the place of a query string. */
+    private static final String CRITERIA = "Criteria";
+
+    /**
+     * Executes only an eligible graph-aware primary-key read. Returns false without SQL for ordinary-find
+     * fallbacks. The caller retains find's cache, locks, graph completion and no-auto-flush semantics.
+     */
+    public static boolean findGraph(io.vidocq.noether.jpa.core.mapping.MappedUnit unit, MappedEntity type, Object id,
+            FetchPlan graph, boolean load, Dialect dialect, Connection connection,
+            io.vidocq.noether.jpa.core.flush.EntityLoader loader,
+            io.vidocq.noether.jpa.core.context.PersistenceContext context) {
+        List<List<Compiled>> split = Translator.splitGraph(Translator.graphRoot(type), unit, graph);
+        if (!split.isEmpty()) {
+            GraphRows rows = splitRows(split, List.of(id), loader::batchBound, dialect, connection);
+            loader.loadCollections(rows.entities(), rows.collections(), connection, context);
+            return true;
+        }
+        Compiled compiled = Translator.graphFind(unit, type, id, graph, load);
+        if (compiled == null) return false;
+        List<io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedEntity> entities = new ArrayList<>();
+        List<io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedElement> collectionRows = new ArrayList<>();
+        try {
+            readGraphRows(compiled, dialect, connection, entities, collectionRows);
+        } catch (SQLException failure) {
+            throw new PersistenceException("The graph find failed: " + failure.getMessage(), failure);
+        }
+        var collection = compiled.collection();
+        loader.loadCollection(entities, collection == null ? null : collection.owner(),
+            collection == null ? -1 : collection.attribute(), collectionRows, connection, context);
+        return true;
+    }
+
+    private record GraphRows(List<EntityLoader.FetchedEntity> entities, List<EntityLoader.FetchedCollection> collections) {}
+
+    /** Completes unloaded branches of an already managed/cache-restored owner without replacing dirty state. */
+    public static void completeGraph(io.vidocq.noether.jpa.core.mapping.MappedUnit unit, MappedEntity type, Object instance,
+            FetchPlan graph, Dialect dialect, Connection connection, EntityLoader loader,
+            io.vidocq.noether.jpa.core.context.PersistenceContext context) {
+        List<List<Compiled>> split = Translator.splitGraph(Translator.graphRoot(type), unit, graph);
+        if (split.isEmpty() || !unloadedGraph(type, instance, graph, unit)) return;
+        GraphRows rows = splitRows(split, List.of(type.id(instance)), loader::batchBound, dialect, connection);
+        loader.loadCollections(rows.entities(), rows.collections(), connection, context);
+    }
+
+    /** Checks graph completeness without initializing a wrapper/reference or acquiring a JDBC connection. */
+    public static boolean unloadedGraph(MappedEntity type, Object instance, FetchPlan graph,
+            io.vidocq.noether.jpa.core.mapping.MappedUnit unit) {
+        if (io.vidocq.noether.jpa.core.spi.LazyReference.unloaded(instance)) return true;
+        for (var node : graph.attributes().entrySet()) {
+            int attribute = attributeIndex(type, node.getKey());
+            if (attribute >= 0 && unloadedAttribute(type, instance, attribute, node.getValue(), unit)) return true;
+        }
+        return false;
+    }
+
+    /** The index of the attribute {@code name} of {@code type}, {@code -1} if it has none. */
+    private static int attributeIndex(MappedEntity type, String name) {
+        var attributes = type.model().attributes();
+        for (int i = 0; i < attributes.size(); i++) {
+            if (attributes.get(i).name().equals(name)) return i;
+        }
+        return -1;
+    }
+
+    /** Whether the attribute of {@code instance}, or an entity it references, is not loaded as far as {@code graph} goes. */
+    private static boolean unloadedAttribute(MappedEntity type, Object instance, int attribute, FetchPlan graph,
+            io.vidocq.noether.jpa.core.mapping.MappedUnit unit) {
+        Object value = type.access().get(instance, attribute);
+        if (io.vidocq.noether.jpa.core.mapping.LazyCollection.unloaded(value)) return true;
+        if (value == null || !(type.model().attributes().get(attribute)
+                instanceof io.vidocq.noether.jpa.core.model.AssociationAttribute association)) {
+            return false;
+        }
+        MappedEntity target = unit.entity(association.targetEntity()).orElseThrow();
+        Collection<?> elements = switch (value) {
+            case Map<?, ?> map -> map.values();
+            case Collection<?> collection -> collection;
+            default -> List.of(value);
+        };
+        return elements.stream().anyMatch(element -> element != null && unloadedGraph(target, element, graph, unit));
+    }
+
+    /** Reads every branch before the loader registers identities, resolves relationships or dispatches callbacks. */
+    private static GraphRows splitRows(List<List<Compiled>> stages, List<Object> rootIds,
+            java.util.function.ToIntFunction<MappedEntity> batchBound, Dialect dialect,
+            Connection connection) {
+        List<EntityLoader.FetchedEntity> entities = new ArrayList<>();
+        List<EntityLoader.FetchedCollection> collections = new ArrayList<>();
+        for (int stage = 0; stage < stages.size(); stage++) {
+            List<EntityLoader.FetchedEntity> owners = List.copyOf(entities);
+            for (Compiled template : stages.get(stage)) {
+                MappedEntity owner = ((Compiled.EntityItem) template.items().getFirst()).type();
+                List<Object> ids = stage == 0 ? rootIds : owners.stream().filter(row -> row.type() == owner)
+                    .map(EntityLoader.FetchedEntity::id).distinct().toList();
+                List<EntityLoader.FetchedElement> elements =
+                    readBranch(template, ids, batchBound.applyAsInt(owner), dialect, connection, entities);
+                if (template.collection() != null) collections.add(new EntityLoader.FetchedCollection(
+                    template.collection().owner(), template.collection().attribute(), elements));
+            }
+        }
+        return new GraphRows(entities, collections);
+    }
+
+    /**
+     * One branch of a split graph read for the owners {@code ids}, at most {@code bound} of them per statement: its
+     * entities are added to {@code entities}, the elements of its collection are returned.
+     */
+    private static List<EntityLoader.FetchedElement> readBranch(Compiled template, List<Object> ids, int bound, Dialect dialect,
+            Connection connection, List<EntityLoader.FetchedEntity> entities) {
+        List<EntityLoader.FetchedElement> elements = new ArrayList<>();
+        for (int from = 0; from < ids.size(); from += bound) {
+            Compiled compiled = Translator.graphOwners(template, ids.subList(from, Math.min(ids.size(), from + bound)));
+            try {
+                readGraphRows(compiled, dialect, connection, entities, elements);
+            } catch (SQLException failure) {
+                throw new PersistenceException("The split graph read failed: " + failure.getMessage(), failure);
+            }
+        }
+        return elements;
+    }
+
+    /**
+     * Runs a graph read, whose parameters are all constants: the entities its rows fetch are added to {@code entities}
+     * and, if it fetches a collection, the element of each row that has an owner to {@code elements}.
+     */
+    private static void readGraphRows(Compiled compiled, Dialect dialect, Connection connection,
+            List<EntityLoader.FetchedEntity> entities, List<EntityLoader.FetchedElement> elements) throws SQLException {
+        Dialect.Rendered rendered = dialect.renderQuery(compiled.sql());
+        try (PreparedStatement statement = connection.prepareStatement(rendered.sql())) {
+            for (int i = 0; i < rendered.parameters().size(); i++) {
+                Compiled.Slot slot = (Compiled.Slot) rendered.parameters().get(i).slot();
+                slot.binder().bind(dialect, statement, i + 1, slot.constant());
+            }
+            try (ResultSet results = statement.executeQuery()) {
+                EntityLoader.FetchedEntity[] row = new EntityLoader.FetchedEntity[compiled.hydrations().size()];
+                while (results.next()) {
+                    int[] column = {compiled.items().getFirst().width() + 1};
+                    fetched(compiled.hydrations(), results, column, row);
+                    for (EntityLoader.FetchedEntity fetched : row) {
+                        if (fetched != null) entities.add(fetched);
+                    }
+                    if (compiled.collection() != null && row[0] != null) {
+                        elements.add(fetchedElement(compiled.collection(), row[0].id(), row, results, column));
+                    }
+                }
+            }
+        }
+    }
+
+    /** A parameter of the query: {@code :name}, or {@code ?position}, and the Java type it is compared with if known. */
+    private record QueryParameter<T>(String name, Integer position, Class<T> type) implements Parameter<T> {
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public Integer getPosition() {
+            return position;
+        }
+
+        @Override
+        public Class<T> getParameterType() {
+            return type;
+        }
+    }
+
+    private final String jpql;
+    private final Ast.Statement statement;
+    /** The shared parse of the query string and its reusable translations; {@code null} for a criteria query. */
+    private final QueryPlans.Parsed parsed;
+    private final Class<X> resultClass;
+    private final QueryRuntime runtime;
+    /** The constructors of the classes the results build, read once per query (§4.8.2, §3.11.15). */
+    private final Map<Class<?>, ResultConstructors> constructors = new HashMap<>();
+    private final boolean collectionFetch;
+    private Integer lockTimeout;
+    private final Map<Object, QueryParameter<?>> parameters = new LinkedHashMap<>();
+    private final Map<Object, Object> values = new HashMap<>();
+    private LockModeType lockMode = LockModeType.NONE;
+    private Map<Parameter<?>, Object> criteriaParameters = Map.of();
+    private List<jakarta.persistence.criteria.Selection<?>> tupleElements = List.of();
+
+    /**
+     * @param resultClass the type the results must have, {@code null} for an untyped {@code Query}
+     * @throws IllegalArgumentException if the query is not valid, or its results are not of {@code resultClass}
+     */
+    public JpqlQuery(String jpql, Class<X> resultClass, FlushModeType flushMode, QueryRuntime runtime) {
+        this(jpql, runtime.plans().parse(jpql), null, resultClass, flushMode, runtime);
+    }
+
+    JpqlQuery(Ast.Statement statement, Class<X> resultClass, FlushModeType flushMode, QueryRuntime runtime,
+            Set<jakarta.persistence.criteria.ParameterExpression<?>> declared,
+            List<jakarta.persistence.criteria.Selection<?>> tupleElements) {
+        this(CRITERIA, null, statement, resultClass, flushMode, runtime);
+        Map<Parameter<?>, Object> identities = new java.util.IdentityHashMap<>();
+        for (var parameter : declared) {
+            Ast.Parameter syntax = (Ast.Parameter) CriteriaExpressions.ast(parameter);
+            identities.put(parameter, key(syntax));
+            parameters.put(key(syntax), declared(syntax, parameter.getParameterType()));
+        }
+        criteriaParameters = java.util.Collections.unmodifiableMap(identities);
+        this.tupleElements = List.copyOf(tupleElements);
+    }
+
+    /**
+     * This query created again for {@code runtime}, another entity manager of the unit, as it was created: the
+     * statement of a criteria query as it was then, whatever its criteria object became, and the same parameter
+     * objects; no bound value, no setting (BUG-20261118-84).
+     */
+    public JpqlQuery<X> copy(QueryRuntime runtime, FlushModeType flushMode) {
+        if (parsed != null) {
+            return new JpqlQuery<>(jpql, resultClass, flushMode, runtime);
+        }
+        Set<jakarta.persistence.criteria.ParameterExpression<?>> declared = new java.util.LinkedHashSet<>();
+        for (Parameter<?> parameter : criteriaParameters.keySet()) {
+            declared.add((jakarta.persistence.criteria.ParameterExpression<?>) parameter);
+        }
+        return new JpqlQuery<>(statement, resultClass, flushMode, runtime, declared, tupleElements);
+    }
+
+    /** @param parsed the shared parse of a query string, whose translations are reused; {@code null} for {@code criteria} */
+    private JpqlQuery(String jpql, QueryPlans.Parsed parsed, Ast.Statement criteria, Class<X> resultClass, FlushModeType flushMode,
+            QueryRuntime runtime) {
+        Ast.Statement tree = parsed != null ? parsed.statement() : criteria;
+        Compiled compiled = parsed != null ? parsed.plan(runtime.mapping(), null, false, false).compiled()
+            : Translator.translate(tree, runtime.mapping(), null, null, null);
+        checkResultClass(jpql, tree, compiled, resultClass);
+        QueryRuntime.Defaults defaults = runtime.defaults();
+        super(flushMode, runtime::isOpen, defaults);
+        this.lockTimeout = defaults.lockTimeout();
+        this.jpql = jpql;
+        this.runtime = runtime;
+        this.resultClass = resultClass;
+        this.parsed = parsed;
+        this.statement = tree;
+        collectionFetch = compiled.collectionFetch();
+        declareParameters(compiled);
+    }
+
+    /** Refuses a result class for an UPDATE or a DELETE, and one the query's results are not instances of (§3.11.1). */
+    private static void checkResultClass(String jpql, Ast.Statement statement, Compiled compiled, Class<?> resultClass) {
+        if (!(statement instanceof Ast.Query) && resultClass != null && resultClass != Object.class) {
+            throw new IllegalArgumentException("An UPDATE or a DELETE has no results of type " + resultClass.getName() + ": " + jpql);
+        }
+        if (resultClass != null && resultClass != Object.class && resultClass != jakarta.persistence.Tuple.class
+                && compiled.resultType() != null
+                && !resultClass.isAssignableFrom(compiled.resultType())
+                && !(jpql.equals(CRITERIA) && Number.class.isAssignableFrom(boxed(resultClass))
+                    && Number.class.isAssignableFrom(boxed(compiled.resultType())))) {
+            throw new IllegalArgumentException("The query " + jpql + " gives results of type " + compiled.resultType().getName()
+                + ", not " + resultClass.getName() + " (§3.11.1)");
+        }
+    }
+
+    /** The parameters of the query, each once, with the Java type of what it is compared with. */
+    private void declareParameters(Compiled compiled) {
+        for (Compiled.Slot slot : compiled.slots()) {
+            if (slot.literal()) {
+                continue;
+            }
+            Object key = key(slot.parameter());
+            Class<?> type = comparedType(slot);
+            Class<?> parameterType = type == null ? Object.class : boxed(type);
+            parameters.putIfAbsent(key, declared(slot.parameter(), parameterType));
+        }
+    }
+
+    /** The Java type a parameter is compared with: its entity, its declared type, else the type of its slot. */
+    private static Class<?> comparedType(Compiled.Slot slot) {
+        if (slot.entity() != null) {
+            return slot.entity().model().javaType();
+        }
+        return slot.parameterType() != null ? slot.parameterType() : slot.type();
+    }
+
+    /** The query as the application wrote it. */
+    public String queryString() {
+        return jpql;
+    }
+
+    /** The type the results were asked to have, or {@code null} for an untyped query. */
+    public Class<X> resultClass() {
+        return resultClass;
+    }
+
+    record CriteriaDefinition(Ast.Statement statement, Set<jakarta.persistence.criteria.ParameterExpression<?>> parameters,
+            List<jakarta.persistence.criteria.Selection<?>> selections) {}
+
+    CriteriaDefinition criteriaDefinition() {
+        if (!jpql.equals(CRITERIA)) return null;
+        Set<jakarta.persistence.criteria.ParameterExpression<?>> declared = new LinkedHashSet<>();
+        for (Parameter<?> parameter : criteriaParameters.keySet())
+            declared.add((jakarta.persistence.criteria.ParameterExpression<?>) parameter);
+        return new CriteriaDefinition(statement, Set.copyOf(declared), tupleElements);
+    }
+
+    /** The Java type of the results of {@code jpql}, or {@code null} if it cannot be told (it is not a valid select). */
+    static Class<?> resultType(String jpql, io.vidocq.noether.jpa.core.mapping.MappedUnit unit) {
+        try {
+            return Parser.parse(jpql) instanceof Ast.Query query ? Translator.translate(query, unit, null, null, null).resultType() : null;
+        } catch (RuntimeException _) {
+            return null;
+        }
+    }
+
+    private static <T> QueryParameter<T> declared(Ast.Parameter parameter, Class<T> type) {
+        return new QueryParameter<>(parameter.name(), parameter.name() == null ? parameter.position() : null, type);
+    }
+
+    private static Object key(Ast.Parameter parameter) {
+        return parameter.name() != null ? parameter.name() : (Object) parameter.position();
+    }
+
+    // ---- results (§3.11) ----------------------------------------------------------------------------------
+
+    @Override
+    public List<X> getResultList() {
+        checkOpen();
+        return run(getMaxResults());
+    }
+
+    @Override
+    public Stream<X> getResultStream() {
+        checkOpen();
+        return getResultList().stream();
+    }
+
+    @Override
+    public X getSingleResult() {
+        checkOpen();
+        List<X> results = run(Math.min(getMaxResults(), 2));
+        if (collectionFetch()) results = uniqueReferences(results);
+        if (results.isEmpty()) {
+            throw new NoResultException("The query found no result: " + jpql);
+        }
+        if (results.size() > 1) {
+            throw new NonUniqueResultException("The query found several results: " + jpql);
+        }
+        return results.getFirst();
+    }
+
+    @Override
+    public X getSingleResultOrNull() {
+        checkOpen();
+        List<X> results = run(Math.min(getMaxResults(), 2));
+        if (collectionFetch()) results = uniqueReferences(results);
+        if (results.size() > 1) {
+            throw new NonUniqueResultException("The query found several results: " + jpql);
+        }
+        return results.isEmpty() ? null : results.getFirst();
+    }
+
+    /** §4.10: runs a bulk update or delete in the transaction, and returns the rows it changed. */
+    @Override
+    public int executeUpdate() {
+        checkOpen();
+        if (statement instanceof Ast.Query) {
+            throw new IllegalStateException("executeUpdate() runs an UPDATE or a DELETE, not a SELECT (§3.11): " + jpql);
+        }
+        checkBound();
+        Compiled compiled = Translator.translate(statement, runtime.mapping(), p -> values.get(key(p)), null, null);
+        return runtime.write(getFlushMode(), connection -> {
+            validateBusinessAssignments(connection);
+            Dialect dialect = runtime.dialect(connection);
+            if (!compiled.mutations().isEmpty()) {
+                return executeMutations(compiled, connection, dialect);
+            }
+            Dialect.Rendered rendered = dialect.renderQuery(compiled.sql());
+            try (PreparedStatement update = connection.prepareStatement(rendered.sql())) {
+                for (int i = 0; i < rendered.parameters().size(); i++) {
+                    bind(dialect, update, i + 1, (Compiled.Slot) rendered.parameters().get(i).slot());
+                }
+                if (getTimeout() != null) {
+                    update.setQueryTimeout(Math.max(1, (getTimeout() + 999) / 1000));
+                }
+                return update.executeUpdate();
+            } catch (SQLException e) {
+                throw new PersistenceException("The bulk statement failed: " + e.getMessage() + " — " + jpql, e);
+            }
+        });
+    }
+
+    private void validateBusinessAssignments(Connection connection) {
+        if (!(statement instanceof Ast.Update update)) return;
+        var model = runtime.mapping().model().entity(update.entity()).orElseThrow();
+        var owner = runtime.mapping().entity(model.javaType()).orElseThrow();
+        for (var assignment : update.assignments()) {
+            var reference = businessKeyReference(owner, assignment.path().segments().getLast());
+            Object target = reference == null ? null : assignedValue(assignment.value());
+            if (target != null) {
+                var type = runtime.mapping().entity(reference.target()).orElseThrow();
+                Object id = type.id(target);
+                if (id == null || !storedBusinessTarget(type, id, connection)) {
+                    throw new PersistenceException("Business-key association SET references an unknown target identity");
+                }
+            }
+        }
+    }
+
+    /** The business-key reference of the attribute {@code name} of {@code owner}; {@code null} for any other attribute. */
+    private static EntityStatements.Reference businessKeyReference(MappedEntity owner, String name) {
+        int index = -1;
+        for (int i = 0; i < owner.model().attributes().size(); i++) {
+            if (owner.model().attributes().get(i).name().equals(name)) index = i;
+        }
+        return owner.statements().reference(index).filter(EntityStatements.Reference::businessKey).orElse(null);
+    }
+
+    /** The entity a business-key SET assigns: the value of its parameter, or its literal ({@code NULL}). */
+    private Object assignedValue(Ast.Expr value) {
+        return switch (value) {
+            case Ast.Parameter parameter -> values.get(key(parameter));
+            case Ast.Literal(var literal) -> literal;
+            default -> throw new IllegalArgumentException("Business-key SET requires an entity parameter/literal or NULL");
+        };
+    }
+
+    private boolean storedBusinessTarget(MappedEntity type, Object id, Connection connection) {
+        var mapping = type.statements();
+        var keys = mapping.keyColumns();
+        var names = keys.stream().map(EntityStatements.Column::name).toList();
+        // Keep the assigned target present until the association mutation commits.
+        Select select = new Select(mapping.select().table(), names, names).locked(Select.Lock.SHARED, false);
+        Dialect dialect = runtime.dialect(connection);
+        try (PreparedStatement lookup = connection.prepareStatement(dialect.render(select))) {
+            Object[] keyValues = mapping.keyValues(id);
+            for (int i = 0; i < keyValues.length; i++) keys.get(i).binder().bind(dialect, lookup, i + 1, keyValues[i]);
+            try (ResultSet rows = lookup.executeQuery()) {
+                return rows.next();
+            }
+        } catch (SQLException e) {
+            throw new PersistenceException("Business-key association SET target identity lookup failed", e);
+        }
+    }
+
+    private int executeMutations(Compiled compiled, Connection connection, Dialect dialect) {
+        List<Object> captured = execute(compiled, null, List.of(), connection);
+        for (Compiled.Mutation mutation : compiled.mutations()) {
+            try (PreparedStatement update = connection.prepareStatement(dialect.render(mutation.sql()))) {
+                if (getTimeout() != null) {
+                    update.setQueryTimeout(Math.max(1, (getTimeout() + 999) / 1000));
+                }
+                for (Object item : captured) {
+                    Object[] row = compiled.items().size() == 1 ? new Object[] {item} : (Object[]) item;
+                    if (mutation.required().stream().noneMatch(i -> row[i] == null)) {
+                        bindMutation(mutation, row, update, dialect);
+                        update.executeUpdate();
+                    }
+                }
+            } catch (SQLException e) {
+                throw new PersistenceException("The joined bulk statement failed: " + e.getMessage() + " — " + jpql, e);
+            }
+        }
+        return captured.size();
+    }
+
+    /** Binds to {@code update} the values of the captured {@code row} that {@code mutation} reads. */
+    private static void bindMutation(Compiled.Mutation mutation, Object[] row, PreparedStatement update, Dialect dialect)
+            throws SQLException {
+        for (int i = 0; i < mutation.values().size(); i++) {
+            mutation.binders().get(i).bind(dialect, update, i + 1, row[mutation.values().get(i)]);
+        }
+    }
+
+    /**
+     * What each select item initializes on the instances it returns: the fetch joins from its identification variable
+     * (§4.4.5.3, a Criteria fetch included), chained through the variables of fetch joins, and the attributes of a fetch
+     * or load graph hint (§3.7.4) for an entity of the {@code FROM} clause; {@code null} for nothing.
+     */
+    private FetchPlan[] fetchPlans() {
+        if (!(statement instanceof Ast.Select select)) {
+            return new FetchPlan[0];
+        }
+        Map<String, FetchPlan> variables = fetchJoinPlans(select);
+        Object graph = getHints().containsKey(FETCH_GRAPH) ? getHints().get(FETCH_GRAPH) : getHints().get(LOAD_GRAPH);
+        FetchPlan graphPlan = graph == null ? null : runtime.plan(graph);
+        FetchPlan[] plans = new FetchPlan[select.items().size()];
+        for (int i = 0; i < plans.length; i++) {
+            FetchPlan plan = rootPlan(select, select.items().get(i).expression(), variables);
+            if (plan != null && graphPlan != null) {
+                plan = merged(plan, graphPlan);
+            }
+            plans[i] = plan == null || plan.isEmpty() ? null : plan;
+        }
+        return plans;
+    }
+
+    /** What the fetch joins initialize, by entity variable of {@code select}, chained through the variables of fetch joins. */
+    private static Map<String, FetchPlan> fetchJoinPlans(Ast.Select select) {
+        Map<String, FetchPlan> variables = new HashMap<>();
+        for (Ast.Range range : select.from()) {
+            if (range.entity() != null) {
+                variables.put(key(range.variable()), new FetchPlan());
+                range.joins().forEach(join -> fetchJoin(join, variables));
+            }
+        }
+        return variables;
+    }
+
+    /** Adds what {@code join} fetches to the plan of the variable it starts from; not a fetch join adds nothing. */
+    private static void fetchJoin(Ast.Join join, Map<String, FetchPlan> variables) {
+        List<String> segments = join.path().segments();
+        FetchPlan plan = join.fetch() && segments.size() > 1 ? variables.get(key(segments.getFirst())) : null;
+        if (plan == null) return; // not a fetch join, or from a variable that is not fetched
+        for (String attribute : segments.subList(1, segments.size())) {
+            plan = plan.attribute(attribute);
+        }
+        if (join.variable() != null) variables.put(key(join.variable()), plan);
+    }
+
+    /** The plan of a select item that is an entity variable of the {@code FROM} clause; {@code null} for another item. */
+    private static FetchPlan rootPlan(Ast.Select select, Ast.Expr item, Map<String, FetchPlan> variables) {
+        if (!(item instanceof Ast.Path path) || path.segments().size() != 1 || path.treatEntity() != null) return null;
+        String variable = key(path.segments().getFirst());
+        boolean root = select.from().stream().anyMatch(r -> r.entity() != null && key(r.variable()).equals(variable));
+        return root ? variables.get(variable) : null;
+    }
+
+    private static final String FETCH_GRAPH = "jakarta.persistence.fetchgraph";
+    private static final String LOAD_GRAPH = "jakarta.persistence.loadgraph";
+
+    private static String key(String variable) {
+        return variable.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static FetchPlan merged(FetchPlan first, FetchPlan second) {
+        FetchPlan plan = new FetchPlan();
+        plan.merge(first);
+        plan.merge(second);
+        return plan;
+    }
+
+    /** Initializes on a result what its select items fetch; a row of several items, item by item. */
+    private void fetch(Object resolved, FetchPlan[] plans, Connection connection) {
+        if (plans.length == 1) {
+            if (plans[0] != null && resolved != null) runtime.fetch(resolved, plans[0], connection);
+        } else if (resolved instanceof Object[] array && array.length == plans.length) {
+            for (int i = 0; i < array.length; i++) {
+                if (plans[i] != null && array[i] != null) runtime.fetch(array[i], plans[i], connection);
+            }
+        }
+    }
+
+    private void checkBound() {
+        for (Map.Entry<Object, QueryParameter<?>> parameter : parameters.entrySet()) {
+            if (!values.containsKey(parameter.getKey())) {
+                throw new IllegalStateException("The parameter " + describe(parameter.getValue()) + " of the query is not bound: " + jpql);
+            }
+        }
+    }
+
+    /** Runs the query for at most {@code maxResults} results. */
+    @SuppressWarnings("unchecked")
+    private List<X> run(int maxResults) {
+        checkReadable();
+        if (maxResults == 0) {
+            return new ArrayList<>();
+        }
+        Object graph = getHints().containsKey(FETCH_GRAPH) ? getHints().get(FETCH_GRAPH) : getHints().get(LOAD_GRAPH);
+        // a graph is read with the query only without a lock and without a collection fetch of the query itself
+        boolean graphRead = graph != null && lockMode == LockModeType.NONE && !collectionFetch();
+        List<List<Compiled>> split = graphRead
+            ? Translator.splitGraph(statement, runtime.mapping(), runtime.plan(graph))
+            : List.of();
+        Ast.Statement execution = split.isEmpty() && graphRead
+            ? Translator.graphSelect(statement, runtime.mapping(), runtime.plan(graph), !getHints().containsKey(FETCH_GRAPH))
+            : statement;
+        boolean graphRows = execution != statement;
+        // the query string as it is, without an entity graph: its translation is shared unless a value shaped it
+        QueryPlans.Plan plan = parsed != null && !graphRows
+            ? parsed.plan(runtime.mapping(), p -> values.get(key(p)), lockMode == LockModeType.NONE, false) : null;
+        Compiled translated = plan != null ? plan.compiled() : Translator.translate(execution, runtime.mapping(),
+            p -> values.get(key(p)), null, null, lockMode == LockModeType.NONE, graphRows);
+        Compiled read = page(translated, execution, graphRows, !split.isEmpty(), maxResults);
+        QueryPlans.Plan shared = plan != null && plan.compiled() == read ? plan : null; // not a page translated for this run
+        return (List<X>) runtime.read(getFlushMode(), getCacheRetrieveMode(), getCacheStoreMode(),
+            connection -> execute(read, shared, split, connection));
+    }
+
+    /** What must hold before a query reads: it is a select, its parameters are bound, its lock has a transaction. */
+    private void checkReadable() {
+        if (!(statement instanceof Ast.Query)) {
+            throw new IllegalStateException("An UPDATE or a DELETE has no results: run it with executeUpdate() (§3.11): " + jpql);
+        }
+        checkBound();
+        boolean paginateCollection = collectionFetch() && paged(getMaxResults());
+        if (paginateCollection && lockMode != LockModeType.NONE) throw Translator.collectionPagination();
+        if (lockMode != LockModeType.NONE && !runtime.inTransaction()) {
+            throw new jakarta.persistence.TransactionRequiredException("A query with the lock mode " + lockMode
+                + " runs in a transaction (§3.11)");
+        }
+    }
+
+    /**
+     * {@code compiled}, or the translation of the page asked for: of the owners when the query fetches a collection,
+     * by a split graph read or by itself, else of the rows.
+     *
+     * @param maxResults the rows this run reads at most, which a single result lowers below {@link #getMaxResults()}
+     */
+    private Compiled page(Compiled compiled, Ast.Statement execution, boolean graphRows, boolean split, int maxResults) {
+        if (split && paged(getMaxResults())) {
+            return Translator.paginateCollection(statement, runtime.mapping(), p -> values.get(key(p)),
+                offset(), limit(getMaxResults()));
+        }
+        if (compiled.collectionFetch() && paged(getMaxResults())) {
+            // the owner page of a graph-synthesized collection needs none of its LEFT joins
+            return Translator.paginateCollection(graphRows ? statement : execution, runtime.mapping(), p -> values.get(key(p)),
+                offset(), limit(getMaxResults()));
+        }
+        if (!compiled.collectionFetch() && paged(maxResults)) {
+            return Translator.translate(execution, runtime.mapping(), p -> values.get(key(p)),
+                offset(), limit(maxResults), lockMode == LockModeType.NONE, graphRows);
+        }
+        return compiled;
+    }
+
+    /** Whether the query skips results or reads at most {@code maxResults} of them. */
+    private boolean paged(int maxResults) {
+        return getFirstResult() > 0 || maxResults < Integer.MAX_VALUE;
+    }
+
+    /** The results to skip, {@code null} for none. */
+    private Integer offset() {
+        return getFirstResult() > 0 ? getFirstResult() : null;
+    }
+
+    /** The results to read at most, {@code null} for all of them. */
+    private static Integer limit(int maxResults) {
+        return maxResults < Integer.MAX_VALUE ? maxResults : null;
+    }
+
+    /** A collection fetch anywhere in the query must never receive a SQL row limit. */
+    private boolean collectionFetch() {
+        return collectionFetch;
+    }
+
+    private static <T> List<T> uniqueReferences(List<T> rows) {
+        Set<T> seen = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        List<T> unique = new ArrayList<>();
+        for (T row : rows) if (seen.add(row)) unique.add(row);
+        return unique;
+    }
+
+    /** @param plan the shared plan {@code compiled} comes from, which keeps its rendered SQL; {@code null} if it has none */
+    private List<Object> execute(Compiled compiled, QueryPlans.Plan plan, List<List<Compiled>> split, Connection connection) {
+        Dialect dialect = runtime.dialect(connection);
+        boolean pessimistic = io.vidocq.noether.jpa.core.flush.Locks.pessimistic(lockMode);
+        io.vidocq.noether.jpa.dialect.sql.Statement sql = compiled.sql();
+        boolean followOn = pessimistic && readsDerivedTable(sql);
+        if (followOn && compiled.items().stream().noneMatch(JpqlQuery::entityItem)) {
+            throw new PersistenceException("A pessimistic TABLE_PER_CLASS query must select an entity for follow-on row locking");
+        }
+        if (pessimistic && !followOn && sql instanceof io.vidocq.noether.jpa.dialect.sql.Query query) { // §3.5.6: the rows it reads
+            sql = query.locked(io.vidocq.noether.jpa.core.flush.Locks.rowLock(lockMode), lockTimeout != null && lockTimeout == 0);
+        }
+        // a row lock makes another statement of it, rendered for this execution
+        Dialect.Rendered rendered = plan != null && sql == compiled.sql() ? plan.rendered(dialect) : dialect.renderQuery(sql);
+        List<Object> rows = new ArrayList<>();
+        // the entities the rows fetched with their select items, in row order
+        List<EntityLoader.FetchedEntity> entities = new ArrayList<>();
+        List<io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedElement> collectionRows = new ArrayList<>();
+        readRows(compiled, rendered, dialect, connection, rows, entities, collectionRows);
+        // entities found, and results constructed, once the rows are read: the loader runs statements of its own
+        List<Object> resultList = new ArrayList<>(rows.size());
+        FetchPlan[] plans = fetchPlans();
+        hydrate(compiled, split, rows, entities, collectionRows, dialect, connection);
+        for (int r = 0; r < rows.size(); r++) {
+            Object resolved = resolve(rows.get(r), connection, followOn);
+            fetch(resolved, plans, connection);
+            resultList.add(selected(resolved));
+        }
+        if (lockMode != LockModeType.NONE) {
+            resultList.forEach(this::lockEntities);
+        }
+        return uniqueOwners(compiled) ? uniqueReferences(resultList) : resultList;
+    }
+
+    /** Whether the owners of a hydrated collection are given once each: a graph read, or a distinct fetch join. */
+    private boolean uniqueOwners(Compiled compiled) {
+        return compiled.collection() != null && (!collectionFetch
+            || statement instanceof Ast.Select select && select.distinct());
+    }
+
+    /** Whether {@code sql} reads a derived table, as a TABLE_PER_CLASS union: its rows cannot be locked by it. */
+    private static boolean readsDerivedTable(io.vidocq.noether.jpa.dialect.sql.Statement sql) {
+        return sql instanceof io.vidocq.noether.jpa.dialect.sql.Query query
+            && query.from().stream().anyMatch(f -> f.table().query() != null || f.joins().stream().anyMatch(j -> j.table().query() != null));
+    }
+
+    /**
+     * Runs the rendered statement with the values bound to its parameters and reads its rows: the select items of each
+     * into {@code rows}, the entities fetched with them into {@code entities} and, when the query fetches a
+     * collection, its element in each row into {@code collectionRows}.
+     */
+    private void readRows(Compiled compiled, Dialect.Rendered rendered, Dialect dialect, Connection connection,
+            List<Object> rows, List<EntityLoader.FetchedEntity> entities, List<EntityLoader.FetchedElement> collectionRows) {
+        boolean pessimistic = io.vidocq.noether.jpa.core.flush.Locks.pessimistic(lockMode);
+        try (PreparedStatement query = connection.prepareStatement(rendered.sql())) {
+            if (pessimistic) {
+                io.vidocq.noether.jpa.core.flush.Locks.timeout(dialect, lockTimeout, connection);
+            }
+            List<io.vidocq.noether.jpa.dialect.sql.Expression.Parameter> bound = rendered.parameters();
+            for (int i = 0; i < bound.size(); i++) {
+                bind(dialect, query, i + 1, (Compiled.Slot) bound.get(i).slot());
+            }
+            if (getTimeout() != null) {
+                query.setQueryTimeout(Math.max(1, (getTimeout() + 999) / 1000));
+            }
+            try (ResultSet results = query.executeQuery()) {
+                readResults(compiled, results, rows, entities, collectionRows);
+            }
+        } catch (SQLException e) {
+            if (pessimistic) {
+                throw io.vidocq.noether.jpa.core.flush.Locks.failure(dialect, e, null);
+            }
+            throw new PersistenceException("The query failed: " + e.getMessage() + " — " + jpql, e);
+        }
+    }
+
+    private static void readResults(Compiled compiled, ResultSet results, List<Object> rows,
+            List<EntityLoader.FetchedEntity> entities, List<EntityLoader.FetchedElement> collectionRows) throws SQLException {
+        List<Compiled.Item> items = compiled.items();
+        int[] column = new int[1]; // the cursor over the columns of a row, one for all the rows
+        // one array serves the reading of the fetched entities of each row
+        EntityLoader.FetchedEntity[] fetchedRow = new EntityLoader.FetchedEntity[compiled.hydrations().size()];
+        while (results.next()) {
+            column[0] = 1;
+            Object first = readItems(items, results, column, rows);
+            if (fetchedRow.length > 0) {
+                fetched(compiled.hydrations(), results, column, fetchedRow);
+                for (EntityLoader.FetchedEntity fetched : fetchedRow) {
+                    if (fetched != null) entities.add(fetched);
+                }
+            }
+            if (compiled.collection() != null) {
+                // the single item of a collection fetch is its root entity (Translator.collectionHydration): a key
+                collectionRows.add(fetchedElement(compiled.collection(), ownerId(first), fetchedRow, results, column));
+            }
+        }
+    }
+
+    /** The identifier of the owner of a collection fetch row, whose single item is its root entity. */
+    private static Object ownerId(Object first) {
+        if (first instanceof EntityKey(_, var id)) {
+            return id;
+        }
+        throw new IllegalStateException("A collection fetch row starts with its root entity, not " + first);
+    }
+
+    /** Reads the select items of the current row and adds the row to {@code rows}; gives its first item. */
+    private static Object readItems(List<Compiled.Item> items, ResultSet results, int[] column, List<Object> rows)
+            throws SQLException {
+        if (items.size() == 1) { // the item is the row: no array around it
+            Object first = read(items.getFirst(), results, column);
+            rows.add(first);
+            return first;
+        }
+        Object[] row = new Object[items.size()];
+        for (int i = 0; i < row.length; i++) {
+            row[i] = read(items.get(i), results, column);
+        }
+        rows.add(row);
+        return row[0];
+    }
+
+    /** Hands the loader what the rows fetched, once they are all read: the loader runs statements of its own. */
+    private void hydrate(Compiled compiled, List<List<Compiled>> split, List<Object> rows,
+            List<EntityLoader.FetchedEntity> entities, List<EntityLoader.FetchedElement> collectionRows, Dialect dialect,
+            Connection connection) {
+        if (!split.isEmpty() && !rows.isEmpty()) {
+            List<Object> ids = rows.stream().map(r -> ((EntityKey) r).id()).distinct().toList();
+            GraphRows collected = splitRows(split, ids, owner -> runtime.graphBatchBound(owner, connection), dialect, connection);
+            runtime.hydrateCollections(collected.entities(), collected.collections(), connection);
+        }
+        if (compiled.hydrations().isEmpty() || rows.isEmpty()) {
+            return; // no row fetched an entity with its select items
+        }
+        if (compiled.collection() != null) {
+            runtime.hydrateCollection(entities, compiled.collection().owner(), compiled.collection().attribute(), collectionRows, connection);
+        } else {
+            runtime.hydrateCollections(entities, List.of(), connection);
+        }
+    }
+
+    /** The result a resolved row gives: a tuple of it if the query was asked for tuples, else the row. */
+    private Object selected(Object resolved) {
+        Object row = typed(resolved);
+        if (resultClass != jakarta.persistence.Tuple.class) {
+            return row;
+        }
+        Object[] cells = row instanceof Object[] array ? array : new Object[]{row};
+        return new CriteriaTuple(cells, tupleElements);
+    }
+
+    /** A resolved row of a criteria query, each selection as its Java type; a row of any other query as it is. */
+    private Object typed(Object resolved) {
+        if (tupleElements.isEmpty()) {
+            return resolved;
+        }
+        if (resolved instanceof Object[] array && array.length == tupleElements.size()) {
+            for (int i = 0; i < array.length; i++) array[i] = convert(array[i], boxed(tupleElements.get(i).getJavaType()));
+            return resolved;
+        }
+        return tupleElements.size() == 1 ? convert(resolved, boxed(tupleElements.getFirst().getJavaType())) : resolved;
+    }
+
+    private static io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedElement fetchedElement(
+            Compiled.CollectionHydration collection, Object owner, EntityLoader.FetchedEntity[] row, ResultSet results, int[] column)
+            throws SQLException {
+        Object[] payload = new Object[collection.readers().size()];
+        boolean[] nulls = new boolean[payload.length];
+        for (int c = 0; c < payload.length; c++) {
+            payload[c] = collection.readers().get(c).read(results, column[0]++);
+            nulls[c] = results.wasNull();
+            if (nulls[c]) payload[c] = null;
+        }
+        Object element;
+        boolean present;
+        int indexFrom;
+        if (collection.elements() != null) {
+            int width = collection.elements().columns().size();
+            present = !nulls[0];
+            element = present ? collection.elements().element(java.util.Arrays.copyOfRange(payload, 1, width + 1),
+                java.util.Arrays.copyOfRange(nulls, 1, width + 1)) : null;
+            indexFrom = width + 1;
+        } else {
+            EntityLoader.FetchedEntity target = row[1];
+            present = target != null;
+            element = present ? target.id() : null;
+            indexFrom = 0;
+        }
+        return new io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedElement(owner, element,
+            java.util.Arrays.copyOfRange(payload, indexFrom, payload.length), present);
+    }
+
+    /** §3.5: the entities of a result hold the lock mode of the query. */
+    private void lockEntities(Object result) {
+        if (result instanceof Object[] row) {
+            for (Object value : row) {
+                lockEntities(value);
+            }
+        } else if (result != null && runtime.mapping().entity(result.getClass()).isPresent()) {
+            runtime.locked(result, lockMode);
+        } else if (result instanceof Map.Entry<?, ?> entry) {
+            lockEntities(entry.getKey());
+            lockEntities(entry.getValue());
+        }
+    }
+
+    /**
+     * Reads, after the select items, the columns of each fetched entity of the current row into {@code fetched}, one
+     * slot per hydration, each indexed like the statement columns of its entity; {@code null} for an entity the row
+     * does not hold. The caller reuses {@code fetched} for the next row: it takes what it keeps before reading it.
+     */
+    private static void fetched(List<Compiled.Hydration> hydrations, ResultSet results, int[] column,
+            EntityLoader.FetchedEntity[] fetched) throws SQLException {
+        for (int h = 0; h < fetched.length; h++) {
+            fetched[h] = fetchedEntity(hydrations.get(h), results, column);
+        }
+    }
+
+    /** The entity of one hydration in the current row, with its columns and its identity; {@code null} without a key. */
+    private static EntityLoader.FetchedEntity fetchedEntity(Compiled.Hydration hydration, ResultSet results, int[] column)
+            throws SQLException {
+        List<io.vidocq.noether.jpa.core.mapping.EntityStatements.Column> columns = hydration.type().statements().columns();
+        Object[] values = new Object[columns.size()];
+        boolean[] nulls = new boolean[values.length];
+        java.util.Arrays.fill(nulls, true);
+        for (int c : hydration.columns()) {
+            values[c] = columns.get(c).binder().read(results, column[0]++);
+            nulls[c] = results.wasNull();
+            if (nulls[c] && columns.get(c).foreignKey() != null) {
+                values[c] = null;
+            }
+        }
+        int[] keyColumns = hydration.key();
+        if (keyColumns.length == 1) { // a simple identifier is its one column: no array around it
+            if (nulls[keyColumns[0]]) {
+                return null;
+            }
+            Object id = hydration.type().statements().simpleKey(values[keyColumns[0]]);
+            return new EntityLoader.FetchedEntity(hydration.type(), id, values, nulls);
+        }
+        Object[] key = new Object[keyColumns.length];
+        boolean empty = true;
+        for (int k = 0; k < key.length; k++) {
+            key[k] = values[keyColumns[k]];
+            empty &= nulls[keyColumns[k]];
+        }
+        return empty ? null : new EntityLoader.FetchedEntity(hydration.type(), hydration.type().statements().key(key), values, nulls);
+    }
+
+    /** The identity of an entity read in a row, found once the rows are read. */
+    private record EntityKey(MappedEntity type, Object id) {
+    }
+
+    /** A constructor result whose arguments are read, built once the entities among them are found. */
+    private record Built(Class<?> type, Object[] arguments) {
+    }
+
+    /** An {@code ENTRY()} result whose entity keys or values are resolved through the persistence context. */
+    private record EntryBuilt(Object key, Object value) {
+    }
+
+    private record EmbeddedBuilt(Compiled.EmbeddedItem item, Object[] components) {
+    }
+
+    private static boolean entityItem(Compiled.Item item) {
+        return switch (item) {
+            case Compiled.EntityItem _ -> true;
+            case Compiled.ConstructorItem constructor -> constructor.arguments().stream().anyMatch(JpqlQuery::entityItem);
+            case Compiled.MapEntryItem(var key, var value) -> entityItem(key) || entityItem(value);
+            case Compiled.EmbeddedItem embedded -> embedded.parts().stream().anyMatch(part -> switch (part) {
+                case Compiled.EntityEmbedded _ -> true;
+                case Compiled.NestedEmbedded(var nested) -> entityItem(nested);
+                case Compiled.ScalarEmbedded _ -> false;
+            });
+            default -> false;
+        };
+    }
+
+    private Object resolve(Object read, Connection connection, boolean followOn) {
+        return switch (read) {
+            case EntityKey(MappedEntity type, Object id) -> {
+                Object entity = runtime.find(type, id, connection);
+                if (followOn && entity != null) runtime.lockResult(entity, lockMode, lockTimeout, connection);
+                yield entity;
+            }
+            case Built(var type, var arguments) -> {
+                Object[] resolved = new Object[arguments.length];
+                for (int i = 0; i < resolved.length; i++) {
+                    resolved[i] = resolve(arguments[i], connection, followOn);
+                }
+                yield construct(type, resolved);
+            }
+            case EntryBuilt(var key, var value) -> new java.util.AbstractMap.SimpleImmutableEntry<>(resolve(key, connection, followOn),
+                resolve(value, connection, followOn));
+            case EmbeddedBuilt embedded -> embedded(embedded, connection);
+            case Object[] row -> {
+                Object[] resolved = new Object[row.length];
+                for (int i = 0; i < row.length; i++) {
+                    resolved[i] = resolve(row[i], connection, followOn);
+                }
+                yield resolved;
+            }
+            case null, default -> read;
+        };
+    }
+
+    private static Object read(Compiled.Item item, ResultSet results, int[] column) throws SQLException {
+        return switch (item) {
+            case Compiled.EntityItem(var type, var keyBinders) -> readKey(type, keyBinders, results, column);
+            case Compiled.ValueItem(var binder, var type) -> readValue(binder, type, results, column);
+            case Compiled.ConstructorItem(var type, var arguments) -> {
+                Object[] readArguments = new Object[arguments.size()];
+                for (int i = 0; i < readArguments.length; i++) {
+                    readArguments[i] = read(arguments.get(i), results, column);
+                }
+                yield new Built(type, readArguments);
+            }
+            case Compiled.MapEntryItem(var key, var value) ->
+                new EntryBuilt(read(key, results, column), read(value, results, column));
+            case Compiled.EmbeddedItem embedded -> {
+                Object[] components = new Object[embedded.parts().size()];
+                for (int i = 0; i < components.length; i++) {
+                    components[i] = readPart(embedded.parts().get(i), results, column);
+                }
+                yield new EmbeddedBuilt(embedded, components);
+            }
+        };
+    }
+
+    /** The identity of an entity of {@code type}, read from its key columns; {@code null} if they are all NULL. */
+    private static EntityKey readKey(MappedEntity type, List<io.vidocq.noether.jpa.core.jdbc.type.ValueBinder> keyBinders,
+            ResultSet results, int[] column) throws SQLException {
+        if (keyBinders.size() == 1) { // a simple identifier is its one column: no array around it
+            Object value = keyBinders.getFirst().read(results, column[0]++);
+            return results.wasNull() ? null : new EntityKey(type, type.statements().simpleKey(value));
+        }
+        Object[] key = new Object[keyBinders.size()];
+        boolean empty = true;
+        for (int k = 0; k < key.length; k++) {
+            key[k] = keyBinders.get(k).read(results, column[0]++);
+            empty &= results.wasNull();
+        }
+        return empty ? null : new EntityKey(type, type.statements().key(key));
+    }
+
+    /**
+     * One column, read through {@code binder}, or as the driver gives it then converted to {@code type} (§4.8.5); a
+     * {@code null} type keeps the driver's value.
+     */
+    private static Object readValue(io.vidocq.noether.jpa.core.jdbc.type.ValueBinder binder, Class<?> type, ResultSet results,
+            int[] column) throws SQLException {
+        Object read = binder != null ? binder.read(results, column[0]) : results.getObject(column[0]);
+        column[0]++;
+        if (results.wasNull()) {
+            return null;
+        }
+        return binder != null || type == null ? read : convert(read, type);
+    }
+
+    /** A component of an embeddable result: a value, a nested embeddable or the identity of an entity. */
+    private static Object readPart(Compiled.EmbeddedPart part, ResultSet results, int[] column) throws SQLException {
+        return switch (part) {
+            case Compiled.ScalarEmbedded(var binder, var type) -> readValue(binder, type, results, column);
+            case Compiled.NestedEmbedded(var item) -> read(item, results, column);
+            case Compiled.EntityEmbedded(var type, var keyBinders) -> readKey(type, keyBinders, results, column);
+        };
+    }
+
+    private Object embedded(EmbeddedBuilt built, Connection connection) {
+        Object[] components = new Object[built.components().length];
+        boolean empty = true;
+        for (int i = 0; i < components.length; i++) {
+            components[i] = resolve(built.components()[i], connection, false);
+            empty &= components[i] == null;
+        }
+        if (empty) {
+            return null;
+        }
+        if (built.item().model().isRecord()) {
+            return built.item().access().construct(components);
+        }
+        Object value = built.item().access().instantiate();
+        built.item().access().write(value, components);
+        return value;
+    }
+
+    private ResultConstructors constructors(Class<?> type) {
+        return constructors.computeIfAbsent(type, t -> ResultConstructors.of(t, runtime.mapping()));
+    }
+
+    /**
+     * {@code NEW type(arguments)} (§4.8.2): a public constructor of the application's class whose parameters take the
+     * arguments, generated by noether-jpa-processor for a named query of the sources, else found reflectively and
+     * called through a method handle ({@link ResultConstructors}): on the module path, the package of a class the
+     * processor did not serve must be exported to this module, as for any provider.
+     */
+    private Object construct(Class<?> type, Object[] arguments) {
+        for (ResultConstructors.Candidate constructor : constructors(type).candidates()) {
+            Class<?>[] types = constructor.parameters();
+            if (types.length != arguments.length) {
+                continue;
+            }
+            Object[] converted = new Object[arguments.length];
+            boolean fits = true;
+            for (int i = 0; i < arguments.length && fits; i++) {
+                Class<?> parameter = boxed(types[i]);
+                converted[i] = convert(arguments[i], parameter);
+                fits = converted[i] == null ? !types[i].isPrimitive() : parameter.isInstance(converted[i]);
+            }
+            if (fits) {
+                return constructor.newInstance(converted);
+            }
+        }
+        throw new PersistenceException("No public constructor of " + type.getName() + " takes the arguments of the query: " + jpql);
+    }
+
+    /** A date or time as the {@code java.sql} or {@code java.time} type expected, or {@code null} if neither is one. */
+    private static Object temporal(Object value, Class<?> type) {
+        if (value instanceof Calendar calendar) {
+            return type == Calendar.class ? value : temporal(new java.sql.Timestamp(calendar.getTimeInMillis()), type);
+        }
+        if (value.getClass() == Date.class) { // a java.util.Date: its time, as a timestamp
+            return type == Date.class ? value : temporal(new java.sql.Timestamp(((Date) value).getTime()), type);
+        }
+        return switch (value) {
+            case java.sql.Date date when type == java.time.LocalDate.class -> date.toLocalDate();
+            case java.sql.Time time when type == java.time.LocalTime.class -> time.toLocalTime();
+            case java.sql.Timestamp timestamp when type == java.time.LocalDateTime.class -> timestamp.toLocalDateTime();
+            case java.sql.Timestamp timestamp when type == java.time.LocalDate.class -> timestamp.toLocalDateTime().toLocalDate();
+            case java.sql.Timestamp timestamp when type == java.time.LocalTime.class -> timestamp.toLocalDateTime().toLocalTime();
+            case java.sql.Timestamp timestamp when type == java.sql.Date.class -> new java.sql.Date(timestamp.getTime());
+            case java.sql.Timestamp timestamp when type == java.sql.Time.class -> new java.sql.Time(timestamp.getTime());
+            case java.sql.Date date when type == java.sql.Timestamp.class -> new java.sql.Timestamp(date.getTime());
+            case java.sql.Date date when type == java.time.LocalDateTime.class -> date.toLocalDate().atStartOfDay();
+            case Date date when type == Date.class -> date;
+            case Date date when type == Calendar.class -> calendar(date);
+            case java.time.LocalDate date when type == java.sql.Date.class -> java.sql.Date.valueOf(date);
+            case java.time.LocalTime time when type == java.sql.Time.class -> java.sql.Time.valueOf(time);
+            case java.time.LocalDateTime dateTime when type == java.sql.Timestamp.class -> java.sql.Timestamp.valueOf(dateTime);
+            case java.time.OffsetDateTime dateTime when type == java.sql.Timestamp.class -> java.sql.Timestamp.from(dateTime.toInstant());
+            // a TIME WITH TIME ZONE (H2's CURRENT_TIME) as the local time it is in this JVM (BUG-20261118-83)
+            case java.time.OffsetTime time when type == java.sql.Time.class -> java.sql.Time.valueOf(time.withOffsetSameInstant(
+                java.time.OffsetDateTime.now().getOffset()).toLocalTime());
+            default -> null;
+        };
+    }
+
+    /** A value the driver read, as {@code type}, never null, the type the specification gives it (§4.8.5). */
+    private static Object convert(Object value, Class<?> type) {
+        if (value == null || type.isInstance(value)) {
+            return value;
+        }
+        Object temporal = temporal(value, type);
+        if (temporal != null) {
+            return temporal;
+        }
+        if (!(value instanceof Number number)) {
+            return value;
+        }
+        if (type == Long.class) {
+            return number.longValue();
+        }
+        if (type == Integer.class) {
+            return number.intValue();
+        }
+        if (type == Double.class) {
+            return number.doubleValue();
+        }
+        if (type == Float.class) {
+            return number.floatValue();
+        }
+        if (type == Short.class) {
+            return number.shortValue();
+        }
+        if (type == BigDecimal.class) {
+            return new BigDecimal(number.toString());
+        }
+        if (type == BigInteger.class) {
+            return new BigDecimal(number.toString()).toBigInteger();
+        }
+        return value;
+    }
+
+    private void bind(Dialect dialect, PreparedStatement statement, int index, Compiled.Slot slot) throws SQLException {
+        Object value = slot.literal() ? slot.constant() : values.get(key(slot.parameter()));
+        if (slot.element() >= 0) {
+            value = new ArrayList<>((Collection<?>) value).get(slot.element());
+        }
+        if (slot.entity() != null) {
+            Object id = value == null ? null : slot.entity().id(value);
+            value = id == null ? null : slot.entity().statements().keyValues(id)[slot.part()];
+        } else if (slot.type() != null) {
+            value = convert(value, boxed(slot.type()));
+        }
+        if (slot.binder() != null) {
+            slot.binder().bind(dialect, statement, index, value);
+        } else if (value == null) {
+            statement.setNull(index, Types.NULL);
+        } else {
+            statement.setObject(index, value instanceof Enum<?> constant ? constant.name() : value);
+        }
+    }
+
+    // ---- parameters (§3.11.4, §4.6.4) ---------------------------------------------------------------------
+
+    private QueryParameter<?> parameter(Object key) {
+        QueryParameter<?> parameter = parameters.get(key);
+        if (parameter == null) {
+            throw new IllegalArgumentException("The query has no parameter " + (key instanceof String ? ":" : "?") + key + ": " + jpql);
+        }
+        return parameter;
+    }
+
+    private static String describe(QueryParameter<?> parameter) {
+        return parameter.name() != null ? ":" + parameter.name() : "?" + parameter.position();
+    }
+
+    /** Binds {@code value}, which must be of the type of the parameter, or a collection of it for {@code IN}. */
+    private void set(Object key, Object value) {
+        QueryParameter<?> parameter = parameter(key);
+        Class<?> type = boxed(parameter.type());
+        if (value != null && type != Object.class && !(value instanceof Collection<?>) && !type.isInstance(value)
+                && !(value instanceof Number && Number.class.isAssignableFrom(type)) && !(temporal(value) && temporal(type))) {
+            throw new IllegalArgumentException("The parameter " + describe(parameter) + " is a " + type.getName() + ", not a "
+                + value.getClass().getName() + " (§3.11.4)");
+        }
+        values.put(key, value);
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(String name, Object value) {
+        checkOpen();
+        set(name, value);
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(int position, Object value) {
+        checkOpen();
+        set(position, value);
+        return this;
+    }
+
+    @Override
+    public <T> TypedQuery<X> setParameter(Parameter<T> param, T value) {
+        checkOpen();
+        if (param == null) {
+            throw new IllegalArgumentException("The parameter cannot be null");
+        }
+        set(parameterKey(param), value);
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(Parameter<Calendar> param, Calendar value, TemporalType temporalType) {
+        checkOpen();
+        set(parameterKey(param), temporal(value, temporalType));
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(Parameter<Date> param, Date value, TemporalType temporalType) {
+        checkOpen();
+        set(parameterKey(param), temporal(value, temporalType));
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(String name, Calendar value, TemporalType temporalType) {
+        checkOpen();
+        set(name, temporal(value, temporalType));
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(String name, Date value, TemporalType temporalType) {
+        checkOpen();
+        set(name, temporal(value, temporalType));
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(int position, Calendar value, TemporalType temporalType) {
+        checkOpen();
+        set(position, temporal(value, temporalType));
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setParameter(int position, Date value, TemporalType temporalType) {
+        checkOpen();
+        set(position, temporal(value, temporalType));
+        return this;
+    }
+
+    /** Whether a value or a type is a date or a time: legacy ({@code java.util}, {@code java.sql}) or {@code java.time}. */
+    private static boolean temporal(Object valueOrType) {
+        Class<?> type = valueOrType instanceof Class<?> c ? c : valueOrType.getClass();
+        return Date.class.isAssignableFrom(type) || Calendar.class.isAssignableFrom(type)
+            || java.time.temporal.Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time");
+    }
+
+    private static Calendar calendar(Date date) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(date);
+        return calendar;
+    }
+
+    @Override
+    public Set<Parameter<?>> getParameters() {
+        checkOpen();
+        if (!criteriaParameters.isEmpty()) return new LinkedHashSet<>(criteriaParameters.keySet());
+        return Collections.unmodifiableSet(new LinkedHashSet<>(parameters.values()));
+    }
+
+    @Override
+    public Parameter<?> getParameter(String name) {
+        checkOpen();
+        QueryParameter<?> declared = parameter(name);
+        return criteriaParameters.keySet().stream().filter(p -> name.equals(p.getName())).findFirst().orElse(declared);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> Parameter<T> getParameter(String name, Class<T> type) {
+        checkOpen();
+        QueryParameter<?> parameter = parameter(name);
+        if (!boxed(type).isAssignableFrom(boxed(parameter.type()))) {
+            throw new IllegalArgumentException("The parameter :" + name + " is a " + parameter.type().getName());
+        }
+        return (Parameter<T>) getParameter(name);
+    }
+
+    @Override
+    public Parameter<?> getParameter(int position) {
+        checkOpen();
+        if (!criteriaParameters.isEmpty()) throw new IllegalArgumentException("Criteria parameters have no positional index");
+        return parameter(position);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> Parameter<T> getParameter(int position, Class<T> type) {
+        checkOpen();
+        if (!criteriaParameters.isEmpty()) throw new IllegalArgumentException("Criteria parameters have no positional index");
+        QueryParameter<?> parameter = parameter(position);
+        if (!boxed(type).isAssignableFrom(boxed(parameter.type()))) {
+            throw new IllegalArgumentException("The parameter ?" + position + " is a " + parameter.type().getName());
+        }
+        return (Parameter<T>) parameter;
+    }
+
+    @Override
+    public boolean isBound(Parameter<?> param) {
+        checkOpen();
+        return param != null && values.containsKey(parameterKey(param));
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T getParameterValue(Parameter<T> param) {
+        checkOpen();
+        return (T) value(parameterKey(param));
+    }
+
+    @Override
+    public Object getParameterValue(String name) {
+        checkOpen();
+        return value(name);
+    }
+
+    private Object parameterKey(Parameter<?> parameter) {
+        if (!criteriaParameters.isEmpty()) {
+            Object identity = criteriaParameters.get(parameter);
+            if (identity == null) throw new IllegalArgumentException("Parameter does not belong to this criteria query");
+            return identity;
+        }
+        return parameter.getName() != null ? parameter.getName() : parameter.getPosition();
+    }
+
+    @Override
+    public Object getParameterValue(int position) {
+        checkOpen();
+        return value(position);
+    }
+
+    private Object value(Object key) {
+        QueryParameter<?> parameter = parameter(key);
+        if (!values.containsKey(key)) {
+            throw new IllegalStateException("The parameter " + describe(parameter) + " is not bound");
+        }
+        return values.get(key);
+    }
+
+    // ---- settings -----------------------------------------------------------------------------------------
+
+    @Override
+    public TypedQuery<X> setMaxResults(int maxResult) {
+        checkOpen();
+        maxResults(maxResult);
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setFirstResult(int startPosition) {
+        checkOpen();
+        firstResult(startPosition);
+        return this;
+    }
+
+    /** The standard hints (§3.11.? 3.2: §3.12): query and lock timeouts, in milliseconds, and cache modes; others are kept as given. */
+    @Override
+    public TypedQuery<X> setHint(String hintName, Object value) {
+        checkOpen();
+        switch (hintName) {
+            case QUERY_TIMEOUT, CACHE_RETRIEVE_MODE, CACHE_STORE_MODE -> standardHint(hintName, value);
+            case "jakarta.persistence.lock.timeout" -> lockTimeout = milliseconds(hintName, value);
+            case FETCH_GRAPH, LOAD_GRAPH ->
+                runtime.validateGraph(value, resultClass != null && runtime.mapping().entity(resultClass).isPresent() ? resultClass : null);
+            default -> {
+                // any other hint is only kept, below
+            }
+        }
+        hint(hintName, value);
+        return this;
+    }
+
+    /** The lock timeout this query applies, in milliseconds; {@code null} for the database's own. */
+    Integer lockTimeout() {
+        return lockTimeout;
+    }
+
+    @Override
+    public TypedQuery<X> setFlushMode(FlushModeType flushMode) {
+        checkOpen();
+        flushMode(flushMode);
+        return this;
+    }
+
+    /** §3.11: for a select only — an UPDATE or a DELETE takes no lock mode (IllegalStateException). */
+    @Override
+    public TypedQuery<X> setLockMode(LockModeType lockMode) {
+        checkOpen();
+        if (!(statement instanceof Ast.Select)) {
+            throw new IllegalStateException("A lock mode is for a SELECT, not an UPDATE or a DELETE: " + jpql);
+        }
+        this.lockMode = lockMode == null ? LockModeType.NONE : lockMode;
+        return this;
+    }
+
+    @Override
+    public LockModeType getLockMode() {
+        checkOpen();
+        if (!(statement instanceof Ast.Select)) {
+            throw new IllegalStateException("A lock mode is for a SELECT, not an UPDATE or a DELETE: " + jpql);
+        }
+        return lockMode;
+    }
+
+    @Override
+    public TypedQuery<X> setCacheRetrieveMode(CacheRetrieveMode cacheRetrieveMode) {
+        checkOpen();
+        cacheRetrieveMode(cacheRetrieveMode);
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setCacheStoreMode(CacheStoreMode cacheStoreMode) {
+        checkOpen();
+        cacheStoreMode(cacheStoreMode);
+        return this;
+    }
+
+    @Override
+    public TypedQuery<X> setTimeout(Integer timeout) {
+        checkOpen();
+        timeout(timeout);
+        return this;
+    }
+
+    private static Class<?> boxed(Class<?> type) {
+        return MethodType.methodType(type).wrap().returnType();
+    }
+}

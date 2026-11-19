@@ -1,0 +1,108 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.noether.jpa.dialect.h2;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.vidocq.noether.jpa.dialect.DialectFactory;
+import io.vidocq.noether.jpa.dialect.sql.Delete;
+import io.vidocq.noether.jpa.dialect.sql.Identifier;
+import io.vidocq.noether.jpa.dialect.sql.Table;
+import io.vidocq.noether.jpa.dialect.sql.Expression;
+import io.vidocq.noether.jpa.dialect.sql.Query;
+import io.vidocq.noether.jpa.dialect.sql.SetQuery;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class H2DialectFactoryTest {
+
+    @Test
+    void derivedUnionRangesRenderWithOuterAggregationAndPaging() {
+        var column = new Expression.Column("e", Identifier.of("id"));
+        var book = Query.from(new Query.From(Table.of("Book"), "e", List.of())).select(column).build();
+        var film = Query.from(new Query.From(Table.of("Film"), "e", List.of())).select(column).build();
+        var union = new SetQuery(List.of(book, film), List.of(new SetQuery.Operation(SetQuery.Operator.UNION, true)),
+            List.of(), null, null);
+        var query = Query.from(new Query.From(Table.derived(union, List.of(Identifier.of("id"))), "a", List.of()))
+            .select(new Expression.Aggregate("COUNT", false, null)).offset(1).limit(1).build();
+        assertThat(new H2DialectFactory().create(2, 3).render(query)).isEqualTo(
+            "SELECT COUNT(*) FROM ((SELECT e.id FROM Book e) UNION ALL (SELECT e.id FROM Film e)) a(id)"
+                + " OFFSET 1 ROWS FETCH FIRST 1 ROWS ONLY");
+    }
+
+    @Test
+    void theModuleProvidesTheFactory() {
+        assertThat(H2DialectFactory.class.getModule().getDescriptor().provides())
+            .anySatisfy(p -> {
+                assertThat(p.service()).isEqualTo(DialectFactory.class.getName());
+                assertThat(p.providers()).containsExactly(H2DialectFactory.class.getName());
+            });
+    }
+
+    @Test
+    void itRecognisesH2FromItsJdbcMetadata() { // DatabaseMetaData.getDatabaseProductName()
+        DialectFactory factory = new H2DialectFactory();
+        assertThat(factory.supports("H2")).isTrue();
+        assertThat(factory.supports("PostgreSQL")).isFalse();
+        assertThat(factory.create(2, 3).name()).isEqualTo("h2");
+    }
+
+    @Test
+    void itRendersTheStandardStatements() {
+        assertThat(new H2DialectFactory().create(2, 3).render(new Delete(Table.of("BOOK"), List.of(Identifier.of("ID")))))
+            .isEqualTo("DELETE FROM BOOK WHERE ID = ?");
+    }
+
+    @Test
+    void generatedKeysAreAskedForAsTheDatabaseFoldsTheirNames() {
+        var dialect = new H2DialectFactory().create(2, 3);
+        assertThat(dialect.generatedKeyName(Identifier.of("Id"))).isEqualTo("ID");
+        assertThat(dialect.generatedKeyName(Identifier.quoted("Id"))).isEqualTo("Id");
+    }
+
+    @Test
+    void aUniqueViolationIsADuplicateKey() {
+        var dialect = new H2DialectFactory().create(2, 3);
+        assertThat(dialect.isDuplicateKey(new java.sql.SQLException("duplicate", "23505"))).isTrue();
+        assertThat(dialect.isDuplicateKey(new java.sql.SQLException("not null", "23502"))).isFalse();
+    }
+
+    @Test
+    void locksAreExclusiveAndATimeoutIsRecognised() {
+        var dialect = new H2DialectFactory().create(2, 3);
+        var select = new io.vidocq.noether.jpa.dialect.sql.Select(Table.of("BOOK"), List.of(Identifier.of("ID")),
+            List.of(Identifier.of("ID")));
+        assertThat(dialect.render(select.locked(io.vidocq.noether.jpa.dialect.sql.Select.Lock.SHARED, true)))
+            .isEqualTo("SELECT ID FROM BOOK WHERE ID = ? FOR UPDATE");
+        assertThat(dialect.lockFailure(new java.sql.SQLException("timeout", "HYT00", 50200)))
+            .isEqualTo(io.vidocq.noether.jpa.dialect.Dialect.LockFailure.TIMEOUT);
+        assertThat(dialect.lockTimeout(100)).isNull();
+    }
+
+    /** A query run with a shared lock (PESSIMISTIC_READ) locks its rows as H2 can: H2 has no FOR SHARE. */
+    @Test
+    void aQueryWithASharedLockLocksItsRowsForUpdate() {
+        var id = new Expression.Column("t0", Identifier.of("ID"));
+        var query = Query.from(new Query.From(Table.of("EMPLOYEE"), "t0", List.of())).select(id).build()
+            .locked(io.vidocq.noether.jpa.dialect.sql.Select.Lock.SHARED, true);
+        assertThat(new H2DialectFactory().create(2, 3).render(query))
+            .isEqualTo("SELECT t0.ID FROM EMPLOYEE t0 FOR UPDATE");
+    }
+}
