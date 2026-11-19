@@ -1,10 +1,10 @@
 name: CI
 
 # Post-merge flow of the monorepo (push on main): an incremental build. gitflow-incremental-builder builds the modules
-# the push changed, compared with the commit main was on before it, and every module depending on them, with their
-# tests, then deploys them as SNAPSHOTs. The modules it leaves out keep their SNAPSHOT of an earlier push.
+# changed since the last deployed commit of main (refs/deployed/main), and every module depending on them, with
+# their tests, then deploys them as SNAPSHOTs. The modules it leaves out keep their SNAPSHOT of an earlier push.
 # The whole reactor is built, tested and deployed every night (nightly.yml), and on a push the incremental builder
-# cannot compare (a new branch, a forced push).
+# cannot compare (no deployed commit yet, a forced push).
 # No sources or javadoc jar on a SNAPSHOT (Yann, 2026-11-19): the release builds them.
 on:
   push:
@@ -28,22 +28,23 @@ jobs:
       - name: Check documented version numbers stay in sync
         run: ./vidocq-runtime/check-doc-versions.sh
 
+      # Compared with refs/deployed/main, the last commit whose SNAPSHOTs a run of this workflow or of nightly.yml
+      # deployed: after a green run it is the commit before the push, and after a red one (nothing deployed,
+      # deployAtEnd) this run also builds what the failed push changed.
       - name: What to build
         id: scope
-        env:
-          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
           # Detached at the pushed commit: gib.disableIfBranchMatches=main is for a developer's local main only.
           git checkout -q --detach
-          if [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
-              && git merge-base --is-ancestor "$BEFORE" HEAD; then
-            git update-ref refs/remotes/origin/gib-base "$BEFORE"
+          if git fetch -q --no-tags origin +refs/deployed/main:refs/remotes/origin/gib-base 2>/dev/null \
+              && git merge-base --is-ancestor refs/remotes/origin/gib-base HEAD; then
+            base=$(git rev-parse refs/remotes/origin/gib-base)
             echo "args=-Dgib.referenceBranch=refs/remotes/origin/gib-base -Dgib.compareToMergeBase=false -Dgib.uncommitted=false -Dgib.untracked=false" >> "$GITHUB_OUTPUT"
-            echo "Incremental: changes since ${BEFORE:0:10}"
+            echo "Incremental: changes since ${base:0:10}, the last deployed commit"
           else
             echo "args=-Dgib.disable=true" >> "$GITHUB_OUTPUT"
-            echo "Full build: no earlier commit of main to compare with"
+            echo "Full build: no deployed commit of main to compare with"
           fi
 
       - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
@@ -78,6 +79,16 @@ jobs:
           snapshot-password: ${{ secrets.REPOSILITE_PASSWORD }}
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Record the deployed commit
+        env:
+          TOKEN: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git push -q --force "${SERVER/https:\/\//https://oauth2:${TOKEN}@}/${REPOSITORY}.git" "$GITHUB_SHA:refs/deployed/main"
+          echo "refs/deployed/main -> ${GITHUB_SHA:0:10}"
 
       - name: Notify Slack on failure
         if: failure()

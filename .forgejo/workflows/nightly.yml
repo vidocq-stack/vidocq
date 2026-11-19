@@ -52,6 +52,18 @@ jobs:
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
+      # The next push to main compares with this commit (ci.yml). A nightly run older than the last push run only
+      # widens the next incremental build.
+      - name: Record the deployed commit
+        env:
+          TOKEN: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git push -q --force "${SERVER/https:\/\//https://oauth2:${TOKEN}@}/${REPOSITORY}.git" "$GITHUB_SHA:refs/deployed/main"
+          echo "refs/deployed/main -> ${GITHUB_SHA:0:10}"
+
       # vidocq-runtime-crac-extension requires jdk.crac: its own artifact, in the `crac` profile, built on Azul Zulu
       # CRaC against the runtime the step above installed. Also built by the release.
       - name: Install Azul Zulu CRaC
