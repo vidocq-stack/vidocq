@@ -1,0 +1,167 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.vidocq</groupId>
+    <artifactId>vidocq-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <relativePath />
+  </parent>
+
+  <groupId>io.vidocq.grimm</groupId>
+  <artifactId>grimm-parent</artifactId>
+  <version>0.4.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>Grimm</name>
+  <description>MicroProfile OpenAPI 4.2 implementation for Vidocq</description>
+  <url>https://codefloe.com/Vidocq/grimm</url>
+
+  <developers>
+    <developer>
+      <name>Yann Blazart</name>
+      <email>yann.blazart@gmail.com</email>
+    </developer>
+    <developer>
+      <name>Antoine Sabot-Durand</name>
+      <email>antoine@sabot-durand.net</email>
+    </developer>
+  </developers>
+
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+  <scm>
+    <connection>scm:git:https://codefloe.com/Vidocq/grimm.git</connection>
+    <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/grimm.git</developerConnection>
+    <url>https://codefloe.com/Vidocq/grimm</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <modules>
+    <module>grimm-core</module>
+    <module>grimm-processor</module>
+    <module>grimm-cdi-vauban</module>
+    <module>grimm-it-other-containers</module>
+    <module>grimm-bench</module>
+    <module>grimm-examples</module>
+    <module>grimm-architecture-tests</module>
+  </modules>
+
+  <properties>
+    <!--
+      Versions of the io.vidocq bricks this repository depends on. They are properties, never
+      literals, so that the CI can pin them: the downstream rebuild of Vidocq/ci (build-impacted,
+      pin-upstreams.py) rewrites <NAME.version> under /project/properties to the version of the
+      pull request under test, and the release (release-maven) bumps them with
+      versions:set-property. The name is the brick's repository name.
+    -->
+    <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+    <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+    <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+    <ravel.version>0.4.0-SNAPSHOT</ravel.version>
+
+    <version.mp.openapi>4.2-RC5</version.mp.openapi>
+    <version.jakarta.ws.rs>4.0.0</version.jakarta.ws.rs>
+    <version.jakarta.cdi>4.1.0</version.jakarta.cdi>
+    <version.jakarta.annotation>3.0.0</version.jakarta.annotation>
+    <version.jakarta.validation>3.1.1</version.jakarta.validation>
+
+    <!--
+      The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by the
+      shared pr-validate workflow, which runs it after the reactor is installed at the pull
+      request's version, and skips the step when this property is absent.
+
+      grimm-tck is a standalone pom outside the reactor, so versions:set does not reach it: its
+      grimm.version is set here to the reactor's version, the pull request's, or the run would
+      certify the grimm SNAPSHOT published on central-snapshots instead of the change. The official
+      suite (`tck-official`) is microprofile-openapi-tck 4.2-RC5, public on Maven Central; the
+      runtime it boots (vidocq-runtime-core, the Cassini and Chappe extensions) comes from
+      central-snapshots.
+
+      Measured on 2026-10-25 with an isolated local repository holding only the reactor's own
+      install (the TCK, the runtime and their dependencies downloaded during the run), Java 25,
+      Maven 3.9.16: 367 tests, 0 failures, 54 s wall clock.
+    -->
+    <ci.tck.command>mvn -B -ntp -f grimm-tck/pom.xml -Ptck-official test -Dgrimm.version="$(mvn -B -ntp -q -N help:evaluate -Dexpression=project.version -DforceStdout)"</ci.tck.command>
+
+    <!--
+      SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+      grimm-coverage (quality profile), so the tests of grimm-it-weld count for the code they
+      exercise in the other modules. grimm-examples stays analysed, out of the coverage
+      figures, and may print to System.out (rule java:S106).
+    -->
+    <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/grimm-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+    <sonar.coverage.exclusions>**/grimm-examples/**</sonar.coverage.exclusions>
+    <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
+    <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
+    <sonar.issue.ignore.multicriteria.examples.resourceKey>**/grimm-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.eclipse.microprofile.openapi</groupId>
+        <artifactId>microprofile-openapi-api</artifactId>
+        <version>${version.mp.openapi}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vidocq.ravel</groupId>
+        <artifactId>ravel-mp-config-api</artifactId>
+        <version>${ravel.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>jakarta.ws.rs</groupId>
+        <artifactId>jakarta.ws.rs-api</artifactId>
+        <version>${version.jakarta.ws.rs}</version>
+      </dependency>
+      <dependency>
+        <groupId>jakarta.enterprise</groupId>
+        <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        <version>${version.jakarta.cdi}</version>
+      </dependency>
+      <dependency>
+        <groupId>jakarta.annotation</groupId>
+        <artifactId>jakarta.annotation-api</artifactId>
+        <version>${version.jakarta.annotation}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <profiles>
+    <!--
+      Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+      the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+    -->
+    <profile>
+      <id>quality</id>
+      <modules>
+        <module>grimm-coverage</module>
+      </modules>
+    </profile>
+  </profiles>
+</project>
+
+

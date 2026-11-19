@@ -1,0 +1,534 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.grimm.internal.schema;
+
+import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
+import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.media.Schema.SchemaType;
+import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Unit tests for {@link SchemaGenerator} — spec §3.10 ({@code @Schema}) and §3.11
+ * (Schema generation from Java types).
+ */
+class SchemaGeneratorTest {
+
+    private final SchemaRegistry registry = new SchemaRegistry();
+    private final SchemaGenerator generator = new SchemaGenerator(registry);
+
+    // ------------- Primitives & scalars (§3.11) -------------
+
+    @Test
+    void generate_mapsPrimitiveIntegers() {
+        var s = generator.generate(int.class);
+        assertEquals(SchemaType.INTEGER, s.getType().get(0));
+        assertEquals("int32", s.getFormat());
+    }
+
+    @Test
+    void generate_mapsLongAsInt64() {
+        var s = generator.generate(Long.class);
+        assertEquals(SchemaType.INTEGER, s.getType().get(0));
+        assertEquals("int64", s.getFormat());
+    }
+
+    @Test
+    void generate_mapsDoubleAsNumberDouble() {
+        var s = generator.generate(double.class);
+        assertEquals(SchemaType.NUMBER, s.getType().get(0));
+        assertEquals("double", s.getFormat());
+    }
+
+    @Test
+    void generate_mapsBooleanAndString() {
+        var b = generator.generate(boolean.class);
+        assertEquals(SchemaType.BOOLEAN, b.getType().get(0));
+        var s = generator.generate(String.class);
+        assertEquals(SchemaType.STRING, s.getType().get(0));
+        assertNull(s.getFormat());
+    }
+
+    @Test
+    void generate_mapsUuidLocalDateInstantBigDecimal() {
+        assertEquals("uuid", generator.generate(UUID.class).getFormat());
+        assertEquals("date", generator.generate(LocalDate.class).getFormat());
+        assertEquals("date-time", generator.generate(Instant.class).getFormat());
+        var bd = generator.generate(BigDecimal.class);
+        assertEquals(SchemaType.NUMBER, bd.getType().get(0));
+        assertNull(bd.getFormat());
+        var bi = generator.generate(BigInteger.class);
+        assertEquals(SchemaType.INTEGER, bi.getType().get(0));
+        assertEquals("int64", bi.getFormat());
+    }
+
+    // ------------- Collections / arrays / maps -------------
+
+    @Test
+    void generate_mapsArrayToArrayOfItems() throws Exception {
+        Type t = Holder.class.getDeclaredField("ints").getGenericType();
+        var s = generator.generate(t);
+        assertEquals(SchemaType.ARRAY, s.getType().get(0));
+        assertEquals(SchemaType.INTEGER, s.getItems().getType().get(0));
+    }
+
+    @Test
+    void generate_mapsListOfStringToArrayOfStrings() throws Exception {
+        Type t = Holder.class.getDeclaredField("names").getGenericType();
+        var s = generator.generate(t);
+        assertEquals(SchemaType.ARRAY, s.getType().get(0));
+        assertEquals(SchemaType.STRING, s.getItems().getType().get(0));
+    }
+
+    @Test
+    void generate_mapsSetOfLongToArrayOfInt64() throws Exception {
+        Type t = Holder.class.getDeclaredField("ids").getGenericType();
+        var s = generator.generate(t);
+        assertEquals(SchemaType.ARRAY, s.getType().get(0));
+        assertEquals(SchemaType.INTEGER, s.getItems().getType().get(0));
+        assertEquals("int64", s.getItems().getFormat());
+    }
+
+    @Test
+    void generate_mapsMapToObjectWithAdditionalProperties() throws Exception {
+        Type t = Holder.class.getDeclaredField("labels").getGenericType();
+        var s = generator.generate(t);
+        assertEquals(SchemaType.OBJECT, s.getType().get(0));
+        assertNotNull(s.getAdditionalPropertiesSchema());
+        assertEquals(SchemaType.STRING,
+                s.getAdditionalPropertiesSchema().getType().get(0));
+    }
+
+    // ------------- Enums (§3.11) -------------
+
+    @Test
+    void generate_mapsEnumAsRefStringWithEnumerationInComponents() {
+        var ref = generator.generate(Status.class);
+        assertEquals("#/components/schemas/Status", ref.getRef());
+        var body = registry.snapshot().get("Status");
+        assertNotNull(body);
+        assertEquals(SchemaType.STRING, body.getType().get(0));
+        assertEquals(List.of("OPEN", "CLOSED"),
+                body.getEnumeration());
+    }
+
+    // ------------- POJOs (§3.11) -------------
+
+    @Test
+    void generate_mapsPojoAsRefAndRegistersComponentSchema() {
+        var ref = generator.generate(Pet.class);
+        assertEquals("#/components/schemas/Pet", ref.getRef());
+        var body = registry.snapshot().get("Pet");
+        assertNotNull(body);
+        assertEquals(SchemaType.OBJECT, body.getType().get(0));
+        assertTrue(body.getProperties().containsKey("name"));
+        assertTrue(body.getProperties().containsKey("age"));
+    }
+
+    @Test
+    void generate_handlesRecursiveTypesViaReservation() {
+        var ref = generator.generate(Node.class);
+        assertEquals("#/components/schemas/Node", ref.getRef());
+        var body = registry.snapshot().get("Node");
+        assertNotNull(body);
+        // 'next' must be a $ref to Node, not an inlined copy.
+        var nextProp = body.getProperties().get("next");
+        assertEquals("#/components/schemas/Node", nextProp.getRef());
+    }
+
+    @Test
+    void generate_appliesClassLevelSchemaName() {
+        var ref = generator.generate(WithCustomName.class);
+        assertEquals("#/components/schemas/MyName", ref.getRef());
+        assertTrue(registry.snapshot().containsKey("MyName"));
+    }
+
+    @Test
+    void generate_skipsHiddenFields() {
+        generator.generate(SecretBox.class);
+        var body = registry.snapshot().get("SecretBox");
+        assertTrue(body.getProperties().containsKey("publicValue"));
+        assertFalse(body.getProperties().containsKey("secret"));
+    }
+
+    @Test
+    void generate_appliesFieldLevelSchemaOverrides() {
+        generator.generate(Constrained.class);
+        var body = registry.snapshot().get("Constrained");
+        var name = body.getProperties().get("name");
+        assertEquals("the name", name.getDescription());
+        assertEquals(Integer.valueOf(3), name.getMinLength());
+        assertEquals(Integer.valueOf(20), name.getMaxLength());
+        assertEquals("Alice", name.getExample());
+        assertTrue(body.getRequired().contains("name"));
+    }
+
+    @Test
+    void generate_mergesGetterSchemaOverridesWithFieldProperty() {
+        generator.generate(GetterAnnotated.class);
+        var body = registry.snapshot().get("GetterAnnotated");
+        assertNotNull(body.getRequired());
+        assertTrue(body.getRequired().contains("name"));
+        assertEquals("doggie", body.getProperties().get("name").getExample());
+    }
+
+    @Test
+    void generate_mapsExclusiveBoundsFromSchemaAnnotation() {
+        generator.generate(ExclusiveBounds.class);
+        var body = registry.snapshot().get("ExclusiveBounds");
+        var id = body.getProperties().get("id");
+        assertEquals(new BigDecimal("101"), id.getExclusiveMaximum());
+        assertEquals(new BigDecimal("9"), id.getExclusiveMinimum());
+    }
+
+    @Test
+    void generate_mapsSchemaExternalDocs() {
+        generator.generate(WithExternalDocs.class);
+        var body = registry.snapshot().get("WithExternalDocs");
+        var code = body.getProperties().get("code");
+        assertNotNull(code.getExternalDocs());
+        assertEquals("Pet Types", code.getExternalDocs().getDescription());
+        assertEquals("http://example.com/pettypes", code.getExternalDocs().getUrl());
+    }
+
+    @Test
+    void generate_mapsSchemaAdditionalPropertiesAndExtensions() {
+        generator.generate(AdditionalPropertiesFixture.class);
+        var body = registry.snapshot().get("AdditionalPropertiesFixture");
+
+        var metadata = body.getProperties().get("metadata");
+        assertEquals(Boolean.TRUE, metadata.getAdditionalPropertiesBoolean());
+
+        var strict = body.getProperties().get("strict");
+        assertEquals(Boolean.FALSE, strict.getAdditionalPropertiesBoolean());
+
+        var typed = body.getProperties().get("typed");
+        assertNotNull(typed.getAdditionalPropertiesSchema());
+        assertEquals(SchemaType.STRING, typed.getAdditionalPropertiesSchema().getType().get(0));
+        assertEquals("field-ext", typed.getExtensions().get("x-field"));
+    }
+
+    /**
+     * §3.10 / BUG-20261004-02: {@code @Extension(parseValue = true)} parses objects and arrays too,
+     * as the scanners do, on {@code @Schema} (class and field) and {@code @SchemaProperty}.
+     */
+    @Test
+    void generate_parsesObjectAndArrayExtensionValues() {
+        generator.generate(ParsedExtensions.class);
+        var body = registry.snapshot().get("ParsedExtensions");
+
+        assertEquals(Map.of("a", 1L), body.getExtensions().get("x-obj"));
+        assertEquals(List.of(1L, 2L), body.getProperties().get("field").getExtensions().get("x-arr"));
+        assertEquals(Map.of("b", true), body.getProperties().get("declared").getExtensions().get("x-prop"));
+        assertEquals("{\"c\": 1}", body.getProperties().get("field").getExtensions().get("x-raw"));
+    }
+
+    /** §3.10 / BUG-20261004-02: {@code @Schema(externalDocs)} keeps its extensions (MP OpenAPI 3.1+). */
+    @Test
+    void generate_mapsSchemaExternalDocsExtensions() {
+        generator.generate(WithExternalDocsExtensions.class);
+        var code = registry.snapshot().get("WithExternalDocsExtensions").getProperties().get("code");
+
+        assertEquals("https://example.com", code.getExternalDocs().getUrl());
+        assertEquals("v", code.getExternalDocs().getExtensions().get("x-e"));
+    }
+
+    /**
+     * §3.10: {@code constValue} "is parsed as JSON if the schema type is anything other than
+     * STRING" — objects and arrays included, as for extension values.
+     */
+    @Test
+    void generate_parsesConstValueAsJsonUnlessTheTypeIsString() {
+        generator.generate(ConstValues.class);
+        var properties = registry.snapshot().get("ConstValues").getProperties();
+
+        assertAll(
+                () -> assertEquals(Map.of("a", 1L, "b", List.of(1L, 2L)), properties.get("object").getConstValue()),
+                () -> assertEquals(List.of("x", "y"), properties.get("array").getConstValue()),
+                () -> assertEquals(Boolean.TRUE, properties.get("flag").getConstValue()),
+                () -> assertEquals(5L, properties.get("number").getConstValue()),
+                () -> assertEquals("5", properties.get("text").getConstValue(), "a String field is a STRING schema"),
+                () -> assertEquals("true", properties.get("forcedString").getConstValue(), "type = STRING"));
+    }
+
+    /** §3.10: {@code @SchemaProperty} carries {@code constValue} and {@code externalDocs} as {@code @Schema} does. */
+    @Test
+    void generate_mapsSchemaPropertyConstValueAndExternalDocs() {
+        generator.generate(DeclaredProperties.class);
+        var properties = registry.snapshot().get("DeclaredProperties").getProperties();
+
+        assertEquals(Map.of("k", "v"), properties.get("obj").getConstValue());
+        assertEquals("7", properties.get("str").getConstValue());
+        var docs = properties.get("documented").getExternalDocs();
+        assertNotNull(docs);
+        assertEquals("https://example.com/doc", docs.getUrl());
+        assertEquals("doc", docs.getDescription());
+        assertEquals("v", docs.getExtensions().get("x-d"));
+        assertNull(properties.get("obj").getExternalDocs(), "no externalDocs without a url");
+    }
+
+    @Test
+    void generate_mapsBeanValidationConstraints() {
+        generator.generate(BeanValidated.class);
+        var body = registry.snapshot().get("BeanValidated");
+
+        var sizedText = body.getProperties().get("sizedText");
+        assertEquals(Integer.valueOf(1), sizedText.getMinLength());
+        assertEquals(Integer.valueOf(6), sizedText.getMaxLength());
+
+        var positiveInt = body.getProperties().get("positiveInt");
+        assertEquals(new BigDecimal("0"), positiveInt.getExclusiveMinimum());
+
+        var positiveOrZeroInt = body.getProperties().get("positiveOrZeroInt");
+        assertEquals(new BigDecimal("0"), positiveOrZeroInt.getMinimum());
+
+        var sizedList = body.getProperties().get("sizedList");
+        assertEquals(Integer.valueOf(1), sizedList.getMinItems());
+
+        var sizedMap = body.getProperties().get("sizedMap");
+        assertEquals(Integer.valueOf(3), sizedMap.getMinProperties());
+
+        assertNotNull(body.getRequired());
+        assertTrue(body.getRequired().contains("requiredName"));
+    }
+
+    @Test
+    void generate_appliesRefOverrideFromAnnotation() throws Exception {
+        Field f = HasRef.class.getDeclaredField("ext");
+        var ann = f.getAnnotation(Schema.class);
+        var s = generator.generate(f.getGenericType(), ann);
+        assertEquals("#/components/schemas/External", s.getRef());
+    }
+
+    @Test
+    void generate_appliesImplementationOverride() throws Exception {
+        Field f = HasImpl.class.getDeclaredField("any");
+        var ann = f.getAnnotation(Schema.class);
+        var s = generator.generate(f.getGenericType(), ann);
+        // implementation = Pet.class → should produce a Pet $ref.
+        assertEquals("#/components/schemas/Pet", s.getRef());
+    }
+
+    @Test
+    void applyTo_writesSchemasIntoComponents() {
+        generator.generate(Pet.class);
+        OpenAPI api = org.eclipse.microprofile.openapi.OASFactory.createObject(OpenAPI.class);
+        registry.applyTo(api);
+        assertNotNull(api.getComponents());
+        assertTrue(api.getComponents().getSchemas().containsKey("Pet"));
+    }
+
+    @Test
+    void generate_avoidsNameCollisionBetweenDifferentClasses() {
+        // Two classes named "Pet" in different inner-class scopes → ensure uniqueness suffix.
+        generator.generate(Pet.class);
+        generator.generate(Other.Pet.class);
+        var keys = registry.snapshot().keySet();
+        assertTrue(keys.contains("Pet"));
+        assertTrue(keys.contains("Pet2"));
+    }
+
+    // ------------------ Fixtures ------------------
+
+    static final class Holder {
+        int[] ints;
+        List<String> names;
+        Set<Long> ids;
+        Map<String, String> labels;
+    }
+
+    enum Status { OPEN, CLOSED }
+
+    static final class Pet {
+        String name;
+        int age;
+    }
+
+    static final class Node {
+        String value;
+        Node next;
+    }
+
+    @Schema(name = "MyName")
+    static final class WithCustomName {
+        String x;
+    }
+
+    static final class SecretBox {
+        String publicValue;
+        @Schema(hidden = true)
+        String secret;
+    }
+
+    static final class Constrained {
+        @Schema(description = "the name", minLength = 3, maxLength = 20,
+                example = "Alice", required = true)
+        String name;
+    }
+
+    static final class GetterAnnotated {
+        String name;
+
+        @Schema(example = "doggie", required = true)
+        public String getName() {
+            return name;
+        }
+    }
+
+    static final class ExclusiveBounds {
+        @Schema(maximum = "101", exclusiveMaximum = true, minimum = "9", exclusiveMinimum = true)
+        Long id;
+    }
+
+    static final class HasRef {
+        @Schema(ref = "#/components/schemas/External")
+        Object ext;
+    }
+
+    static final class HasImpl {
+        @Schema(implementation = Pet.class)
+        Object any;
+    }
+
+    static final class WithExternalDocs {
+        @Schema(externalDocs = @org.eclipse.microprofile.openapi.annotations.ExternalDocumentation(
+                description = "Pet Types",
+                url = "http://example.com/pettypes"
+        ))
+        String code;
+    }
+
+    @Schema(extensions = @Extension(name = "x-obj", value = "{\"a\": 1}", parseValue = true),
+            properties = @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "declared",
+                    extensions = @Extension(name = "x-prop", value = "{\"b\": true}", parseValue = true)))
+    static final class ParsedExtensions {
+        @Schema(extensions = {
+                @Extension(name = "x-arr", value = "[1, 2]", parseValue = true),
+                @Extension(name = "x-raw", value = "{\"c\": 1}")})
+        String field;
+
+        String declared;
+    }
+
+    static final class ConstValues {
+        @Schema(constValue = "{\"a\": 1, \"b\": [1, 2]}")
+        Map<String, Object> object;
+
+        @Schema(constValue = "[\"x\", \"y\"]")
+        List<String> array;
+
+        @Schema(constValue = "true")
+        boolean flag;
+
+        @Schema(constValue = "5")
+        int number;
+
+        @Schema(constValue = "5")
+        String text;
+
+        @Schema(type = org.eclipse.microprofile.openapi.annotations.enums.SchemaType.STRING, constValue = "true")
+        Object forcedString;
+    }
+
+    @Schema(properties = {
+            @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "obj",
+                    constValue = "{\"k\": \"v\"}"),
+            @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "str",
+                    type = org.eclipse.microprofile.openapi.annotations.enums.SchemaType.STRING, constValue = "7"),
+            @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "documented",
+                    externalDocs = @org.eclipse.microprofile.openapi.annotations.ExternalDocumentation(
+                            url = "https://example.com/doc", description = "doc",
+                            extensions = @Extension(name = "x-d", value = "v")))})
+    static final class DeclaredProperties {
+        Map<String, Object> obj;
+        Object str;
+        String documented;
+    }
+
+    static final class WithExternalDocsExtensions {
+        @Schema(externalDocs = @org.eclipse.microprofile.openapi.annotations.ExternalDocumentation(
+                url = "https://example.com",
+                extensions = @Extension(name = "x-e", value = "v")))
+        String code;
+    }
+
+    static final class BeanValidated {
+        @jakarta.validation.constraints.Size(min = 1, max = 6)
+        String sizedText;
+
+        @jakarta.validation.constraints.Positive
+        Integer positiveInt;
+
+        @jakarta.validation.constraints.PositiveOrZero
+        Integer positiveOrZeroInt;
+
+        @jakarta.validation.constraints.Size(min = 1)
+        List<String> sizedList;
+
+        @jakarta.validation.constraints.Size(min = 3)
+        Map<String, String> sizedMap;
+
+        @jakarta.validation.constraints.NotNull
+        String requiredName;
+    }
+
+    static final class AdditionalPropertiesFixture {
+        @Schema(additionalProperties = Schema.True.class)
+        Map<String, Object> metadata;
+
+        @Schema(additionalProperties = Schema.False.class)
+        Map<String, Object> strict;
+
+        @Schema(additionalProperties = String.class,
+                extensions = @Extension(name = "x-field", value = "field-ext"))
+        Map<String, Object> typed;
+    }
+
+    static final class Other {
+        static final class Pet {
+            String differentField;
+        }
+    }
+
+    // unused but kept to ensure HashMap import is meaningful
+    @SuppressWarnings("unused")
+    private static final HashMap<String, String> SENTINEL = new LinkedHashMap<>();
+}
+

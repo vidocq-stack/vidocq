@@ -1,0 +1,145 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.grimm.cdi;
+
+import io.vidocq.grimm.internal.OpenApiSerializers;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.models.OpenAPI;
+
+import java.util.Locale;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+/**
+ * JAX-RS resource serving the assembled OpenAPI document at {@code /openapi}
+ * (spec §2.1).
+ *
+ * <ul>
+ *   <li>Content negotiation: {@code application/yaml} (default per spec §2.2),
+ *       {@code application/json}.</li>
+ *   <li>Spec §2.3 — the {@code ?format=} query parameter overrides the
+ *       {@code Accept} header. Accepted values: {@code json}, {@code yaml},
+ *       {@code yml}.</li>
+ * </ul>
+ *
+ * <p>Reads from {@link GrimmModelCache}; never recomputes per request.</p>
+ */
+@Path("/openapi")
+@ApplicationScoped
+public class OpenApiResource {
+
+    static final String MEDIA_TYPE_JSON = "application/json";
+    static final String MEDIA_TYPE_YAML = "application/yaml";
+
+    private Supplier<OpenAPI> documentSupplier;
+
+    /** CDI constructor — reads the model from the shared {@link GrimmModelCache}. */
+    @Inject
+    public OpenApiResource(GrimmModelCache cache) {
+        this.documentSupplier = Objects.requireNonNull(cache, "cache must not be null")::getDocument;
+    }
+
+    /** No-arg fallback for proxy / legacy bootstrap use. */
+    public OpenApiResource() {
+        this.documentSupplier = () -> OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+    }
+
+    static OpenApiResource fromSupplier(Supplier<OpenAPI> documentSupplier) {
+        OpenApiResource resource = new OpenApiResource();
+        resource.documentSupplier = Objects.requireNonNull(documentSupplier, "documentSupplier must not be null");
+        return resource;
+    }
+
+    /**
+     * Returns the OpenAPI document in the negotiated format.
+     *
+     * @param format the {@code ?format=} override (spec §2.3) — {@code json}/{@code yaml}/{@code yml}
+     * @param accept the {@code Accept} header
+     */
+    @GET
+    @Produces({MEDIA_TYPE_YAML, MEDIA_TYPE_JSON})
+    public Response getOpenApi(
+            @QueryParam("format") String format,
+            @HeaderParam("Accept") String accept) {
+        RenderedDocument rendered = render(format, accept);
+        return Response.ok(rendered.body(), rendered.mediaType()).build();
+    }
+
+    /**
+     * Renders the document; exposed for direct (non-JAX-RS) callers and unit tests.
+     */
+    public RenderedDocument render(String format, String accept) {
+        OutputFormat outputFormat = resolveOutputFormat(format, accept);
+        OpenAPI document = documentSupplier.get();
+        if (outputFormat == OutputFormat.JSON) {
+            return rendered(json, document, OpenApiSerializers::toJson, MEDIA_TYPE_JSON);
+        }
+        return rendered(yaml, document, OpenApiSerializers::toYaml, MEDIA_TYPE_YAML);
+    }
+
+    /** A document and its serialized form. */
+    private record Serialized(OpenAPI document, RenderedDocument rendered) {}
+
+    /**
+     * The last document served in each format: serializing walks the whole model by reflection, so it is done once per
+     * document; a new document, as after a reload, is serialized again.
+     */
+    private final AtomicReference<Serialized> json = new AtomicReference<>();
+    private final AtomicReference<Serialized> yaml = new AtomicReference<>();
+
+    private static RenderedDocument rendered(AtomicReference<Serialized> slot, OpenAPI document,
+                                             Function<OpenAPI, String> serializer, String mediaType) {
+        Serialized last = slot.get();
+        if (last != null && last.document() == document) {
+            return last.rendered();
+        }
+        Serialized fresh = new Serialized(document, new RenderedDocument(serializer.apply(document), mediaType));
+        slot.set(fresh);
+        return fresh.rendered();
+    }
+
+    private OutputFormat resolveOutputFormat(String format, String accept) {
+        if (format != null) {
+            String normalized = format.toLowerCase(Locale.ROOT);
+            if ("json".equals(normalized)) return OutputFormat.JSON;
+            if ("yaml".equals(normalized) || "yml".equals(normalized)) return OutputFormat.YAML;
+        }
+        if (accept != null && accept.toLowerCase(Locale.ROOT).contains(MEDIA_TYPE_JSON)) {
+            return OutputFormat.JSON;
+        }
+        return OutputFormat.YAML;
+    }
+
+    private enum OutputFormat { JSON, YAML }
+
+    public record RenderedDocument(String body, String mediaType) {}
+}
+
+

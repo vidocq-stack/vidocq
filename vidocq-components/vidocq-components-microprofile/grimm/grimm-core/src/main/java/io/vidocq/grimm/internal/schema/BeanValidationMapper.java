@@ -1,0 +1,336 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.grimm.internal.schema;
+
+import org.eclipse.microprofile.openapi.models.media.Schema;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.util.List;
+
+/**
+ * Maps Jakarta/Javax Bean Validation constraints to OpenAPI Schema facets.
+ */
+public final class BeanValidationMapper {
+
+    private static final String JAKARTA = "jakarta.validation.constraints.";
+    private static final String JAVAX = "javax.validation.constraints.";
+    private static final String VALUE = "value";
+
+    private static final java.util.concurrent.atomic.AtomicBoolean ENABLED =
+            new java.util.concurrent.atomic.AtomicBoolean(true);
+
+    /**
+     * Enables or disables bean validation → schema mapping globally for the current
+     * build. Honors {@code mp.openapi.scan.beanvalidation=false}.
+     */
+    public static void setEnabled(boolean enabled) {
+        ENABLED.set(enabled);
+    }
+
+    private BeanValidationMapper() {
+    }
+
+    public static void apply(Schema schema, Annotation[] annotations) {
+        if (!ENABLED.get()) {
+            return;
+        }
+        if (schema == null || annotations == null || annotations.length == 0) {
+            return;
+        }
+        for (Annotation ann : annotations) {
+            String constraint = constraintName(ann.annotationType().getName());
+            if (constraint != null && appliesToDefaultGroup(ann)) {
+                applyConstraint(schema, ann, constraint);
+            }
+        }
+    }
+
+    /** The simple name of a Jakarta or javax Bean Validation built-in constraint, else {@code null}. */
+    private static String constraintName(String fqcn) {
+        if (fqcn.startsWith(JAKARTA)) {
+            return fqcn.substring(JAKARTA.length());
+        }
+        if (fqcn.startsWith(JAVAX)) {
+            return fqcn.substring(JAVAX.length());
+        }
+        return null;
+    }
+
+    private static void applyConstraint(Schema schema, Annotation ann, String constraint) {
+        switch (constraint) {
+            case "Size" -> applySize(schema, ann);
+            case "DecimalMin" -> applyDecimalMin(schema, ann);
+            case "DecimalMax" -> applyDecimalMax(schema, ann);
+            case "Min" -> schema.setMinimum(BigDecimal.valueOf(longAttr(ann, VALUE, Long.MIN_VALUE)));
+            case "Max" -> schema.setMaximum(BigDecimal.valueOf(longAttr(ann, VALUE, Long.MAX_VALUE)));
+            case "Positive" -> schema.setExclusiveMinimum(BigDecimal.ZERO);
+            case "PositiveOrZero" -> schema.setMinimum(BigDecimal.ZERO);
+            case "Negative" -> schema.setExclusiveMaximum(BigDecimal.ZERO);
+            case "NegativeOrZero" -> schema.setMaximum(BigDecimal.ZERO);
+            case "Pattern" -> applyPattern(schema, ann);
+            case "NotBlank" -> applyNotBlank(schema);
+            case "NotEmpty" -> applyNotEmpty(schema);
+            case "Digits" -> applyDigits(schema, ann);
+            default -> {
+                // a constraint without a JSON Schema counterpart
+            }
+        }
+    }
+
+    private static void applyPattern(Schema schema, Annotation ann) {
+        String regexp = stringAttr(ann, "regexp");
+        if (!regexp.isEmpty()) {
+            schema.setPattern(regexp);
+        }
+    }
+
+    private static void applyNotBlank(Schema schema) {
+        setMinLengthAtLeast(schema, 1);
+        if (schema.getPattern() == null || schema.getPattern().isBlank()) {
+            schema.setPattern("\\S");
+        }
+    }
+
+    private static boolean appliesToDefaultGroup(Annotation ann) {
+        Object groups = invoke(ann, "groups");
+        if (!(groups instanceof Object[] values) || values.length == 0) {
+            return true;
+        }
+        for (Object value : values) {
+            if (!(value instanceof Class<?> group)) {
+                continue;
+            }
+            String name = group.getName();
+            if ("jakarta.validation.groups.Default".equals(name)
+                    || "javax.validation.groups.Default".equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasNotNull(Annotation[] annotations) {
+        if (annotations == null) {
+            return false;
+        }
+        for (Annotation ann : annotations) {
+            String name = ann.annotationType().getName();
+            if (matches(name, "NotNull")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void applySize(Schema schema, Annotation ann) {
+        int min = intAttr(ann, "min", 0);
+        int max = intAttr(ann, "max", Integer.MAX_VALUE);
+
+        if (isArray(schema)) {
+            if (min > 0) {
+                setMinItemsAtLeast(schema, min);
+            }
+            if (max != Integer.MAX_VALUE) {
+                setMaxItemsAtMost(schema, max);
+            }
+            return;
+        }
+        if (isObject(schema)) {
+            if (min > 0) {
+                setMinPropertiesAtLeast(schema, min);
+            }
+            if (max != Integer.MAX_VALUE) {
+                setMaxPropertiesAtMost(schema, max);
+            }
+            return;
+        }
+        if (min > 0) {
+            setMinLengthAtLeast(schema, min);
+        }
+        if (max != Integer.MAX_VALUE) {
+            setMaxLengthAtMost(schema, max);
+        }
+    }
+
+    private static void applyDecimalMin(Schema schema, Annotation ann) {
+        String raw = stringAttr(ann, VALUE);
+        if (raw.isEmpty()) {
+            return;
+        }
+        BigDecimal value = new BigDecimal(raw);
+        boolean inclusive = booleanAttr(ann, "inclusive", true);
+        if (inclusive) {
+            schema.setMinimum(value);
+        } else {
+            schema.setExclusiveMinimum(value);
+        }
+    }
+
+    private static void applyDecimalMax(Schema schema, Annotation ann) {
+        String raw = stringAttr(ann, VALUE);
+        if (raw.isEmpty()) {
+            return;
+        }
+        BigDecimal value = new BigDecimal(raw);
+        boolean inclusive = booleanAttr(ann, "inclusive", true);
+        if (inclusive) {
+            schema.setMaximum(value);
+        } else {
+            schema.setExclusiveMaximum(value);
+        }
+    }
+
+    private static void applyNotEmpty(Schema schema) {
+        if (isArray(schema)) {
+            setMinItemsAtLeast(schema, 1);
+        } else if (isObject(schema)) {
+            setMinPropertiesAtLeast(schema, 1);
+        } else {
+            setMinLengthAtLeast(schema, 1);
+        }
+    }
+
+    /**
+     * Maps {@code @Digits(integer, fraction)} (MicroProfile OpenAPI 4.2, issue #717): a {@code multipleOf}
+     * of {@code 10^-fraction} on numbers, a {@code pattern} on strings, nothing on integers (implied by the
+     * type). Explicit values on the schema are never overridden.
+     */
+    private static void applyDigits(Schema schema, Annotation ann) {
+        int integer = intAttr(ann, "integer", 0);
+        int fraction = intAttr(ann, "fraction", 0);
+        List<Schema.SchemaType> types = schema.getType();
+        if (types == null) {
+            return;
+        }
+        if (types.contains(Schema.SchemaType.STRING)) {
+            if (schema.getPattern() == null || schema.getPattern().isBlank()) {
+                schema.setPattern(digitsPattern(integer, fraction));
+            }
+        } else if (types.contains(Schema.SchemaType.NUMBER) && schema.getMultipleOf() == null) {
+            schema.setMultipleOf(BigDecimal.ONE.movePointLeft(fraction));
+        }
+    }
+
+    /**
+     * Builds the {@code @Digits} string pattern. {@code integer = 0} is legal in Bean Validation (a value
+     * such as {@code 0.5} has no integer digits), so {@code \d{1,0}} must never be emitted: the integer
+     * part is then the single digit {@code 0}, optional when a fraction follows ({@code .5} and
+     * {@code 0.5} both match), and a bare {@code 0} is always accepted.
+     */
+    private static String digitsPattern(int integer, int fraction) {
+        if (integer > 0) {
+            return fraction > 0
+                    ? "^-?\\d{1," + integer + "}(\\.\\d{1," + fraction + "})?$"
+                    : "^-?\\d{1," + integer + "}$";
+        }
+        return fraction > 0
+                ? "^-?(0|0?\\.\\d{1," + fraction + "})$"
+                : "^-?0$";
+    }
+
+    private static void setMinLengthAtLeast(Schema schema, int value) {
+        Integer current = schema.getMinLength();
+        if (current == null || current < value) {
+            schema.setMinLength(value);
+        }
+    }
+
+    private static void setMaxLengthAtMost(Schema schema, int value) {
+        Integer current = schema.getMaxLength();
+        if (current == null || current > value) {
+            schema.setMaxLength(value);
+        }
+    }
+
+    private static void setMinItemsAtLeast(Schema schema, int value) {
+        Integer current = schema.getMinItems();
+        if (current == null || current < value) {
+            schema.setMinItems(value);
+        }
+    }
+
+    private static void setMaxItemsAtMost(Schema schema, int value) {
+        Integer current = schema.getMaxItems();
+        if (current == null || current > value) {
+            schema.setMaxItems(value);
+        }
+    }
+
+    private static void setMinPropertiesAtLeast(Schema schema, int value) {
+        Integer current = schema.getMinProperties();
+        if (current == null || current < value) {
+            schema.setMinProperties(value);
+        }
+    }
+
+    private static void setMaxPropertiesAtMost(Schema schema, int value) {
+        Integer current = schema.getMaxProperties();
+        if (current == null || current > value) {
+            schema.setMaxProperties(value);
+        }
+    }
+
+    private static boolean isArray(Schema schema) {
+        List<Schema.SchemaType> types = schema.getType();
+        return types != null && types.contains(Schema.SchemaType.ARRAY);
+    }
+
+    private static boolean isObject(Schema schema) {
+        List<Schema.SchemaType> types = schema.getType();
+        return types != null && types.contains(Schema.SchemaType.OBJECT);
+    }
+
+    private static boolean matches(String fqcn, String simpleName) {
+        return (JAKARTA + simpleName).equals(fqcn) || (JAVAX + simpleName).equals(fqcn);
+    }
+
+    private static int intAttr(Annotation ann, String attribute, int fallback) {
+        Object value = invoke(ann, attribute);
+        return value instanceof Integer i ? i : fallback;
+    }
+
+    private static long longAttr(Annotation ann, String attribute, long fallback) {
+        Object value = invoke(ann, attribute);
+        return value instanceof Long l ? l : fallback;
+    }
+
+    private static boolean booleanAttr(Annotation ann, String attribute, boolean fallback) {
+        Object value = invoke(ann, attribute);
+        return value instanceof Boolean b ? b : fallback;
+    }
+
+    private static String stringAttr(Annotation ann, String attribute) {
+        Object value = invoke(ann, attribute);
+        return value instanceof String s ? s : "";
+    }
+
+    private static Object invoke(Annotation ann, String methodName) {
+        try {
+            Method method = ann.annotationType().getMethod(methodName);
+            return method.invoke(ann);
+        } catch (ReflectiveOperationException _) {
+            return null;
+        }
+    }
+}
+
+

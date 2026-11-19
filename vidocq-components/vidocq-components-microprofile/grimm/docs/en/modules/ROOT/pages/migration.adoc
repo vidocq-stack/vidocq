@@ -1,0 +1,108 @@
+= Migration
+:description: Moving from SmallRye OpenAPI or Quarkus OpenAPI to Grimm — equivalences, configs, gotchas.
+
+[CAUTION]
+====
+Grimm is at `{project-version}`. The MicroProfile OpenAPI 4.2 spec is fully covered (TCK 4.2-RC5 367/367, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
+====
+
+[.lead]
+On the application code side, migration is trivial: Grimm strictly consumes the standard `org.eclipse.microprofile.openapi.annotations.*` annotations. No proprietary import to replace. The gaps lie in configuration and packaging.
+
+[#upgrading-from-0-3-0]
+== Upgrading from 0.3.0
+
+What an application built against Grimm {release-version} may need to change, or will see change, on this development line. The full list is in xref:whats-new.adoc[What's new].
+
+* **Module name.** Grimm's jars are named modules now (xref:reference.adoc#java-modules[Java modules]). A `module-info.java` that read Grimm by its automatic name changes `requires grimm.cdi.vauban;` to `requires io.vidocq.grimm.cdi.vauban;`. That module `requires transitive` the MicroProfile OpenAPI and JAX-RS APIs, so `jakarta.ws.rs-api` reaches your build at compile scope through it.
+* **MicroProfile OpenAPI API 4.2.** Grimm builds on `microprofile-openapi-api` `4.2-RC5` until the final reaches Maven Central; an application that declares the API itself moves to the same version (see xref:getting-started.adoc[Getting started]).
+* **Static file over `OASModelReader`.** On a conflicting element, the static file now wins over the reader model, as the specification orders; it used to be the reverse. An application that relied on the reader to override `META-INF/openapi.yaml` moves that override to an annotation or an `OASFilter`. xref:concepts.adoc#how-the-sources-combine[How the sources combine].
+* **Annotation values read as JSON.** `constValue` and `examples` of a non-`STRING` schema, and `@Extension(parseValue = true)` values, go through a strict JSON reader: lenient forms (`{a: 1}`, single quotes, `TRUE`, `1L`) stay strings, and an integral `1.0` inside an array is a `Double`. xref:reference.adoc#annotation-values[How annotation values are mapped].
+* **Fewer stray keywords.** Annotated schemas no longer carry `minItems: 2147483647`, `maxItems: -2147483648` and `maxProperties: 0`. A client generated from the old document, or a test that compared against it, sees them go.
+* **Static-file keywords are typed.** Keywords such as `minimum` or `discriminator` read from a static file are no longer extensions: an `OASFilter` that looked for them in `getExtensions()` reads the typed getter instead. xref:reference.adoc#static-documents[Static documents and schema overrides].
+* **Explicit `$ref` in `mp.openapi.schema.<FQCN>` is verbatim.** A short name in `$ref` (`"$ref": "Pet"`) is no longer expanded; write `"ref": "Pet"` or the full `#/components/schemas/Pet`. xref:reference.adoc#static-documents[Static documents and schema overrides].
+
+== From SmallRye OpenAPI
+
+SmallRye OpenAPI is the reference implementation in Quarkus and several Jakarta EE servers. Migration is direct — Grimm targets strict conformance to the same spec.
+
+[cols="2,2,3"]
+|===
+| SmallRye OpenAPI | Grimm | Note
+
+| Annotations `org.eclipse.microprofile.openapi.annotations.*`
+| Same annotations
+| No application code change.
+
+| Classpath scan at startup
+| Scan via Vauban BCE at startup
+| Same semantics. Neither does per-request scanning.
+
+| `/openapi` endpoint
+| `/openapi` endpoint
+| Identical. YAML/JSON content negotiation identical.
+
+| `mp.openapi.*` (MP Config keys)
+| `mp.openapi.*` (same keys)
+| Overrides, exclusions, filters, model reader: identical.
+
+| Dependencies: Jandex, SnakeYAML, Jackson, etc.
+| None (hand-written serializers)
+| Reduced classpath footprint. Immediate jlink compatibility.
+
+| `quarkus.smallrye-openapi.path`
+| Fixed `/openapi` endpoint (per MP spec)
+| To publish on another path, add a JAX-RS alias in the application.
+|===
+
+== From Quarkus OpenAPI
+
+Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
+
+[cols="2,2,3"]
+|===
+| Quarkus OpenAPI | Grimm | Note
+
+| Build-time scanning via Jandex
+| Runtime scanning via Vauban BCE (at startup, not per request)
+| Equivalent startup-latency cost. No Jandex index to maintain.
+
+| `quarkus.smallrye-openapi.info-*`
+| `@OpenAPIDefinition` (standard annotation)
+| Prefer the portable annotation.
+
+| `quarkus.smallrye-openapi.security-scheme`
+| `@SecurityScheme` (standard annotation)
+| Prefer the portable annotation.
+
+| Built-in Swagger UI
+| Out of scope for Grimm
+| Wire Swagger UI or Redoc on the application side as a static resource.
+
+| `quarkus.dev` hot reload
+| No Dev Mode equivalent
+| The cycle is `./mvnw clean install` + restart. See xref:vauban::index.adoc[Vauban].
+|===
+
+== Gotchas
+
+* **No hot classpath scan** — Grimm does not expose hot document refresh (the MP OpenAPI spec does not require it). Any annotation change requires a restart.
+* **No `setAccessible(true)`** — if application code relied on non-public classes accessed by a permissive scanner, Grimm will not reach them. Open packages in the application's `module-info.java` or make the types `public`.
+* **Strict YAML** — the hand-written YAML serializer emits strict 1.2. Some lax YAML clients (legacy browsers) may want different indentation. When in doubt, prefer JSON.
+* **`mp.openapi.servers`** — the override _replaces_ the document's `servers` list entirely (spec behaviour). For a merge, go through an `OASFilter`.
+* **`summary` next to a `$ref` is dropped**— a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
+
+== Porting checklist
+
+. Declare `grimm-core` + `grimm-cdi-vauban` instead of SmallRye / Quarkus OpenAPI.
+. Audit application annotations: they must all come from `org.eclipse.microprofile.openapi.annotations.*`. Replace any proprietary annotation.
+. Migrate `quarkus.smallrye-openapi.*` properties to `@OpenAPIDefinition` / `@SecurityScheme` / `@Server` or `mp.openapi.*` keys.
+. Run `./mvnw test` then `./run-official-tck-mp-openapi-4.2.sh` (see xref:tck.adoc[TCK]).
+. Diff the produced document before/after — verify `info`, `servers`, `paths`, `components/schemas`.
+. Wire Swagger UI or Redoc on the application side if needed.
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — model, merge, filters.
+* xref:reference.adoc[Reference] — annotations and `mp.openapi.*` keys.
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — known gotchas.

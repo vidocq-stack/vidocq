@@ -1,0 +1,298 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.grimm.internal.serialization;
+
+import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.Operation;
+import org.eclipse.microprofile.openapi.models.PathItem;
+import org.eclipse.microprofile.openapi.models.Paths;
+import org.eclipse.microprofile.openapi.models.info.Info;
+import org.eclipse.microprofile.openapi.models.media.Schema;
+import org.eclipse.microprofile.openapi.models.responses.APIResponse;
+import org.eclipse.microprofile.openapi.models.responses.APIResponses;
+import org.eclipse.microprofile.openapi.models.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.models.security.SecurityScheme;
+import org.eclipse.microprofile.openapi.models.servers.Server;
+import org.eclipse.microprofile.openapi.models.tags.Tag;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class SerializationTest {
+
+    /** Readers and tools expect the version first, as the specification's examples write it (grimm BUG-20261030-04). */
+    @Test
+    void theDocumentStartsWithItsVersionThenInfo() {
+        OpenAPI openAPI = createSampleModel();
+
+        String yaml = new YamlSerializer().serialize(openAPI);
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(yaml.startsWith("openapi: \"3.1.0\"\ninfo:"), yaml);
+        assertTrue(json.startsWith("{\"openapi\":\"3.1.0\",\"info\":"), json);
+    }
+
+    @Test
+    void jsonSerializer_serializesCoreDocumentShape() {
+        // Spec §2.2 / §3.1: OpenAPI document serialized in JSON format.
+        OpenAPI openAPI = createSampleModel();
+
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"openapi\":\"3.1.0\""));
+        assertTrue(json.contains("\"title\":\"Pet Store\""));
+        assertTrue(json.contains("\"paths\":{\"/pets\":"));
+        assertTrue(json.contains("\"get\":{"));
+        assertTrue(json.contains("\"responses\":{\"200\":"));
+        assertTrue(json.contains("\"description\":\"A list of pets\""));
+        assertTrue(json.contains("\"externalDocs\":{"));
+        assertTrue(json.contains("\"url\":\"https://example.com/docs\""));
+        assertTrue(json.contains("\"servers\":[{"));
+        assertTrue(json.contains("\"url\":\"https://api.example.com\""));
+        assertTrue(json.contains("\"tags\":[{"));
+        assertTrue(json.contains("\"name\":\"pets\""));
+    }
+
+    @Test
+    void yamlSerializer_serializesCoreDocumentShape() {
+        // Spec §2.2: YAML is a supported output format.
+        OpenAPI openAPI = createSampleModel();
+
+        String yaml = new YamlSerializer().serialize(openAPI);
+
+        assertTrue(yaml.contains("openapi: \"3.1.0\""));
+        assertTrue(yaml.contains("title: \"Pet Store\""));
+        assertTrue(yaml.contains("paths:"));
+        assertTrue(yaml.contains("/pets:"));
+        assertTrue(yaml.contains("get:"));
+        assertTrue(yaml.contains("200:"));
+        assertTrue(yaml.contains("description: \"A list of pets\""));
+        assertTrue(yaml.contains("externalDocs:"));
+        assertTrue(yaml.contains("url: \"https://example.com/docs\""));
+        assertTrue(yaml.contains("servers:"));
+        assertTrue(yaml.contains("-"));
+        assertTrue(yaml.contains("tags:"));
+    }
+
+    @Test
+    void serializers_flattenExtensionsToTopLevel() {
+        // Spec §4.2: vendor extensions are serialized as x-* fields.
+        OpenAPI openAPI = createSampleModel();
+        openAPI.getInfo().addExtension("x-internal-id", 42);
+
+        String json = new JsonSerializer().serialize(openAPI);
+        String yaml = new YamlSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"x-internal-id\":42"));
+        assertFalse(json.contains("\"extensions\":"));
+        assertTrue(yaml.contains("x-internal-id: 42"));
+    }
+
+    @Test
+    void jsonRoundTrip_restoresOpenApiCoreFields() {
+        OpenAPI source = createSampleModel();
+        source.getInfo().addExtension("x-internal-id", 42);
+
+        String json = new JsonSerializer().serialize(source);
+        OpenAPI restored = new JsonDeserializer().deserialize(json);
+
+        assertCoreFieldsRestored(restored);
+    }
+
+    @Test
+    void yamlRoundTrip_restoresOpenApiCoreFields() {
+        OpenAPI source = createSampleModel();
+        source.getInfo().addExtension("x-internal-id", 42);
+
+        String yaml = new YamlSerializer().serialize(source);
+        OpenAPI restored = new YamlDeserializer().deserialize(yaml);
+
+        assertCoreFieldsRestored(restored);
+    }
+
+    @Test
+    void serializers_useOpenApiFieldNamesAndSkipInternalAccessors() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        Schema schema = OASFactory.createObject(Schema.class);
+        schema.setType(List.of(Schema.SchemaType.STRING));
+        schema.setDefaultValue("Dog");
+        schema.setEnumeration(List.of("Dog", "Cat"));
+
+        Schema additionalProperties = OASFactory.createObject(Schema.class);
+        additionalProperties.setType(List.of(Schema.SchemaType.INTEGER));
+        schema.setAdditionalPropertiesSchema(additionalProperties);
+
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class)
+                .addMediaType("application/json", OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class)
+                        .schema(schema));
+        APIResponse response = OASFactory.createObject(APIResponse.class)
+                .description("ok")
+                .content(content);
+        APIResponses responses = OASFactory.createObject(APIResponses.class).addAPIResponse("200", response);
+        Operation operation = OASFactory.createObject(Operation.class).responses(responses);
+        PathItem item = OASFactory.createObject(PathItem.class).GET(operation);
+        openAPI.paths(OASFactory.createObject(Paths.class).addPathItem("/pets", item));
+
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"default\":\"Dog\""));
+        assertTrue(json.contains("\"enum\":[\"Dog\",\"Cat\"]"));
+        assertTrue(json.contains("\"additionalProperties\":"));
+        assertFalse(json.contains("\"defaultValue\":"));
+        assertFalse(json.contains("\"enumeration\":"));
+        assertFalse(json.contains("\"additionalPropertiesSchema\":"));
+        assertFalse(json.contains("\"all\":"));
+        assertFalse(json.contains("\"operations\":"));
+    }
+
+    @Test
+    void serializers_useCanonicalEnumLiteralsForSecuritySchemeType() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        var components = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Components.class);
+        var apiKey = OASFactory.createObject(SecurityScheme.class)
+                .type(SecurityScheme.Type.APIKEY)
+                .in(SecurityScheme.In.HEADER)
+                .name("createPetProfile");
+        components.addSecurityScheme("petsApiKey", apiKey);
+        openAPI.setComponents(components);
+
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"type\":\"apiKey\""));
+        assertFalse(json.contains("\"type\":\"apikey\""));
+    }
+
+    @Test
+    void yamlSerializer_preservesEmptyCollections() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        APIResponse response = OASFactory.createObject(APIResponse.class).description("ok");
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+        content.addMediaType("*/*", OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class));
+        response.setContent(content);
+
+        APIResponses responses = OASFactory.createObject(APIResponses.class)
+                .addAPIResponse("503", response);
+        Operation operation = OASFactory.createObject(Operation.class).responses(responses);
+        PathItem item = OASFactory.createObject(PathItem.class).GET(operation);
+        openAPI.setPaths(OASFactory.createObject(Paths.class).addPathItem("/pets", item));
+
+        String yaml = new YamlSerializer().serialize(openAPI);
+
+        assertTrue(yaml.contains("*/*: {}") || yaml.contains("\"*/*\": {}"));
+    }
+
+    @Test
+    void serializers_mapSchemaDialectToDollarSchema() {
+        OpenAPI openAPI = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+        Schema schema = OASFactory.createObject(Schema.class)
+                .schemaDialect("http://example.com/myCustomSchema")
+                .type(List.of(Schema.SchemaType.OBJECT));
+        var components = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Components.class)
+                .addSchema("custom", schema);
+        openAPI.setComponents(components);
+
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(json.contains("\"$schema\":\"http://example.com/myCustomSchema\""));
+        assertFalse(json.contains("\"schemaDialect\""));
+        assertFalse(json.contains("\"jsonSchemaDialect\""));
+    }
+
+    private OpenAPI createSampleModel() {
+        APIResponse response = OASFactory.createObject(APIResponse.class)
+                .description("A list of pets");
+
+        APIResponses responses = OASFactory.createObject(APIResponses.class)
+                .addAPIResponse("200", response);
+
+        Operation operation = OASFactory.createObject(Operation.class)
+                .operationId("listPets")
+                .responses(responses);
+
+        PathItem pathItem = OASFactory.createObject(PathItem.class)
+                .GET(operation);
+
+        Paths paths = OASFactory.createObject(Paths.class)
+                .addPathItem("/pets", pathItem);
+
+        Info info = OASFactory.createObject(Info.class)
+                .title("Pet Store")
+                .version("1.0.0");
+
+        Tag petsTag = OASFactory.createObject(Tag.class)
+                .name("pets")
+                .description("Pet operations");
+
+        Server primaryServer = OASFactory.createObject(Server.class)
+                .url("https://api.example.com")
+                .description("Primary server");
+
+        org.eclipse.microprofile.openapi.models.ExternalDocumentation externalDocs =
+                OASFactory.createObject(org.eclipse.microprofile.openapi.models.ExternalDocumentation.class)
+                        .url("https://example.com/docs")
+                        .description("Reference docs");
+
+        SecurityRequirement securityRequirement = OASFactory.createObject(SecurityRequirement.class)
+                .addScheme("oauth2", java.util.List.of("read", "write"));
+
+        return OASFactory.createObject(OpenAPI.class)
+                .openapi("3.1.0")
+                .info(info)
+                .externalDocs(externalDocs)
+                .addTag(petsTag)
+                .addServer(primaryServer)
+                .addSecurityRequirement(securityRequirement)
+                .paths(paths);
+    }
+    /** The fields of {@link #createSampleModel()} a serialization round trip must keep. */
+    private static void assertCoreFieldsRestored(OpenAPI restored) {
+        assertNotNull(restored);
+        assertNotNull(restored.getInfo());
+        assertNotNull(restored.getPaths());
+        PathItem pets = restored.getPaths().getPathItem("/pets");
+        assertNotNull(pets);
+        Operation get = pets.getGET();
+        assertNotNull(get);
+        assertNotNull(get.getResponses());
+        APIResponse ok = get.getResponses().getAPIResponse("200");
+        assertNotNull(ok);
+        assertEquals("3.1.0", restored.getOpenapi());
+        assertEquals("Pet Store", restored.getInfo().getTitle());
+        assertEquals("listPets", get.getOperationId());
+        assertEquals("A list of pets", ok.getDescription());
+        Number internalId = assertInstanceOf(Number.class, restored.getInfo().getExtension("x-internal-id"));
+        assertEquals(42, internalId.intValue());
+        assertNotNull(restored.getExternalDocs());
+        assertEquals("https://example.com/docs", restored.getExternalDocs().getUrl());
+        assertEquals(1, restored.getTags().size());
+        assertEquals("pets", restored.getTags().getFirst().getName());
+        assertEquals(1, restored.getServers().size());
+        assertEquals("https://api.example.com", restored.getServers().getFirst().getUrl());
+        assertEquals(1, restored.getSecurity().size());
+        assertNotNull(restored.getSecurity().getFirst().getScheme("oauth2"));
+    }
+}

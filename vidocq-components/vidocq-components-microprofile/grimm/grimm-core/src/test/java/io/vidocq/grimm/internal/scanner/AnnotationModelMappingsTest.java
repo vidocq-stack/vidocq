@@ -1,0 +1,182 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.grimm.internal.scanner;
+
+import io.vidocq.grimm.internal.config.ScanConfig;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import java.util.List;
+import java.util.Map;
+import org.eclipse.microprofile.openapi.annotations.Components;
+import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
+import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
+import org.eclipse.microprofile.openapi.annotations.headers.Header;
+import org.eclipse.microprofile.openapi.annotations.info.Info;
+import org.eclipse.microprofile.openapi.annotations.media.ExampleObject;
+import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+/**
+ * Tests for the annotation-to-model mappings shared by both scanners (MP OpenAPI 4.2 §3).
+ */
+class AnnotationModelMappingsTest {
+
+    @ExternalDocumentation(url = "https://example.org/docs", description = "More",
+            extensions = @Extension(name = "x-owner", value = "team-a"))
+    static class Full { }
+
+    @ExternalDocumentation(url = "https://example.org/docs")
+    static class NoDescription { }
+
+    @Test
+    void mapsUrlAndDescription() {
+        var docs = AnnotationModelMappings.toModelExternalDocs(Full.class.getAnnotation(ExternalDocumentation.class));
+        assertEquals("https://example.org/docs", docs.getUrl());
+        assertEquals("More", docs.getDescription());
+    }
+
+    @Test
+    void leavesDescriptionUnsetWhenEmpty() {
+        var docs = AnnotationModelMappings.toModelExternalDocs(
+                NoDescription.class.getAnnotation(ExternalDocumentation.class));
+        assertEquals("https://example.org/docs", docs.getUrl());
+        assertNull(docs.getDescription());
+    }
+
+    @Test
+    void mapsExtensions() {
+        var docs = AnnotationModelMappings.toModelExternalDocs(Full.class.getAnnotation(ExternalDocumentation.class));
+        assertEquals("team-a", docs.getExtensions().get("x-owner"));
+    }
+
+    @Extension(name = "x-nested", value = "{\"a\": [1, 2], \"b\": {\"c\": [true, \"d\"]}, \"e\": [[1, 2], [3]]}",
+            parseValue = true)
+    static class NestedArrays { }
+
+    @Test
+    void parsedValueKeepsArraysNestedInObjectsAndArrays() {
+        // A comma inside [...] does not separate the members of the enclosing object or array.
+        assertEquals(Map.of(
+                        "a", List.of(1L, 2L),
+                        "b", Map.of("c", List.of(true, "d")),
+                        "e", List.of(List.of(1L, 2L), List.of(3L))),
+                AnnotationModelMappings.parseExtensionValue(NestedArrays.class.getAnnotation(Extension.class)));
+    }
+
+    @Test
+    void parsedValueIsReadAsJson() {
+        // Extension values with parseValue = true and constValue go through grimm's JSON reader.
+        Map<String, Object> withEscapedQuote = new java.util.LinkedHashMap<>();
+        withEscapedQuote.put("a", "x\"y");
+        withEscapedQuote.put("b", 1L);
+        assertAll(
+                () -> assertEquals(withEscapedQuote,
+                        AnnotationModelMappings.parseJsonValue("{\"a\": \"x\\\"y\", \"b\": 1}")),
+                () -> assertNull(AnnotationModelMappings.parseJsonValue("null")),
+                () -> assertEquals(1000.0, AnnotationModelMappings.parseJsonValue("1e3")),
+                () -> assertEquals("abc", AnnotationModelMappings.parseJsonValue("\"abc\"")),
+                () -> assertEquals(Map.of("a", 1L), AnnotationModelMappings.parseJsonValue(" {\"a\": 1} ")),
+                () -> assertEquals(1.0, AnnotationModelMappings.parseJsonValue("1.0")),
+                () -> assertEquals(List.of(1.0), AnnotationModelMappings.parseJsonValue("[1.0]")),
+                () -> assertEquals(117L, AnnotationModelMappings.parseJsonValue("117")),
+                () -> assertEquals(Boolean.TRUE, AnnotationModelMappings.parseJsonValue("true")));
+    }
+
+    @Test
+    void parsedValueThatIsNotJsonStaysTheStringAsWritten() {
+        assertAll(
+                () -> assertEquals("hello", AnnotationModelMappings.parseJsonValue("hello")),
+                () -> assertEquals("{a: 1}", AnnotationModelMappings.parseJsonValue("{a: 1}")),
+                () -> assertEquals(" 'x' ", AnnotationModelMappings.parseJsonValue(" 'x' ")),
+                () -> assertEquals("[1, 2", AnnotationModelMappings.parseJsonValue("[1, 2")),
+                () -> assertEquals("", AnnotationModelMappings.parseJsonValue("")));
+    }
+
+    @Path("/e")
+    static class EmptyUrlResource {
+        @GET
+        @ExternalDocumentation(description = "no url")
+        public String get() {
+            return "";
+        }
+    }
+
+    @Test
+    void emptyUrlOnAMethodProducesNoExternalDocs() {
+        // The empty-url guard stays at each call site (class level and operation level alike).
+        OpenAPI openAPI = new AnnotationScanner(ScanConfig.defaultConfig()).scanClasses(List.of(EmptyUrlResource.class));
+        assertNotNull(openAPI.getPaths().getPathItem("/e").getGET());
+        assertNull(openAPI.getPaths().getPathItem("/e").getGET().getExternalDocs());
+    }
+    @OpenAPIDefinition(info = @Info(title = "Headers", version = "1"), components = @Components(headers = {
+            @Header(name = "X-Sample", example = "plain",
+            examples = {
+                    @ExampleObject(name = "full", summary = "Full", description = "Every attribute",
+                            value = "42", externalValue = "https://example.org/42.json",
+                            ref = "#/components/examples/full",
+                            extensions = @Extension(name = "x-origin", value = "test")),
+                    @ExampleObject(name = "empty"),
+                    @ExampleObject(summary = "nameless, ignored")
+            }),
+            @Header(name = "X-Bare")}))
+    static class WithHeaders { }
+
+    private static Header header(int index) {
+        return WithHeaders.class.getAnnotation(OpenAPIDefinition.class).components().headers()[index];
+    }
+
+    @Test
+    void headerExamplesAreMappedByName() {
+        // §5.2.3 @Header: example and named examples; nameless examples are ignored.
+        var header = org.eclipse.microprofile.openapi.OASFactory.createObject(
+                org.eclipse.microprofile.openapi.models.headers.Header.class);
+        AnnotationModelMappings.applyHeaderExamples(header, header(0));
+
+        assertEquals("plain", header.getExample());
+        assertEquals(2, header.getExamples().size());
+        var full = header.getExamples().get("full");
+        assertAll(
+                () -> assertEquals("Full", full.getSummary()),
+                () -> assertEquals("Every attribute", full.getDescription()),
+                () -> assertEquals("42", full.getValue()),
+                () -> assertEquals("https://example.org/42.json", full.getExternalValue()),
+                () -> assertEquals("#/components/examples/full", full.getRef()),
+                () -> assertEquals("test", full.getExtensions().get("x-origin")));
+        var empty = header.getExamples().get("empty");
+        assertNull(empty.getSummary());
+        assertNull(empty.getValue());
+    }
+
+    @Test
+    void headerWithoutExamplesKeepsNone() {
+        var header = org.eclipse.microprofile.openapi.OASFactory.createObject(
+                org.eclipse.microprofile.openapi.models.headers.Header.class);
+        AnnotationModelMappings.applyHeaderExamples(header, header(1));
+
+        assertNull(header.getExample());
+        assertNull(header.getExamples());
+    }
+}

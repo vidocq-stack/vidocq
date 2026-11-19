@@ -1,0 +1,120 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.grimm.internal.config;
+
+import java.util.Set;
+
+/**
+ * Configuration for annotation scanning.
+ *
+ * Spec §4.1: MP Config keys for scanning:
+ * - mp.openapi.scan.disable
+ * - mp.openapi.scan.packages
+ * - mp.openapi.scan.classes
+ * - mp.openapi.scan.exclude.packages
+ * - mp.openapi.scan.exclude.classes
+ */
+public record ScanConfig(
+    boolean disableScan,
+    Set<String> includePackages,
+    Set<String> includeClasses,
+    Set<String> excludePackages,
+    Set<String> excludeClasses,
+    boolean scanBeanValidation
+) {
+    /**
+     * Creates a default {@code ScanConfig} with scanning enabled and no filters.
+     */
+    public static ScanConfig defaultConfig() {
+        return new ScanConfig(
+            false,
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            true
+        );
+    }
+
+    /** Backwards-compatible constructor (bean validation defaults to enabled). */
+    public ScanConfig(
+        boolean disableScan,
+        Set<String> includePackages,
+        Set<String> includeClasses,
+        Set<String> excludePackages,
+        Set<String> excludeClasses
+    ) {
+        this(disableScan, includePackages, includeClasses, excludePackages, excludeClasses, true);
+    }
+
+    /**
+     * Checks if the given class should be scanned.
+     *
+     * @param className the fully-qualified class name
+     * @return true if the class should be scanned, false otherwise
+     */
+    public boolean shouldScan(String className) {
+        if (disableScan) {
+            return false;
+        }
+
+        // Explicit class exclusion has highest priority.
+        if (excludeClasses.contains(className)) {
+            return false;
+        }
+
+        // Explicit class inclusion can override package-level excludes.
+        if (includeClasses.contains(className)) {
+            return true;
+        }
+
+        String packageName = extractPackageName(className);
+        int includePackageMatch = bestPackageMatch(includePackages, packageName);
+        int excludePackageMatch = bestPackageMatch(excludePackages, packageName);
+        boolean hasIncludes = !includeClasses.isEmpty() || !includePackages.isEmpty();
+
+        if (!hasIncludes) {
+            return excludePackageMatch < 0;
+        }
+
+        if (includePackageMatch < 0) {
+            return false;
+        }
+
+        // For overlapping include/exclude package filters, the most specific package wins.
+        return includePackageMatch > excludePackageMatch;
+    }
+
+    private String extractPackageName(String className) {
+        int lastDot = className.lastIndexOf('.');
+        return lastDot > 0 ? className.substring(0, lastDot) : "";
+    }
+
+    private int bestPackageMatch(Set<String> packages, String packageName) {
+        int best = -1;
+        for (String candidate : packages) {
+            if (packageName.equals(candidate) || packageName.startsWith(candidate + ".")) {
+                best = Math.max(best, candidate.length());
+            }
+        }
+        return best;
+    }
+}
+

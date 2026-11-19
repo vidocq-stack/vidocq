@@ -1,0 +1,52 @@
+# TCK Scoreboard
+
+Track MicroProfile OpenAPI 4.2 TCK progress here.
+
+## Current score
+
+- Status: M10 completed
+- Full suite: **367 tests, 0 failures, 0 errors, 0 skipped** (2026-10-04): the 364 tests of the official TCK plus
+  3 Grimm harness tests (`GrimmTckSmokeTest`, 1 test; `DotNameCompatibilityTest`, 2 tests).
+- Run against TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot); re-run on the 4.2 final.
+- Count: 349 on the 4.1 TCK, 367 on 4.2-RC5 (+18):
+  - `ExternalDocumentationAnnotationTest` (+2: 1 method, run once per format, JSON and YAML);
+  - `SchemaExtensionPropertyTest` (+6: plain model tests, each run once);
+  - `BeanValidationTest` (+8: four new `@Digits` methods, run once per format);
+  - `AirlinesAppTest` (+2: `testExamplesInHeaders`, run once per format).
+- Evidence (Surefire): `grimm-tck/target/surefire-reports/TEST-TestSuite.xml`
+- Last targeted reference also green: `AirlinesAppTest` (**120/120** on 4.2-RC5) in
+  `grimm-tck/target/surefire-reports/TEST-org.eclipse.microprofile.openapi.tck.AirlinesAppTest.xml`
+
+## Runtime matrix (Cassini/Chappe)
+
+The TCK harness now supports a small execution matrix to isolate infra regressions:
+
+| Variant | Goal | Key properties |
+|---|---|---|
+| `default-readiness` | baseline stable startup | `grimm.tck.port=0`, `grimm.tck.waitForReadiness=true`, `grimm.tck.readinessTimeoutMillis=10000` |
+| `extended-readiness` | detect slow bootstrap vs hard failures | same as above with `readinessTimeoutMillis=30000` |
+| `no-readiness-probe` | compare behavior without HTTP readiness gate | `grimm.tck.waitForReadiness=false` |
+
+Entrypoints:
+
+- `./run-official-tck-mp-openapi-4.2.sh smoke`
+- `./run-official-tck-mp-openapi-4.2.sh matrix PetStoreAppTest`
+- `./run-official-tck-mp-openapi-4.2.sh all`
+
+## Harness knobs
+
+Arquillian container `grimm` accepts:
+
+- `host` (default `127.0.0.1`)
+- `port` (default `0` for ephemeral)
+- `waitForReadiness` (default `true`)
+- `readinessTimeoutMillis` (default `10000`)
+- `readinessPath` (default `/openapi`)
+- `systemProperties` (semicolon-separated `key=value` list injected during deployment)
+
+These can be overridden per run with JVM properties `-Dgrimm.tck.*`.
+
+## Exclusions
+
+No excluded tests currently.
+

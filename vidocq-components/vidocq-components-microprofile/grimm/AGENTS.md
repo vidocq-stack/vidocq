@@ -1,0 +1,247 @@
+# AGENTS.md
+
+> This file is the contribution guide for AI agents (GitHub Copilot, Copilot Chat,
+> Copilot Workspace). It must stay in sync with `CLAUDE.md` — any change in one
+> must be reflected in the other.
+
+## Repository Mission
+
+- Grimm implements **MicroProfile OpenAPI 4.2** in Java 25, with **zero third-party
+  implementation libraries**: only spec APIs (`microprofile-openapi-api`, `jakarta.ws.rs-api`,
+  `jakarta.enterprise.cdi-api`, `jakarta.annotation-api`) plus the Vidocq modular repackage
+  `io.vidocq.ravel:ravel-mp-config-api` are compiled into `grimm-core` and
+  `grimm-cdi-vauban`.
+- Strict Java Modules architecture: `grimm-core` is pure Java scanning + serialization logic with no
+  CDI dependency; `grimm-cdi-vauban` is the CDI integration layer and JAX-RS endpoint host;
+  `grimm-tck` is out-of-reactor.
+- **No SmallRye OpenAPI, Swagger Core, Jackson, or Snakeyaml** in production code.
+- Virtual threads (Project Loom) wherever concurrency is introduced —
+  `Executors.newVirtualThreadPerTaskExecutor()`, no platform thread pools.
+- Use `ROADMAP.md` to track milestone progress (M0…M10+).
+- If the rules in this file need updating, align `CLAUDE.md` in the same operation — both
+  files are mirrors targeted at different tools.
+
+## Real Code State to Know Before Modifying
+
+- Consult `ROADMAP.md` for the detailed state of each milestone.
+- M1 is implemented: `OASFactoryResolver` wiring (`ServiceLoader`) and model POJOs are present
+  in `grimm-core`.
+- `grimm-core` will export `io.vidocq.grimm.internal` as a **qualified export** to
+  `io.vidocq.grimm.cdi.vauban` only — any new internal class is invisible outside
+  `cdi-vauban` without a `module-info.java` change.
+- The BCE is a **CDI 4.1 Build Compatible Extension**
+  (`jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) — not the
+  legacy `jakarta.enterprise.inject.spi.Extension`. Declared via `provides … with` in the
+  `module-info` of `cdi-vauban`.
+
+## Boundaries Not to Break
+
+- Never put `grimm-tck` back in the reactor: it is deliberately a standalone runner, so the released
+  runtime stays decoupled from the official TCK.
+- `grimm-core` must **never import** any CDI class (`jakarta.enterprise.*`, `jakarta.inject.*`),
+  any Vauban class, or any Cassini/Chappe class.
+- **No `synchronized` blocks** — use `ReentrantLock.tryLock()`, `Semaphore`, `AtomicReference`.
+  `synchronized` pins virtual threads.
+- **No `ThreadLocal`** — use `ScopedValue` (JEP 506) to propagate request context.
+- **No `java.lang.reflect.Proxy`** — annotation access via direct reflection or `MethodHandle`.
+- **No `setAccessible(true)`** in production — open packages in `module-info.java` when
+  reflective access is needed, and document why.
+- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) for `grimm-core` and
+  `grimm-cdi-vauban` unit tests. The TCK uses **TestNG** (upstream constraint).
+- Any `<scope>compile|runtime</scope>` dependency addition requires the `dependency-gatekeeper`
+  agent and an explicit justification in the PR.
+
+## Java Modules Convention — `module-info` placement
+
+- `module-info.java` sits in `src/main/java/` of `grimm-core`, `grimm-processor`,
+  `grimm-cdi-vauban` and `grimm-examples`: it is compiled with the code it describes, and the
+  tests run on the module path. What only the tests need (extra `--add-reads`, `--add-exports`,
+  `--add-opens`, test-scope modules) goes in the test compiler/surefire configuration of the
+  module's `pom.xml`, with a comment, never in the descriptor.
+- `grimm-bench` (shaded JMH uber-jar run on the class path) and `grimm-tck` (no main code,
+  out-of-reactor TCK on the class path) have no descriptor.
+- `microprofile-openapi-api:4.2-RC5` provides `module-info.class`; use
+  `requires org.eclipse.microprofile.openapi` in `module-info.java`.
+- MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api`, which provides
+  `module org.eclipse.microprofile.config` for Java Modules/jlink compatibility.
+
+## Model Build Pipeline
+
+The OpenAPI document is assembled once at CDI container startup by `grimm-cdi-vauban`:
+
+1. **`ModelReaderInvoker`** — instantiates the class named by `mp.openapi.model.reader` (if
+   set) and calls `buildModel()`: the starting model.
+2. **`StaticFileReader`** — reads `META-INF/openapi.yaml` / `.json` / `.yml` from the
+   deployment classpath.
+3. **`AnnotationScanner`** — scans JAX-RS resource classes + MP OpenAPI annotations
+   (respecting `mp.openapi.scan.*` config keys).
+4. **`ModelMerger`** — merges the three `ModelSource` values with spec order/priority:
+   annotations > static file > `OASModelReader` (MP OpenAPI "Processing rules").
+5. **`FilterInvoker`** — instantiates the class named by `mp.openapi.filter` (if set) and
+   applies each filter method.
+6. **`GrimmModelCache`** — holds the immutable final `OpenAPI` document for the lifetime of
+   the application.
+
+## `/openapi` Endpoint
+
+- Served by `OpenApiResource` in `grimm-cdi-vauban` — a plain JAX-RS `@Path("/openapi")`
+  `@GET` resource.
+- Content negotiation via `Accept` header: `application/yaml` (default per spec §2.2),
+  `application/json`.
+- Reads from `GrimmModelCache`; no recomputation per request.
+- `format` query parameter (`?format=json` / `?format=yaml`) overrides `Accept` (spec §2.3).
+
+## Useful Workflows
+
+```bash
+# Initialise SDK environment
+sdk env
+
+# Full reactor build
+./mvnw -ntp install -DskipTests
+
+# Unit tests
+./mvnw test
+
+# TCK — smoke test (installs reactor then runs TCK)
+./run-official-tck-mp-openapi-4.2.sh
+
+# TCK — full suite
+./run-official-tck-mp-openapi-4.2.sh all
+
+# TCK — targeted test (e.g. AnnotationScanTest)
+./run-official-tck-mp-openapi-4.2.sh -Dtest=AnnotationScanTest
+
+# JMH benchmarks
+./mvnw -pl grimm-bench -Pbench package
+java -jar grimm-bench/target/benchmarks.jar
+```
+
+- The TCK always goes through the root script, which first runs `clean install` on the reactor then
+  invokes `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test`.
+- The TCK artifact (`microprofile-openapi-tck` 4.2-RC5, like 4.1) is published on Maven Central:
+  Maven resolves it, nothing to install by hand.
+
+## Contribution Conventions
+
+- **Strict TDD**: Red → Green → Refactor. No production line before a failing test justifies it.
+  Cite the MicroProfile OpenAPI 4.2 spec section in test comments (e.g. `// §3.5.1`).
+- Unit tests in the same package as the tested class, named `<Class>Test`.
+- No Mockito — manual test doubles (`FakeOASModelReader`, `FakeOASFilter`,
+  `FakeConfigSource`, etc.).
+- Scanner logic in `grimm-core` is testable without a CDI container — that is the whole point
+  of the `grimm-core` / `grimm-cdi-vauban` separation.
+- JMH benchmarks in `grimm-bench` — comparison vs SmallRye OpenAPI on the same JVM.
+  Results recorded in `BENCH.md` at the project root.
+- Reproducible bugs tracked in `BUG.md` with: id, date, symptom, minimal repro, hypothesis,
+  status.
+- For non-trivial changes (scanner phase, `ModelMerger`, BCE, `module-info.java`), enter plan
+  mode and record architectural decisions in `ROADMAP.md` (section "Actioned Decisions").
+- Use `virtual-threads-reviewer` for concurrent code changes, `java-modules-guardian` after
+  `module-info.java`/package changes, and `tck-runner` to diagnose TCK failures.
+- **Language**: Commit messages, Javadoc, and the content of all `.md` files must be written in **English**.
+
+## What an Agent Should Assume for Upcoming Tasks
+
+- `grimm-core` will contain: `OASFactoryImpl`, model POJOs (implementing all MP OpenAPI
+  model interfaces), `AnnotationScanner`, `StaticFileReader`, `ModelMerger`, `FilterInvoker`,
+  `ModelReaderInvoker`, JSON and YAML serializers, `ScanConfig` record, `FilterConfig` record.
+- `grimm-cdi-vauban` will contain: `GrimmExtension` (BCE CDI 4.1), `GrimmModelCache`
+  (`@ApplicationScoped`), `OpenApiResource` (JAX-RS resource), `GrimmConfigProducer`.
+- The Java module name for `grimm-core` is `io.vidocq.grimm.core`; for `grimm-cdi-vauban`
+  it is `io.vidocq.grimm.cdi.vauban`.
+- Configuration keys follow the MP OpenAPI spec §4.1:
+  `mp.openapi.model.reader`, `mp.openapi.filter`, `mp.openapi.scan.disable`,
+  `mp.openapi.scan.packages`, `mp.openapi.scan.classes`,
+  `mp.openapi.scan.exclude.packages`, `mp.openapi.scan.exclude.classes`,
+  `mp.openapi.servers`, `mp.openapi.schema.<FQCN>`.
+- The annotation scanning order must follow spec §3.7 (class-level annotations override
+  method-level for Info, Tags, Servers; method-level `@Operation` takes precedence over
+  class-level `@Tag`).
+- Before any structural change to `GrimmExtension` or `AnnotationScanner`, reason against the
+  contract: **MicroProfile OpenAPI 4.2 TCK at 100% PASS**.
+
+## Documentation (Antora) conventions
+
+The project documentation lives in `docs/en` as an Antora component and is
+aggregated by the **vidocq-docs** site, which provides a **shared UI bundle** (banner,
+logo, fonts, colours, footer). **Never customise the documentation UI per project** —
+all visual harmonisation is centralised in `vidocq-docs/ui-bundle`.
+
+### Gold reference
+**Vauban** is the reference implementation for documentation structure. Mirror its
+`docs/en` layout when creating or updating docs. **Chappe** (HTTP server)
+and **Vidocq** (runtime orchestrator) are *special cases*, not references: they are not
+Jakarta EE / MicroProfile spec implementations.
+
+### Repository layout
+- `docs/en/antora.yml` → `name: <project>`, `title:`, versioned per branch (`dev` prerelease on `main`, `'<version>'` on `docs/<version>`), `project-version` attribute, `nav:`, `lang: en`.
+- Pages in `modules/ROOT/pages/`, navigation in `modules/ROOT/nav.adoc`, images in
+  `modules/ROOT/images/`.
+- **English-only** (ADR 0004 in vidocq-docs): no French mirror — do not reintroduce one.
+
+### Canonical navigation (section order)
+`index` → `getting-started` → `usage` → `concepts` → `internals` → `tck` →
+`performance` → `reference` → `migration`
+
+Multi-module projects (e.g. Vidocq, Mansart) may append `modules/*` / `sub-modules/*`
+sub-pages after `migration`.
+
+### TCK / Performance rule (not mutually exclusive)
+- Every **spec implementation** — i.e. **all projects except Chappe and Vidocq** — MUST
+  have a **`tck`** section documenting TCK coverage/status.
+- Projects with a performance story (e.g. **Chappe**) keep their **`performance`** section.
+- When **both** sections exist, order them **TCK first, then Performance**.
+- **Chappe** and **Vidocq** do not require a `tck` section (not spec implementations).
+
+### `index.adoc` structure
+Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a centred logo
+(`image::<project>-logo.png[...,role=module-logo]`), a `[.lead]` paragraph, then
+`== Origin of the name`, an `== At a glance` table, and ecosystem / quick-links sections.
+
+### Logo
+Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
+
+> When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.
+
+## Architecture rules
+
+- The architecture rules (module dependencies, layers, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal`) are ArchUnit tests in `grimm-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path is documented in `internals.adoc` and added to the rule's fallback list with its reason, never silently.
+
+## Build compatible extensions work at build only
+
+A CDI build compatible extension works at build, and only there. `vidocq:generate` runs the extensions of an
+application once and records what they did; the packaged application loads that record instead of running them
+(Vidocq/vauban#288). An extension that breaks these rules loses work or checks in a packaged application:
+
+- compute from the deployment's classes only: no configuration value, environment variable, outside file or network
+  resource in a phase;
+- check the start environment in an observer of `jakarta.enterprise.event.Startup` that throws a
+  `DeploymentException`, fed with what the build collected (`withParam`); models: Ravel's `ConfigStartCheck`,
+  Cervantes' `JwtConfigurationCheck`;
+- add annotations, never remove them; carry data in parameters, never in fields of the extension;
+- ask `ExtensionPhase.isBuildTime()` only as a last resort, in a class of its own: an extension that asks runs again
+  at each start (Heisenberg's `InterceptorPriorityExtension`);
+- the brick's Vidocq runtime extension adds its own beans with `VaubanContainerBuilder.addHostBean`, never
+  `addBeanClass`, and its `-codegen` bundle brings the brick's CDI jar to the processor path;
+- list in `@io.vidocq.vauban.api.ClientProxies` every interface the extension registers as a synthetic bean of a
+  normal scope (`@ApplicationScoped`, `@TransactionScoped`, ...). Vauban generates client proxies at build from the
+  classes it compiles, and a synthetic bean has none: the freeze records its descriptor, not a proxy, and a deployment
+  that runs its extensions at start has no build step. Without the list, the container builds a
+  `java.lang.reflect.Proxy` at every start: every call goes through reflection, the boot is slower, nothing runs ahead
+  of time, and every application prints the `RUNTIME CODE GENERATION FALLBACK` warning (Vauban BUG-20261113-19:
+  Noether's `EntityManager` and `EntityManagerFactory`). Put it on a class of a module compiled with
+  `vauban-processor` that provides its `_VaubanComponents`: the `*-cdi-vauban` extension, or, for a
+  container-neutral brick, its Vidocq runtime extension (Vidocq's `NoetherPersistenceExtension`). Public interfaces
+  only, no class, no `@Dependent` bean;
+- test both ways: the extensions run at start (TCK, another container) and frozen (the startup report says
+  `cdi extensions  N extensions frozen at build`, and an invalid environment still stops the start).
+
+Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspace`, and Vauban's concepts page,
+"Writing an extension the build can freeze" (`docs/en/modules/ROOT/pages/concepts.adoc#writing-a-frozen-extension`).

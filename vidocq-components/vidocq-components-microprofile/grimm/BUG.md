@@ -1,0 +1,591 @@
+# Bug Tracker
+
+Track reproducible bugs with:
+- id
+- date
+- symptom
+- minimal repro
+- hypothesis
+- status
+
+## Entries
+
+### BUG-20260715-01 — grimm-tck references stale vidocq-runtime groupIds
+
+- **id**: BUG-20260715-01
+- **date**: 2026-07-15
+- **symptom**: `./run-official-tck-mp-openapi-4.1.sh all` fails before running any test:
+  `Could not resolve dependencies for io.vidocq.grimm:grimm-tck` —
+  `Could not find artifact io.vidocq.runtime:vidocq-runtime-cassini-rest-extension:jar:0.3.0-SNAPSHOT`.
+- **minimal repro**: build vidocq runtime `main` (`mvn install`), then run the grimm TCK script.
+- **hypothesis (confirmed)**: the vidocq runtime module rework of 2026-06-08
+  ("first rework of modules") moved `vidocq-runtime-cassini-rest-extension` to groupId
+  `io.vidocq.runtime.extensions.jakartaee.core` and `vidocq-runtime-chappe-webserver-extension`
+  to `io.vidocq.runtime.extensions.essentials`. `grimm-tck` (out-of-reactor) still declared the
+  old `io.vidocq.runtime` groupId, which is no longer installed locally; resolution then falls
+  back to the invalid snapshot on central-snapshots (see vidocq/BUG.md) and fails.
+  `vidocq-runtime-core` did not move.
+- **status**: FIXED — grimm-tck/pom.xml updated to the new groupIds;
+  full MP OpenAPI 4.1 TCK green again (349 tests, 0 failures, 0 errors, 0 skipped).
+
+
+## BUG-20261001-01 — Grimm ships automatic modules: `/openapi` lost in a modular application (grimm#15)
+
+- **Date**: 2026-10-01
+- **Status**: FIXED (`fix/named-modules`, with vauban `fix/inject-constructor-over-no-arg`, cassini `fix/no-split-into-automatic-module` and the Vidocq extension's `requires io.vidocq.grimm.cdi.vauban`)
+- **Symptom** (reported by Sébastien Blanc on 0.4.0-SNAPSHOT): a Vidocq application whose build runs `cassini-maven-plugin:generate` with `scope=dependencies` does not serve `/openapi`. Grimm is "not active in the container", the Cassini report misses `OpenApiResource`, and nothing says why. Depending on the launch shape, the layer fails instead: `LayerInstantiationException: Package io.vidocq.grimm.cdi in both module grimm.cdi.vauban and module <app>`.
+- **Minimal repro**: an application module with Cassini REST + the Grimm extension, and the Cassini plugin execution above. `/openapi` answers 404, and 200 without that execution.
+- **Cause**:
+  1. The `module-info.java` of grimm-core, grimm-processor and grimm-cdi-vauban, under `src/main/module-info/`, were never compiled into the jars, so Grimm shipped automatic modules (`grimm.cdi.vauban`, ...).
+  2. cassini-maven-plugin took the jar without module-info for a class-path jar and wrote `io/vidocq/grimm/cdi/OpenApiResource$$CassiniAdapter.class` into the application module, which split the package.
+  3. The application layer's loader then owned `io.vidocq.grimm.cdi`, so `GrimmModelCache` and the other Grimm beans could not be loaded, and Vauban's scan skipped them without a word.
+- **Fix**: the three module descriptors are compiled at `prepare-package` and ship in the jars, so Grimm is made of named modules (`io.vidocq.grimm.*`), never automatic ones. grimm-cdi-vauban:
+  - `provides` its generated `_VaubanComponents`;
+  - `requires transitive` the MicroProfile OpenAPI and JAX-RS APIs its own API exposes, with jakarta.ws.rs-api moved to compile scope to match.
+
+  The Cassini plugin then repackages grimm-cdi-vauban instead of splitting its package. Being a named module also exposed a Vauban defect, fixed in Vauban: with an `@Inject` constructor next to a no-arg one, the generated provider only knew the no-arg one. Verified on the reporter's shape, packaged distribution: `/openapi` 200, and the document lists the application's routes.
+
+### BUG-20261004-01 — `Schema.setAll` keeps standard properties and `getAll` returns only unknown ones
+
+- **id**: BUG-20261004-01
+- **date**: 2026-10-04
+- **symptom**: the MP OpenAPI 4.2 `Schema` Javadoc says `setAll` is "equivalent to clearing all
+  properties, including extensions, and then setting each property with `set`", and `getAll` is
+  "equivalent to calling `get` for each property set to a non-null value". In `SchemaImpl`,
+  `setAll` clears only the store of unknown properties (the extensions) and leaves every standard
+  property in place; `getAll` returns that store only, never the standard properties.
+- **minimal repro** (from code review, `SchemaImpl` ~430-445):
+  `Schema s = OASFactory.createSchema().title("t"); s.setAll(Map.of("x-a", "v"));` →
+  `s.getTitle()` is still `"t"` (expected `null`).
+  `OASFactory.createSchema().title("t").getAll()` → `{}` (expected `{title=t}`).
+- **hypothesis**: `getAll`/`setAll` predate the 4.2 extension semantics and were written against
+  the store of unknown properties only. A fix must clear (and list) the typed fields too, and
+  `OpenApiValueMapper` must then stop serializing `getAll()` with `putIfAbsent`, or the standard
+  properties would be written under their Java names. Not covered by the 4.2-RC5 TCK (367/367).
+- **status**: FIXED — 2026-10-04, commit e137051. `get`/`set` resolve the standard properties by
+  JSON name through an explicit table (no reflective accessor lookup, so `extensions`, `all`, `ref`
+  or `class` are plain unknown properties); `getAll` lists every non-null property (`$ref` and the
+  extensions included) and `setAll` clears all of them first. `OpenApiValueMapper` no longer writes
+  `getAll()`, a view of the getters it already writes. Covered by `SchemaImplTest` and
+  `OpenApiValueMapperTest`; official TCK still 367/367.
+
+### BUG-20261004-02 — `@Schema` extensions: scalar-only value parsing, and no extensions on `externalDocs`
+
+- **id**: BUG-20261004-02
+- **date**: 2026-10-04
+- **symptom**: `SchemaGenerator` has its own extension-value parser (`parseExtensionValue` /
+  `parseScalar`, ~635-655) that only knows booleans and numbers, while the scanners use
+  `AnnotationModelMappings.parseExtensionValue`, which also parses `{…}` objects and `[…]` arrays.
+  So `@Schema(extensions = @Extension(name = "x-obj", value = "{\"a\": 1}", parseValue = true))`
+  yields the string `{"a": 1}` instead of an object. In the same method (~619-626), `@Schema`
+  `externalDocs` is mapped without its `extensions` (`@ExternalDocumentation.extensions()`, since
+  MP OpenAPI 3.1).
+- **minimal repro** (from code review): annotate a model class with the `@Schema` above and with
+  `externalDocs = @ExternalDocumentation(url = "https://example.com",
+  extensions = @Extension(name = "x-e", value = "v"))`; the generated schema has
+  `x-obj: '{"a": 1}'` (a string) and an `externalDocs` without `x-e`.
+- **hypothesis**: duplicated logic — `SchemaGenerator` should reuse
+  `AnnotationModelMappings.parseExtensionValue` and the shared external-documentation mapping
+  instead of its own copies. Not covered by the 4.2-RC5 TCK (367/367).
+- **status**: FIXED — 2026-10-04, commit 8b75298. `SchemaGenerator` uses
+  `AnnotationModelMappings.applyExtensions` (`@Schema` and `@SchemaProperty`) and
+  `toModelExternalDocs`; its own extension parser is gone. Covered by `SchemaGeneratorTest`;
+  official TCK still 367/367.
+
+### BUG-20261004-03 — APT-generated model ignores Bean Validation on scalar parameters
+
+- **id**: BUG-20261004-03
+- **date**: 2026-10-04
+- **symptom**: `GrimmModelProcessor` (~216) builds a path/query/header parameter schema from the
+  type alone, while the runtime scanner applies Bean Validation to it (`JaxRsResourceScanner`
+  ~590 and ~594, `BeanValidationMapper.apply`). The processor does not reject a parameter carrying
+  `jakarta.validation` annotations (only MicroProfile OpenAPI annotations hand a class to the runtime
+  scan), so for the same resource the compile-time `$$GrimmModel` fragment and the scanned model
+  differ, and the served document (built from the fragment first) lacks the constraints.
+- **minimal repro** (from code review): a resource without MicroProfile OpenAPI annotations,
+  `@GET @Path("{id}") @Produces("text/plain") String get(@PathParam("id") @Min(1) long id)`;
+  the fragment gives the `id` schema `type: integer, format: int64` with no `minimum`, the runtime
+  scan gives `minimum: 1`.
+- **hypothesis**: the M1 subset of the processor predates Bean Validation support in the scanner.
+  Either apply the same mapping in the processor (from the annotation mirrors) or hand any class
+  with Bean Validation on a parameter to the runtime scan (`SkipGeneration`). The processor's
+  oracle tests, which compare against the runtime scan, do not cover this case.
+- **status**: FIXED — 2026-10-04, commit a6cd5b6. The processor skips a class whose operation
+  parameter carries a `jakarta.validation.constraints.*` or `javax.validation.constraints.*`
+  annotation (matched by name), so the runtime scan documents it, as for the other constructs
+  outside the M1 subset. Covered by `GrimmModelProcessorOracleTest`; official TCK still 367/367.
+
+### BUG-20261004-04 — Merged schemas lose most properties of the higher-priority source
+
+- **id**: BUG-20261004-04
+- **date**: 2026-10-04
+- **symptom**: when two sources give a schema at the same position (a media type schema, a
+  property of it, its `items`), `ModelMerger.mergeSchema` copies only `format`, `type`, `title`,
+  `default`, `enum`, `required`, `items`, `properties`, `description`, `additionalProperties`,
+  `$schema`, `$ref` and the extensions of the higher-priority one. Its `minimum`, `maxLength`,
+  `pattern`, `readOnly`, `examples`, `not`, `contentMediaType` and every other property are lost.
+- **minimal repro**: a static file whose response schema is `{type: string}` and an annotation
+  model whose same response schema has `minimum: 1, maxLength: 5`; the merged schema has neither.
+- **hypothesis (confirmed)**: the merge was a hand-written list of properties, older than the
+  4.0 model. A same-named `components.schemas` entry is not concerned: the higher source replaces
+  it whole.
+- **status**: FIXED — 2026-10-04, commit 77ee08e. `mergeSchema` walks `Schema#getAll()`, so it
+  follows the property table of the model (`SchemaImpl`); `items` and `properties` still merge
+  recursively, and an empty list or map does not override the lower source. Covered by
+  `ModelMergerTest`; official TCK still 367/367. Follow-up 2e13a1c (review): only an empty
+  `type`, `enum`, `required` or `properties` leaves the lower value in place; any other empty
+  value (`default: []`, `const: {}`, an extension `x-tags: []`) is copied, as before 77ee08e.
+
+### BUG-20261004-05 — Static file: refs of parameters, request bodies, responses and callbacks lost; parameter fields and the `null` type dropped
+
+- **id**: BUG-20261004-05
+- **date**: 2026-10-04
+- **symptom**: `OpenApiModelMapper` (static file and `mp.openapi.schema.*` reader) drops the `$ref`
+  of a Parameter, a RequestBody and an APIResponse, and reads the `$ref` of a Callback as a callback
+  expression. A parameter loses `style`, `explode`, `allowReserved`, `deprecated`,
+  `allowEmptyValue`, `example`, `examples` and `content`. A schema `type: "null"` (or the `null` of
+  `type: [string, "null"]`) is dropped, and so is a type name that is not a JSON Schema type.
+- **minimal repro**: `paths./p.post: {parameters: [{$ref: Param.yaml}], requestBody: {$ref:
+  Body.yaml}, responses: {200: {$ref: Response.yaml}}, callbacks: {cb: {$ref: Callback.yaml}}}`:
+  the served document has none of the four refs.
+- **hypothesis (confirmed)**: the mapper had no case for these keys (only `x-` keys fall through
+  to the extensions), and `toSchemaType` knew six of the seven JSON Schema types.
+- **status**: FIXED — 2026-10-04, commit 8d4a6fc. The four refs are kept as written, like the
+  other static refs; every Parameter field of the 4.2 model is mapped; `null` is
+  `SchemaType.NULL` and an unknown type is kept as written. Covered by `OpenApiModelMapperTest`;
+  official TCK still 367/367.
+
+### BUG-20261004-06 — `constValue` is not read as JSON; `@SchemaProperty` ignores `constValue` and `externalDocs`
+
+- **id**: BUG-20261004-06
+- **date**: 2026-10-04
+- **symptom**: the 4.2 Javadoc of `@Schema.constValue` / `@SchemaProperty.constValue` says the
+  value "is parsed as JSON if the schema type is anything other than STRING". `SchemaGenerator`
+  reads `@Schema(constValue)` with a scalar-only parser: an object or an array stays a string, and
+  a STRING schema has `"5"` turned into the number 5. `@SchemaProperty` maps neither `constValue`
+  nor `externalDocs`. The parser of extension values (`parseValue = true`) also split an object at
+  a comma nested in `[...]`: `{"a": [1, 2]}` gave `{a=[1, ...}` broken in two.
+- **minimal repro**: `@Schema(constValue = "{\"a\": 1}") Map<String, Object> m;` gives the string
+  `{"a": 1}`; `@Schema(constValue = "5") String s;` gives `5L`.
+- **status**: FIXED — 2026-10-04, commit 7f4eacc. `constValue` goes through the parser of
+  extension values (`AnnotationModelMappings.parseJsonValue`) unless the schema type is STRING;
+  that parser tracks `[...]` nesting; `@SchemaProperty` maps `constValue` and `externalDocs`.
+  Covered by `SchemaGeneratorTest` and `AnnotationModelMappingsTest`; official TCK still 367/367.
+  The hand-rolled parser itself was then replaced by grimm's JSON reader (BUG-20261004-09).
+
+### BUG-20261004-07 — `@SchemaProperty` maps a few attributes only; `@Schema.examples` is not mapped
+
+- **id**: BUG-20261004-07
+- **date**: 2026-10-04
+- **symptom**: in `SchemaGenerator.applyAnnotationOverrides`, a `@SchemaProperty` maps only
+  `implementation`, `ref`, `type`, `title`, `description`, `format`, `example`, `comment`,
+  `extensions`, `hidden` (and, since BUG-20261004-06, `constValue` and `externalDocs`). Its
+  `minimum`/`maximum` and their exclusive forms, `multipleOf`, `minLength`/`maxLength`, `pattern`,
+  `minItems`/`maxItems`, `uniqueItems`, `minProperties`/`maxProperties`, `requiredProperties`,
+  `nullable`, `readOnly`, `writeOnly`, `deprecated`, `enumeration`, `defaultValue`, `examples`,
+  `not`/`oneOf`/`anyOf`/`allOf`, `additionalProperties`, the discriminator and the 2020-12
+  keywords (`if`/`then`/`else`, `dependentSchemas`, `contains`, `prefixItems`, …) are ignored.
+  `@Schema.examples()` (4.0, which deprecates `example`) is not mapped either.
+- **minimal repro** (from code review): `@Schema(properties = @SchemaProperty(name = "age",
+  minimum = "0"))` on a class with an `int age` field: the `age` schema has no `minimum`.
+- **hypothesis**: the `@SchemaProperty` mapping was written as a subset of the `@Schema` one; the
+  two annotation types share no interface, so the `@Schema` code cannot be reused as it stands.
+- **status**: FIXED — 2026-10-04, commit c75ff4e. `@Schema` and `@SchemaProperty` are read into
+  `SchemaAttributes` and applied by one `applyAttributes` method (no second copy); it also maps
+  `examples()`, composition, the discriminator and the 2020-12 keywords, for both annotations (the
+  `@Schema` branch did not map those either). A property declared by both the field's `@Schema` and
+  the class's `@Schema(properties = ...)`: the latter is applied last, attribute by attribute.
+  Covered by `SchemaPropertyMappingTest`; official TCK still 367/367.
+
+### BUG-20261004-08 — The `OASModelReader` model overrides the static file (spec order reversed)
+
+- **id**: BUG-20261004-08
+- **date**: 2026-10-04
+- **symptom**: the "Processing rules" of the MP OpenAPI 4.2 spec order the sources as
+  `OASModelReader` (the starting model), then the static file, "where conflicting elements from
+  the static file will override the values from the original model", then the annotations,
+  "further overriding any conflicting elements". `ModelMerger` merged static file, reader,
+  annotations, so on a conflict the reader won over the static file. The docs (concepts,
+  getting-started, internals), AGENTS.md, CLAUDE.md and ROADMAP.md stated the same reversed order.
+- **minimal repro**: an `OASModelReader` returning `info.title: Reader` and a static file with
+  `info.title: Static`; `/openapi` served `Reader` (spec: `Static`).
+- **hypothesis (confirmed)**: the order was taken from the reading order of the pipeline (static
+  file read first) rather than from the processing rules; the official TCK has no app that gives
+  the reader and the static file a conflicting element, so it did not catch it.
+- **status**: FIXED — 2026-10-04, commit 3224795. The merger merges reader, static file,
+  annotations; `ModelBuilder` invokes the reader before reading the static file; the two unit
+  tests that asserted the reverse priority are inverted; docs updated. Covered by
+  `ModelMergerTest`; official TCK still 367/367.
+
+### BUG-20261004-09 — Annotation JSON values (`parseValue`, `constValue`) read by a lossy hand-rolled parser
+
+- **id**: BUG-20261004-09
+- **date**: 2026-10-04
+- **symptom**: extension values with `parseValue = true` (and, since BUG-20261004-06,
+  `constValue`) went through a hand-rolled splitter: an escaped quote broke an object
+  (`{"a": "x\"y", "b": 1}`), `null` gave the string `"null"`, `1e3` stayed a string, a top-level
+  `"abc"` kept its quotes, a leading space made the whole value a raw string, and `1.0` was a
+  `Double` at the top level but a `Long` inside an array.
+- **minimal repro**: `@Extension(name = "x-e", value = "{\"a\": \"x\\\"y\", \"b\": 1}", parseValue = true)`
+  gives `{a="x\"y", "b": 1}` (one broken entry) instead of `{a=x"y, b=1}`.
+- **status**: FIXED — 2026-10-04, commit 85bc4f4. `AnnotationModelMappings.parseJsonValue`
+  delegates to `JsonDeserializer.parseRaw`, the reader of static files, so grimm has one JSON
+  reader; a value that is not JSON stays the string as written. A JSON `null` extension adds
+  nothing (the model keeps no null extension). Covered by `AnnotationModelMappingsTest`; official
+  TCK still 367/367.
+- **behaviour change**: lenient non-JSON values (`{a: 1}`, single quotes, `TRUE`, `1f`, `1d`, `1L`)
+  now stay raw strings, and an integral `1.0` inside an array is now a `Double` (it was a `Long`).
+  Recorded in the Antora What's new page and in Migration, "Upgrading from 0.3.0".
+
+### BUG-20261004-10 — `summary` next to a `$ref` is lost (MP OpenAPI model limitation)
+
+- **id**: BUG-20261004-10
+- **date**: 2026-10-04
+- **symptom**: OpenAPI 3.1 (§4.8.23) lets a Reference Object carry `summary` and `description`
+  next to `$ref`. A static file with `parameters: [{$ref: '#/components/parameters/P', summary: s}]`
+  serves the parameter without `summary`. The same holds for a request body, a response, a header,
+  a link and a security scheme. On a callback, `summary` and `description` are both lost: every key
+  other than `$ref` and `x-*` is read as a callback expression.
+- **minimal repro**: the static file above; or programmatically, there is no `setSummary` on
+  `Parameter`, `RequestBody`, `APIResponse`, `Header`, `Link`, `SecurityScheme` or `Callback` in
+  the MP OpenAPI 4.2-RC5 API (`javap`), and `Callback` is a map of expressions to path items.
+- **hypothesis (confirmed)**: an API limitation, not a grimm defect. `description` survives
+  wherever the object has its own `description` field. `Schema` keeps `summary` as an unknown
+  keyword. `PathItem` and `Example` have a `summary` field.
+- **status**: WON'T FIX in grimm — the model has nowhere to put the value. A side store outside
+  the API would be invisible to `OASFilter` and `OASModelReader` code, and would make Grimm's
+  model differ from the spec model. The fix belongs upstream: a `summary` (and, for `Callback`,
+  `description`) on the Reference-capable model interfaces. Documented in `concepts.adoc`.
+
+### BUG-20261004-11 — Every `@Schema` / `@SchemaProperty` writes `minItems`, `maxItems` and `maxProperties`
+
+- **id**: BUG-20261004-11
+- **date**: 2026-10-04
+- **symptom**: every annotated schema carried `minItems: 2147483647`, `maxItems: -2147483648` and
+  `maxProperties: 0`, and so did the document served at `/openapi`. A validator or client generator
+  read "at most zero properties" for every annotated object. An empty `@Schema()` also counted as
+  content in `JaxRsResourceScanner.hasAnyContent`.
+- **minimal repro**: `@Schema(description = "d") class C {}`, then `getMinItems()` on the generated
+  schema returns `2147483647`.
+- **hypothesis (confirmed)**: the guards in `SchemaGenerator.applyAttributes` and `hasAnyContent`
+  assumed the wrong annotation defaults. The real ones (MP OpenAPI 4.2-RC5 sources): `maxProperties`
+  0, `minItems` `Integer.MAX_VALUE`, `maxItems` `Integer.MIN_VALUE`. The shared `applyAttributes`
+  (BUG-20261004-07) spread the defect to every `@SchemaProperty`. Not visible to the TCK, which only
+  asserts values that are set.
+- **status**: FIXED — 2026-10-04, commit 91159d3. The guards compare with the real defaults; an
+  explicit 0 still maps. Covered by `SchemaPropertyMappingTest` (class, field and `@SchemaProperty`
+  without those attributes; explicit values); official TCK still 367/367.
+
+### BUG-20261004-12 — `examples()` of `@Schema` / `@SchemaProperty` is not parsed as JSON
+
+- **id**: BUG-20261004-12
+- **date**: 2026-10-04
+- **symptom**: `@Schema(type = INTEGER, examples = "1")` gave `examples: ["1"]` (a string on an integer
+  schema); an object example was an escaped JSON string.
+- **minimal repro**: `@SchemaProperty(name = "n", type = INTEGER, examples = {"1", "2"})`.
+- **hypothesis (confirmed)**: the 4.2 Javadoc of `examples()` says the value is a literal string when
+  the schema type is STRING and parsed as JSON otherwise, the same clause as `constValue`. The
+  mapping copied the raw strings. The deprecated `example()` has no such clause and stays raw.
+- **status**: FIXED — 2026-10-04, commit 91159d3. Each entry goes through `constValueOf`. Covered by
+  `SchemaPropertyMappingTest` (STRING literal, INTEGER, OBJECT); official TCK still 367/367.
+
+### BUG-20261004-13 — A `@Schema` that sets only some attributes is ignored on parameters, bodies, headers and content
+
+- **id**: BUG-20261004-13
+- **date**: 2026-10-04
+- **symptom**: `@QueryParam("n") @Schema(minimum = "0") int n`, or a request body `@Schema(examples = "x")`,
+  gave the inferred schema without the attribute. Same for `oneOf`/`anyOf`/`allOf`/`not`, `readOnly`,
+  `writeOnly`, `nullable`, `deprecated`, `pattern`, `maximum`, `multipleOf`, `uniqueItems`, `defaultValue`,
+  `constValue`, and others.
+- **minimal repro**: `void get(@QueryParam("n") @Schema(minimum = "0") int n)`; the parameter schema has no `minimum`.
+- **hypothesis (confirmed)**: `JaxRsResourceScanner.hasAnyContent` (five call sites: parameter, request body,
+  response header, content, header) tested a hand-picked subset of attributes and chose `generate(type)`
+  over `generate(type, annotation)` when none was set. Pre-existing.
+- **status**: FIXED — 2026-10-04, commit 5e1795c. `SchemaGenerator.hasContent` uses
+  `SchemaAttributes.hasContent()`, which compares every shared attribute with its real default (one list,
+  the one the mapping uses), plus implementation, ref, required and properties. An empty `@Schema()` is
+  unchanged. Covered by `JaxRsResourceScannerTest` (parameter and request body; minimum, examples, oneOf,
+  readOnly; empty schema) and `SchemaPropertyMappingTest`.
+
+### BUG-20261008-01 — grimm-processor does not compile as a module: grimm-core packages exported to grimm-cdi-vauban only (grimm#19)
+
+- **id**: BUG-20261008-01
+- **date**: 2026-10-08
+- **symptom**: compiled as a module (its `module-info.java` with the rest of its sources, not alone
+  at `prepare-package`), `grimm-processor` fails: `GrimmModelProcessor` uses
+  `io.vidocq.grimm.internal.OpenApiSerializers` and `io.vidocq.grimm.internal.schema.*`, which
+  grimm-core exports only to `io.vidocq.grimm.cdi.vauban` (qualified exports).
+- **minimal repro**: move `grimm-processor/src/main/module-info/module-info.java` to
+  `src/main/java/` and run `./mvnw clean verify -pl grimm-processor -am`.
+- **hypothesis (confirmed)**: the descriptor was compiled alone, late, so javac never checked the
+  processor's code against grimm-core's exports. The shipped jar is a named module that would fail
+  to resolve `OpenApiSerializers` at run time as soon as javac loads it from the module path.
+- **status**: FIXED — 2026-10-08, commit f6918c7. grimm-core exports `io.vidocq.grimm.internal`
+  and `io.vidocq.grimm.internal.schema` to `io.vidocq.grimm.processor` too (still qualified).
+  Covered by `GrimmCoreExportsTest` (grimm-processor). Commit 8081a87 then compiles the
+  descriptors in `src/main/java`, so the processor is built as a module; reactor tests unchanged
+  (282 / 11 / 14), official TCK 367/367.
+
+### BUG-20261010-01 — Grimm's beans do not load under Weld or Open Liberty (grimm#22)
+
+- **id**: BUG-20261010-01
+- **date**: 2026-10-10
+- **symptom**: Weld skips `GrimmModelCache`, `OpenApiResource` and `GrimmAutoDiscovery` with an INFO message,
+  `WELD-000119: ... Type io.vidocq.vauban.api.ProxyLink not found`; `OpenApiResource` is then unsatisfied
+  (`WELD-001334`).
+- **minimal repro**: `grimm-it-weld` (`WeldPortabilityTest`) on `main`.
+- **hypothesis (confirmed)**: the Vauban build weaves a `protected <init>(io.vidocq.vauban.api.ProxyLink)`
+  entry constructor into every normal-scoped bean, and `vauban-api` was `provided` (`requires static`). Same
+  cause as in Knock, Heisenberg, Cervantes, Humboldt and Dirac.
+- **status**: FIXED — 2026-10-10. `vauban-api` is a runtime dependency of `grimm-cdi-vauban` (plain
+  `requires`), its Jakarta CDI dependencies excluded.
+
+### BUG-20261010-02 — Two containers in one JVM document each other's resources (grimm#22)
+
+- **id**: BUG-20261010-02
+- **date**: 2026-10-10
+- **symptom**: two containers sharing Grimm's classes (two applications on one class loader, or two Weld
+  containers in one JVM) that start together: the first one's `/openapi` lists the second one's resources
+  (`{"paths":{"/second":...}}` in the first container).
+- **minimal repro**: `grimm-it-weld`, `TwoContainersOneJvmTest`: the first container starts the second
+  from an `@Initialized(ApplicationScoped.class)` observer, before building its document.
+- **hypothesis (confirmed)**: `GrimmExtension` recorded the class names in a `static` set, cleared at each
+  container's `@Discovery` phase, and `GrimmConfigProducer` built `ScannedTypes` from whatever it held.
+- **status**: FIXED — 2026-10-10. The names belong to the extension instance; `@Synthesis` registers a
+  synthetic `ScannedTypes` bean with them as a parameter, resolved by `ScannedTypesCreator`, which also adds
+  the resources `grimm-processor` described (a `@Path` class that is not a bean, in `annotated` mode).
+  `GrimmModelCache` takes `Instance<ScannedTypes>`. Covered by `TwoContainersOneJvmTest`,
+  `ScannedTypesCreatorTest`, `GrimmExtensionApplicationScanTest`; official TCK 367/367.
+
+### BUG-20261028-01 — Every `@Components.pathItems` operation gets a content-less request body
+
+- **id**: BUG-20261028-01
+- **date**: 2026-10-28
+- **symptom**: an operation of a reusable path item (`@OpenAPIDefinition(components = @Components(pathItems =
+  @PathItem(operations = @PathItemOperation(method = "delete"))))`) is documented with
+  `requestBody: {required: true}` although it declares no request body; the Request Body Object has no
+  `content`, which OpenAPI 3.1 requires.
+- **minimal repro**: `AnnotationScannerPathItemsTest.operationWithoutRequestBodyDeclaresNone`: the DELETE and
+  PATCH operations of `petItem` have a request body.
+- **hypothesis (confirmed)**: `@PathItemOperation.requestBody` defaults to `@RequestBody()`, whose `required`
+  defaults to `true` (MP OpenAPI 4.2); `AnnotationScanner` created a request body as soon as `required()` was
+  true, so for every operation.
+- **status**: FIXED — 2026-10-28. A request body is created only when the annotation sets a `ref`, a
+  `description` or some `content`; `addComponentPathItems` is split into smaller helpers (path item,
+  operation, tags, security, request body, responses, callback). Regression test:
+  `AnnotationScannerPathItemsTest.operationWithoutRequestBodyDeclaresNone`.
+
+### BUG-20261028-02 — grimm-processor companions document other path templates than the runtime scan
+
+- **id**: BUG-20261028-02
+- **date**: 2026-10-28
+- **symptom**: for a resource whose method `@Path` ends with a slash, or is `"/"`, the `$$GrimmModel`
+  companion documents another template than the runtime scan (the behavioural oracle): class
+  `@Path("/a/")` with `@GET @Path("b/")` and `@POST @Path("/")` gives `/a/b` and `/a/` in the companion,
+  `/a/b/` and `/a` in the scan. The served `/openapi` document depends on whether the processor ran.
+- **minimal repro**: `GrimmModelProcessorOracleTest.methodPathSlashes_matchScan`.
+- **hypothesis (confirmed)**: the processor normalised the method path like the class path (trailing slash
+  stripped, `"/"` kept), while `JaxRsResourceScanner.methodSubPath` keeps a trailing slash and drops `"/"`.
+- **status**: FIXED — 2026-10-28. `GrimmModelProcessor.methodSubPath` applies the scanner's rule; the
+  per-method part of `generate` moved to `addOperation`. Regression test:
+  `GrimmModelProcessorOracleTest.methodPathSlashes_matchScan`.
+
+### BUG-20261028-20 — OAuth flows of a static-file security scheme are dropped
+
+- **id**: BUG-20261028-20
+- **date**: 2026-10-28
+- **symptom**: a `securitySchemes` entry of `META-INF/openapi.yaml` / `.json` with `type: oauth2` and
+  `flows` loses its flows: the model (`SecurityScheme#getFlows()`) is `null`, so `/openapi` serves the
+  scheme without its `implicit` / `password` / `clientCredentials` / `authorizationCode` flows, scopes or URLs.
+- **minimal repro**: `StaticOAuthFlowsTest` — deserialize a YAML document whose `oauth2` scheme declares
+  the four flows, then read `getFlows()`.
+- **hypothesis (confirmed)**: `OpenApiModelMapper.toSecurityScheme` had no `flows` case; unknown keys that do
+  not start with `x-` are ignored.
+- **status**: FIXED — 2026-10-28. `toSecurityScheme` maps `flows` through `toOAuthFlows` / `toOAuthFlow`
+  (URLs, `scopes`, `x-` extensions on both levels). Regression test: `StaticOAuthFlowsTest`.
+
+### BUG-20261028-21 — Static YAML files with common layouts are misread or silently truncated
+
+- **id**: BUG-20261028-21
+- **date**: 2026-10-28
+- **symptom**: `META-INF/openapi.yaml` written in usual YAML styles loses content without an error:
+  4-space indentation gives `info: null`; a sequence at the indentation of its key (`servers:` then
+  `- url: ...`) is dropped; a trailing comment becomes part of the value (`3.1.0 # version`); flow
+  collections (`tags: [a, b]`, `required: [id]`) stay strings; a `---` marker, multi-line plain scalars,
+  `|-` / `>-` / `|+` chomping and `\uXXXX` escapes are not read; lines after a stray indentation are ignored.
+- **minimal repro**: `YamlDeserializerTest` — e.g. `openapi: 3.1.0\ninfo:\n    title: t\n` gives no title.
+- **hypothesis (confirmed)**: `YamlDeserializer.NodeParser` assumed every child two columns deeper than
+  its parent, only accepted sequences deeper than their key, and had no comment, flow, chomping or
+  document-marker handling; the parse stopped at the first unexpected indentation.
+- **status**: FIXED — 2026-10-28. The parser reads the child indentation from the document, accepts a
+  sequence at its key's column, strips comments outside quotes, parses flow collections (also over several
+  lines), joins multi-line scalars, applies block chomping, reads `---` / `...`, and rejects a stray
+  indentation with an `IllegalArgumentException`. The three static files of the official TCK and Grimm's
+  own test files parse to the same maps as before. Regression test: `YamlDeserializerTest`.
+
+### BUG-20261028-22 — A JSON integer beyond a `long` fails the whole static file
+
+- **id**: BUG-20261028-22
+- **date**: 2026-10-28
+- **symptom**: `META-INF/openapi.json` (or a JSON schema from `mp.openapi.schema.*`) with an integer
+  outside the `long` range, e.g. `"maximum": 99999999999999999999`, is rejected with
+  `NumberFormatException: For input string`; the YAML reader accepts the same value.
+- **minimal repro**: `JsonDeserializerTest#integerBeyondALongIsReadAsABigInteger`.
+- **hypothesis (confirmed)**: `JsonDeserializer.Parser.parseNumber` called `Long.parseLong` on every
+  integer token, while RFC 8259 §6 sets no range on numbers.
+- **status**: FIXED — 2026-10-28. An integer beyond a `long` is read as a `BigInteger` (as the YAML
+  reader does), which the schema mapper turns into a `BigDecimal`. Regression test: `JsonDeserializerTest`.
+
+### BUG-20261028-23 — Control characters are written raw in the JSON and YAML documents
+
+- **id**: BUG-20261028-23
+- **date**: 2026-10-28
+- **symptom**: a string of the model holding a C0 control character other than `\n`, `\r`, `\t` (for
+  example `\b`, `\f`, `\0`, BEL from a description) is written as is inside the quoted string of
+  `/openapi`: the JSON output is not valid RFC 8259 JSON and the YAML output is not valid YAML 1.2.
+- **minimal repro**: `SerializationRoundTripTest#controlCharactersAreEscaped`.
+- **hypothesis (confirmed)**: `JsonSerializer.escapeJson` and its copy `YamlSerializer.escapeString` only
+  escaped backslash, quote, `\n`, `\r` and `\t`.
+- **status**: FIXED — 2026-10-28. Other characters below U+0020 are written as `\uXXXX`; the YAML serializer
+  reuses the JSON escape (valid in a YAML double-quoted scalar) instead of a copy. Regression test:
+  `SerializationRoundTripTest`.
+
+### BUG-20261028-24 — A long digit run in a static YAML file takes quadratic time to read
+
+- **id**: BUG-20261028-24
+- **date**: 2026-10-28
+- **symptom**: a plain scalar made of a long run of digits followed by a non-numeric character (for
+  example 50,000 digits then `x`) in `META-INF/openapi.yaml` takes seconds to read (SonarQube java:S5852).
+- **minimal repro**: `YamlDeserializerTest#longDigitRunThatIsNotANumberIsRejectedWithoutBacktracking`.
+- **hypothesis (confirmed)**: the float pattern `\d+\.?\d*` lets the two digit runs share the digits when
+  the dot is absent, so a failed match retries every split point (quadratic backtracking).
+- **status**: FIXED — 2026-10-28. The pattern is `\d+(?:\.\d*)?`, which accepts the same language (the
+  YAML 1.2 core-schema float) with a single way to match the digits. Regression test: `YamlDeserializerTest`.
+
+## BUG-20261102-01 — every request to /openapi serializes the whole model by reflection
+
+- **Date**: 2026-11-02
+- **Symptom**: the reflection audit of 2026-11-02 traced about 1,900 `Method.invoke` (and 210 `getMethods`) per `GET /openapi`: `OpenApiResource.render` serialized the document again on every request, and the serializer walks the model's getters by reflection.
+- **Repro**: `OpenApiResourceRenderOnceTest.theSameDocumentIsSerializedOncePerFormat`: two renders gave two strings.
+- **Cause**: nothing kept the rendered text, although the document only changes when it is built again.
+- **Status**: FIXED (branch `fix/openapi-render-once`) — the text is kept per format with the document it was rendered from; a new document instance (a reload in dev mode, the model built after an early request) is rendered again. The serializer itself still uses reflection once per document; replacing it with a generated or hand-written writer is part of wave 4 (build-time model). MP OpenAPI TCK unchanged.
+
+## BUG-20261102-02 — a resource with an `@Context` parameter is left to the run-time scan
+
+- **Date**: 2026-11-02
+- **Symptom**: `GrimmModelProcessor` skipped every class with an `@Context` parameter ("not a scalar path/query/header parameter"), so the class was described by the reflective scan at start-up, although the scan leaves such a parameter out of the document.
+- **Repro**: `GrimmModelProcessorOracleTest.contextParameters_matchScan`: no `$$GrimmModel` companion for a resource taking `@Context UriInfo`.
+- **Cause**: the M1 subset accepted path, query and header parameters only.
+- **Status**: FIXED (branch `perf/model-at-build`) — `@Context` parameters are left out, as the scan does. Measured on 15 resource classes of the sample applications (vidocq-demo, vidocq-tools, experiments, rehearsals), the build-time model still covers none of them: 13 return `Response`, 8 take a request body, most use application classes. Those shapes stay on the scan for now (`Response` is handled since BUG-20261110-01): the scan described `Response` by its getters as a component (`#/components/schemas/Response`, plus `URI`, `Locale`, `MediaType`…), and a fragment carrying such components would collide by simple name with application classes (fragments merge components first-wins); `java.time` and `UUID` schemas can be replaced by `mp.openapi.schema.*` at run time, which a build-time fragment cannot know. Application POJOs need a schema generator working on `TypeMirror`. The reflective scan is unchanged.
+
+## BUG-20261110-01 — a JAX-RS `Response` is described through its getters
+
+- **Date**: 2026-11-10
+- **Symptom**: the scan generated a schema for `jakarta.ws.rs.core.Response` from its getters: a useless `Response` component and `StatusType`, `Family`, `MediaType`, `NewCookie`, `EntityTag`, `Link`, `URI`, `UriBuilder`, `Locale`… components, colliding by simple name with application classes (fragments merge components first-wins). It also kept every resource returning `Response` on the reflective path (BUG-20261102-02).
+- **Repro**: `ResponseSchemaTest` (grimm-core), `GrimmModelProcessorOracleTest.responseReturnType_isGeneratedAsOpaqueObject_withoutComponents`.
+- **Cause**: `SchemaGenerator` treated `Response` as any POJO.
+- **Status**: FIXED (vidocq-workspace#40, item 4, approved 2026-11-10) — `Response` and its subclasses are an opaque `type: object` with no component, in the scan and in the processor, which now generates the classes that return one. An `mp.openapi.schema.jakarta.ws.rs.core.Response` override still wins. Application POJO schemas at build stay a separate topic (BUG-20261102-02).
+
+## BUG-20261029-01 — the configured model reader and filter are looked up in Grimm's loader only
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (branch fix/application-class-loader)
+- **Symptom**: `mp.openapi.model.reader` and `mp.openapi.filter` name classes of the application (MicroProfile
+  OpenAPI §5.1, §5.2). `ModelReaderInvoker` and `FilterInvoker` loaded them with a single-argument `Class.forName`,
+  that is through grimm-core's own loader. When that loader does not see the application's classes — Grimm provided
+  by an application server, or in a parent module layer — the document build fails with
+  `IllegalArgumentException: Model reader class not found` / `Filter class not found`.
+- **Minimal repro**: `ApplicationClassesTest` (grimm-core): a reader and a filter defined by an application loader
+  set as thread context class loader, invisible to Grimm's loader.
+- **Root cause**: the single-argument `Class.forName`, found during the cross-repository pass on generated code and
+  reflection. `ConfigApplier` already asked the thread context class loader first, the invokers did not.
+- **Fix**: `ApplicationClasses.load` asks the thread context class loader, then Grimm's own; the two invokers and
+  `ConfigApplier` use it.
+- **Regression test**: `ApplicationClassesTest` (red before the fix).
+
+## BUG-20261030-01 — the processor generates nothing under Maven: "No OASFactoryResolver implementation found!"
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/processor-oas-factory-resolver)
+- **Symptom**: with `grimm-processor` on an application's annotation processor path, no `$$GrimmModel` is generated.
+  Each `@Path` class gets a compiler warning, `Grimm fragment generation failed, runtime scan will handle it:
+  java.lang.IllegalStateException: No OASFactoryResolver implementation found!`, and the runtime scans every resource
+  by reflection. Found while wiring the processor into a Vidocq codegen bundle (vidocq-workspace#38).
+- **Minimal repro**: `GrimmModelProcessorOracleTest.aContextLoaderThatCannotSeeGrimmCoreStillGetsTheFragment`: the
+  same compilation as the other oracle tests, with the platform class loader as thread context class loader and the
+  API's cached resolver cleared.
+- **Root cause**: the processor builds the fragment with grimm-core's model objects, created through
+  `OASFactory`, whose `OASFactoryResolver` is looked up with `ServiceLoader` through the thread context class loader.
+  javac leaves its own loader there, which does not see the processor path. The oracle tests passed because they
+  compile in the test JVM, whose context loader sees grimm-core, and because the API caches the resolver it found.
+- **Fix**: `process` runs each round with the processor's class loader as thread context class loader, and restores
+  the previous one.
+- **Regression test**: the test above (red before the fix).
+
+## BUG-20261030-02 — `@OpenAPIDefinition` is ignored: the document keeps "Generated API"
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/openapi-definition-and-order)
+- **Symptom**: an application with `@OpenAPIDefinition(info = @Info(title = "Library API", …))` on its
+  `Application` subclass, or on a plain class, serves `info: title: "Generated API"`. Reported by the vidocq-tutorial
+  session (batch 5, item 1).
+- **Minimal repro**: `ModelBuilderTest.theDefinitionOfAClassWithACompanionIsRead`; `ScannedTypesCreatorTest
+  .theClassesListedForTheirDefinitionAreScanned`; `GrimmModelProcessorOracleTest.theClassesCarryingTheDefinitionAreListed`.
+- **Root cause**: two paths lose it. In `annotated` discovery mode (Vidocq's), an `Application` subclass or a plain
+  class without a bean-defining annotation is no bean: `GrimmExtension` never records it, and only the resources of
+  the `$$GrimmModel` services reach the scan. And a class that has a `$$GrimmModel` is not scanned at all: its fragment
+  carries paths only, so an `@OpenAPIDefinition` on a resource was lost too.
+- **Fix**: grimm-processor lists the classes carrying `@OpenAPIDefinition` in `META-INF/grimm/openapi-definitions`
+  (`OpenApiContribution.DEFINITIONS`), and `ScannedTypesCreator` adds them to the scanned types. `ModelBuilder` reads
+  the definition of a class that has a fragment (`AnnotationScanner.scanDefinitions`).
+- **Regression tests**: the three above (red before the fix).
+
+## BUG-20261030-03 — the application's document lists the runtime's health and metrics endpoints
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/openapi-definition-and-order)
+- **Symptom**: on Vidocq, `/openapi` lists `/health`, `/health/live|ready|started`, `/metrics`, `/metrics/{scope}` and
+  `/metrics/{scope}/{name}` under a `default` tag, beside the application's own paths. Reported by the vidocq-tutorial
+  session (batch 5, item 3).
+- **Root cause**: `GrimmExtension` records every bean class but Grimm's own, so the JAX-RS resources of Knock and
+  Dirac, beans of the runtime, are scanned as the application's.
+- **Fix**: `GrimmExtension.documented` leaves out the packages of the bricks whose endpoints the runtime serves
+  (`io.vidocq.knock.`, `io.vidocq.dirac.`, … and `io.vidocq.runtime.extensions.`), as the other MicroProfile runtimes
+  do. The runtime's examples (`io.vidocq.runtime.examples.`) are applications and stay in.
+- **Regression test**: `ScannedTypesCreatorTest.theEndpointsOfTheBricksStayOutOfTheDocument`.
+
+## BUG-20261030-04 — the YAML document writes `openapi:` after `info` and `paths`
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/openapi-definition-and-order)
+- **Symptom**: `openapi: "3.1.0"` appears at line 277 of the tutorial's document, after `info` and `paths`. Valid, but
+  readers and tools expect it first. Reported by the vidocq-tutorial session (batch 5, item 4).
+- **Root cause**: `OpenApiValueMapper` writes a model's properties in the order of `Class.getMethods()`, which is
+  unspecified.
+- **Fix**: the root fields are written in the specification's order (`openapi`, `info`, `jsonSchemaDialect`,
+  `servers`, `paths`, `webhooks`, `components`, `security`, `tags`, `externalDocs`), then the others.
+- **Regression test**: `SerializationTest.theDocumentStartsWithItsVersionThenInfo` (JSON and YAML).
+
+## BUG-20261030-05 — two `ScannedTypes` beans (build-time and start-up runs of `GrimmExtension`) empty or break the document
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/merge-scanned-types)
+- **Symptom**: with `grimm-cdi-vauban` on the processor path (the OpenAPI codegen bundle of Vidocq), Vauban runs
+  `GrimmExtension` when the application compiles and freezes its `ScannedTypes` bean; the extension runs again when the
+  application starts and registers a second one, with other class names. `vidocq-runtime-it-grimm-openapi` failed with
+  _Ambiguous dependency: parameter 1 of GrimmModelCache() … ScannedTypes_ (a Vauban bug, VAU-DISC-003); once that is
+  fixed, `Instance<ScannedTypes>.isResolvable()` is false and the cache would have scanned nothing.
+- **Root cause**: `GrimmModelCache` read a single `ScannedTypes`.
+- **Fix**: `ScannedTypes.merge` reads the classes of every `ScannedTypes` bean, once each; the CDI constructor uses it.
+- **Regression test**: `GrimmModelCacheTest.theScannedTypesOfEveryRunAreMerged`; in Vidocq,
+  `vidocq-runtime-it-grimm-openapi` 5/5 and the MicroProfile OpenAPI TCK 364/364 with `GrimmExtension` run at build time.
+## BUG-20261030-06 — grimm-processor says, one INFO line per class at every build, that the run-time scan describes it
+- **Date**: 2026-10-30 — **Status**: FIXED (fix/build-noise-26)
+- **Symptom**: `[INFO] … [grimm-processor] skipping com.example.BookResource$$GrimmModel — MicroProfile OpenAPI
+  annotation …Tag is outside the M1 subset (runtime annotation scan will handle this class)`, once per resource class,
+  at every build (vidocq BUG-20261030-26).
+- **Root cause**: the fallback to the run-time annotation scan, which works, was reported per class.
+- **Fix**: one note per build, with the count; `-Agrimm.processor.verbose=true` lists the classes and their reason.
+  Supporting `@Tag` at build time stays a separate item: the tags of the class reach each operation and the
+  document's `tags`, which the run-time scan already does.
+- **Regression test**: `SkippedClassesSummaryTest`.

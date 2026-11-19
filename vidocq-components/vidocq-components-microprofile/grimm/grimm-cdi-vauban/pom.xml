@@ -1,0 +1,183 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.vidocq.grimm</groupId>
+    <artifactId>grimm-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>grimm-cdi-vauban</artifactId>
+  <name>grimm-cdi-vauban</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.vidocq.grimm</groupId>
+      <artifactId>grimm-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.eclipse.microprofile.openapi</groupId>
+      <artifactId>microprofile-openapi-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.vidocq.ravel</groupId>
+      <artifactId>ravel-mp-config-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- OpenApiResource is a JAX-RS resource and its API returns a Response, so the module requires
+         jakarta.ws.rs transitively. A Jakarta platform API: `provided`, the container brings it (the
+         Vidocq OpenAPI extension, or an application server), so a WAR never ships a second copy
+         (vidocq-workspace#17). -->
+    <dependency>
+      <groupId>jakarta.ws.rs</groupId>
+      <artifactId>jakarta.ws.rs-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.enterprise</groupId>
+      <artifactId>jakarta.enterprise.cdi-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.annotation</groupId>
+      <artifactId>jakarta.annotation-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!--
+      Runtime dependency under any CDI container, not only Vauban: the build weaves a
+      `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+      (GrimmModelCache, OpenApiResource, GrimmAutoDiscovery). Without this jar Weld cannot load their
+      classes and skips the beans silently (WELD-000119). API types only, no code runs outside
+      Vauban (vidocq-workspace#15, grimm-it-weld). Its Jakarta CDI dependencies are excluded: the
+      container brings the CDI API.
+    -->
+    <dependency>
+      <groupId>io.vidocq.vauban</groupId>
+      <artifactId>vauban-api</artifactId>
+      <version>${vauban.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>jakarta.enterprise</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>jakarta.inject</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Compile-only: the generated OpenApiResource$$CassiniAdapter implements a cassini-api type. Only Cassini
+         loads it; on another JAX-RS runtime it stays unused, and the module does not need cassini-api. -->
+    <dependency>
+      <groupId>io.vidocq.cassini</groupId>
+      <artifactId>cassini-api</artifactId>
+      <version>${cassini.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.vidocq.cassini</groupId>
+      <artifactId>cassini-chappe</artifactId>
+      <version>${cassini.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vidocq.chappe</groupId>
+      <artifactId>chappe-api</artifactId>
+      <version>${chappe.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vidocq.chappe</groupId>
+      <artifactId>chappe-core</artifactId>
+      <version>${chappe.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vidocq.vauban</groupId>
+      <artifactId>vauban-core</artifactId>
+      <version>${vauban.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans, so the jar ships
+        as a functional Vauban bean archive (META-INF/vauban-beans.list + _Factory / _ClientProxy /
+        _VaubanComponents). Combined with META-INF/services BCE registration and META-INF/beans.xml,
+        this lets any Vidocq runtime discover grimm's beans and run GrimmExtension (which synthesises
+        GrimmModelCache) without scanning the dependency from the consumer. Build-time only; the
+        output is inert for a standard CDI container (Weld).
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <!-- Vauban APT on MAIN sources only: produces the bean infrastructure shipped in the jar. -->
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <annotationProcessorPaths>
+                <path>
+                  <groupId>io.vidocq.vauban</groupId>
+                  <artifactId>vauban-processor</artifactId>
+                  <version>${vauban.version}</version>
+                </path>
+                <!-- The Cassini adapter of OpenApiResource, generated with the module rather than at run
+                     time when a Cassini stack is built (vidocq-workspace#38). Inert on other JAX-RS runtimes. -->
+                <path>
+                  <groupId>io.vidocq.cassini</groupId>
+                  <artifactId>cassini-processor</artifactId>
+                  <version>${cassini.version}</version>
+                </path>
+              </annotationProcessorPaths>
+            </configuration>
+          </execution>
+          <!-- No annotation processing on tests: grimm's CDI test fixtures (nested producers) are
+               not vauban-APT-shaped and are exercised via vauban's embedded runtime discovery. -->
+          <execution>
+            <id>default-testCompile</id>
+            <configuration>
+              <!-- OpenApiHttpChappeTest calls the served document with the JDK HTTP client, a module the main code does not read. -->
+              <compilerArgs combine.children="append">
+                <arg>--add-modules</arg>
+                <arg>java.net.http</arg>
+                <arg>--add-reads</arg>
+                <arg>io.vidocq.grimm.cdi.vauban=java.net.http</arg>
+              </compilerArgs>
+              <proc>none</proc>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Tests run on the module path: they boot a VaubanContainer and a Cassini/Chappe HTTP stack (test-scope modules) directly, over test beans that have no generated provider. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+          <argLine>
+            @{argLine}
+            --add-modules java.net.http
+            --add-reads io.vidocq.grimm.cdi.vauban=java.net.http,io.vidocq.vauban.core,io.vidocq.cassini.api,io.vidocq.cassini.chappe,io.vidocq.chappe.api
+            --add-opens io.vidocq.grimm.cdi.vauban/io.vidocq.grimm.cdi=io.vidocq.vauban.core
+            --add-opens io.vidocq.grimm.cdi.vauban/test.grimm.app=io.vidocq.vauban.core
+          </argLine>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+

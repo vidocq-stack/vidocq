@@ -1,0 +1,17 @@
+# Maven
+/target/
+**/target/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Bench outputs
+/BENCH.md
+

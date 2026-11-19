@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<arquillian xmlns="http://jboss.org/schema/arquillian"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://jboss.org/schema/arquillian http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
+
+    <container qualifier="grimm" default="true">
+        <configuration>
+            <property name="host">127.0.0.1</property>
+            <property name="port">0</property>
+            <property name="waitForReadiness">true</property>
+            <property name="readinessTimeoutMillis">10000</property>
+            <property name="readinessPath">/openapi</property>
+            <property name="systemProperties"></property>
+        </configuration>
+    </container>
+</arquillian>
+
+
+

@@ -1,0 +1,281 @@
+= Reference
+:description: Maven artefacts, exported Java modules, supported annotations, MicroProfile Config keys.
+
+[.lead]
+This page consolidates Grimm's public surface: artefacts to declare, exported Java modules, OpenAPI 3.1 annotations the scanner understands, and `mp.openapi.*` keys honoured by `ConfigApplier`.
+
+== Maven artefacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.grimm`
+| `grimm-core`
+| Annotation scanner, JSON/YAML serializer, internal model, merger, `OASFactoryResolver`.
+
+| `io.vidocq.grimm`
+| `grimm-processor`
+| APT processor generating the `$$GrimmModel` compile-time companions consumed through `io.vidocq.grimm.spi.gen`. [[processor-verbose]]A class it cannot describe at build time is described by the annotation scan when the application starts; the build says how many in one note, and `-Agrimm.processor.verbose=true` lists them with their reason.
+
+| `io.vidocq.grimm`
+| `grimm-cdi-vauban`
+| Vauban BCE, `GrimmModelCache`, `/openapi` JAX-RS resource, config producer.
+
+| `io.vidocq.grimm`
+| `grimm-bench`
+| JMH benchmarks. Not for production.
+
+| `io.vidocq.grimm`
+| `grimm-examples`
+| Standalone or integrated usage examples.
+
+| `io.vidocq.grimm`
+| `grimm-tck`
+| Official MP OpenAPI 4.2 TCK runner — out of reactor (Model 4.0.0). Do not declare as an application dependency.
+|===
+
+Every artefact is at `{project-version}`.
+
+[#java-modules]
+== Java modules
+
+Every Grimm jar ships its compiled `module-info.class`, so Grimm is made of the three named modules below, never of automatic modules. Up to {release-version} the descriptors were not compiled into the jars: Grimm ran as automatic modules (`grimm.core`, `grimm.processor`, `grimm.cdi.vauban`), and in a modular application a build tool could take `grimm-cdi-vauban` for a class-path jar and split its package (grimm#15). An application module that read Grimm by its automatic name moves to `requires io.vidocq.grimm.cdi.vauban;` — see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `io.vidocq.grimm.core`
+| Exports `io.vidocq.grimm.spi.gen` (compile-time contribution SPI) and `io.vidocq.grimm.internal.reader` (static-document readers) unqualified; exports `io.vidocq.grimm.internal.config` and `internal.merger` only to `io.vidocq.grimm.cdi.vauban`, and `io.vidocq.grimm.internal` and `internal.schema` only to `io.vidocq.grimm.cdi.vauban` and `io.vidocq.grimm.processor`. `internal.factory`, `internal.invoker`, `internal.model`, `internal.scanner`, `internal.serialization` are not exported at all.
+
+| `io.vidocq.grimm.processor`
+| No exports — the APT processor is consumed exclusively through the `javax.annotation.processing.Processor` service it `provides`. It resolves on the module path, as a named module (grimm#19).
+
+| `io.vidocq.grimm.cdi.vauban`
+| `io.vidocq.grimm.cdi` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`.`requires transitive` the MicroProfile OpenAPI and JAX-RS APIs that its own API exposes (`OpenAPI`, `Response`), and `provides` its Vauban-generated `_VaubanComponents`, so the container builds Grimm's beans with no `opens`.
+|===
+
+Apart from `io.vidocq.grimm.internal.reader`, the `io.vidocq.grimm.internal.*` packages are reserved for Grimm's own modules. Any application class depending on them signals a regression to fix.
+
+[#supported-annotations]
+== Supported MicroProfile OpenAPI annotations
+
+[cols="2,3,1"]
+|===
+| Annotation | Effect | Status
+
+| `@OpenAPIDefinition`
+| Root metadata (`info`, `tags`, `servers`, `security`, `externalDocs`).
+| ✅
+
+| `@Operation`
+| Describes a JAX-RS method: summary, description, `operationId`, `deprecated`.
+| ✅
+
+| `@Parameter`
+| Describes a parameter (`path`, `query`, `header`, `cookie`).
+| ✅
+
+| `@RequestBody`
+| Describes the request body: content, schema, examples.
+| ✅
+
+| `@APIResponse` / `@APIResponses`
+| Describes possible responses, code by code, with headers and links.
+| ✅
+
+| `@Schema`
+| Describes a type: title, description, constraints, `oneOf`, `discriminator`.
+| ✅
+
+| `@SecurityScheme` / `@SecurityRequirement` / `@SecuritySchemes`
+| Security schemes (HTTP, API Key, OAuth2, OpenID Connect) and requirements.
+| ✅
+
+| `@Server` / `@Servers`
+| Target URL(s) inscribed on the document, operation, or path.
+| ✅
+
+| `@Tag` / `@Tags`
+| Logical grouping of operations.
+| ✅
+
+| `@Callback` / `@Callbacks`
+| Server-described webhooks.
+| ✅
+
+| `@Extension` / `@Extensions`
+| Free-form `x-*` extensions.
+| ✅
+
+| `@ExternalDocumentation`
+| Link to external documentation. On a resource method, it becomes the operation's `externalDocs` (MP OpenAPI 4.2).
+| ✅
+
+| `@Header`
+| Describes a response or encoding header, including its `example` and `examples` (MP OpenAPI 4.2).
+| ✅
+
+| `@SchemaProperty`
+| Describes one property inside `@Schema(properties = ...)`, with every attribute it shares with `@Schema` — see xref:#annotation-values[How annotation values are mapped].
+| ✅
+
+| `@Components`
+| Explicit reuse catalogue.
+| ✅
+
+| `@Schema(hidden = true)` / `@Operation(hidden = true)`
+| Hides a type, property, or operation from the document — MP OpenAPI has no standalone `@Hidden` annotation; hiding is expressed through the `hidden` attribute.
+| ✅
+|===
+
+JAX-RS annotations consumed by the scanner: `@Path`, `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS`, `@Produces`, `@Consumes`, `@PathParam`, `@QueryParam`, `@HeaderParam`, `@CookieParam`, `@FormParam`, `@MatrixParam`, `@DefaultValue`, `@ApplicationPath`.
+
+[#annotation-values]
+== How annotation values are mapped
+
+These rules follow the MicroProfile OpenAPI 4.2 Javadoc of each attribute.
+
+* **`@Schema` and `@SchemaProperty` map the same attributes.** Every attribute the two annotations share is applied by one mapping: bounds and their exclusive forms, `multipleOf`, lengths, `pattern`, item and property counts, `requiredProperties`, `nullable`, `readOnly`, `writeOnly`, `deprecated`, `enumeration`, `defaultValue`, `constValue`, `examples`, `externalDocs` (with its extensions), composition (`allOf`, `anyOf`, `oneOf`, `not`), the discriminator, and the JSON Schema 2020-12 keywords (`if`/`then`/`else`, `contains`, `prefixItems`, `patternProperties`, `propertyNames`, `dependentSchemas`, `contentSchema`, …). When a field's `@Schema` and the class's `@Schema(properties = @SchemaProperty(...))` both describe a property, the `@SchemaProperty` is applied last, attribute by attribute.
+* **An attribute left at its default writes nothing.** A schema no longer carries `minItems: 2147483647`, `maxItems: -2147483648` or `maxProperties: 0` because some other attribute was set; an explicit value, `0` included, is written.
+* **A partial `@Schema` counts.** On a parameter, a request body, a header or a content entry, a `@Schema` that sets any attribute (only `minimum`, only `examples`, only `oneOf`, …) is applied on top of the inferred schema. An empty `@Schema()` still gives the inferred schema.
+* **`constValue` and `examples` are JSON unless the type is `STRING`.** With `type = STRING` the value is the literal string; with any other type it is parsed as JSON, so `@Schema(type = INTEGER, examples = "1")` gives the number `1` and an object example is an object. A value that is not valid JSON stays the string as written. The deprecated `example` attribute is always copied as written.
+* **`@Extension(parseValue = true)` uses a strict JSON reader** — the reader of static files. `null`, `1e3`, escaped quotes and nested arrays come out as JSON says. Lenient forms that are not JSON (`{a: 1}`, single quotes, `TRUE`, `1L`) stay strings, and a JSON `null` adds no extension.
+* **`@Digits` gives `multipleOf` or `pattern`** (MicroProfile OpenAPI 4.2), when `mp.openapi.scan.beanvalidation` is not `false`: `multipleOf` of `10^-fraction` on a `number` schema, a `pattern` such as `^-?\d{1,5}(\.\d{1,2})?$` on a `string` schema, nothing on an `integer` schema. A value set explicitly on the schema is never overridden. Decimal values are written as plain decimals in JSON and YAML (`0.0000000001`, not `1E-10`), so a YAML 1.1 parser still reads them as numbers.
+* **A `@DiscriminatorMapping` or `@PatternProperty` with no `schema`** (left at `Void.class`) is skipped instead of producing an empty entry.
+
+[#static-documents]
+== Static documents and schema overrides
+
+A static file (`META-INF/openapi.yaml`, `.yml`, `.json`), the value of an `mp.openapi.schema.<FQCN>` key and the `$$GrimmModel` fragments of the annotation processor are all read by the same mapper.
+
+* **Standard keywords get their model type.** `minimum`, `maxLength`, `not`, `discriminator`, `xml`, `externalDocs`, `allOf`, … become typed `Schema` properties, nested schemas included, and `true`/`false` subschemas become boolean schemas. They are no longer stored as extensions, so an `OASFilter` that clears a schema's extensions keeps them. A value of another JSON type is kept as written, for an alternative dialect.
+* **Unknown keywords are extensions** (MicroProfile OpenAPI 4.2). A `Schema` keeps any property it does not know, `x-` or not, and writes it back. `Schema.getAll()` lists every property set, standard ones and `$ref` included, under its JSON name, and `Schema.setAll(...)` clears them all before setting the new ones, as the 4.2 Javadoc says.
+* **`$ref` is kept as written** on schemas and on the referenceable objects — parameters, request bodies and responses (whose `$ref` used to be dropped), callbacks (whose `$ref` used to be read as a callback expression), path items: a document reference such as `Pet.yaml` is not expanded into `#/components/...`, in the static file and when models merge.
+* **Every field is read.** A parameter keeps `style`, `explode`, `allowReserved`, `deprecated`, `allowEmptyValue`, `example`, `examples` and `content`; a header keeps `style`, `explode`, `content`, `example` and `examples`; a discriminator keeps its `x-` keys. `type: "null"` (alone or in a type array) is `SchemaType.NULL`, and a type name that is not a JSON Schema type is kept as written.
+* **YAML numbers follow YAML 1.2**: `+1`, `1e3`, `.5`, `0o17` and `0x1F` are numbers; integers beyond a `long` are read as `BigInteger`.
+* **In `mp.openapi.schema.<FQCN>`**, the historical `ref` key is accepted at every level of the schema, `$defs` and `definitions` included, and expands a short name to `#/components/schemas/<name>`. An explicit `$ref` is kept as written, as in a static file.
+
+== MicroProfile Config keys
+
+All keys are read once at startup: `GrimmConfigProducer` (in `io.vidocq.grimm.cdi`) calls `ConfigProvider.getConfig()` and materialises the `GrimmConfig` record (`io.vidocq.grimm.internal.config`); `ConfigApplier` then applies the server and schema overrides at step 5 of the pipeline.
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.openapi.scan.disable`
+| Boolean. Disables annotation scanning entirely.
+
+| `mp.openapi.scan.packages`
+| List of packages to scan (whitelist, comma-separated).
+
+| `mp.openapi.scan.classes`
+| List of classes to scan (whitelist).
+
+| `mp.openapi.scan.exclude.packages`
+| List of excluded packages.
+
+| `mp.openapi.scan.exclude.classes`
+| List of excluded classes.
+
+| `mp.openapi.scan.beanvalidation`
+| Boolean. Enables derivation of Bean Validation constraints into the schema.
+
+| `mp.openapi.filter`
+| FQCN of an `OASFilter` applied after merge.
+
+| `mp.openapi.model.reader`
+| FQCN of an `OASModelReader` invoked before merge.
+
+| `mp.openapi.servers`
+| List of server URLs (replaces `servers` on the document).
+
+| `mp.openapi.servers.path.<path>`
+| Overrides `servers` for one specific path.
+
+| `mp.openapi.servers.operation.<operationId>`
+| Overrides `servers` for one specific operation.
+
+| `mp.openapi.schema.<FQCN>`
+| JSON snippet describing a schema for the given class (full override).
+
+| `mp.openapi.extensions.scan.disable`
+| Boolean. Disables scanning of `@Extension` annotations.
+|===
+
+[NOTE]
+====
+Two spec keys are deliberately deferred and currently unimplemented: `mp.openapi.servers.<name>.*` (per-server variable overrides) and `mp.openapi.extensions.<key>=<value>` (document-level extensions). They are intentionally left out for now and scheduled for a later milestone — see the `GrimmConfig` Javadoc for the authoritative status.
+====
+
+== `/openapi` endpoint
+
+[cols="1,3"]
+|===
+| Path | `/openapi`
+| Verb | `GET`
+| Media types | `application/yaml` (default, spec §2.2), `application/json`
+| Format override | `?format=yaml`, `?format=yml`, `?format=json` (takes precedence over `Accept`, spec §2.3)
+| Source | `GrimmModelCache.getDocument()`
+| Status | Always `200` when the scan succeeded
+|===
+
+[#other-containers]
+== Other CDI containers
+
+Grimm does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `grimm-it-other-containers`, prove it on every build (grimm#22):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `grimm-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: the document lists a resource, its operation and its `@Schema`, and not `/openapi` itself. A second test starts two Weld containers in one JVM, the second during the first one's start, and checks that each document lists only its own resources. A third checks that a resource described only by `grimm-processor` enters the document.
+
+| `grimm-it-openliberty`
+| A WAR compiled with `grimm-processor` on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, MicroProfile Config 3.1), with Liberty's `mpOpenAPI` feature off: `GET /openapi` lists a resource that is a CDI bean and one that is not.
+|===
+
+Neither module is published. What they found, now fixed:
+
+* **`vauban-api` is a runtime dependency** of `grimm-cdi-vauban`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (`GrimmModelCache`, `OpenApiResource`, `GrimmAutoDiscovery`); a container that cannot load that type cannot load the class, and Weld drops the bean with an INFO message (`WELD-000119`). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded.
+* **Each container has its own document** — see xref:internals.adoc[Internals].
+* **A complete document in `annotated` mode** — compile the application with `grimm-processor`: the resources it describes enter the document even when they are not CDI beans.
+* **`grimm-processor` carries Jakarta REST** — it reads the Jakarta REST annotations, and an `annotationProcessorPaths` entry only resolves its compile and runtime dependencies; the API used to be `provided` there, so the processor could not load from such an entry.
+
+Grimm's own classes (`io.vidocq.grimm.*`) never enter the document, so `/openapi` does not describe itself: keep your application out of that package.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own OpenAPI off** — `mpOpenAPI` on Open Liberty. Otherwise the server answers `/openapi` itself.
+* **Enable the server's CDI, Jakarta REST and MicroProfile Config** — `cdi-4.0`, `restfulWS-3.1` and `mpConfig-3.1` on Open Liberty. `grimm-cdi-vauban` leaves Jakarta REST and the MicroProfile Config API `provided` (vidocq-workspace#17); under Vidocq, the OpenAPI extension brings them.
+* **Nothing to exclude** — the WAR carries the Grimm jars, the MicroProfile OpenAPI API and `vauban-api` (API types only). `grimm-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== Compatibility
+
+* Java 25 (LTS), Maven 3.9.16.
+* JAX-RS 4.0 (Cassini or any conformant runtime).
+* CDI 4.1 Lite (Vauban) or Lite-compatible — proven on Weld SE 6.0 and Open Liberty (CDI 4.0): see <<other-containers>>.
+* No Jakarta EE Full Profile dependency.
+
+== Bugs and benchmarks
+
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (to be created if missing).
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (to be created if missing).
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — merge, filters, configuration.
+* xref:internals.adoc[Internals] — pipeline and threading.
+* xref:tck.adoc[TCK] — status and execution.
+
+== Architecture rules
+
+`io.vidocq.grimm:grimm-architecture-tests` is a **test-only** module, never released. It runs Grimm's architecture
+rules on the classes of every shipped module: the dependencies of each module (the MicroProfile OpenAPI and Config APIs, Jakarta REST and the Jakarta APIs it reads, nothing else), the layers between the modules, no reflection outside the documented fallbacks of `internals.adoc`, no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.
