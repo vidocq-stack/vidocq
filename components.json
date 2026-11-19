@@ -1,0 +1,33 @@
+{
+  "description": "The components of the Vidocq monorepo: the PR title tag of each, its folder, its group and its maturity level (stable, preview, incubator). Read by the governance-checks title check and forge-dashboard (MONOREPO.md §7 and §9). A component that changes level moves its folder and changes its entry here in the same commit.",
+  "components": [
+    { "tag": "PARENT", "path": "vidocq-parent", "group": "build", "level": "stable" },
+    { "tag": "RUNTIME", "path": "vidocq-runtime", "group": "runtime", "level": "stable" },
+    { "tag": "CHAPPE", "path": "vidocq-components/vidocq-components-transport/chappe", "group": "transport", "level": "stable" },
+    { "tag": "VAUBAN", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban", "group": "jakartaee-core", "level": "stable" },
+    { "tag": "CHAMPOLLION", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion", "group": "jakartaee-core", "level": "stable" },
+    { "tag": "CASSINI", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini", "group": "jakartaee-core", "level": "stable" },
+    { "tag": "FOY", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy", "group": "jakartaee-webprofile", "level": "stable" },
+    { "tag": "PEANO", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano", "group": "jakartaee-webprofile", "level": "stable" },
+    { "tag": "IBARRA", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra", "group": "jakartaee-webprofile", "level": "stable" },
+    { "tag": "BODONI", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni", "group": "jakartaee-webprofile", "level": "stable" },
+    { "tag": "MANSART", "path": "vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart", "group": "jakartaee-webprofile", "level": "stable" },
+    { "tag": "RAVEL", "path": "vidocq-components/vidocq-components-microprofile/ravel", "group": "microprofile", "level": "stable" },
+    { "tag": "KNOCK", "path": "vidocq-components/vidocq-components-microprofile/knock", "group": "microprofile", "level": "stable" },
+    { "tag": "DIRAC", "path": "vidocq-components/vidocq-components-microprofile/dirac", "group": "microprofile", "level": "stable" },
+    { "tag": "HEISENBERG", "path": "vidocq-components/vidocq-components-microprofile/heisenberg", "group": "microprofile", "level": "stable" },
+    { "tag": "CERVANTES", "path": "vidocq-components/vidocq-components-microprofile/cervantes", "group": "microprofile", "level": "stable" },
+    { "tag": "CYRANO", "path": "vidocq-components/vidocq-components-microprofile/cyrano", "group": "microprofile", "level": "stable" },
+    { "tag": "HUMBOLDT", "path": "vidocq-components/vidocq-components-microprofile/humboldt", "group": "microprofile", "level": "stable" },
+    { "tag": "GRIMM", "path": "vidocq-components/vidocq-components-microprofile/grimm", "group": "microprofile", "level": "stable" },
+    { "tag": "NOETHER", "path": "preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether", "group": "jakartaee-webprofile", "level": "preview" },
+    { "tag": "KERCKHOFFS", "path": "preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs", "group": "jakartaee-webprofile", "level": "preview" }
+  ],
+  "other_tags": [
+    { "tag": "BOM", "paths": ["vidocq-runtime/vidocq-runtime-bom"] },
+    { "tag": "TCK", "paths": ["vidocq-tck"] },
+    { "tag": "BUILD", "paths": ["pom.xml", ".mvn", "vidocq-components/pom.xml", "preview/pom.xml", "incubator/pom.xml"] },
+    { "tag": "CI", "paths": [".forgejo"] },
+    { "tag": "DOCS", "paths": [] }
+  ]
+}
