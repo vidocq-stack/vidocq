@@ -1,0 +1,693 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq</groupId>
+    <artifactId>vidocq-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <!-- vidocq-archrules: the shared architecture rules every brick runs as ArchUnit tests (Vidocq/vidocq#289).
+         Build and test tooling, test scope in the bricks, never part of what a brick ships. -->
+    <modules>
+        <module>vidocq-archrules</module>
+    </modules>
+
+    <name>Vidocq :: Parent</name>
+    <description>Common parent POM for all Vidocq ecosystem projects - Java 25, Maven Central, release/snapshot/quality profiles.</description>
+    <url>https://codefloe.com/Vidocq/vidocq-parent</url>
+
+    <scm>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq-parent.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq-parent.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq-parent</url>
+      <tag>HEAD</tag>
+  </scm>
+
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+        <developer>
+            <name>Antoine Sabot-Durand</name>
+            <email>antoine@sabot-durand.net</email>
+        </developer>
+    </developers>
+
+    <distributionManagement>
+        <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://central.sonatype.com/api/v1/publisher</url>
+        </repository>
+        <!-- The Vidocq SNAPSHOTs go to our own repository since 2026-10-30; the CI passes the same target with
+             altSnapshotDeploymentRepository (Vidocq/ci deploy-maven). Releases stay on Central. -->
+        <snapshotRepository>
+            <id>vidocq-snapshots</id>
+            <name>Vidocq Snapshots</name>
+            <url>https://maven.vidocq.dev/snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <!-- maven.bak.vidocq.dev is a full copy of maven.vidocq.dev on another site, read when the first is down. -->
+    <pluginRepositories>
+        <pluginRepository>
+            <id>vidocq-snapshots</id>
+            <name>Vidocq Snapshots</name>
+            <url>https://maven.vidocq.dev/snapshots/</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>vidocq-snapshots-bak</id>
+            <name>Vidocq Snapshots (mirror)</name>
+            <url>https://maven.bak.vidocq.dev/snapshots/</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+
+        <junit.version>6.0.3</junit.version>
+
+        <!-- Maven plugin versions - overridable via property in child modules -->
+        <!-- 3.15.0: required for Maven 4, which enables Reproducible Builds by
+             default and thereby the compiler-plugin's JDK-8318913 module-info
+             patch; the ASM 9.6 bundled with 3.13.0 cannot read Java 25 classes. -->
+        <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+        <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
+        <maven.surefire.plugin.version>3.5.5</maven.surefire.plugin.version>
+        <!-- Explicitly pinned for the ecosystem's *-maven-plugin modules
+             (cassini, chappe, vauban, vidocq, champollion x2); otherwise Maven 3.9
+             falls back to a potentially older default version. -->
+        <maven.plugin.plugin.version>3.15.2</maven.plugin.plugin.version>
+        <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
+        <maven.clean.plugin.version>3.4.0</maven.clean.plugin.version>
+        <maven.resources.plugin.version>3.3.1</maven.resources.plugin.version>
+        <maven.install.plugin.version>3.1.3</maven.install.plugin.version>
+        <maven.deploy.plugin.version>3.1.4</maven.deploy.plugin.version>
+        <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
+        <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
+        <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
+        <!-- Same version as the SBOM the CI writes for the dependency scan (Vidocq/ci sonar-analysis). -->
+        <cyclonedx.maven.plugin.version>2.9.3</cyclonedx.maven.plugin.version>
+        <central.publishing.plugin.version>0.10.0</central.publishing.plugin.version>
+        <!-- 3.1.1 pinned so that all releases (via Vidocq/ci/release-maven@v1)
+             use a proven, stable version on Maven 3.9.x. -->
+        <maven.release.plugin.version>3.1.1</maven.release.plugin.version>
+        <!-- 2.18.0: required for versions:set-property, used by the release
+             script when the upstream dependency is expressed via a property. -->
+        <versions.plugin.version>2.18.0</versions.plugin.version>
+        <jacoco.version>0.8.13</jacoco.version>
+        <!-- Error Prone, for the errorprone profile: a javac plugin, build side only (Vidocq/vidocq#269). -->
+        <errorprone.version>2.50.0</errorprone.version>
+        <!--
+            Empty by default so that a module that needs its own JVM options for its tests
+            writes them as <argLine>@{argLine} its options</argLine> in surefire. Under the
+            quality profile, JaCoCo's prepare-agent puts its agent in this property and the
+            late @{argLine} replacement keeps it; a plain <argLine> would drop the agent and
+            leave the module without coverage. Without the profile, @{argLine} is empty.
+        -->
+        <argLine></argLine>
+        <!--
+            SonarQube (Vidocq/vidocq#284): sources written by annotation processors and
+            other generators are not ours to fix, keep them out of the analysis. A
+            repository that sets its own sonar.exclusions must keep these patterns.
+        -->
+        <sonar.exclusions>**/generated-sources/**,**/generated/**</sonar.exclusions>
+        <!-- mycila license-maven-plugin: build-time only, no runtime dependency.
+             Manages the triple-license SPDX header on every .java source file.
+             Header template lives at <repo-root>/etc/license-header.txt. -->
+        <license.maven.plugin.version>5.1.1</license.maven.plugin.version>
+        <license.year>2026</license.year>
+        <!-- git-commit-id-maven-plugin: writes the per-artifact build identity
+             file (see <build><plugins>). Latest 9.x line. -->
+        <git-commit-id.plugin.version>9.2.0</git-commit-id.plugin.version>
+
+        <!--
+            central-publishing-maven-plugin's autoPublish flag, exposed as a
+            property so the release-maven workflow can flip it per-run via
+            `-Dcentral.publishing.autoPublish=true`. Default `false`: a release
+            uploads the bundle, Sonatype validates it (~10 min), and it stays
+            in state VALIDATED on central.sonatype.com/publishing waiting for
+            a manual "Publish" click. This is the safe default - set to `true`
+            in the workflow input only when you want the wait-for-Central
+            polling step to converge automatically.
+        -->
+        <central.publishing.autoPublish>false</central.publishing.autoPublish>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven.compiler.plugin.version}</version>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven.surefire.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>${maven.dependency.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven.jar.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>${maven.clean.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven.resources.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven.install.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <!-- 3.1.4: fixes the `deployAtEnd` bugs on Maven 4; 3.1.3
+                         reports BUILD SUCCESS without pushing anything to the registry. -->
+                    <version>${maven.deploy.plugin.version}</version>
+                    <configuration>
+                        <!-- One batch at the end of the reactor: nothing reaches the
+                             repository unless every module built and passed its tests (a
+                             failure used to leave the modules built before it published),
+                             and the batch uploads in parallel (vidocq: 10.3 -> 3.75 min).
+                             Checked with 3.1.4 on Maven 3.9.16 in every repository: the same
+                             files as module by module, none on a late failure (Vidocq/vidocq#285). -->
+                        <deployAtEnd>true</deployAtEnd>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                    <executions>
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals><goal>prepare-agent</goal></goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>verify</phase>
+                            <goals><goal>report</goal></goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!--
+                    Driver behind every release. Triggered by the release.yml
+                    workflow (which calls Vidocq/ci/release-maven@v1). Pinned to
+                    3.1.1: 3.0.x doesn't grok Model 4.1.0 POMs. tagNameFormat is
+                    `v<version>` and the release builds activate the release
+                    profile (sources + javadoc + GPG + central-publishing).
+                -->
+                <!-- Version managed here (not only in the release profile) so that
+                     modules declaring the plugin with skipPublishing=true get a
+                     version in the default effective model - otherwise Maven 4
+                     emits a model-validation warning per module. -->
+                <plugin>
+                    <groupId>org.sonatype.central</groupId>
+                    <artifactId>central-publishing-maven-plugin</artifactId>
+                    <version>${central.publishing.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-release-plugin</artifactId>
+                    <version>${maven.release.plugin.version}</version>
+                    <configuration>
+                        <tagNameFormat>v@{project.version}</tagNameFormat>
+                        <releaseProfiles>release</releaseProfiles>
+                        <pushChanges>true</pushChanges>
+                        <autoVersionSubmodules>true</autoVersionSubmodules>
+                        <preparationGoals>clean verify</preparationGoals>
+                    </configuration>
+                </plugin>
+
+                <!--
+                    Used by Vidocq/ci/release-maven@v1's release.sh when an
+                    override needs to patch a Maven property (i.e. when a dep
+                    version is declared as ${some.version}). Not invoked here;
+                    pinned so the script can pick a known-good version.
+                -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>${versions.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!--
+                License header enforcement, inherited and ACTIVE in every child
+                reactor. `check` is bound to the verify phase so a missing or
+                stale SPDX header fails the build (and the CI). Run
+                `mvn license:format` once after a relicensing to (re)write all
+                headers. The header path uses ${maven.multiModuleProjectDirectory}
+                so it resolves to each repository's own root etc/ directory,
+                whether the project is single- or multi-module.
+            -->
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <version>${license.maven.plugin.version}</version>
+                <configuration>
+                    <skip>true</skip>
+                    <failIfMissing>false</failIfMissing>
+                    <licenseSets>
+                        <licenseSet>
+                            <header>etc/license-header.txt</header>
+                            <excludes>
+                                <exclude>**/target/**</exclude>
+                                <exclude>**/.claude/**</exclude>
+                                <exclude>**/*.adoc</exclude>
+                                <exclude>**/*.md</exclude>
+                                <exclude>**/*.txt</exclude>
+                                <exclude>**/*.xml</exclude>
+                                <exclude>**/*.yml</exclude>
+                                <exclude>**/*.yaml</exclude>
+                                <exclude>**/*.json</exclude>
+                                <exclude>**/*.properties</exclude>
+                                <exclude>LICENSE</exclude>
+                                <exclude>NOTICE</exclude>
+                                <exclude>**/*.sh</exclude>
+                                <!-- Web/binary assets (e.g. vendored swagger-ui-dist under
+                                     META-INF/resources): never carry a source header. -->
+                                <exclude>**/*.js</exclude>
+                                <exclude>**/*.css</exclude>
+                                <exclude>**/*.html</exclude>
+                                <exclude>**/*.htm</exclude>
+                                <exclude>**/*.map</exclude>
+                                <exclude>**/*.png</exclude>
+                                <exclude>**/*.ico</exclude>
+                                <exclude>**/*.gif</exclude>
+                                <exclude>**/*.jpg</exclude>
+                                <exclude>**/*.svg</exclude>
+                                <exclude>**/*.woff</exclude>
+                                <exclude>**/*.woff2</exclude>
+                                <exclude>**/*.ttf</exclude>
+                                <exclude>**/*.eot</exclude>
+                            </excludes>
+                        </licenseSet>
+                    </licenseSets>
+                    <properties>
+                        <year>${license.year}</year>
+                    </properties>
+                    <mapping>
+                        <java>SLASHSTAR_STYLE</java>
+                    </mapping>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>check-license-headers</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Build identity, inherited and ACTIVE in every child reactor: each
+                jar carries META-INF/vidocq/build-info/<artifactId>.properties
+                (git.build.version, git.build.time, git.commit.id.abbrev,
+                git.commit.time, git.dirty), read by the Vidocq startup banner.
+                The file name is per artifact because, on the class path, a fixed
+                name would make every brick read the first jar's file.
+                - pom-packaged modules are skipped (skipPoms, default true);
+                - -Dmaven.gitcommitid.skip=true disables it;
+                - outside a git repository the build still succeeds, with only
+                  git.build.version and git.build.time.
+                Do NOT set project.build.outputTimestamp outside the release
+                profile: once set, the plugin writes it as git.build.time instead
+                of the wall-clock time, and two local builds of the same commit
+                become indistinguishable.
+            -->
+            <plugin>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>${git-commit-id.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>vidocq-build-info</id>
+                        <phase>initialize</phase>
+                        <goals><goal>revision</goal></goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <abbrevLength>8</abbrevLength>
+                    <dateFormat>yyyy-MM-dd'T'HH:mm:ssXXX</dateFormat>
+                    <dateFormatTimeZone>UTC</dateFormatTimeZone>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                    <generateGitPropertiesFile>true</generateGitPropertiesFile>
+                    <generateGitPropertiesFilename>${project.build.outputDirectory}/META-INF/vidocq/build-info/${project.artifactId}.properties</generateGitPropertiesFilename>
+                    <includeOnlyProperties>
+                        <includeOnlyProperty>^git.build.version$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.build.time$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.dirty$</includeOnlyProperty>
+                    </includeOnlyProperties>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <properties>
+                <!-- Reproducible release jars: every zip entry is stamped with the
+                     commit time (set by git-commit-id-maven-plugin at initialize).
+                     Release-only on purpose, see the plugin in <build><plugins>. -->
+                <project.build.outputTimestamp>${git.commit.time}</project.build.outputTimestamp>
+            </properties>
+            <build>
+                <plugins>
+                    <!-- Same identity file minus git.build.time, so that two builds
+                         of the same commit are byte-for-byte identical. The version
+                         is immutable on Central; commit, dirty and commit time are
+                         enough to identify a release. -->
+                    <plugin>
+                        <groupId>io.github.git-commit-id</groupId>
+                        <artifactId>git-commit-id-maven-plugin</artifactId>
+                        <configuration>
+                            <includeOnlyProperties combine.self="override">
+                                <includeOnlyProperty>^git.build.version$</includeOnlyProperty>
+                                <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
+                                <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
+                                <includeOnlyProperty>^git.dirty$</includeOnlyProperty>
+                            </includeOnlyProperties>
+                        </configuration>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven.source.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven.javadoc.plugin.version}</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                            <!-- JDK 23+ copies the DejaVu web fonts into every javadoc jar: 4 MB of the 4.2 MB of each
+                                 one, 97 % of a release's size on Central (0.4.0-RC1: 597 of 613 MB). The pages fall back to
+                                 the reader's fonts. -->
+                            <additionalOptions>
+                                <additionalOption>--no-fonts</additionalOption>
+                            </additionalOptions>
+                            <!--
+                                Force legacy (non-modular) javadoc. Modules that keep
+                                module-info.java under src/main/module-info (the
+                                testCompile-on-classpath workaround, e.g. dirac-core) trip
+                                maven-javadoc-plugin into module mode under Maven 4 (the
+                                compile-module-info execution's compileSourceRoots is now
+                                project-wide), and it fails with "No source files for
+                                package ...". Pinning sourcepath to src/main/java keeps
+                                javadoc classpath-based over the real sources for every
+                                module style (verified on clean-modular and workaround
+                                layouts alike). ${project.basedir} resolves per child module.
+                            -->
+                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- One CycloneDX SBOM per published artifact (Vidocq/vidocq#270): written at
+                         package, attached with the classifier cyclonedx and the type json
+                         (<artifactId>-<version>-cyclonedx.json), so the gpg plugin below signs it
+                         at verify like the jars and Maven Central carries it with its .asc.
+                         What the artifact ships only: compile and runtime scopes. Build tooling,
+                         never in an application. -->
+                    <plugin>
+                        <groupId>org.cyclonedx</groupId>
+                        <artifactId>cyclonedx-maven-plugin</artifactId>
+                        <version>${cyclonedx.maven.plugin.version}</version>
+                        <configuration>
+                            <outputFormat>json</outputFormat>
+                            <!-- Named like the file it becomes on Central. -->
+                            <outputName>${project.build.finalName}-cyclonedx</outputName>
+                            <includeTestScope>false</includeTestScope>
+                            <includeProvidedScope>false</includeProvidedScope>
+                            <includeSystemScope>false</includeSystemScope>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-sbom</id>
+                                <phase>package</phase>
+                                <goals><goal>makeBom</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven.gpg.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg><arg>loopback</arg>
+                                        <arg>--batch</arg>
+                                        <arg>--yes</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central.publishing.plugin.version}</version>
+                        <!--
+                            <extensions>true</extensions> alone is not enough under
+                            Maven 4 (rc-5): the deploy-phase binding contributed by
+                            the extension does not fire. Observed during the first
+                            real release: BUILD SUCCESS but only install:install
+                            ran in the deploy phase, no central-publishing:publish.
+                            We keep extensions=true (replaces maven-deploy-plugin
+                            on the deploy phase) AND we wire an explicit execution
+                            so the publish goal is bound deterministically.
+                        -->
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>injected-central-publishing</id>
+                                <phase>deploy</phase>
+                                <goals><goal>publish</goal></goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <!-- Param-driven via property. Default = false (manual
+                                 click on central.sonatype.com to publish, safest).
+                                 The release-maven workflow can set this to true
+                                 with `-Dcentral.publishing.autoPublish=true`, in
+                                 which case the bundle is published automatically
+                                 after Sonatype validation and the wait-for-Central
+                                 step in release.sh polls until it propagates. -->
+                            <autoPublish>${central.publishing.autoPublish}</autoPublish>
+                        </configuration>
+                    </plugin>
+
+                    <!--
+                        Defensive: explicitly skip maven-deploy-plugin in the
+                        release profile. central-publishing-maven-plugin's
+                        <extensions>true</extensions> normally swaps it out, but
+                        under Maven 4 we cannot rely on that - being explicit
+                        prevents any chance of a parallel deploy to a non-existent
+                        repository.
+                    -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+            Publish -SNAPSHOT artifacts to the Central Portal snapshot repository.
+            We do NOT go through central-publishing-maven-plugin: its end-of-session
+            publish hook does not fire under Maven 4 (BUILD SUCCESS but nothing published).
+            The standard maven-deploy-plugin pushes to distributionManagement/snapshotRepository.
+            SNAPSHOTs are not validated by Central: no bundle, no GPG signature required.
+
+            Snapshots DO attach sources and javadoc (the latter pinned to legacy mode via
+            sourcepath, like the release profile). This is deliberate: it makes the snapshot
+            artifacts mirror a release minus GPG signing, so a green snapshot deploy proves
+            the release-time javadoc:jar will also succeed (canary). -->
+        <profile>
+            <id>snapshot</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven.source.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven.javadoc.plugin.version}</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                            <!-- JDK 23+ copies the DejaVu web fonts into every javadoc jar: 4 MB of the 4.2 MB of each
+                                 one, 97 % of a release's size on Central (0.4.0-RC1: 597 of 613 MB). The pages fall back to
+                                 the reader's fonts. -->
+                            <additionalOptions>
+                                <additionalOption>--no-fonts</additionalOption>
+                            </additionalOptions>
+                            <!-- See the release profile: legacy javadoc for every module style. -->
+                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>quality</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Error Prone (Vidocq/vidocq#269): opt-in with -Perrorprone, and by the SonarQube job, which imports
+             its warnings as external issues. Report mode, like the rest of the analysis: every finding is a
+             warning (-XepAllErrorsAsWarnings), none stops the build. Nothing is added to what ships: Error Prone
+             only runs inside javac. Error Prone needs the javac internals a repository opens in
+             .mvn/jvm.config (see QUALITY.md). A module that sets its own annotationProcessorPaths keeps this
+             path thanks to combine.children="append". -->
+        <profile>
+            <id>errorprone</id>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-compiler-plugin</artifactId>
+                            <configuration>
+                                <compilerArgs combine.children="append">
+                                    <arg>-XDcompilePolicy=simple</arg>
+                                    <arg>--should-stop=ifError=FLOW</arg>
+                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*(generated|generated-sources)/.* -XepDisableWarningsInGeneratedCode</arg>
+                                    <!-- javac stops printing warnings after 100 per module by default: SonarQube
+                                         would only import the first 100 findings of a module. -->
+                                    <arg>-Xmaxwarns</arg>
+                                    <arg>100000</arg>
+                                </compilerArgs>
+                                <annotationProcessorPaths combine.children="append">
+                                    <path>
+                                        <groupId>com.google.errorprone</groupId>
+                                        <artifactId>error_prone_core</artifactId>
+                                        <version>${errorprone.version}</version>
+                                    </path>
+                                </annotationProcessorPaths>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
+    </profiles>
+</project>
