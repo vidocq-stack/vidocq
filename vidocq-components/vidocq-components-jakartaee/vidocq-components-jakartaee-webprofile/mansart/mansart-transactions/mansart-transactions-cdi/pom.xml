@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-transactions</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-transactions-cdi</artifactId>
+    <name>Mansart :: Transactions :: CDI bootstrap</name>
+    <description>CDI 4.1 bootstrap — @Transactional interceptor (REQUIRED, REQUIRES_NEW, MANDATORY, NEVER, NOT_SUPPORTED, SUPPORTS) + @TransactionScoped scope, plugged via BuildCompatibleExtension + portable Extension.</description>
+
+    <properties>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+        </dependency>
+        <!-- Jakarta platform APIs: provided by the CDI container (vidocq-workspace#17). The Vidocq
+             runtime extension of Mansart Transactions brings them under Vidocq. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped
+             MansartTransactionsProducer. Without this jar Weld cannot load the class and drops the
+             bean (WELD-000119), then no TransactionManager is published (mansart-it-weld). API types
+             only, no code runs outside Vauban (vidocq-workspace#15). Not trimmed of its Jakarta CDI
+             dependencies (MANSART-035): exclusions on this declaration win Maven's mediation in a consumer
+             and strip the CDI API from a Vidocq codegen bundle's processor path. The CDI APIs it brings are
+             the ones the container provides. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- ====== Test dependencies ====== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Vauban — CDI 4.1 Lite container natif Vidocq. Utilisé pour valider que l'interceptor
+            @Transactional et le contexte @TransactionScoped fonctionnent dans le container ciblé
+            par les apps Vidocq. Test scope uniquement.
+        -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            vauban-core a un `requires` (runtime) sur io.vidocq.vauban.classloader.spi, mais le
+            déclare en <optional> dans son pom (non transitif). On l'ajoute donc explicitement
+            pour que le module-path de test résolve la boot layer modulaire de vauban-core.
+        -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-junit</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the six
+                @Transactional interceptors, the TransactionManager/UserTransaction/TSR producer and
+                the @TransactionScoped context). The main compile generates _ClientProxy/_Factory,
+                META-INF/vauban-beans.list and an in-module _VaubanComponents that instantiates these
+                beans and field-injects their (package-private) dependencies — so a CDI 4.1 Lite
+                container needs no `opens io.vidocq.mansart.transactions.cdi`. Build-time only: no
+                runtime dependency on Vauban, inert under a standard CDI container (Weld).
+
+                The $$Intercepted subclasses for application @Transactional beans are generated by the
+                APT in the *user* module (jakarta.transaction.Transactional is an @InterceptorBinding),
+                exactly like @Counted/@Retry — not here.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- The APT does not process the (nested) test fixtures: this module's own unit
+                         test exercises behaviour on the class path. The module-path / zero-opens
+                         proof lives in the mansart-transactions-cdi-module-it vehicle, where the
+                         @Transactional fixture is a top-level class processed by the APT. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+                The unit test runs on the CLASS PATH (useModulePath=false): the production module-info
+                is opens-free, and on the class path reflection is unrestricted, so the test needs no
+                `opens` and no add-reads option. vauban-core (test scope) runtime-generates the nested
+                fixture's TxService$$Intercepted there, which is fine on the class path. Strict
+                module-path interception with a build-time subclass and no opens is proven separately by
+                mansart-transactions-cdi-module-it.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

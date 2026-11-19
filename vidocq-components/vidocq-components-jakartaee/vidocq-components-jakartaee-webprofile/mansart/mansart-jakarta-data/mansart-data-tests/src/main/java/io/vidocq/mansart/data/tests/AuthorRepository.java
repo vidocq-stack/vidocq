@@ -1,0 +1,250 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.mansart.data.tests;
+
+import jakarta.data.repository.BasicRepository;
+import jakarta.data.repository.Repository;
+
+@Repository
+public interface AuthorRepository extends BasicRepository<Author, Long> {
+
+    long count();
+
+    boolean existsById(Long id);
+
+    /* ---- M3b derived queries ---- */
+
+    java.util.List<Author> findByName(String name);
+
+    java.util.Optional<Author> findOneByName(String name);
+
+    java.util.List<Author> findByNameLike(String pattern);
+
+    long countByName(String name);
+
+    boolean existsByName(String name);
+
+    long deleteByName(String name);
+
+    java.util.List<Author> findAllByOrderByNameAsc();
+
+    /* ---- M3c pagination ---- */
+
+    jakarta.data.page.Page<Author> findByNameLikeOrderByNameAsc(String pattern, jakarta.data.page.PageRequest pageRequest);
+
+    jakarta.data.page.CursoredPage<Author> findByNameLikeOrderByIdAsc(String pattern, jakarta.data.page.PageRequest pageRequest);
+
+    /* ---- M3c-2 In(List) ---- */
+
+    java.util.List<Author> findByNameIn(java.util.List<String> names);
+
+    /* ---- M3c-3 multi-attribute cursor + mixed In ---- */
+
+    jakarta.data.page.CursoredPage<Author> findByNameLikeOrderByNameAscIdAsc(
+            String pattern, jakarta.data.page.PageRequest pageRequest);
+
+    java.util.List<Author> findByNameLikeAndIdIn(String pattern, java.util.List<Long> ids);
+
+    /* ---- M5 @Query JDQL ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE name = :name")
+    java.util.List<Author> jdqlByName(String name);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name LIKE :pattern ORDER BY name DESC")
+    java.util.List<Author> jdqlNameLikeDesc(String pattern);
+
+    @jakarta.data.repository.Query("FROM Author WHERE id = ?1")
+    java.util.Optional<Author> jdqlById(Long id);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name LIKE :pattern AND id > :minId")
+    java.util.List<Author> jdqlNameLikeAndIdGt(String pattern, Long minId);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name IS NOT NULL")
+    long jdqlCountNonNull();
+
+    /* ---- M5-2 JDQL extensions ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE id IN :ids")
+    java.util.List<Author> jdqlByIdIn(java.util.List<Long> ids);
+
+    @jakarta.data.repository.Query("SELECT COUNT(*) FROM Author WHERE name LIKE :pattern")
+    long jdqlSelectCountByNameLike(String pattern);
+
+    @jakarta.data.repository.Query("UPDATE Author SET name = :newName WHERE name = :oldName")
+    long jdqlRename(String oldName, String newName);
+
+    @jakarta.data.repository.Query("DELETE FROM Author WHERE name LIKE :pattern")
+    long jdqlDeleteByNameLike(String pattern);
+
+    /* ---- M5-3 OR/NOT with IN, multi-element IN literal ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE name = :name OR id IN :ids")
+    java.util.List<Author> jdqlNameOrIdIn(String name, java.util.List<Long> ids);
+
+    @jakarta.data.repository.Query("FROM Author WHERE NOT (id IN :ids)")
+    java.util.List<Author> jdqlNotIdIn(java.util.List<Long> ids);
+
+    @jakarta.data.repository.Query("FROM Author WHERE name IN (:a, :b, :c)")
+    java.util.List<Author> jdqlNameInLiteral(String a, String b, String c);
+
+    /* ---- M5-4 aggregates + projections ---- */
+
+    @jakarta.data.repository.Query("SELECT MAX(id) FROM Author")
+    Long jdqlMaxId();
+
+    @jakarta.data.repository.Query("SELECT MIN(id) FROM Author WHERE name LIKE :pattern")
+    long jdqlMinIdByPattern(String pattern);
+
+    @jakarta.data.repository.Query("SELECT SUM(id) FROM Author WHERE name LIKE :pattern")
+    Long jdqlSumIdByPattern(String pattern);
+
+    @jakarta.data.repository.Query("SELECT name FROM Author ORDER BY name ASC")
+    java.util.List<String> jdqlAllNames();
+
+    @jakarta.data.repository.Query("SELECT name FROM Author WHERE id = ?1")
+    java.util.Optional<String> jdqlNameById(Long id);
+
+    /* ---- M7-28 compile-time: comparators emitted by RepositoryWriter ---- */
+
+    java.util.List<Author> findByNameContains(String fragment);
+    java.util.List<Author> findByNameStartsWith(String prefix);
+    java.util.List<Author> findByNameEndsWith(String suffix);
+    java.util.List<Author> findByNameIgnoreCase(String name);
+    java.util.List<Author> findByNameLikeIgnoreCase(String pattern);
+    java.util.List<Author> findByNameNotIgnoreCase(String name);
+    long countByNameIgnoreCase(String name);
+    long deleteByNameIgnoreCase(String name);
+    java.util.List<Author> findByNameContainsIgnoreCase(String fragment);
+
+    /* ---- M8-1 JDQL scalar functions: UPPER / LOWER / LENGTH / ABS / CONCAT ---- */
+
+    @jakarta.data.repository.Query("FROM Author WHERE UPPER(name) = :n")
+    java.util.List<Author> jdqlUpperEq(String n);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LOWER(name) LIKE :p")
+    java.util.List<Author> jdqlLowerLike(String p);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LENGTH(name) > :min")
+    java.util.List<Author> jdqlLengthGt(int min);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LENGTH(name) BETWEEN :lo AND :hi")
+    java.util.List<Author> jdqlLengthBetween(int lo, int hi);
+
+    @jakarta.data.repository.Query("FROM Author WHERE ABS(id) <= :max")
+    java.util.List<Author> jdqlAbsIdLte(long max);
+
+    @jakarta.data.repository.Query("FROM Author WHERE LOWER(name) IN (:a, :b)")
+    java.util.List<Author> jdqlLowerIn(String a, String b);
+
+    @jakarta.data.repository.Query("FROM Author WHERE UPPER(name) IS NOT NULL")
+    long jdqlUpperIsNotNullCount();
+
+    /* ---- M8-1f UPDATE SET with scalar fn / arithmetic via runtime fallback ---- */
+
+    @jakarta.data.repository.Query("UPDATE Author SET name = UPPER(name) WHERE id = :id")
+    long jdqlSetUpper(long id);
+
+    @jakarta.data.repository.Query("UPDATE Author SET name = CONCAT(name, :suffix) WHERE id = :id")
+    long jdqlSetConcatSuffix(long id, String suffix);
+
+    /* ---- M8-2 multi-projection (SELECT a, b, …) ---- */
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author ORDER BY name ASC")
+    java.util.List<Object[]> jdqlIdNamePairs();
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author WHERE name LIKE :pattern ORDER BY name ASC")
+    java.util.stream.Stream<Object[]> jdqlIdNameStream(String pattern);
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author WHERE name = :name")
+    java.util.Optional<Object[]> jdqlIdNameOptional(String name);
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author ORDER BY id ASC")
+    java.util.List<AuthorView> jdqlAuthorViews();
+
+    @jakarta.data.repository.Query("SELECT id, name FROM Author WHERE id = :id")
+    AuthorView jdqlAuthorViewById(long id);
+
+    record AuthorView(Long id, String name) {}
+
+    /** MANSART-039: a record of one component, filled from a one-attribute SELECT. */
+    @jakarta.data.repository.Query("SELECT name FROM Author ORDER BY name ASC")
+    java.util.List<NameOnly> jdqlNamesOnly();
+
+    @jakarta.data.repository.Query("SELECT name FROM Author WHERE id = :id")
+    NameOnly jdqlNameOnlyById(long id);
+
+    record NameOnly(String name) {}
+
+    /* ---- mansart#41 ---- */
+
+    /** {@code @Param} names the query parameter, whatever the Java parameter is called. */
+    @jakarta.data.repository.Query("FROM Author WHERE name = :who")
+    java.util.List<Author> jdqlByParamName(@jakarta.data.repository.Param("who") String someName);
+
+    /** JDQL may leave {@code FROM} out when the repository has a primary entity. */
+    @jakarta.data.repository.Query("WHERE name LIKE ?1 ORDER BY name ASC")
+    java.util.List<Author> jdqlWithoutFrom(String pattern);
+
+    /** {@code @Find}: a parameter matches the attribute {@code @By} names. */
+    @jakarta.data.repository.Find
+    java.util.List<Author> findNamed(@jakarta.data.repository.By("name") String wanted);
+
+    /** {@code @Find}: without {@code @By}, the parameter's own name is the attribute. */
+    @jakarta.data.repository.Find
+    java.util.Optional<Author> lookup(String name);
+
+    /** {@code @Find} without parameters: every entity, in the {@code @OrderBy} order. */
+    @jakarta.data.repository.Find
+    @jakarta.data.repository.OrderBy(value = "name", descending = true)
+    java.util.List<Author> everyoneByNameDescending();
+
+    /** {@code @Find} with a trailing {@code PageRequest}: one page, in the {@code @OrderBy} order. */
+    @jakarta.data.repository.Find
+    @jakarta.data.repository.OrderBy("name")
+    jakarta.data.page.Page<Author> everyonePaged(jakarta.data.page.PageRequest page);
+
+    /** {@code findFirst}: the first result in the {@code OrderBy} order, even when several match (MANSART-013). */
+    java.util.Optional<Author> findFirstByOrderByNameDesc();
+
+    /** {@code findFirst<N>}: at most N results, in the {@code OrderBy} order (MANSART-013). */
+    java.util.List<Author> findFirst2ByNameNotOrderByNameAsc(String excluded);
+
+    /** {@code findFirst} with a single-entity return (MANSART-013). */
+    Author findFirstByNameStartsWithOrderByNameAsc(String prefix);
+
+    /** A single-entity derived query without a result throws {@code EmptyResultException} (MANSART-014). */
+    Author findByIdGreaterThan(Long id);
+
+    /** A single-entity {@code @Query} without a result throws {@code EmptyResultException} (MANSART-014). */
+    @jakarta.data.repository.Query("WHERE name = ?1")
+    Author jdqlOneNamed(String name);
+
+    /** A single-value projection without a result throws {@code EmptyResultException} (MANSART-014). */
+    @jakarta.data.repository.Query("SELECT name WHERE id = ?1")
+    String jdqlNameOfId(Long id);
+
+    /** A projection to a primitive (MANSART-015). */
+    @jakarta.data.repository.Query("SELECT id WHERE name = ?1")
+    long jdqlIdOf(String name);
+
+    /** A projection to a primitive array (MANSART-015). */
+    @jakarta.data.repository.Query("SELECT id ORDER BY id")
+    long[] jdqlAllIds();
+}

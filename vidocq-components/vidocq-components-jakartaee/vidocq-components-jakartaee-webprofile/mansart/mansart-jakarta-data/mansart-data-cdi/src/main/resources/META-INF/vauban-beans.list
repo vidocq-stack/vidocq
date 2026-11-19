@@ -1,0 +1,8 @@
+# Vauban-specific bean discovery list. MansartDataExtension (the BCE) is NOT listed here —
+# Vauban now picks it up via the standard CDI 4.1 ServiceLoader contract
+# (META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension).
+#
+# @Singleton + @Produces RepositoryRuntime — regular CDI bean, must be listed for Vauban
+# (the application's vauban-processor APT only sees the user's own classes, not those of
+# transitively-pulled libraries like mansart-data-cdi).
+io.vidocq.mansart.data.cdi.MansartRuntimeProducer

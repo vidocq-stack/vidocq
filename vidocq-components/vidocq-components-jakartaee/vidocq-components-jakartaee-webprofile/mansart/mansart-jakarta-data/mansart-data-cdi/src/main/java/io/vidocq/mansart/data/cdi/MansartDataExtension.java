@@ -1,0 +1,542 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.mansart.data.cdi;
+
+import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.Discovery;
+import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
+import jakarta.enterprise.inject.build.compatible.spi.Messages;
+import jakarta.enterprise.inject.build.compatible.spi.Registration;
+import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
+import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.inject.build.compatible.spi.Types;
+import jakarta.enterprise.inject.build.compatible.spi.Validation;
+import jakarta.data.repository.Repository;
+import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.enterprise.lang.model.declarations.DeclarationInfo;
+import jakarta.enterprise.lang.model.types.Type;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * CDI 4.1 {@link BuildCompatibleExtension} that wires Mansart {@code @Repository} interfaces into
+ * the bean container. Two paths:
+ *
+ * <ol>
+ *   <li><b>Compile-time</b> — reads {@code META-INF/mansart-repositories.list} (produced by
+ *       {@code mansart-data-processor}) and registers one synthetic bean per entry, scoped
+ *       {@code @Singleton}, instantiated via {@link MansartRepoCreator} from the generated
+ *       {@code *RepositoryImpl} class.</li>
+ *   <li><b>Runtime</b> (M7-4) — the {@code @Enhancement} phase scans for any {@code @Repository}
+ *       interface that did NOT come from APT, and registers it via {@link MansartRuntimeRepoCreator}
+ *       which uses {@link io.vidocq.mansart.data.core.RuntimeRepositoryProxy}. This is the path TCK
+ *       deployments take, where pre-compiled jakarta.data jars do not contain APT artifacts.</li>
+ * </ol>
+ *
+ * <p>Also makes sure {@link MansartRuntimeProducer} is scanned so the shared
+ * {@link io.vidocq.mansart.data.core.RepositoryRuntime} is available for injection. Vauban-processor
+ * indexes the producer class for validation but skips emitting a {@code *_Factory.class} in the
+ * user module's output (Phase 1 patch on Vauban-processor) — Vauban-runtime falls back to a
+ * reflective factory, avoiding the Java Modules split-package that a generated class would create.
+ */
+public final class MansartDataExtension implements BuildCompatibleExtension {
+
+    private static final System.Logger LOG = System.getLogger(MansartDataExtension.class.getName());
+
+    private final List<RepoEntry> entries = new ArrayList<>();
+    private final Set<String> runtimeRepoFqns = new LinkedHashSet<>();
+    /** Bean classes the container itself manages, seen at {@code @Registration}; per instance (DRC-005). */
+    private final Set<String> managedBeanClasses = new HashSet<>();
+    /** The types of the beans the container manages, by binary name, seen at {@code @Registration}. */
+    private final Set<String> managedBeanTypes = new HashSet<>();
+    /** The {@code @Repository} interfaces the managed beans inject, by binary name, with the first bean that does. */
+    private final Map<String, Injection> injectedRepositories = new LinkedHashMap<>();
+
+    /** Where a repository is injected, and the provider its annotation names when it is not Mansart. */
+    record Injection(String bean, String foreignProvider) {}
+    private boolean registrationSeen;
+
+    record RepoEntry(String itfFqn, String implFqn) {}
+
+    @Discovery
+    public void readRepositoriesIndex(ScannedClasses scanned) {
+        // Default RepositoryRuntime producer — must be in the index for its @Produces method
+        // to be scanned. Vauban-processor skips emitting a *_Factory.class for it in the user
+        // module (Phase 1 patch on Vauban-processor recognises classes added via
+        // ScannedClasses.add(...) as external) — Vauban-runtime falls back to a reflective
+        // factory at boot, so no on-disk artefact lives in the user module.
+        scanned.add(MansartRuntimeProducer.class.getName());
+
+        entries.addAll(readIndices(currentClassLoader()));
+    }
+
+    /**
+     * The entries of the two compile-time indices, identical format (itf=impl): the APT-produced list (repositories
+     * in the application's own sources) and the mansart-data-maven-plugin list (repositories from pre-compiled
+     * dependency jars, generated ahead of time into an app-owned package). Both map to a @Singleton *Impl with an
+     * (RepositoryRuntime) constructor → MansartRepoCreator path.
+     */
+    static List<RepoEntry> readIndices(ClassLoader cl) {
+        List<RepoEntry> read = new ArrayList<>();
+        for (String resource : new String[]{
+                "META-INF/mansart-repositories.list",
+                "META-INF/mansart-repositories-external.list"}) {
+            Enumeration<URL> resources;
+            try {
+                resources = cl.getResources(resource);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            while (resources.hasMoreElements()) {
+                readIndex(resources.nextElement(), read);
+            }
+        }
+        return read;
+    }
+
+    /** Adds the {@code itf=impl} entries of one index file; blank lines and {@code #} comments are skipped. */
+    private static void readIndex(URL url, List<RepoEntry> read) {
+        try (BufferedReader r = new BufferedReader(
+                new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                RepoEntry entry = parseEntry(line.trim());
+                if (entry != null) read.add(entry);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** The implementations the indices of a class loader list, read once per loader. */
+    private static final Map<ClassLoader, Set<String>> INDEXED_IMPLEMENTATIONS =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /**
+     * Whether {@code className} can be a repository implementation {@link #vetoRoutedRepositoryImpls} vetoes: one the
+     * Mansart indices list (a routed repository's generated implementation), or one named by another provider's
+     * convention, {@code <repository>_} (mansart#40). Any other class is left alone without being loaded.
+     */
+    static boolean vetoCandidate(String className, ClassLoader cl) {
+        if (className.endsWith("_")) return true;
+        return INDEXED_IMPLEMENTATIONS.computeIfAbsent(cl, loader -> readIndices(loader).stream()
+                .map(RepoEntry::implFqn).collect(java.util.stream.Collectors.toUnmodifiableSet()))
+                .contains(className);
+    }
+
+    private static RepoEntry parseEntry(String line) {
+        if (line.isEmpty() || line.startsWith("#")) return null;
+        int eq = line.indexOf('=');
+        if (eq < 0) return null;
+        return new RepoEntry(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+    }
+
+    /**
+     * M7-4 — auto-discover {@code @Repository} interfaces that were not registered through the
+     * compile-time META-INF list. Such interfaces are routed to the runtime Proxy path.
+     *
+     * <p>Uses the wildcard {@code types = Object.class} + {@code withSubtypes = true} which is the
+     * BCE idiom for "every class in the bean archive" — interfaces are then filtered by the body
+     * of the method via {@link ClassInfo#isInterface()} and the annotation predicate.
+     */
+    @Enhancement(types = Object.class, withSubtypes = true)
+    public void discoverRuntimeRepositories(ClassInfo info) {
+        if (!info.isInterface()) return;
+        // Use the typed hasAnnotation(Class) — implementations are required to resolve this
+        // as a name match against the index, without forcing the annotation type itself to
+        // be loadable through the bean archive index (unlike iterating annotations()).
+        if (!info.hasAnnotation(Repository.class)) return;
+        if (foreignProvider(info.annotation(Repository.class)) != null) return;   // another provider's (§4)
+        String fqn = info.name();
+        for (RepoEntry e : entries) {
+            if (e.itfFqn().equals(fqn)) return;     // already covered by compile-time entry
+        }
+        runtimeRepoFqns.add(fqn);
+    }
+
+    /**
+     * MANSART-005 — a bean class implementing an interface that declares a non-default
+     * {@code dataStore} must NOT become a managed bean: the APT-generated constructor injects the
+     * unqualified ({@code @Default}) {@link io.vidocq.mansart.data.core.RepositoryRuntime}, which
+     * would silently route every operation to the default datasource. Veto it here so the
+     * {@code @Synthesis} phase registers the synthetic bean instead, whose creator resolves the
+     * runtime through {@link DataStoreResolver} (CDI {@code @Named} / JNDI). Same
+     * {@code @Enhancement + @Vetoed} idiom as Ravel's {@code ConfigCdiExtension} (portable
+     * extensions never run on CDI Lite).
+     *
+     * <p>Deliberately stateless (no {@code entries} lookup): a container may run
+     * {@code @Enhancement} on an extension instance that did not see {@code @Discovery}. Vauban's
+     * archive-class pass did, until Vauban BUG-20261117-08: since that fix a start uses the
+     * {@code @Discovery} instance, once. The method stays stateless for an older Vauban and for
+     * the other containers.
+     * The interface is found by reflection on the loaded class, not through the lang model —
+     * index-backed {@code ClassInfo.superInterfacesDeclarations()} is empty for pre-indexed
+     * application classes on the module path. Class-loading tolerance matches
+     * {@code @Synthesis}: when the class is not loadable (APT-time replay), no veto happens
+     * and no synthetic bean is registered either, keeping both sides consistent.
+     *
+     * <p>Only the classes {@link #vetoCandidate} names are loaded: the generated implementations the indices list,
+     * and the {@code <repository>_} classes of another provider. Every other class of the archive is skipped by its
+     * name, instead of being loaded and introspected at startup.
+     */
+    @Enhancement(types = Object.class, withSubtypes = true)
+    public void vetoRoutedRepositoryImpls(jakarta.enterprise.inject.build.compatible.spi.ClassConfig clazz) {
+        if (clazz.info().isInterface()) return;
+        ClassLoader cl = currentClassLoader();
+        if (!vetoCandidate(clazz.info().name(), cl)) return;
+        Class<?> impl;
+        try {
+            impl = cl.loadClass(clazz.info().name());
+        } catch (ClassNotFoundException | LinkageError _) {
+            return;
+        }
+        for (Class<?> itf : impl.getInterfaces()) {
+            Repository ann = itf.getAnnotation(Repository.class);
+            if (ann != null) {
+                if (foreignProvider(ann.provider()) != null) {
+                    return;     // the repository names that provider: its implementation is the bean (mansart#85)
+                }
+                if (isRouted(ann.dataStore())) {
+                    clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
+                } else if (isForeignImplementation(impl, itf)) {
+                    // mansart#40 — another provider's generated implementation, shipped in a library jar: Mansart
+                    // implements the repository, so this class must not become a second bean (ambiguous, and
+                    // needing a provider that is not there).
+                    LOG.log(System.Logger.Level.INFO, "{0} is another Jakarta Data provider''s implementation of {1};"
+                            + " Mansart implements {1} instead.", impl.getName(), itf.getName());
+                    clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
+                }
+                return;
+            }
+        }
+    }
+
+    /**
+     * Whether {@code impl} is the implementation another provider's processor generated for {@code itf}: named by
+     * Hibernate Processor's convention, {@code <repository>_}, and without the {@code (RepositoryRuntime)}
+     * constructor of Mansart's. A class the application writes keeps its own name and stays a bean.
+     */
+    static boolean isForeignImplementation(Class<?> impl, Class<?> itf) {
+        // A naming convention, not a class identity: the binary name of the interface followed by '_'.
+        String name = impl.getName();
+        String repository = itf.getName();
+        if (name.length() != repository.length() + 1 || !name.startsWith(repository) || !name.endsWith("_")) {
+            return false;
+        }
+        try {
+            for (var constructor : impl.getDeclaredConstructors()) {
+                var params = constructor.getParameterTypes();
+                if (params.length == 1 && params[0] == io.vidocq.mansart.data.core.RepositoryRuntime.class) {
+                    return false;
+                }
+            }
+        } catch (LinkageError _) {
+            // Its constructor names a type of the other provider, absent here: certainly not Mansart's.
+        }
+        return true;
+    }
+
+    /**
+     * MANSART-031 — records the bean classes the container manages itself, so that {@code @Synthesis}
+     * registers a repository only when no managed bean implements it. The generated
+     * {@code *RepositoryImpl} is {@code @Singleton}, a pseudo-scope that is not a bean defining
+     * annotation: Vauban manages it, but Weld or Open Liberty in an {@code annotated} bean archive do
+     * not discover it, and the repository was then left unsatisfied (mansart-it-weld).
+     */
+    @Registration(types = Object.class)
+    public void recordManagedBeans(BeanInfo bean) {
+        registrationSeen = true;
+        if (bean.isClassBean()) {
+            managedBeanClasses.add(bean.declaringClass().name());
+        }
+        for (Type type : bean.types()) {
+            ClassInfo declaration = declarationOf(type);
+            if (declaration != null) managedBeanTypes.add(declaration.name());
+        }
+        ClassLoader cl = currentClassLoader();
+        for (InjectionPointInfo point : bean.injectionPoints()) {
+            ClassInfo declaration = declarationOf(point.type());
+            // The lang model of a class outside the bean archive (a dependency jar's) carries its name only: the
+            // interface and its @Repository are read from the class itself, the way the run-time path loads it.
+            Repository repository = declaration == null ? null : repositoryAnnotation(cl, declaration.name());
+            if (repository != null) {
+                DeclarationInfo where = point.declaration();
+                String member = where != null && where.isField() ? "." + where.asField().name() : "";
+                injectedRepositories.putIfAbsent(declaration.name(),
+                        new Injection(bean.declaringClass().name() + member, foreignProvider(repository.provider())));
+            }
+        }
+    }
+
+    /** The {@code @Repository} of the interface {@code className} names, or {@code null} for any other type. */
+    private static Repository repositoryAnnotation(ClassLoader cl, String className) {
+        try {
+            Class<?> type = cl.loadClass(className);
+            return type.isInterface() ? type.getAnnotation(Repository.class) : null;
+        } catch (ClassNotFoundException | LinkageError _) {
+            return null;
+        }
+    }
+
+    /** The provider a repository names when it is not Mansart (Jakarta Data §4), else {@code null}. */
+    private static String foreignProvider(jakarta.enterprise.lang.model.AnnotationInfo repository) {
+        var member = repository.member("provider");
+        return member == null ? null : foreignProvider(member.asString());
+    }
+
+    private static String foreignProvider(String provider) {
+        return provider == null || provider.isEmpty() || provider.equalsIgnoreCase("mansart") ? null : provider;
+    }
+
+    /** The class a type refers to (a class or a parameterized type), or {@code null} for any other type. */
+    private static ClassInfo declarationOf(Type type) {
+        if (type.isClass()) return type.asClass().declaration();
+        if (type.isParameterizedType()) return type.asParameterizedType().declaration();
+        return null;
+    }
+
+    /**
+     * A repository a bean injects that nothing implements is, under Vidocq, the interface of a dependency jar the
+     * build did not enrich: the jar is on the class path, not in the bean archive, so the processor never saw the
+     * interface and no implementation exists. The container would report a bare unsatisfied dependency; this names
+     * the repository, the bean, the jar and the fix (mansart#85). Only at run time: while the Vauban processor
+     * replays this extension at compile time, the application's beans are not loadable yet, and the dependency jars
+     * are enriched by {@code vidocq:generate} after that compilation.
+     */
+    @Validation
+    public void everyInjectedRepositoryHasAnImplementation(Messages messages) {
+        ClassLoader cl = currentClassLoader();
+        for (Map.Entry<String, Injection> injected : injectedRepositories.entrySet()) {
+            String bean = injected.getValue().bean();
+            if (!isImplemented(injected.getKey()) && loadable(cl, bean.contains(".") ? beanClassOf(bean) : bean)) {
+                messages.error(notImplemented(cl, injected.getKey(), injected.getValue()));
+            }
+        }
+    }
+
+    /** Why nothing implements {@code repository}: the provider it names, or the jar the build did not enrich. */
+    private static String notImplemented(ClassLoader cl, String repository, Injection injected) {
+        String where = "Repository " + repository + ", injected in " + injected.bean() + ", ";
+        if (injected.foreignProvider() != null) {
+            return where + "is declared for the Jakarta Data provider \"" + injected.foreignProvider()
+                    + "\" (@Repository(provider)), and nothing on the class path implements it: add that provider, or"
+                    + " remove the provider attribute for Mansart to implement it.";
+        }
+        return where + "has no implementation: it comes from " + codeSourceOf(cl, repository) + ", which was not"
+                + " enriched by vidocq:generate (a signed jar, processed only when scanDependencies names it; a jar"
+                + " scanExcludes names; a build where the goal did not run; or a jar it could not process, see its"
+                + " log). Fix: let vidocq:generate process the jar, or build the library with mansart-data-processor"
+                + " on its annotation processor path.";
+    }
+
+    private boolean isImplemented(String repository) {
+        String canonical = repository.replace('$', '.');
+        return runtimeRepoFqns.contains(repository) || managedBeanTypes.contains(repository)
+                || entries.stream().anyMatch(e -> e.itfFqn().equals(canonical) || e.itfFqn().equals(repository));
+    }
+
+    /** The bean's class from {@code Class.member}: the member is the last segment when there is one. */
+    private static String beanClassOf(String bean) {
+        int dot = bean.lastIndexOf('.');
+        return Character.isLowerCase(bean.charAt(dot + 1)) ? bean.substring(0, dot) : bean;
+    }
+
+    private static boolean loadable(ClassLoader cl, String className) {
+        try {
+            cl.loadClass(className);
+            return true;
+        } catch (ClassNotFoundException | LinkageError _) {
+            return false;
+        }
+    }
+
+    /** The jar or directory {@code className} is loaded from, by its name; a generic phrase when unknown. */
+    private static String codeSourceOf(ClassLoader cl, String className) {
+        try {
+            var source = cl.loadClass(className).getProtectionDomain().getCodeSource();
+            if (source != null && source.getLocation() != null) {
+                String path = source.getLocation().getPath();
+                String kind = path.endsWith("/") ? "the directory " : "the jar ";
+                while (path.endsWith("/")) {
+                    path = path.substring(0, path.length() - 1);
+                }
+                return kind + path.substring(path.lastIndexOf('/') + 1);
+            }
+        } catch (ClassNotFoundException | LinkageError | SecurityException _) {
+            // fall through: the class is not loadable, the jar stays unnamed
+        }
+        return "a dependency jar";
+    }
+
+    @Synthesis
+    public void registerRepositories(SyntheticComponents components, Types types) {
+        ClassLoader cl = currentClassLoader();
+
+        // The runtimes of the routed data stores are the container's own (MANSART-041): see DataStoreRuntimes.
+        components.addBean(DataStoreRuntimes.class)
+                .type(DataStoreRuntimes.class)
+                .scope(jakarta.inject.Singleton.class)
+                .createWith(DataStoreRuntimesCreator.class);
+
+        // Compile-time path — APT-generated *RepositoryImpl from mansart-data-processor
+        for (RepoEntry e : entries) registerCompileTimeEntry(components, types, cl, e);
+
+        // Runtime path (M7-4) — @Repository interfaces with no APT-generated impl (e.g. TCK).
+        for (String fqn : runtimeRepoFqns) registerRuntimeEntry(components, types, cl, fqn);
+    }
+
+    /**
+     * Whether the container manages {@code impl} as a bean of its own. Decided from what
+     * {@code @Registration} saw; a container that never ran that phase keeps the former rule, the
+     * bean scope annotations the processor emits.
+     */
+    boolean isManagedBean(Class<?> impl) {
+        return registrationSeen ? managedBeanClasses.contains(impl.getName()) : isAlreadyManagedBean(impl);
+    }
+
+    private void registerCompileTimeEntry(SyntheticComponents components, Types types, ClassLoader cl, RepoEntry e) {
+        Class<?> itf;
+        try {
+            itf = cl.loadClass(e.itfFqn());
+        } catch (ClassNotFoundException _) {
+            // Compile-time: the impl/interface aren't loadable yet from the APT classloader.
+            // Skip silently — the runtime container will register the bean correctly when it
+            // re-runs this BCE with a classloader that can see the user module.
+            return;
+        }
+        Class<?> impl;
+        try {
+            impl = cl.loadClass(e.implFqn());
+        } catch (ClassNotFoundException _) {
+            // MANSART-027: the interface is there but its generated implementation is gone (deleted, or a stale
+            // index left by an incremental build). The entry kept the interface off the runtime path, so serve
+            // it there now rather than leave the application without the bean.
+            LOG.log(System.Logger.Level.WARNING, "Repository {0} is indexed with {1}, which cannot be loaded;"
+                    + " it is implemented at run time instead. Rebuild the module to regenerate it.",
+                    e.itfFqn(), e.implFqn());
+            registerRuntimeEntry(components, types, cl, e.itfFqn());
+            return;
+        }
+        Repository ann = itf.getAnnotation(Repository.class);
+        boolean routed = ann != null && isRouted(ann.dataStore());
+        // Default dataStore: skip if the impl is already a managed CDI bean (recent
+        // mansart-data-processor versions emit @Singleton on *RepositoryImpl) — its
+        // unqualified RepositoryRuntime injection is correct there, and re-registering a
+        // synthetic bean would create an ambiguous dependency for @Inject MyRepository.
+        // Non-default dataStore (MANSART-005): the impl was vetoed at @Enhancement, so the
+        // synthetic bean below is the only one and its creator routes via DataStoreResolver.
+        if (!routed && isManagedBean(impl)) return;
+        registerCompileTime(components, types, itf, impl);
+    }
+
+    private void registerRuntimeEntry(SyntheticComponents components, Types types, ClassLoader cl, String fqn) {
+        Class<?> itf;
+        try {
+            itf = cl.loadClass(fqn);
+        } catch (ClassNotFoundException _) {
+            // Same compile-time tolerance as above: defer to runtime.
+            return;
+        }
+        // Skip if a sibling *RepositoryImpl bean already covers this interface (handles the
+        // case where the runtime path saw a @Repository whose impl is actually APT-generated
+        // and managed by CDI — happens when the bean archive contains both).
+        if (hasManagedImplFor(cl, fqn)) return;
+        registerRuntime(components, types, itf);
+    }
+
+    private static boolean isAlreadyManagedBean(Class<?> impl) {
+        return impl.isAnnotationPresent(jakarta.inject.Singleton.class)
+                || impl.isAnnotationPresent(jakarta.enterprise.context.ApplicationScoped.class)
+                || impl.isAnnotationPresent(jakarta.enterprise.context.Dependent.class);
+    }
+
+    /** True when {@code dataStore} names a specific store (CDI {@code @Named} or JNDI). */
+    private static boolean isRouted(String dataStore) {
+        return dataStore != null && !dataStore.isEmpty()
+                && !Repository.DEFAULT_DATA_STORE.equals(dataStore);
+    }
+
+    private boolean hasManagedImplFor(ClassLoader cl, String itfFqn) {
+        // Convention: the APT-generated implementation lives next to the interface, named after its binary name
+        // with _ for $ (Generated.implementationName). We accept multi-package layouts only via the explicit
+        // compile-time list above; this heuristic is the runtime-path twin and only checks the conventional sibling.
+        try {
+            Class<?> impl = cl.loadClass(io.vidocq.mansart.data.core.Generated.implementationName(itfFqn));
+            return isManagedBean(impl);
+        } catch (ClassNotFoundException _) {
+            return false;
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void registerCompileTime(SyntheticComponents components, Types types, Class<?> itf,
+            Class<?> impl) {
+        // M9 — itfClass is forwarded so the creator can read @Repository(dataStore) and pick
+        // the matching RepositoryRuntime (CDI @Named or JNDI lookup).
+        withSupertypes(components.<Object>addBean((Class) itf).type(itf), types, itf)
+                .scope(jakarta.inject.Singleton.class)
+                .withParam("implClass", impl)
+                .withParam("itfClass", itf)
+                .createWith(MansartRepoCreator.class);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void registerRuntime(SyntheticComponents components, Types types, Class<?> itf) {
+        withSupertypes(components.<Object>addBean((Class) itf).type(itf), types, itf)
+                .scope(jakarta.inject.Singleton.class)
+                .withParam("itfClass", itf)
+                .createWith(MansartRuntimeRepoCreator.class);
+    }
+
+    /**
+     * Gives the synthetic bean of a repository the parameterized super-interfaces of its interface
+     * ({@code BasicRepository<Author, Long>}), as the generated implementation's class bean has them: a repository
+     * is then injected by the same types whatever its data store (MANSART-068).
+     */
+    private static SyntheticBeanBuilder<Object> withSupertypes(SyntheticBeanBuilder<Object> bean, Types types,
+            Class<?> itf) {
+        for (Type supertype : RepositoryBeanTypes.of(types, itf)) {
+            bean.type(supertype);
+        }
+        return bean;
+    }
+
+    private static ClassLoader currentClassLoader() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        return cl != null ? cl : MansartDataExtension.class.getClassLoader();
+    }
+}

@@ -1,0 +1,220 @@
+= mansart-jakarta-data
+:repo-noether: https://codefloe.com/Vidocq/noether
+:description: Jakarta Data 1.0 implementation — repositories, JDQL, JDBC dialects, APT codegen.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
+
+[.lead]
+`mansart-jakarta-data` implements {spec-data-1}[Jakarta Data 1.0] — `@Repository` annotations, query methods, pagination, JDQL — on top of JDBC, with no heavy ORM, no runtime reflection. Every user-defined repository is materialized at compile time by APT. Official TCK: 74/74 PASS (M7, May 2026).
+
+== Mission
+
+* Cover the common persistence needs (CRUD, typed queries, pagination) without forcing an `EntityManager`.
+* Zero runtime reflection — static metamodel + cached `MethodHandle`.
+* Pluggable JDBC dialects (H2, PostgreSQL delivered; MariaDB / SQL Server on the backlog).
+* AOT-compatible (GraalVM native-image, Leyden CDS).
+
+== Modules
+
+[cols="2,3"]
+|===
+| Sub-module | Role
+
+| `mansart-data-core`
+| Runtime: `RepositoryRuntime`, query execution, ResultSet ↔ entity mapping, connection management.
+
+| `mansart-data-cdi`
+| CDI 4.1 Lite bootstrap (Build Compatible Extension) — `@Repository` beans, `RepositoryRuntime` producer, `dataStore` routing.
+
+| `mansart-data-dialects`
+| `mansart-data-dialect-spi` + shipped dialects `mansart-data-dialect-h2`, `mansart-data-dialect-postgresql`.
+
+| `mansart-data-processor`
+| APT — static metamodel (`_Book`, `Book_`) + `*RepositoryImpl` + `META-INF/mansart-repositories.list`.
+
+| `mansart-data-maven-plugin`
+| Maven plugin — generates, at build time, the `*RepositoryImpl` for `@Repository` interfaces coming from **dependency jars** (where the APT never ran), indexed in `META-INF/mansart-repositories-external.list`.
+
+| `mansart-data-dialect-spi`
+| SPI: `Dialect`, `DialectFactory`, neutral query AST.
+
+| `mansart-data-dialect-h2`
+| H2 dialect (test reference + embedded).
+
+| `mansart-data-dialect-postgresql`
+| PostgreSQL dialect (production target).
+
+| `mansart-data-cdi`
+| CDI 4.1 bootstrap — BCE that reads `META-INF/mansart-repositories.list` (and `…-external.list` produced by the plugin) and declares the repository beans.
+
+| `mansart-data-tests`
+| H2 in-memory unit tests.
+
+| `mansart-data-tck`
+| Jakarta Data 1.0 TCK runner — **out of reactor** (standalone POM Model 4.0.0).
+|===
+
+== Quickstart
+
+See xref:getting-started.adoc[Getting started]. Summary:
+
+[source,java]
+----
+@Entity
+public class Author {
+    @Id @GeneratedValue Long id;
+    String name;
+}
+
+@Repository
+public interface AuthorRepository extends BasicRepository<Author, Long> {
+    List<Author> findByName(String name);
+    @Query("FROM Author WHERE name LIKE :pattern")
+    List<Author> search(String pattern);
+}
+
+// APT generates AuthorRepositoryImpl + _Author + META-INF/mansart-repositories.list
+----
+
+== Functional scope (delivered)
+
+* `BasicRepository`, `CrudRepository`, `DataRepository`.
+* Inherited methods: `save`, `saveAll`, `findById`, `findAll`, `deleteById`, `delete`, `deleteAll` (+ `insert`/`update` pairs via `CrudRepository`).
+* Lifecycle: `@Insert`, `@Update`, `@Delete`, `@Save`.
+* `@Find` (parameter-name binding) — served by the reflective runtime fallback; the APT compiles `@Query` and the lifecycle annotations.
+* Derived queries: `findBy`, `existsBy`, `countBy`, `deleteBy` + `And`, `Or`, `Like`, `Between`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
+* `@Query` JDQL (SELECT/UPDATE/DELETE).
+* Offset pagination (`PageRequest.ofPage(n).size(s)`) and keyset cursors (`PageRequest.afterCursor(cursor)`).
+* `Sort`, `Order`, `Limit`.
+* SQLState → Jakarta Data exception mapping (`OptimisticLockingFailureException`, `EntityExistsException`, etc.).
+
+== Out of scope v1
+
+* Explicit JDQL subqueries.
+* Multi-level explicit joins.
+* Multi-attribute aggregations.
+* `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`.
+* `@Convert` / `AttributeConverter`.
+* NoSQL (Jakarta Data NoSQL is an extension out of scope for Mansart v1).
+
+Deferred to `noether-persistence` or v1.1.
+
+== Runtime architecture
+
+[mermaid]
+....
+flowchart TB
+    REPO[Repository Impl<br/>APT-generated] --> PLAN[prepared query plan<br/>cached]
+    PLAN --> RT[RepositoryRuntime]
+    RT --> DIAL[Dialect SPI]
+    DIAL --> SQL[SQL + parameters]
+    RT --> CONN[Connection<br/>via DataSource]
+    CONN --> JDBC[(JDBC driver)]
+    RT --> MM[_Book metamodel<br/>MethodHandle setters]
+    MM --> ROW[Author instance]
+....
+
+* Query plans prepared at `<clinit>` (static constants).
+* `MethodHandle` cached once via `MethodHandles.privateLookupIn(...)`.
+* Connection: borrowed from the injected `DataSource`; released at the end of the method (unless a TX is active → the TX connection).
+
+See xref:internals.adoc[Internals] for codegen and mapping details.
+
+== Repositories from external jars (AOT generation, Maven plugin)
+
+By default, only the `@Repository` interfaces present in the application's **sources** are
+materialized by the APT. A `@Repository` shipped by an **already-compiled dependency** (a library
+that did not run the APT) therefore has no implementation: at runtime the BCE falls back to a
+**reflective** path (a proxy generated at startup via the Class-File API).
+
+`mansart-data-maven-plugin` removes that fallback for application builds. Its
+`generate-external-repositories` goal (phase `generate-sources`):
+
+. scans the compile classpath (JDK Class-File API) for `@Repository` interfaces with no
+  implementation (deduplicated against the `mansart-repositories*.list` indices already present);
+. reuses **the very same emitters as the APT** through a source-less `javac` task — no duplicated
+  codegen;
+. generates the `*RepositoryImpl` (and any missing `_Entity` metamodels) into an
+  **application-owned package**, referring to the external types by fully-qualified name → **no Java Modules
+  split package** with the originating jar;
+. writes the `META-INF/mansart-repositories-external.list` index, read by the `mansart-data-cdi` BCE
+  alongside the APT index.
+
+The result: beans for library-provided repositories are wired **statically** (zero reflection), just
+like the application's own. The reflective path remains the safety net for archives you do not build
+(TCK suites, opaque jars).
+
+[source,xml]
+----
+<plugin>
+  <groupId>io.vidocq.mansart</groupId>
+  <artifactId>mansart-data-maven-plugin</artifactId>
+  <version>${mansart.version}</version>
+  <executions>
+    <execution>
+      <goals><goal>generate-external-repositories</goal></goals>
+    </execution>
+  </executions>
+  <!-- Optional: target package for the generated classes (default: derived from project coordinates). -->
+  <configuration>
+    <targetPackage>com.acme.app.mansart.generated</targetPackage>
+  </configuration>
+</plugin>
+----
+
+[NOTE]
+====
+The generated metamodel reads the entity's private fields via `MethodHandles.privateLookupIn`, so an
+entity provided by an external jar must remain **reflectively accessible** (classpath, or an open
+module). A sealed module-path entity requires an `opens`. If the library was itself compiled with the
+APT (it already ships its `_Entity`), the plugin reuses that metamodel instead of regenerating one.
+====
+
+== Dialects
+
+[cols="2,1,3"]
+|===
+| Dialect | Status | Key notes
+
+| H2 | ✅ Delivered | `MERGE INTO`, `LIMIT/OFFSET`, `IDENTITY`.
+| PostgreSQL | ✅ Delivered | `ON CONFLICT`, `RETURNING`, `UUID`/`JSONB` types.
+| MariaDB | ❌ Backlog | —
+| SQL Server | ❌ Backlog | —
+|===
+
+Key differences isolated in the dialect: pagination, upsert, identifier return, native types (`UUID`, `JSONB`, `BOOLEAN`), snake_case schema.
+
+== Java Modules
+
+[source,java]
+----
+module io.vidocq.mansart.data.core {
+    requires transitive io.vidocq.mansart.data.dialect.spi;
+    requires java.sql;
+    requires jakarta.data;
+    requires transitive jakarta.inject;   // *RepositoryImpl carries @Singleton/@Inject
+    exports io.vidocq.mansart.data.core;
+    uses io.vidocq.mansart.data.dialect.DialectFactory;
+}
+----
+
+== Bench
+
+First smoke: see link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BENCH.md[mansart-jakarta-data BENCH.md] (BENCH-20260504-01: `findById` H2 in-memory).
+
+== Bugs
+
+See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled) — resolved via the M7 runtime repo creator.
+
+== Roadmap
+
+* ✅ M2 — Skeleton + APT metamodel.
+* ✅ M3a — H2 dialect + BasicRepository CRUD.
+* ⏳ M3b — Keyset pagination, lifecycle, derived queries (extras).
+* ⏳ M4 — PostgreSQL dialect.
+* ⏳ M5 — `@Query` JDQL (extras — base delivered in M7-27).
+* ✅ M6 — Jakarta Data 1.0 TCK.
+* ✅ M7 — Runtime impl generation — TCK 74/74 PASS.
+
+See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md] for sub-milestone details (M7-26 to M7-29).

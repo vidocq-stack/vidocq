@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.mansart.data.cdi;
+
+import io.vidocq.mansart.data.core.MansartData;
+import io.vidocq.mansart.data.core.MansartDataException;
+import io.vidocq.mansart.data.core.RepositoryRuntime;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Singleton;
+
+import javax.sql.DataSource;
+
+/**
+ * Default CDI producer for {@link RepositoryRuntime}. Backs every {@code @Repository} whose
+ * {@code dataStore} attribute is empty (the spec default). Multi-tenant deployments that route
+ * every repository through {@code @Repository(dataStore = "name")} never trigger this producer —
+ * hence the {@link Instance} indirection: a missing {@code @Default DataSource} is only a
+ * problem if some repository actually needs the default runtime.
+ *
+ * <p>Discovered by {@link MansartDataExtension} via {@code ScannedClasses.add(...)} at
+ * {@code @Discovery}. Vauban-processor indexes the class for validation but skips emitting a
+ * {@code *_Factory.class} in the user module's output — the class lives in this jar and
+ * Vauban-runtime falls back to a reflective factory. Override by declaring your own
+ * {@code @Produces RepositoryRuntime} method, which CDI takes in priority.
+ */
+@Singleton
+public class MansartRuntimeProducer {
+
+    @Produces
+    @Singleton
+    public RepositoryRuntime runtime(Instance<DataSource> defaultDs, Instance<Object> lookup) {
+        if (defaultDs.isUnsatisfied()) {
+            throw new MansartDataException(
+                    "No @Default DataSource bean found. Either expose one, or route every repository "
+                            + "through @Repository(dataStore = \"name\") with a matching @Named DataSource.");
+        }
+        if (defaultDs.isAmbiguous()) {
+            throw new MansartDataException(
+                    "Multiple @Default DataSource beans match. Disambiguate with @Named and route "
+                            + "each repository via @Repository(dataStore = \"name\").");
+        }
+        // MANSART-007 — when a TransactionManager is present, repository connections join the
+        // active JTA transaction. The lookup parameter is Instance<Object> on purpose: a typed
+        // Instance<TransactionManager> parameter would make this producer's signature
+        // unloadable in deployments without jakarta.transaction.
+        return MansartData.builder()
+                .dataSource(defaultDs.get())
+                .transactionBridge(JtaBridgeActivator.tryCreate(lookup))
+                .build().runtime();
+    }
+}

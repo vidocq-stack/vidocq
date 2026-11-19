@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-transactions</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-transactions-api</artifactId>
+    <name>Mansart :: Transactions :: API</name>
+    <description>Re-exposure of jakarta.transaction-api 2.0 + Mansart helper SPI (XAResource enrolment hooks, transactional callbacks).</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+        </dependency>
+        <!-- jakarta.transaction-api 2.0's module-info requires jakarta.cdi and jakarta.interceptor
+             (for @TransactionScoped and @Transactional): they must be on the module path to compile.
+             Provided: the CDI container brings them at run time (vidocq-workspace#17), so each
+             module compiling against this API declares them too. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>

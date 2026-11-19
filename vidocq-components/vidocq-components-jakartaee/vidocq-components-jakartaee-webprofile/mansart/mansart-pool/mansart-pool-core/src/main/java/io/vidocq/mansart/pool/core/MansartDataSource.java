@@ -1,0 +1,222 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.mansart.pool.core;
+
+import io.vidocq.mansart.pool.PoolConfig;
+import io.vidocq.mansart.pool.PoolMetrics;
+
+import javax.sql.DataSource;
+import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.Objects;
+import java.util.logging.Logger;
+
+/**
+ * Pool front-end implementing {@link DataSource}. MP-A skeleton — borrow / restitution land in MP-B.
+ *
+ * <p>Constructed via {@link #of(PoolConfig)}. The instance is its own resource: call {@link #close()}
+ * to drain the pool and reject further borrows.
+ */
+public final class MansartDataSource implements DataSource, AutoCloseable {
+
+    private final PoolConfig     config;
+    private final ConnectionPool pool;
+    /** The application's class loader when the pool was built: where the XA data source class is loaded from. */
+    private final ClassLoader    driverLoader;
+    /** Built lazily from {@code config.xaDataSourceClassName()} — MANSART-007 phase 2. */
+    private volatile javax.sql.XADataSource xaDataSource;
+    /** What {@code unwrap(XADataSource.class)} answers: XA connections borrowed from this pool (MANSART-065). */
+    private final javax.sql.XADataSource pooledXaDataSource = new PooledXADataSource();
+
+    private MansartDataSource(PoolConfig config) {
+        this.config = Objects.requireNonNull(config, "config");
+        this.driverLoader = DriverLocator.applicationLoader(MansartDataSource.class);
+        this.pool   = config.xaDataSourceClassName() == null
+                ? new ConnectionPool(config)
+                : new ConnectionPool(config, this::xaDataSource);
+    }
+
+    public static MansartDataSource of(PoolConfig config) {
+        return new MansartDataSource(config);
+    }
+
+    /** The configuration this pool was built with. */
+    public PoolConfig config() {
+        return config;
+    }
+
+    /** Live snapshot of pool counters. */
+    public PoolMetrics snapshot() {
+        return pool.snapshot();
+    }
+
+    @Override
+    public Connection getConnection() throws SQLException {
+        return pool.acquire();
+    }
+
+    @Override
+    public Connection getConnection(String username, String password) throws SQLException {
+        // Per-call credentials override is intentionally not supported — pool credentials are set
+        // once via PoolConfig. Override at the DataSource level by building a second pool.
+        throw new SQLFeatureNotSupportedException(
+                "Per-call credentials are not supported; use PoolConfig.username/password");
+    }
+
+    @Override
+    public void close() {
+        pool.close();
+    }
+
+    /* ---- DataSource boilerplate ---- */
+
+    @Override public PrintWriter getLogWriter()                  { return null; }
+    @Override public void        setLogWriter(PrintWriter out)   { /* no-op */ }
+    @Override public void        setLoginTimeout(int seconds)    { /* no-op — see PoolConfig.acquireTimeout */ }
+    @Override public int         getLoginTimeout()               { return (int) config.acquireTimeout().toSeconds(); }
+    @Override public Logger      getParentLogger()               { return Logger.getLogger("io.vidocq.mansart.pool"); }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (iface.isInstance(this)) return (T) this;
+        if (iface == javax.sql.XADataSource.class && config.xaDataSourceClassName() != null) {
+            xaDataSource(); // a class the pool cannot build is reported here, not at the first transaction
+            return (T) pooledXaDataSource;
+        }
+        throw new SQLException("Not a wrapper for " + iface.getName());
+    }
+
+    @Override
+    public boolean isWrapperFor(Class<?> iface) {
+        return iface.isInstance(this)
+                || (iface == javax.sql.XADataSource.class && config.xaDataSourceClassName() != null);
+    }
+
+    /**
+     * The driver's {@link javax.sql.XADataSource} configured with this pool's URL, credentials and driver
+     * properties (MANSART-007 phase 2). Built once by reflection from {@code xaDataSourceClassName} —
+     * config-driven, so the pool stays free of driver dependencies. The pool opens every one of its
+     * connections on it (MANSART-065): it never leaves this class but through the pool.
+     */
+    private javax.sql.XADataSource xaDataSource() throws SQLException {
+        javax.sql.XADataSource existing = xaDataSource;
+        if (existing != null) return existing;
+        synchronized (this) {
+            if (xaDataSource == null) {
+                xaDataSource = buildXaDataSource();
+            }
+            return xaDataSource;
+        }
+    }
+
+    private javax.sql.XADataSource buildXaDataSource() throws SQLException {
+        String className = config.xaDataSourceClassName();
+        try {
+            Class<?> type = Class.forName(className, true, driverLoader);
+            Object instance = type.getDeclaredConstructor().newInstance();
+            setBeanProperty(type, instance, new String[]{"setURL", "setUrl"}, config.jdbcUrl());
+            if (config.username() != null) {
+                setBeanProperty(type, instance, new String[]{"setUser"}, config.username());
+            }
+            if (config.password() != null) {
+                setBeanProperty(type, instance, new String[]{"setPassword"}, config.password());
+            }
+            for (var property : config.driverProperties().entrySet()) {
+                setDriverProperty(type, instance, property.getKey(), property.getValue());
+            }
+            return (javax.sql.XADataSource) instance;
+        } catch (ReflectiveOperationException | ClassCastException e) {
+            throw new SQLException("Cannot build the XADataSource '" + className
+                    + "' configured for this pool (xaDataSourceClassName)", e);
+        }
+    }
+
+    /**
+     * The class of the JDBC driver that a pool built now, on this thread, would use for {@code jdbcUrl}: a
+     * {@code java.sql.Driver} provider visible to the context class loader, else one registered with
+     * {@code DriverManager}. For diagnostics and tests.
+     */
+    public static String driverClassFor(String jdbcUrl) throws SQLException {
+        return DriverLocator.find(jdbcUrl, DriverLocator.applicationLoader(MansartDataSource.class))
+                .getClass().getName();
+    }
+
+    /**
+     * Hands one of {@code PoolConfig.driverProperties} to the XA data source: its bean setter
+     * ({@code setDescription} for {@code description}) when it has one taking a {@code String}, else its
+     * {@code setProperty(String, String)} (PostgreSQL). A property it can take neither way is an error: the
+     * pool does not drop configuration silently.
+     */
+    private static void setDriverProperty(Class<?> type, Object instance, String name, String value)
+            throws ReflectiveOperationException {
+        String setter = "set" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        try {
+            type.getMethod(setter, String.class).invoke(instance, value);
+            return;
+        } catch (NoSuchMethodException _) {
+            // no bean setter of that name — try the generic one below
+        }
+        try {
+            type.getMethod("setProperty", String.class, String.class).invoke(instance, name, value);
+        } catch (NoSuchMethodException _) {
+            throw new NoSuchMethodException(type.getName() + " takes the driver property '" + name
+                    + "' neither through " + setter + "(String) nor through setProperty(String, String)");
+        }
+    }
+
+    /** The XA face of the pool: each XA connection is a borrow, given back by its {@code close()}. */
+    private final class PooledXADataSource implements javax.sql.XADataSource {
+
+        @Override
+        public javax.sql.XAConnection getXAConnection() throws SQLException {
+            return pool.acquireXa();
+        }
+
+        @Override
+        public javax.sql.XAConnection getXAConnection(String user, String password) throws SQLException {
+            throw new SQLFeatureNotSupportedException(
+                    "Per-call credentials are not supported; use PoolConfig.username/password");
+        }
+
+        @Override public PrintWriter getLogWriter()                { return MansartDataSource.this.getLogWriter(); }
+        @Override public void        setLogWriter(PrintWriter out) { /* no-op */ }
+        @Override public void        setLoginTimeout(int seconds)  { /* no-op — see PoolConfig.acquireTimeout */ }
+        @Override public int         getLoginTimeout()             { return MansartDataSource.this.getLoginTimeout(); }
+        @Override public Logger      getParentLogger()             { return MansartDataSource.this.getParentLogger(); }
+    }
+
+    private static void setBeanProperty(Class<?> type, Object instance,
+                                        String[] setterCandidates, String value)
+            throws ReflectiveOperationException {
+        for (String name : setterCandidates) {
+            try {
+                type.getMethod(name, String.class).invoke(instance, value);
+                return;
+            } catch (NoSuchMethodException _) {
+                // driver naming differs (setURL vs setUrl) — try the next candidate
+            }
+        }
+        throw new NoSuchMethodException(type.getName() + " has none of "
+                + String.join("/", setterCandidates) + "(String)");
+    }
+}

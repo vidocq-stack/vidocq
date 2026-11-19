@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-it-other-containers</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-it-openliberty</artifactId>
+    <packaging>war</packaging>
+    <name>Mansart :: Integration tests on Open Liberty</name>
+    <description>Portability proof: a WAR bundling the Mansart Data jars, unchanged, deployed on Open
+        Liberty (Jakarta EE 11 Web Profile distribution, CDI 4.1) with Liberty's own data feature off — a Jakarta
+        Data repository on a Liberty data source looked up through JNDI, its writes inside Liberty's
+        transactions (vidocq-workspace#15, mansart#35).</description>
+
+    <properties>
+        <!-- The application under test has no public API to document. -->
+        <maven.javadoc.failOnError>false</maven.javadoc.failOnError>
+        <!-- Open Liberty runtime: the Jakarta EE 11 Web Profile distribution ships the cdi-4.1,
+             restfulWS-4.0 and jdbc-4.3 features (the MicroProfile 7 one has no JDBC), so nothing is
+             installed from the network at build time. Its data-1.0 feature stays off. -->
+        <openliberty.version>26.0.0.10</openliberty.version>
+        <liberty.maven.plugin.version>3.12.3</liberty.maven.plugin.version>
+        <failsafe.plugin.version>3.5.5</failsafe.plugin.version>
+        <build.helper.plugin.version>3.6.1</build.helper.plugin.version>
+        <war.plugin.version>3.4.0</war.plugin.version>
+        <!-- SonarQube: this application only exists to be tested inside Open Liberty, whose JVM
+             JaCoCo does not instrument; its code would only count as uncovered (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
+    </properties>
+
+    <!--
+        The WAR bundles mansart-data-cdi and the H2 dialect with what they bring transitively
+        (mansart-data-core, the dialect SPI, the Jakarta Data API), exactly as an application would.
+        The Jakarta platform APIs are `provided` by Liberty's features; the H2 driver is a server
+        library behind Liberty's data source. Liberty's data feature is never enabled: it would serve
+        the repository itself and the test would prove nothing about Mansart. Transactions are
+        Liberty's: Mansart Transactions is a Vidocq-side implementation and stays out of the WAR.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-cdi</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-h2</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>${jakarta.persistence.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <!-- CDI 4.1, the level of Liberty's cdi-4.1 feature and the one Mansart targets. -->
+            <version>4.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>3.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+            <version>${jakarta.transaction.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <!-- Jakarta REST 4.0, the level of Liberty's restfulWS-4.0 feature. -->
+            <version>4.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>${project.artifactId}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- The repository implementation is generated at build time, as for any
+                         application. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.mansart</groupId>
+                            <artifactId>mansart-data-processor</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>${war.plugin.version}</version>
+                <configuration>
+                    <failOnMissingWebXml>false</failOnMissingWebXml>
+                </configuration>
+            </plugin>
+            <!-- A free HTTP port per build, so parallel builds on one runner do not collide. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>${build.helper.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>reserve-ports</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>reserve-network-port</goal>
+                        </goals>
+                        <configuration>
+                            <portNames>
+                                <portName>liberty.http.port</portName>
+                                <portName>liberty.https.port</portName>
+                            </portNames>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.openliberty.tools</groupId>
+                <artifactId>liberty-maven-plugin</artifactId>
+                <version>${liberty.maven.plugin.version}</version>
+                <configuration>
+                    <runtimeArtifact>
+                        <groupId>io.openliberty</groupId>
+                        <artifactId>openliberty-webProfile11</artifactId>
+                        <version>${openliberty.version}</version>
+                        <type>zip</type>
+                    </runtimeArtifact>
+                    <serverName>mansartIt</serverName>
+                    <!-- Deploy the packaged WAR, the artefact an application ships — not a loose
+                         application, which points Liberty at the jars in the local repository and
+                         would test those instead of what the WAR holds. -->
+                    <deployPackages>project</deployPackages>
+                    <looseApplication>false</looseApplication>
+                    <!-- The H2 driver is a server library, behind Liberty's data source. -->
+                    <copyDependencies>
+                        <location>${project.build.directory}/liberty/wlp/usr/shared/resources/h2</location>
+                        <dependency>
+                            <groupId>com.h2database</groupId>
+                            <artifactId>h2</artifactId>
+                        </dependency>
+                    </copyDependencies>
+                    <bootstrapProperties>
+                        <http.port>${liberty.http.port}</http.port>
+                        <https.port>${liberty.https.port}</https.port>
+                    </bootstrapProperties>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>start-liberty</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>create</goal>
+                            <goal>deploy</goal>
+                            <goal>test-start</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>stop-liberty</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>test-stop</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${failsafe.plugin.version}</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <mansart.it.base>http://localhost:${liberty.http.port}/mansart</mansart.it.base>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

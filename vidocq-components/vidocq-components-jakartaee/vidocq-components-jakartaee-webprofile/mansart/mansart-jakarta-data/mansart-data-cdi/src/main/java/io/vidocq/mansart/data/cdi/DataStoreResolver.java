@@ -1,0 +1,122 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.mansart.data.cdi;
+
+import io.vidocq.mansart.data.core.MansartData;
+import io.vidocq.mansart.data.core.MansartDataException;
+import io.vidocq.mansart.data.core.RepositoryRuntime;
+import jakarta.data.repository.Repository;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.literal.NamedLiteral;
+
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
+import javax.sql.XADataSource;
+
+/**
+ * Resolves the {@link RepositoryRuntime} bound to a given {@code @Repository}'s {@code dataStore}.
+ *
+ * <p>The Jakarta Data 1.0 spec defines {@link Repository#dataStore()} with three precedence rules,
+ * the lowest of which is "vendor-specific identifier". Mansart binds that vendor slot to a
+ * <b>CDI {@code @Named} lookup</b> on a {@link DataSource} bean — there is no Mansart-proprietary
+ * annotation in the API surface; the spec attribute carries the contract.
+ *
+ * <p>Resolution order, highest priority first:
+ * <ol>
+ *   <li>Empty value ({@link Repository#DEFAULT_DATA_STORE}) — fall back to the {@link RepositoryRuntime}
+ *       {@code @Default} synthetic bean wired by {@link MansartDataExtension} via
+ *       {@link DefaultRepositoryRuntimeCreator}.</li>
+ *   <li>Value starts with {@code "java:"} — JNDI lookup, must yield a {@link DataSource}. Spec-mandated
+ *       behaviour for EE deployments.</li>
+ *   <li>Otherwise — CDI lookup of {@code DataSource @Named(value)}.</li>
+ * </ol>
+ *
+ * <p>{@link XADataSource} beans matching the requested name produce a clear error: full XA wiring
+ * lands with the JTA bridge in {@code mansart-persistence}; until then, Mansart only consumes plain
+ * {@link DataSource}.
+ *
+ * <p>Each resolved {@link DataSource} is wrapped in a fresh {@link RepositoryRuntime}, then cached by
+ * dataStore key in the container's {@link DataStoreRuntimes} — multiple repositories targeting the same store of one
+ * container share one runtime, and a container never sees the runtimes of another.
+ */
+final class DataStoreResolver {
+
+    private DataStoreResolver() {}
+
+    /**
+     * @param lookup  CDI {@link Instance} handle from the synthetic-bean creator
+     * @param repoItf the {@code @Repository}-annotated interface being instantiated
+     */
+    static RepositoryRuntime resolve(Instance<Object> lookup, Class<?> repoItf) {
+        Repository ann = repoItf.getAnnotation(Repository.class);
+        String key = ann == null ? Repository.DEFAULT_DATA_STORE : ann.dataStore();
+        if (key == null || key.isEmpty() || Repository.DEFAULT_DATA_STORE.equals(key)) {
+            return lookup.select(RepositoryRuntime.class).get();
+        }
+        return runtimes(lookup).of(key, k -> buildRuntime(lookup, k));
+    }
+
+    /** The runtimes of this container, held by the container itself: they die with it (MANSART-041). */
+    private static DataStoreRuntimes runtimes(Instance<Object> lookup) {
+        Instance<DataStoreRuntimes> held = lookup.select(DataStoreRuntimes.class);
+        if (!held.isResolvable()) {
+            throw new MansartDataException("The data store runtimes of this container are not registered: "
+                    + MansartDataExtension.class.getName() + " did not run its synthesis phase");
+        }
+        return held.get();
+    }
+
+    private static RepositoryRuntime buildRuntime(Instance<Object> lookup, String key) {
+        DataSource ds = key.startsWith("java:") ? jndiLookup(key) : cdiLookup(lookup, key);
+        // MANSART-007 — routed repositories join the caller's active JTA transaction too.
+        return MansartData.builder()
+                .dataSource(ds)
+                .transactionBridge(JtaBridgeActivator.tryCreate(lookup))
+                .build().runtime();
+    }
+
+    private static DataSource jndiLookup(String name) {
+        try {
+            Object obj = new InitialContext().lookup(name);
+            if (obj instanceof DataSource ds) return ds;
+            throw new MansartDataException(
+                    "JNDI lookup of dataStore '" + name + "' yielded " + obj.getClass().getName()
+                            + " — expected javax.sql.DataSource (XA bridge lands with mansart-persistence)");
+        } catch (NamingException e) {
+            throw new MansartDataException("JNDI lookup failed for dataStore '" + name + "'", e);
+        }
+    }
+
+    private static DataSource cdiLookup(Instance<Object> lookup, String name) {
+        Instance<DataSource> ds = lookup.select(DataSource.class, NamedLiteral.of(name));
+        if (ds.isResolvable()) return ds.get();
+        // MANSART-007 — a bean exposed only as XADataSource is adapted: outside a transaction
+        // the wrapper hands out plain connections; inside one, JtaTransactionBridge unwraps it
+        // and enlists the driver's XAResource (real two-phase commit).
+        Instance<XADataSource> xa = lookup.select(XADataSource.class, NamedLiteral.of(name));
+        if (xa.isResolvable()) {
+            return new XaBackedDataSource(xa.get());
+        }
+        throw new MansartDataException(
+                "No DataSource bean found with @Named(\"" + name + "\") for @Repository(dataStore=\""
+                        + name + "\")");
+    }
+}

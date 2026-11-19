@@ -1,0 +1,183 @@
+= Migration
+:repo-noether: https://codefloe.com/Vidocq/noether
+:description: From Hibernate, EclipseLink, Spring Data, HikariCP — transition paths to Mansart.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
+
+[.lead]
+Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2]), not proprietary extensions. Migrating from Spring Data is trivial — the Jakarta Data spec explicitly took Spring Data conventions on board. Hibernate / EclipseLink takes more effort if the application uses out-of-spec features (custom dialects, listeners, events).
+
+[#upgrading-from-0-3-0]
+== Upgrading from 0.3.0
+
+[#mapped-names-unquoted]
+=== Table and column names are no longer quoted
+
+Up to 0.4.0-RC2, Mansart Data put every table and column name between double quotes in its SQL, so a name was case-sensitive: the table of `Book` was `"books"`, exactly. From 0.4 a name is written as the mapping gives it, as Jakarta Persistence does (see xref:reference.adoc#name-quoting[Table and column names]): `books`, which the database folds to its own case.
+
+What it changes, by database:
+
+* *PostgreSQL, tables created without quotes* — nothing: `books` and `"books"` are the same table. A mapping in upper or mixed case (`@Table(name = "ITEM")`), which did not work, now names `item`.
+* *H2, tables created with quoted lower-case names* (`CREATE TABLE "books" (...)`, what the reference page advised for H2) — H2 reads the unquoted `books` as `BOOKS` and no longer finds the table: the repository fails with `The table books of entity … does not exist`, the message says that a table of another case exists, and its cause is H2's `Table "BOOKS" not found (candidates are: "books")`. Pick one: remove the quotes in the migrations of a database you can recreate; or add `DATABASE_TO_LOWER=TRUE` to the JDBC URL, which makes H2 fold to lower case; or keep the schema and write the mapped names with quotes (`@Table(name = "\"books\"")`, `@Column(name = "\"title\"")`).
+* *H2 with `DATABASE_TO_LOWER=TRUE`* — nothing.
+* *Any database, a table or column in mixed case, with a space, or named like a reserved word* (`"OrderLines"`, `"user"`, `"value"`) — the quotes that Mansart added must now be in the mapping: `@Table(name = "\"OrderLines\"")`, `@Column(name = "\"value\"")`. Without them the statement fails, with the database's own message for a reserved word.
+
+=== `Book_` is no longer generated
+
+Up to 0.4.0-RC2, `mansart-data-processor` also wrote the JPA canonical metamodel `Book_` when `jakarta.persistence-api` was on the compile class path. It no longer does: it writes the Jakarta Data metamodel `_Book` only, and `Book_` belongs to the persistence provider's processor (xref:concepts.adoc#static-metamodel[Concepts]). The `Book_` Mansart wrote declared every attribute a `SingularAttribute`, a collection included, and was never filled at run time.
+
+Code that uses `_Book` is unaffected. Code that refers to `Book_`:
+
+* *with Noether or another JPA provider* — put the provider's processor on the annotation processor path, next to `mansart-data-processor` (Noether's is `noether-jpa-processor`); it writes `Book_` with the right attribute kinds, and the provider fills it at startup;
+* *with Mansart Data alone* — use `_Book` instead: the attribute name `Book_.TITLE` becomes `_Book.title.name()`, or the literal `"title"` where Java needs a constant (an annotation value such as `@OrderBy`).
+
+=== `@Enumerated(EnumType.ORDINAL)` now stores the index
+
+Mansart 0.3.0 ignored `@Enumerated`: every enum attribute was stored by its constant name, in a text column, whatever the annotation said. From 0.4, `@Enumerated(EnumType.ORDINAL)` and a bare `@Enumerated` store the constant's index in an integer column (see xref:reference.adoc#enum-storage[enum storage]). An attribute with no `@Enumerated`, or with `@Enumerated(EnumType.STRING)`, is unaffected: it is still stored by name.
+
+If an entity declares `ORDINAL` (or a bare `@Enumerated`), its existing rows hold names that Mansart no longer reads for that attribute, and new rows would hold indexes. Before upgrading, pick one:
+
+* **Keep the data as it is** — change the attribute to `@Enumerated(EnumType.STRING)`, or remove the annotation. That is what 0.3.0 actually did, so nothing else changes.
+* **Store indexes** — keep `ORDINAL` and migrate the column in the same deployment: rewrite each name as its constant's index (`UPDATE ticket SET priority = CASE priority WHEN 'LOW' THEN '0' WHEN 'HIGH' THEN '1' END`, following the declaration order of the enum), then change the column type to an integer type. Mansart's own DDL only creates a missing table; it does not alter an existing column. Keep the enum's constants in the same order from then on: reordering them changes what every stored index means.
+
+== From Spring Data JPA
+
+[cols="2,2,3"]
+|===
+| Spring Data | Mansart Jakarta Data | Note
+
+| `org.springframework.data.repository.CrudRepository`
+| `jakarta.data.repository.CrudRepository`
+| Standardized API — very close signatures.
+
+| `@org.springframework.stereotype.Repository`
+| `@jakarta.data.repository.Repository`
+| Different semantics: Jakarta Data scope = bean repository, not exception translator.
+
+| Derived methods (`findByXxx`)
+| Identical
+| Convention adopted by Jakarta Data.
+
+| `@Query("SELECT b FROM Book b WHERE ...")`
+| `@Query("FROM Book WHERE ...")` (JDQL)
+| JDQL is simpler than JPQL — the leading SELECT is implicit.
+
+| `Pageable` / `Page<T>`
+| `PageRequest` / `Page<T>`
+| Identical semantics. `PageRequest.afterCursor(cursor)` for keyset.
+
+| `@Transactional` (Spring)
+| `@jakarta.transaction.Transactional`
+| Six standard TxType values. No `propagation = NESTED` (savepoints) in v1.
+
+| `JpaRepository<T, ID>`
+| `BasicRepository<T, K>` or `CrudRepository<T, K>`
+| No `findAll(Sort)` overload — pass `Sort`/`Order`/`Limit` as extra call parameters, or use `findAllByOrderByXxxAsc`.
+|===
+
+[TIP]
+====
+Migrating from Spring Data is the shortest path. Derived method names and `@Query` JDQL transpose line-by-line in most cases.
+====
+
+== From Hibernate ORM 6/7
+
+[cols="2,2,3"]
+|===
+| Hibernate | Mansart | Note
+
+| `SessionFactory` / `EntityManagerFactory`
+| Standard `EntityManagerFactory` from `noether-persistence`
+| Implemented; use Jakarta Data instead when declarative repositories suffice.
+
+| HQL
+| JPQL (`noether-persistence`) or JDQL (`mansart-jakarta-data`)
+| Mansart targets the spec, not proprietary HQL extensions.
+
+| `@Entity`, `@Id`, `@GeneratedValue`, `@Column`
+| Identical
+| Standard JPA annotations recognized as-is.
+
+| `@OneToMany`, `@ManyToMany`, inheritance
+| Implemented by `noether-persistence` within its mapping boundaries
+| Required `SINGLE_TABLE` and `JOINED` are supported; optional `TABLE_PER_CLASS` and some relationship shapes remain refused.
+
+| Hibernate Reactive
+| `mansart-jakarta-data` + virtual threads
+| Blocking JDBC under Loom — no Vert.x, no callback.
+
+| JPA listeners (`@PrePersist`, `@PostLoad`)
+| Standard callbacks implemented by `noether-persistence`
+| Annotation and XML listener/callback metadata are supported.
+
+| Criteria API
+| Standard Criteria API implemented by `noether-persistence`
+| Shares the JPQL AST and execution path.
+
+| Schema generation (`hibernate.hbm2ddl`)
+| Standard JPA schema-generation properties and `SchemaManager`
+| Schema creation/drop/validation are implemented; existing-schema migrations remain external.
+|===
+
+== From EclipseLink / OpenJPA
+
+Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotations are recognized as-is; proprietary extensions (`@CustomConverter`, `@Cache(...)`) must be rewritten as standard equivalents or deferred to `noether-persistence`.
+
+// TODO@user: document an EclipseLink → Mansart real-world experience once a case shows up.
+
+== From HikariCP (pool)
+
+[cols="2,2,3"]
+|===
+| HikariCP | mansart-pool | Note
+
+| `HikariDataSource`
+| `MansartDataSource`
+| Implements standard `javax.sql.DataSource`.
+
+| `HikariConfig`
+| `PoolConfig` builder
+| Similar API — `jdbcUrl`, `username`, `password`, `maximumPoolSize` → `maxSize`.
+
+| `minimumIdle`
+| `minIdle`
+| Same.
+
+| `connectionTimeout`
+| `acquireTimeout`
+| Same.
+
+| `idleTimeout`
+| `idleTimeout`
+| Same.
+
+| `maxLifetime`
+| `maxLifetime`
+| Same.
+
+| `leakDetectionThreshold`
+| `leakDetectionThreshold`
+| Same.
+
+| `connectionTestQuery`
+| `validationQuery` + `validation=ON_BORROW`
+| Mansart prefers `Connection.isValid()` (`ON_BORROW` without a query) — JDBC standard, no custom SQL.
+
+| Micrometer / Prometheus metrics
+| `PoolMetrics` (snapshot)
+| Micrometer bridge on the `mansart-pool` backlog.
+|===
+
+Performance comparison: see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md]. mansart-pool is virtual-thread-native and avoids the pinning cost under Loom load.
+
+== Known pitfalls
+
+* **No entity proxy** — Mansart materializes entities directly. Lazy loading is not magical: `@ManyToOne(fetch=LAZY)` loads the attribute on next access through a getter intercepted by APT-generated bytecode (M5).
+* **No implicit auto-flush** — the user calls `flush()` explicitly or ends the transaction. Different from Hibernate which flushes on query.
+* **No runtime entity scan** — the APT registers entities at compile time. Adding an `@Entity` without recompiling is a classic mistake when migrating from Hibernate.
+* **No `@OneToMany` in v1** — model explicitly via the owning `@ManyToOne` and a `findByOwner(...)` in the target's repository.
+
+== No migration needed
+
+Vidocq Runtime ships `vidocq-runtime-mansart-h2-example` which shows a clean end-to-end integration. For a new project, starting from this example is often simpler than migrating a legacy.

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>mansart-data-dialect-spi</artifactId>
+    <name>Mansart :: Data :: Dialect SPI</name>
+    <description>Pluggable SQL dialect SPI shared between Mansart Data and Mansart Persistence.</description>
+
+    <!-- M7-29: EnumStorage replaces the previous io.vidocq.mansart.data.EnumType import
+         (mansart-data-api retired). jakarta.data-api is part of the SPI surface
+         (jakarta.data.exceptions thrown by Dialect.translate, jakarta.data.page used by
+         dialects to lower Pagination). -->
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.data</groupId>
+            <artifactId>jakarta.data-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>

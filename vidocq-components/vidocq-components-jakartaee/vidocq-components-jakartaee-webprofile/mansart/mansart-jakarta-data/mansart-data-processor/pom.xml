@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-data-processor</artifactId>
+    <name>Mansart :: Data :: Annotation processor</name>
+    <description>APT generating the static metamodel (_Entity, optional Entity_) and the *RepositoryImpl classes.</description>
+
+    <dependencies>
+        <!-- Jakarta platform API, needed to compile against the Mansart APIs: provided by the CDI
+             container at run time (vidocq-workspace#17). -->
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-spi</artifactId>
+        </dependency>
+        <!-- M7-2: QueryMethodParser moved here so it is shared with the runtime path
+             (mansart-data-core). -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-core</artifactId>
+        </dependency>
+        <!-- M7-29: jakarta.persistence-api is the sole entity-mapping API surface (no more
+             Mansart mirror annotations). The processor only reads annotation FQNs through
+             javax.lang.model, never loads JPA classes at runtime, so it stays optional. -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- This module IS a processor, so disable processing on itself. -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

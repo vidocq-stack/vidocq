@@ -1,0 +1,1547 @@
+> Persistence and Validation were extracted to [Noether](https://codefloe.com/Vidocq/noether)
+> on 2026-10-11. Their entries below are historical Mansart evidence;
+> original commands, names and revisions are retained, not new Noether results.
+
+# Mansart — Bug tracker
+
+Reproducible bugs in Mansart (Jakarta Data 1.0 + Persistence 3.2). Format per workspace CLAUDE.md:
+short id, date, symptom, minimal repro, cause hypothesis, status. Update on each investigation.
+
+---
+
+## MANSART-068 — A repository on a named data store cannot be injected by its parameterized supertype
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/routed-repository-bean-types` (decided by the maintainer on 2026-11-17, relayed by the
+  coordinating session: a pull request of its own after MANSART-067, a red test first, no ambiguity with the
+  generated class bean, and a deployment whose extensions are frozen at build)
+- **Severity**: low (injecting `BasicRepository<Author, Long>` instead of the repository interface is unusual; the
+  failure is at the container start, with a clear message)
+- **Symptom**: `Authors extends BasicRepository<Author, Long>` with `@Repository(dataStore = "audit")`, and a bean
+  with `@Inject BasicRepository<Author, Long>`: the container start fails with `Unsatisfied dependency … of type
+  ParameterizedType[rawType=jakarta.data.repository.BasicRepository, typeArguments=[…Author, java.lang.Long]]`.
+  The same repository on the default data store is injected. `@Inject Authors` works in both cases.
+- **Minimal reproduction**: `RoutedRepositorySupertypeInjectionTest` (mansart-data-tests). First run on 2026-11-17 in the test vehicle `mansart-data-vauban-it` (branch
+  `test/parameterized-repository-injection`, both processors, Vauban 0.4.0-20261117.095612-67, a start from the
+  build index as a Vidocq application does): with `Authors` routed to a named data source, only the `Author`
+  injection point is unsatisfied.
+- **Cause**: one repository has two kinds of bean. On the default data store its generated implementation is a
+  class bean (`@Singleton`), whose bean types are all its supertypes, `BasicRepository<Author, Long>` included. On a
+  named data store the implementation is vetoed (MANSART-005) and `MansartDataExtension.registerCompileTime`
+  registers a synthetic bean with `addBean(itf).type(itf)`: its types are the interface and `Object`. The same
+  holds for a repository implemented at run time (`registerRuntime`), and for a deployment that lists its bean
+  classes one by one without the build index.
+- **Recommendation**: give the synthetic bean the parameterized super-interfaces of the repository interface
+  (`BasicRepository<Author, Long>`, `CrudRepository<…>`, `DataRepository<…>`), so that a repository has the same
+  bean types whatever its data store. To check with it: no ambiguity with the implementation's class bean (it is
+  vetoed or absent whenever the synthetic bean is registered), and a deployment with frozen extensions. The types
+  must be the real parameterized ones, not raw ones: Vauban is moving to the strict rule of CDI 4.1 §5.2.4 (Vauban
+  BUG-20261117-16), under which a raw bean type no longer satisfies a parameterized injection point.
+- **Fix**: `RepositoryBeanTypes` gives the synthetic bean, compile-time and run-time, the parameterized
+  super-interfaces of the repository interface, type variables replaced (`CrudRepository<Author, Long>`,
+  `BasicRepository<Author, Long>`, `DataRepository<Author, Long>`). It reads them from the language model of the
+  build compatible extension, with no reflection. It needs a Vauban whose model gives super-interfaces as declared,
+  also for a class of a dependency jar (Vauban BUG-20261117-22 and BUG-20261117-31); on an older Vauban the walk
+  finds nothing and the bug stays.
+- **Investigations**:
+  - 2026-11-17: a first version read the super-interfaces by reflection, with an entry in
+    `ArchitectureRules.REFLECTIVE_FALLBACKS`, because Vauban's model gave them without type arguments. The
+    maintainer refused it: Vauban is fixed first, reflection stays for other containers or impossible cases. The
+    entry and the reflective code are gone.
+  - 2026-11-18: on Vauban cd2ffe5c (BUG-31 on BUG-22, built from `git archive` into a private repository), the
+    language-model walk passes the three tests of `RoutedRepositorySupertypeInjectionTest`.
+  - 2026-11-17: the synthetic beans are registered for every repository of the build index, so two routed
+    repositories of one entity are both candidates for `BasicRepository<E, K>`: ambiguous, as two class beans are on
+    the default data store. Documented in `usage.adoc`.
+  - 2026-11-17, frozen extensions, a probe and not a committed test: in Vidocq's `vidocq-runtime-mansart-h2-example`
+    (Vidocq main a7e0a6cf, which runs `vidocq:generate`), a field `@Inject BasicRepository<AuditEntry, Long>` added
+    to `AuditResource`, whose `AuditEntryRepository` is on the data store `audit`. The frozen record
+    `META-INF/vauban-frozen-synthetic.properties` holds the two parameterized types of the bean
+    (`genericType.0=jakarta.data.repository.BasicRepository<…AuditEntry, java.lang.Long>`, `genericType.1=…
+    DataRepository<…>`), and the module's 11 tests pass with `vidocq.startup.require-frozen-extensions=true`.
+  - 2026-11-17, a limit seen in that probe: at compile time `vauban-processor` prints a warning for such an
+    injection point, `Unsatisfied dependency … the required type is not declared by this compilation unit;
+    resolution deferred to the runtime container`. The synthetic bean does not exist yet when the application is
+    compiled; the container start resolves it. A build with `failOnWarning` stops on it.
+
+---
+
+## MANSART-067 — One `@Table(name = "ITEM")` names two tables on PostgreSQL: Mansart Data quotes it, a persistence unit does not
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/jpa-identifier-quoting` — the maintainer chose way (a) on 2026-11-17
+- **Severity**: medium (an entity shared by a repository and a persistence unit fails at the first repository call
+  when its mapped names are not lower case; documented for Mansart Data alone, not for the shared entity)
+- **Symptom**: on PostgreSQL, an entity with `@Table(name = "ITEM")` whose table comes from unquoted DDL
+  (`CREATE TABLE ITEM (...)`, stored as `item`), used by a Noether persistence unit and by a Mansart Data repository:
+  the unit works, the repository fails with `MansartDataException: The table "ITEM" of entity …Item does not exist`.
+  The same holds for a column named by `@Column(name = "NAME")`.
+- **Minimal reproduction**: `MappedNameQuotingTest` (H2), `PostgresqlCrudIntegrationTest.aMappedNameInAnotherCaseReachesTheUnquotedTable`
+  (`pg-it`). First seen by NOETHER while writing
+  `TwoPhaseCommitPostgresModulePathTest` (vidocq#641, first red run), and avoided there, as in the local XA study of
+  2026-11-14, by lower-case mapped names.
+- **Cause**: Mansart Data quotes every table and column name in its SQL (`AbstractSqlDialect`, `RepositoryRuntime`,
+  `JdqlExecutor`, the dialects), so a name is case-sensitive. Jakarta Persistence leaves a mapped name undelimited
+  unless it is written with quotes or `<delimited-identifiers/>` is set, so the database folds it (lower case on
+  PostgreSQL, upper case on H2). The reference page ("Table and column names") says that Mansart quotes and that the
+  database must hold the names in the same case; it does not say that the same annotation means another table to a
+  Jakarta Persistence provider.
+- **Ways out considered**: (a) follow Jakarta Persistence — emit a mapped name undelimited unless it is written
+  with quotes; this breaks schemas that rely on today's quoting (an H2 migration with quoted lower-case names, a
+  mixed-case table); (b) keep the quoting and add an option that turns it off; (c) keep the rule, and make the
+  PostgreSQL missing-table message say that a table of another case exists, as the H2 dialect does.
+- **Investigations**:
+  - 2026-11-17: read the SQL builders — every identifier is quoted, on every dialect; `PostgresqlDialect` has no
+    `undefinedTableHint`. Reference page completed with the shared-entity case.
+  - 2026-11-17: the maintainer chose (a), "on aligne avec Jakarta Persistence".
+- **Fix**: the dialects, `RepositoryRuntime` and `JdqlExecutor` write a table or column name as the mapping gives it:
+  undelimited without quotes, delimited when the value carries double quotes (`@Table(name = "\"Item\"")`). The
+  metamodel writer escapes such a name in the generated literal (it wrote a class that did not compile). The
+  build-time migration check compares exactly only a delimited mapped name with a quoted migration name. The H2 hint
+  for a table of another case now names the quoted migration as the cause. Breaking for a schema created with
+  quoted names on H2, or with mixed-case or reserved-word names anywhere: migration page, "Table and column names
+  are no longer quoted".
+
+---
+
+## MANSART-066 — A repository and a persistence unit had a connection each in the same transaction
+
+- **Date**: 2026-11-13 (reported by the maintainer the same day)
+- **Status**: FIXED on 2026-11-13 — in Mansart by mansart#103 (`3589db59`), in the Vidocq Noether extension by
+  vidocq#544 (`51b80ca9`): a JTA unit gets a `JtaDataSource` over the pool bean, `EnlistingDataSource` is gone.
+  Across Mansart Data and Noether, the shared connection is tested by `SharedConnectionModulePathTest`
+  (`vidocq-runtime-it-noether-mansart-data`, Vidocq repository).
+- **Module**: `mansart-data-cdi` (`JtaTransactionBridge`), `mansart-transactions-jdbc`
+- **Symptom**: in one JTA transaction, a Jakarta Data repository and a Noether `EntityManager` on the same data source
+  worked on two physical connections. Neither saw the other's uncommitted writes; two writes to the same row waited
+  on each other's lock inside one transaction; on a non-XA pool the commit was two single-phase resources, without
+  the warning, which counted the bridge's own only; two places of the pool per transaction.
+- **Reproduction**: by reading — `JtaTransactionBridge` kept its connection in the
+  `TransactionSynchronizationRegistry` under a key of its own, the Vidocq extension's `EnlistingDataSource` in a
+  private `Map<Transaction, Connection>`. Not reproduced by a run across Mansart Data and Noether. In Mansart:
+  `JtaDataSourceTest`, `EnlistedConnectionHandleTest` (`mansart-transactions-tests`) and the two
+  `aJtaDataSourceHandle…` / `aRepositorySees…` tests of `JtaTransactionBridgeTest` (`mansart-data-tests`).
+- **Cause**: "the connection of this transaction" was decided by each consumer, not by the data source.
+- **Fix**: `JtaConnections` (`mansart-transactions-jdbc`) keeps one connection per transaction and data source
+  instance in the registry; `JtaDataSource` hands out handles on it to code that only knows `DataSource`; the bridge
+  takes its connections from `JtaConnections`.
+
+---
+
+## MANSART-065 — XA connections were opened outside the pool: no `maxSize`, no reuse, no metrics
+
+- **Date**: 2026-11-13 (found on 2026-11-12, pool and transactions audit)
+- **Status**: FIXED on `fix/pool-xa-connections`.
+- **Module**: `mansart-pool-core` (`MansartDataSource.unwrap`, `ConnectionPool`)
+- **Symptom**: with `xaDataSourceClassName`, `unwrap(XADataSource.class)` answered the driver's `XADataSource`. The
+  JTA bridge opened a physical connection on it for each transaction and closed it afterwards: as many
+  physical connections as concurrent transactions whatever `maxSize`, each paying its connection handshake;
+  `snapshot()`, leak detection, validation and `maxLifetime` saw none of them.
+- **Reproduction**: `XaConnectionsThroughPoolTest` (`mansart-pool-tests`), 7 of 10 red on `31aa8752`;
+  `PostgresqlXaPoolIntegrationTest` (`mansart-data-tests`, `-Ppg-it`) for a real two-phase commit on PostgreSQL.
+- **Cause**: by design of MANSART-007 phase 2 — "transactional XA connections are opened outside the pool".
+- **Fix**: a pool with `xaDataSourceClassName` opens **every** connection on the driver's `XADataSource`.
+  `unwrap(XADataSource.class)` answers the pool's own: `getXAConnection()` is a borrow (`PooledXAConnection`), its
+  `getXAResource()` the driver's, its `close()` a release. A connection given back inside a branch is closed, not
+  kept. `driverProperties` reach the XA data source through its bean setters or `setProperty(String, String)`; one
+  it cannot take fails the borrow.
+
+---
+
+## MANSART-050 — A static nested entity did not compile: its metamodel went to a package named after the outer class
+
+- **Date**: 2026-11-12 (found on 2026-11-11 while writing the tests of MANSART-049)
+- **Status**: FIXED on `fix/data-nested-entity`.
+- **Module**: `mansart-data-processor` (`MansartMetamodelWriter.write`, `MansartProcessor`)
+- **Symptom**: for `class Library { @Entity static class Shelf { ... } }` the processor wrote `_Shelf` with
+  `package shop.Library;`, and the compilation failed: `class shop.Library clashes with package of same name`, then
+  `cannot find symbol` on every attribute type. Jakarta Persistence allows the shape ("a non-final top-level class
+  or static inner class").
+- **Reproduction**: `ProcessorNestedEntityTest`, and `RuntimeNestedEntityTest` whose own nested entity kept the test
+  module from compiling (`mansart-data-tests`), red on `5bd81456`.
+- **Cause**: the writer took the package from the text of the qualified name, up to its last dot, which for a nested
+  class is the outer class. `RepositoryWriter`, `EntityModels` (run time) and `writeMissingMetamodel` named the
+  metamodel `_Shelf` in the real package instead: a name two nested entities of one package would share.
+- **Fix**: the metamodel of `shop.Library.Shelf` is `shop._Library_Shelf` — the entity's package, its binary name
+  with `_` for `$` — in the writer, the repository implementations and the run-time lookup alike (`MetamodelName`,
+  `EntityModels`). A first attempt kept `_Shelf` in the package: the run-time lookup then gave that metamodel to
+  the unrelated nested `Crate` classes of other tests (`Unknown attribute 'status' on Crate`), which is why the
+  name carries the outer class.
+
+---
+
+## MANSART-060 to MANSART-064 — Five defects in what keeps the transaction manager sound over time
+
+Found by reading `mansart-transactions` on 2026-11-12 (pool and transactions audit). **Status** of the five: FIXED
+on `fix/tx-robustness`; reproduction in `TransactionRobustnessTest` (`mansart-transactions-core`) and
+`RegistryOnRollbackOnlyTest` (`mansart-transactions-cdi`). The tests use the API the fix adds (node id, journal
+threshold, interposed registration), so they did not compile before it.
+
+- **MANSART-060 — The global transaction id was a counter starting at 1 in every JVM.** With a durable journal, a
+  transaction begun after a restart took the id of one left in doubt, and its `COMPLETED` record erased the other
+  from the recovery scan; two instances on one database produced the same Xid (`XAER_DUPID`). Fix: the id is the
+  node id (`mansart.tx.node-id`, drawn at random by default), the manager's start instant and a sequence.
+- **MANSART-061 — `setTransactionTimeout` was accepted and never applied.** A transaction could stay active, with
+  its connection, for ever. Fix: a virtual thread marks the transaction rollback-only when its time is up; the
+  commit rolls back and throws `RollbackException`; leaving `STATUS_ACTIVE` is a compare-and-set.
+- **MANSART-062 — The recovery journal grew for ever and kept orphan records.** Three lines per two-phase
+  transaction, never removed; a transaction rolled back after its prepare (last-resource commit failure) kept a
+  `PREPARED` record reported in doubt at every start; a journal that refused a record left the prepared branches
+  as they were, `afterCompletion` not run. Fix: the journal is rewritten with what is in doubt, at opening and every
+  1024 completed transactions; the rollback writes `COMPLETED`; a refused record rolls back or is reported with the
+  completion callbacks run.
+- **MANSART-063 — A `@TransactionScoped` bean or a registry resource first used on a rollback-only transaction was
+  never released.** `registerSynchronization` refuses a transaction marked rollback-only; the context and the
+  registry swallowed that and kept their per-transaction map for ever. Interposed synchronizations also ran in
+  registration order. Fix: `MansartTransactionManager.registerInterposedSynchronization`, with the order the
+  specification gives them, accepted on a rollback-only transaction.
+- **MANSART-064 — A one-phase commit the database rolled back was a `SystemException` with no cause.** Status
+  `STATUS_UNKNOWN`, error code only. Fix: an `XA_RB*` code is `RollbackException` and `STATUS_ROLLEDBACK`; the
+  `XAException` is the cause in both cases.
+
+---
+
+## MANSART-058 — The default validation mode validated nothing, and `validationQuery` was never run
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-validation`.
+- **Module**: `mansart-pool-core` (`ConnectionPool`, `Housekeeper`)
+- **Symptom**: `ValidationMode.PERIODIC`, the default when no `validationQuery` is set, was read nowhere: no idle
+  connection was ever checked, and one the database had dropped was handed to the next borrower. `validationQuery`
+  was read nowhere either: `ON_BORROW` always called `Connection.isValid`.
+- **Reproduction**: `IdleMaintenanceTest.periodicValidationClosesAnIdleConnectionTheDatabaseDropped`,
+  `theValidationQueryIsWhatChecksAConnectionOnBorrow` (`mansart-pool-tests`), red on `fix/pool-tx-audit`.
+- **Fix**: the housekeeper checks every idle connection in `PERIODIC` mode and closes the dead ones; a check runs
+  the `validationQuery` when one is set, else `isValid`.
+
+## MANSART-059 — `minIdle` was honoured at start-up only
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-validation`.
+- **Module**: `mansart-pool-core` (`ConnectionPool.sweep`, `refill`)
+- **Symptom**: the pool opened `minIdle` connections when built, then closed them all after `idleTimeout` and never
+  opened one again unless a borrower asked: a pool configured warm was cold after ten idle minutes, and stayed
+  empty when the database was down at start-up.
+- **Reproduction**: `IdleMaintenanceTest.minIdleConnectionsOutliveTheIdleTimeout`,
+  `thePoolOpensConnectionsAgainToReachMinIdle`, red on `fix/pool-tx-audit`.
+- **Fix**: the sweep keeps `minIdle` connections through the idle timeout, checking each one it keeps, and the
+  housekeeper opens connections until the pool holds `minIdle`.
+
+---
+
+## MANSART-051 to MANSART-055 — Five defects in how a transaction completes
+
+Found by reading `mansart-transactions` on 2026-11-12 (pool and transactions audit); each has a test that is red on
+`5d5fd8e6`. **Status** of the five: FIXED on `fix/pool-tx-audit`.
+
+- **MANSART-051 — A rollback-only mark set during `beforeCompletion` was ignored: the transaction committed.**
+  `MansartTransaction.commit()` read the status before `beforeCompletion` only. A participant whose flush fails
+  there and calls `setRollbackOnly()` saw its transaction committed. Reproduction:
+  `CompletionContractTest.aRollbackOnlyMarkSetInBeforeCompletionRollsBack`. Fix: the status is read again after
+  `beforeCompletion`; a mark rolls back and throws `RollbackException`.
+- **MANSART-052 — Registering a synchronization from `beforeCompletion` rolled the transaction back.** The
+  callbacks were run with an iterator over the list `registerSynchronization` appends to:
+  `ConcurrentModificationException`, taken for a `beforeCompletion` failure. A flush that takes its connection at
+  that moment does exactly this (`JtaTransactionBridge.connectionFor` registers the synchronization that closes the
+  connection). Reproduction: `CompletionContractTest.aSynchronizationMayRegisterAnotherFromBeforeCompletion`. Fix:
+  the callbacks are run by index, and a late participant gets its own callbacks.
+- **MANSART-053 — The caller of nested `@Transactional` methods got an `IllegalStateException` instead of its
+  exception.** `setRollbackOnly()` on a transaction already marked threw `setRollbackOnly() requires STATUS_ACTIVE,
+  was STATUS_MARKED_ROLLBACK`; the interceptor marks in each joined frame an exception crosses, so from two joined
+  calls on, the second mark's failure replaced the business exception. Reproduction:
+  `CompletionContractTest.settingRollbackOnlyTwiceIsAllowed`,
+  `TransactionalFailureTest.anExceptionCrossingTwoJoinedCallsReachesTheCallerUnchanged`. Fix: marking twice is a
+  no-op, and the interceptor attaches a failure of the marking as a suppressed exception.
+- **MANSART-054 — An `Error` out of a `@Transactional` method left its transaction bound to the thread.**
+  `TransactionalInterceptor.executeWithOwnTx` caught `Exception` only: after an `AssertionError` or a
+  `StackOverflowError` the transaction was neither committed nor rolled back, its connections were never given
+  back to the pool, and a pooled thread carried it to its next task. Reproduction:
+  `TransactionalFailureTest.anErrorLeavesNoTransactionBoundToTheThread`. Fix: the interceptor ends the transaction
+  when an `Error` goes through, by a rollback.
+- **MANSART-055 — A two-phase commit stopped at the first resource that failed.** The other branches stayed
+  prepared, their locks held, until a restart ran recovery; the `XAException` was dropped (error code only).
+  Reproduction: `CompletionContractTest.aTwoPhaseCommitThatFailsOnOneResourceStillCommitsTheOthers`. Fix: every
+  branch gets its commit; the `SystemException` then thrown has the first `XAException` as its cause, and no
+  `COMPLETED` record is written, so recovery finishes the failed branch.
+
+---
+
+## MANSART-056 — A closed pooled connection still reached the physical connection, by then another borrower's
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-tx-audit`.
+- **Module**: `mansart-pool-core` (`PooledConnection`, `PooledStatement`)
+- **Symptom**: after `close()`, every method of the handle but `isClosed()` still went to the driver's connection,
+  and so did the statements the handle had created. The physical connection was back in the pool: a `rollback()`
+  on the closed handle rolled back the transaction of the borrower that held it next, and a kept statement wrote
+  inside that transaction. The class comment claimed the driver would raise its own error; the driver's connection
+  is not closed, so it raised none.
+- **Reproduction**: `ClosedConnectionTest` (`mansart-pool-tests`), red on `5d5fd8e6`:
+  `aClosedHandleCannotRollBackTheNextBorrowersTransaction`,
+  `aStatementOfAClosedHandleCannotWriteOnTheNextBorrowersConnection`.
+- **Cause**: the wrapper routed to the delegate unconditionally. `close()` also read then wrote its flag, so two
+  threads closing one handle could release the entry twice (`closingAHandleFromTwoThreadsReleasesItOnce`; that race
+  was read in the code, the test did not hit it in 2000 rounds on `5d5fd8e6`).
+- **Fix**: a closed handle throws `SQLException` (SQLSTATE 08003) from every method but `close()`, `isClosed()` and
+  `isValid()`, and from the `execute*` of its statements; `close()` is a compare-and-set.
+
+## MANSART-057 — A driver's unchecked exception during the reset cost the pool a place for good
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-tx-audit`.
+- **Module**: `mansart-pool-core` (`ConnectionPool.release`)
+- **Symptom**: `release` caught `SQLException` only. A `RuntimeException` from the driver in `getAutoCommit`,
+  `rollback`, a session attribute setter or `clearWarnings` left the entry in `inUse` and its permit never given
+  back: the pool had one place fewer until restart.
+- **Reproduction**: `ReleaseFailureTest` (`mansart-pool-tests`). Written with the fix, not seen red.
+- **Fix**: `release` discards the connection on a `RuntimeException` too, and gives the permit back.
+
+---
+
+## MANSART-049 — An entity with a collection field got a `_Book` that did not compile
+
+- **Date**: 2026-11-11
+- **Status**: FIXED on `fix/data-collection-attribute`. A plural attribute — `@ElementCollection`, `@OneToMany`,
+  `@ManyToMany`, or a field typed as a `Collection` or a `Map` — is not a column: `PluralAttributes` makes the
+  scanner leave it out of `_Book` (with a compiler note) and the repository writer out of the derived-query
+  attributes, and `RuntimeEntityModelBuilder` leaves it out of the run-time model. Mansart repositories read and
+  write the entity's columns and leave its collections to the persistence provider.
+- **Module**: `mansart-data-processor` (`EntityScanner`, `RepositoryWriter`), `mansart-data-core`
+  (`RuntimeEntityModelBuilder`)
+- **Symptom**: `@Entity class Book { @Id Long id; @ElementCollection List<String> tags; }` compiled with the
+  processor produced `NumericAttribute<Book, java.util.List<java.lang.String>> tags = new NumericAttribute<>(…,
+  java.util.List<java.lang.String>.class, …)`, and javac failed on `<identifier> expected`. A raw `List` broke
+  `NumericAttribute`'s bound instead. On the run-time path the model took the field for a column, and `save` failed
+  with `Column "tags" not found`. A derived query `findByTags` failed in the generated implementation
+  (`cannot find symbol: variable tags`) instead of naming the method.
+- **Reproduction**: `ProcessorPluralAttributeTest` (4 tests) and `RuntimePluralAttributeTest` (2 tests), in
+  `mansart-data-tests`, red on `5d5fd8e6`.
+- **Cause**: Mansart Data maps an entity to the columns of one table and has no plural kind; `EntityScanner.kindOf`
+  and `RuntimeEntityModelBuilder` sent every unknown type to the numeric fallback, and the writer printed the
+  declared type, type arguments included, before `.class`.
+- **Reported by**: Noether, BUG-20261111-06, while writing the two-processor coexistence test after
+  Vidocq/mansart#95; Noether's `MansartDataCoexistenceTest` maps its collection through an `@Access(PROPERTY)` getter
+  over a `@Transient` field until this lands.
+
+---
+
+## MANSART-048 — The processor's JPA metamodel `Book_` gave a collection a singular kind and kept Noether's out
+
+- **Date**: 2026-11-11
+- **Status**: FIXED on `fix/data-no-jpa-metamodel`. `JpaMetamodelWriter` is removed: `mansart-data-processor`
+  writes the Jakarta Data metamodel `_Book` only, and the JPA canonical metamodel `Book_` is left to the persistence
+  provider's processor. The maintainer chose this over emitting the plural kinds (Vidocq/noether#45, F15); an
+  application that referred to `Book_` without a JPA processor uses `_Book` (`migration.adoc`, Upgrading from 0.3.0).
+- **Module**: `mansart-data-processor` (`JpaMetamodelWriter`, `MansartProcessor.init`)
+- **Symptom**: with `jakarta.persistence-api` on the compile class path, the processor wrote `Book_` with every
+  attribute a `SingularAttribute`, plural ones included (`List<Tag> tags` → `SingularAttribute<Book, List>`). Next
+  to Noether's processor, which leaves `Book_` to a processor that already wrote it, Noether could not fill
+  `Book_.tags` at bootstrap and a Criteria query on the collection failed (Noether BUG-20261009-09). When the
+  provider's `Book_` was in the same compilation, the build failed: `Failed to write metamodel for shop.Book: Attempt
+  to recreate a file for type shop.Book_`.
+- **Reproduction**: `ProcessorJpaMetamodelTest` (`mansart-data-tests`), red on `f67d5ca2`: a JPA entity got a
+  `Book_`, and a `Book_` written beside it (with a `ListAttribute`) failed the compilation.
+- **Cause**: the processor wrote a metamodel whose attribute kinds only the persistence provider knows; the writer
+  emitted `SingularAttribute` for every attribute.
+- **Reported by**: Noether's audit, Vidocq/noether#45 F15 (BUG-20261009-09 in `noether-persistence/BUG.md`).
+
+---
+
+## MANSART-047 — A pooled connection kept the session settings of its previous borrower
+
+- **Date**: 2026-11-11
+- **Status**: FIXED on `fix/pool-reset-session-state`, after Vidocq/mansart#93. The wrapper's setters record
+  the attribute before the driver changes it (`SessionState`, one per physical connection): the driver's value is
+  read the first time, and the release puts back, once auto-commit is on again, every attribute a borrower left on
+  another value. An attribute the driver cannot read makes the release close the connection.
+- **Module**: `mansart-pool-core` (`PooledEntry.resetForReuse`, `PooledConnection`)
+- **Symptom**: what a borrower changes on its connection through the JDBC API reaches the next borrower of the same
+  physical connection: transaction isolation, read-only flag, catalog, schema, holdability, network timeout and
+  type map. A borrower that sets `TRANSACTION_SERIALIZABLE` or `setReadOnly(true)` and closes the connection hands
+  a serializable or read-only session to whoever borrows it next. The release only restores auto-commit and clears
+  the warnings, while `modules/mansart-pool.adoc` and `mansart-pool/PLAN.md` said it restored the default isolation.
+- **Reproduction**: `SessionStateResetTest` (`mansart-pool-tests`): a pool of one connection, a first borrow that
+  changes the attribute, a second borrow that reads it. 7 of 8 tests red on `d78f0fd3`; the eighth, a borrow that
+  changes nothing, checks that the release then calls no session setter. Then red too: an attribute the driver
+  cannot read keeps the borrower's value instead of the connection being discarded.
+- **Cause**: `resetForReuse` never had the code: neither the wrapper nor the entry tracks which attributes a borrow
+  changed, nor what the driver had opened the connection with.
+- **Reported by**: found while fixing Vidocq/noether#45 F17 (mansart#93), when the release section of the pool page
+  was checked against the code.
+
+---
+
+## MANSART-046 — A library built with Hibernate Processor failed `vidocq:generate` on its `Book_` metamodel
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/library-metamodel-and-provider` (Vidocq/mansart#85). Over a dependency jar, `writeMissingMetamodel` wrote both `_Book` and the JPA metamodel `Book_` whenever `_Book` was missing; a library built with Hibernate Processor already ships `Book_`, and the enriched copy cannot hold a second one: `vidocq:generate` failed with `Mansart generated acme/lib/Book_.class, which the jar already has`. The processor now reuses the `Book_` the jar ships and writes `_Book` only. It also honours `@Repository(provider)` (Jakarta Data §4): a repository declared for another provider gets no implementation and no index entry (a compiler note says so), the extension does not serve it at run time nor vetoes that provider's implementation, and when nothing implements it the deployment error names the missing provider.
+- **Reproduction**: `ProcessorClassFileInputTest.aMetamodelTheLibraryShipsIsNotGeneratedAgain`, `ProcessorProviderTest`, `ForeignProviderRepositoryTest` (red first).
+- **Reported by**: the verification of the external-jar scenarios of 2026-11-09 (ticket #85, scenario with a Hibernate-built library).
+
+---
+
+## MANSART-045 — A nameless `@Find` parameter was bound to the entity's only attribute of its type
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/find-without-parameter-names` (Vidocq/mansart#85). Since commit 95158224 (mansart#40) a `@Find` parameter with no name in the class file (a library compiled without `-parameters`) and no `@By` was compared to the entity's only attribute of its type, by the processor (`RepositoryWriter.attributeOfType`) and by the run-time path (`FindBindings` positional fallback). Jakarta Data 1.0 §4.3 binds a parameter by `@By` or by its name only, and `usage.adoc` said Mansart never guesses an attribute. Both paths now refuse such a parameter, naming the method, `@By` and `-parameters`; the type-based lookup and its two-candidates diagnostic are gone.
+- **Reproduction**: `ProcessorClassFileInputTest.aFindParameterWithoutANameIsAnErrorNamingTheMethod`, `RuntimeFindWithoutParameterNamesTest.aParameterWithoutANameIsRefusedEvenWhenOneAttributeHasItsType` (red first: `byKey(Long)` was bound to `id`).
+- **Reported by**: the review of the external-jar scenarios of 2026-11-09 (ticket #85).
+
+---
+
+## MANSART-044 — A repository of a jar the build did not enrich failed with a bare unsatisfied dependency
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/external-jar-repositories` (Vidocq/mansart#85). Under Vidocq a dependency jar is on the class path, not in the bean archive: when `vidocq:generate` did not enrich it (a signed jar `scanDependencies` does not name, a jar `scanExcludes` names, a build where the goal did not run), its `@Repository` interface is never seen by the extension, nothing implements it and the container failed with `Unsatisfied dependency: field Shelf.books of type ClassType[name=acme.lib.Books]…`, while `usage.adoc` promised a run-time implementation. `MansartDataExtension` now records, at `@Registration`, the repository interfaces the beans inject, and at `@Validation` reports every one nothing implements with the repository, the bean, the jar and the fix; only at run time (the compile-time replay by the Vauban processor cannot load the application's beans, and the jars are enriched after that compilation). The sentence of `usage.adoc` is corrected.
+- **Reproduction**: `ExternalJarRepositoryTest.aRepositoryOfAJarNotEnrichedFailsTheDeploymentNamingTheJarAndTheFix` (red first: the bare message).
+- **Reported by**: the verification of the external-jar scenarios of 2026-11-09 (ticket #85, scenarios A-G).
+
+---
+
+## MANSART-043 — A private repository compiled with a note, then failed at startup in a named module
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/non-public-repositories` (Vidocq/mansart#85). A `@Repository` interface that is `private`, or nested in a `private` type, cannot be implemented by the generated top-level class of its package. The processor said so with a compiler NOTE, invisible in a Maven build, and left the repository to the run-time path, which a named application module cannot serve (`privateLookupIn` drops the module mode a hidden class needs, and a child loader can only implement a public interface): the application failed at startup. It is now a compile error that names the interface and the fix; `-Amansart.privateRepositories=warn` turns it back into a warning and the run-time path, for a class-path application. A repository declared inside a method is never handed to a processor; `RuntimeRepositoryProxy` now refuses it with a message instead of failing on an access check in the generator. Hibernate Processor 7.4.9 silently skips every one of these shapes.
+- **Reproduction**: `ProcessorNestedRepositoryTest.aPrivateNestedRepositoryFailsTheBuild`, `aRepositoryNestedInAPrivateTypeFailsTheBuild`, `thePrivateRepositoriesOptionLeavesItToTheRunTimePath`; `RuntimeLocalRepositoryTest.aLocalRepositoryIsRefusedWithAClearMessage` (all red first).
+- **Reported by**: the study of non-public repositories of 2026-11-09 (Hibernate Processor vs Mansart, six shapes, class path and named module).
+
+---
+
+## MANSART-042 — Runtime repositories: the `java.lang.reflect.Proxy` fallback removed
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `feat/no-proxy-fallback`. Experiment first: with the fallback turned into a failure, the whole reactor (498 tests of `mansart-data-tests`) and the Jakarta Data TCK (73 EntityTests + SignatureTests, H2) were run. Only repositories compiled without the processor and living in another class loader than Mansart fell back (`GeneratedComponentsFallbackTest`, `RuntimeFindWithoutParameterNamesTest`): `MethodHandles.privateLookupIn` across modules or loaders drops the module mode, so `defineHiddenClass` throws `IllegalAccessException`. `RuntimeRepositoryClassGenerator` now defines the class in a dedicated child loader of the repository's for a public, exported repository; the `Proxy` path, `RuntimeGeneration.proxied` and its warning are deleted. A shape still unsupported (non-public repository seen from another loader, unexported package, unlinkable class) throws a `MansartDataException` naming the cause.
+- **Reproduction**: `RuntimeGenerationWarningTest.aRepositoryTheGeneratorCannotImplementFailsLoudly`, `GeneratedComponentsFallbackTest.aPackagePrivateRepositoryOfAnotherLoaderFailsLoudly`.
+
+---
+
+## MANSART-041 — The runtime of a routed data store outlived its CDI container
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `fix/layer-leak-mansart`. `DataStoreResolver` cached the `RepositoryRuntime` of each `@Repository(dataStore = "...")` in a static map, for the life of the JVM. Each cached runtime wraps the `DataSource` bean of the container that built it, so in `vidocq dev` every hot reload (a new container, new data source beans) left the previous layer reachable from that static (the static audit of vidocq-workspace#40 item 25), and the next layer's repositories were served the previous layer's runtime, on a data source its container had already closed. The runtimes are now held by `DataStoreRuntimes`, a singleton synthetic bean of the container registered by `MansartDataExtension`, so they die with it; several repositories of one container still share one runtime per data store.
+- **Reproduction**: `DataStoreResolverScopeTest.aNewContainerDoesNotGetTheRuntimeOfThePreviousOne` (red before the change: the second container got the first one's runtime).
+- **Reported by**: the static audit of the layers `vidocq dev` discards (2026-11-02). The other statics of the Mansart modules are `ClassValue`s keyed by the application's own classes, string sets, or weak maps keyed by the class loader, and need no change.
+
+---
+
+## MANSART-040 — Reflection repeated on every call, and every class loaded at startup
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `perf/mansart-reflection-wave`. (1) The method body the processor emits for a JDQL statement left to the run time (an arithmetic `UPDATE`) called `this.getClass().getInterfaces()[0].getMethod(…)` on every call; it now reads the method from a local holder class (`final class _CallSite { static final Method M = JdqlExecutor.callSite(Repo.class, "name", …); }`), resolved once, on the interface that declares the method (`RuntimeFallbackCallSiteTest`, red before; it also runs the statement twice on H2). (2) `TransactionalInterceptor` resolved `@Transactional` with `getAnnotation` on the method and the target class hierarchy on every call; the same resolution is now cached per target class (`ClassValue`) and method (`theBindingIsResolvedOncePerTargetClassAndMethod`, `theMethodBindingWinsOverTheClassBinding`, `aSubclassFindsTheBindingOfItsSuperclass`). `InvocationContext.getInterceptorBinding` was not used: Vauban derives the bindings of a business method by reflection on every call too. (3) `MansartDataExtension.vetoRoutedRepositoryImpls`, an `@Enhancement` over every class, loaded each class and read its interfaces (≈ 5 700 introspections at a boot measured by the reflection audit); it now loads only the classes the repository indices list as implementations and the `<repository>_` classes of another provider (`VetoCandidateTest`). A class the application writes itself that implements a repository bound to a named `dataStore` is no longer vetoed: the veto was meant for the generated implementation, whose constructor injects the default runtime. The reflective paths themselves are unchanged. Full reactor 665 tests, Jakarta Data TCK 74/74, Weld and Open Liberty modules green; a `vidocq create` application (REST, data, pool, transactions, Flyway) answers its `@Transactional` POST, derived query and JDQL projections on PostgreSQL.
+- **Reported by**: the reflection audit of the standard Vidocq path
+- **Minimal reproduction**: profile a request on a repository method with an arithmetic `UPDATE`, or on a `@Transactional` bean method: `Class.getMethod` / `getAnnotation` on each call; boot an application: every class of the archive is loaded by the extension.
+- **Cause hypothesis**: the generated fallback body and the interceptor had no place to keep what they resolved; the `@Enhancement` filter was by type `Object` because the index-backed interfaces are empty for pre-indexed module-path classes.
+
+## MANSART-039 — A one-attribute SELECT into a one-component record was read as a plain column
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/no-reflection-under-vidocq`
+- **Severity**: medium (the query failed at every call)
+- **Symptom**: `@Query("SELECT title FROM Book WHERE id = :id") List<TitleOnly> titleOf(long id)` with
+  `record TitleOnly(String title)`: `MansartDataException: SQL error`, caused by `conversion to class …TitleOnly from
+  varchar not supported` (PostgreSQL).
+- **Minimal reproduction**: `JdqlMultiProjectionTest.oneComponentRecords`.
+- **Cause**: the JDQL parser classifies a one-attribute `SELECT` as a scalar projection before looking at the return
+  type, so the record was asked of the driver as the column's type.
+- **Fix**: a one-attribute projection whose element is a record goes the multi-column way, with that one attribute.
+
+## MANSART-038 — In a named module, entity packages needed `opens` for what Mansart reached by reflection
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/no-reflection-under-vidocq`
+- **Severity**: medium (a request failed at run time; Vidocq's checks asked for `opens` on every entity package)
+- **Symptom**: a Vidocq application whose entity package is neither opened nor exported: CRUD, derived queries and
+  JDQL entity queries already worked (the generated repository uses `_Book.$MODEL`, Vauban creates it), but a JDQL
+  projection into a record failed — `IllegalAccessException: JdqlExecutor (in module io.vidocq.mansart.data.core)
+  cannot access class …IdTitle … does not export …book` — and `EntityModels.of` (JDQL run at run time, the dev console)
+  and `MansartData.repository` / `MansartRepoCreator` (a repository bound to a named data store) used reflection too.
+- **Minimal reproduction**: `RecordProjectionCodegenTest`; end to end, a packaged Vidocq application with
+  `cassini-rest`, `mansart-data`, `-pool`, `-transactions`, `flyway-migration`, no `opens` on the entity package.
+- **Cause**: `JdqlExecutor` built projection records through their canonical constructor by reflection;
+  `EntityModels.of` read `_Entity.$MODEL` reflectively; `MansartData` and `MansartRepoCreator` created the
+  `*Impl` with `Constructor.newInstance` — all from Mansart's module.
+- **Fix**: the processor generates the record factory next to the query (`_r -> new IdTitle((Long) _r[0], …)`, a new
+  `dispatchMultiProjection` overload), and a `_MansartComponents` per package, declared in
+  `META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents`, which hands Mansart the entity models and
+  creates the repository implementations by plain calls; `EntityModels.of`, `MansartData.repository` and
+  `MansartRepoCreator` ask it first and keep reflection as the fallback (no processor, portable containers). The
+  run-time repository warning now names its cause (a repository not visible from its package, or no processor).
+  Verified: the packaged application with no `opens` on the entity package answers CRUD, a derived query, JDQL
+  record projections (two components, one component) and a JDQL entity query.
+
+## MANSART-037 — A table made after the class name was only found missing at the first request
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/migration-table-check` (follow-up of MANSART-036)
+- **Severity**: low (the run-time message of MANSART-036 names the fix; this moves it to the build)
+- **Symptom**: an entity `Book` without `@Table` and a Flyway migration creating `book`: the build passed, the first
+  repository call failed (`"books"` does not exist).
+- **Minimal reproduction**: `MigrationTableCheckTest`.
+- **Cause**: nothing compared the entities' tables with the application's migrations before run time.
+- **Fix**: when the application ships SQL migrations (`<class output>/db/migration`, where Maven copies
+  `src/main/resources/db/migration` before compiling; `-Amansart.migrations` names other directories), the processor
+  reads their `CREATE TABLE` / `CREATE VIEW` / `ALTER TABLE … RENAME TO` (comments skipped; schema prefix, quotes,
+  `IF NOT EXISTS`; a quoted name matches exactly, an unquoted one in any case) and warns about an entity whose table
+  none creates, naming the table a migration made after the class name and the `@Table` fix. A warning, not an error;
+  silent without SQL migrations; `-Amansart.migrationCheck=off` turns it off. Checked with a Vidocq application:
+  `Book` without `@Table` and a migration creating `book` warns at `mvn compile`; with `@Table(name = "book")`, silent.
+
+## MANSART-036 — A missing table fails with a bare "SQL error", and the table naming rule is not documented
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `fix/missing-table-message`
+- **Severity**: medium (a schema made after the class name fails at the first request, with no hint)
+- **Symptom**: an entity `Book` without `@Table` and a Flyway migration creating `book`: the first repository call
+  failed with `MansartDataException: SQL error` (or "PostgreSQL SQL error", "H2 SQL error"), the table name only in the
+  driver's cause. Mansart looks for `books`; the rule (snake_case plural of the simple class name, `SqlNames`) was
+  documented only in `mansart-jakarta-data/README.md` and PLAN.md, not in the docs, and differs from Jakarta
+  Persistence's default (the entity name), although entities use `@jakarta.persistence.Entity`. Found while checking
+  MANSART-035 with a Vidocq application.
+- **Minimal reproduction**: `MissingTableTest` (H2: empty database, other tables, a table named by `@Table`, an
+  unquoted table stored in upper case); `PostgresqlCrudIntegrationTest.aMissingTableIsNamedWithTheEntityAndTheFixes`
+  (`pg-it`).
+- **Cause**: `RepositoryRuntime` ran every statement through `ConnectionScope.withConnection`, which wraps any
+  `SQLException` in a generic message; the dialects' `translate` knew no "undefined table" state.
+- **Fix**: `Dialect.isUndefinedTable` (default `42S02`; PostgreSQL `42P01`; H2 2.x `42S02`, `42S04` on an empty
+  database, `42S03` when a table of another case exists) and `Dialect.undefinedTableHint` (H2: quote the name or
+  `DATABASE_TO_LOWER=TRUE`); `RepositoryRuntime` runs its statements through one helper that turns such a failure into
+  a `MansartDataException` naming the entity, the table, whether the name is the default or `@Table`'s, and the fix
+  (`@Table(name = …)` or a migration). Docs: reference "Table and column names" (NEW), a tip in Getting started,
+  What's new.
+
+## MANSART-035 — The exclusions on `vauban-api` strip the CDI API from a Vidocq codegen bundle's processor path
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `fix/vauban-api-no-exclusions`
+- **Severity**: medium (latent: masked in Vidocq by vidocq#465, which declares the CDI API on the Mansart codegen bundles)
+- **Symptom**: `mansart-data-cdi` and `mansart-transactions-cdi` declared `vauban-api` with exclusions of
+  `jakarta.enterprise:*` and `jakarta.inject:*`. On a processor path where `vauban-api` is the only route to the CDI API
+  (a Vidocq codegen bundle), the Mansart BCEs cannot be loaded: "VaubanProcessor could not be instantiated:
+  NoClassDefFoundError: jakarta/enterprise/inject/build/compatible/spi/BuildCompatibleExtension". The same trap broke
+  `champollion-jsonb-cdi` (champollion#76), whose fix this follows.
+- **Minimal reproduction**: in Vidocq, remove the `jakarta.enterprise.cdi-api` dependency vidocq#465 added to
+  `vidocq-runtime-mansart-data-extension-codegen` and `vidocq-runtime-mansart-transactions-extension-codegen`, then
+  `mvn dependency:tree -Dscope=runtime` on them: before the fix, `vauban-api` is there without
+  `jakarta.enterprise.cdi-api` nor `jakarta.inject-api`; after it, both come with `vauban-api`.
+- **Cause**: exclusions on a declaration also apply to the transitive dependencies Maven's mediation keeps for that
+  artifact in a consumer's graph; on the bundle, the excluded `vauban-api` node is the only path to the CDI API.
+  Making `vauban-api` optional is no fix: Weld loads every class of the bean archive and drops the components when
+  `_VaubanComponents` cannot load.
+- **Fix**: `vauban-api` is a plain compile dependency, without exclusions, in both modules (as in champollion#76). The
+  CDI APIs it brings are the ones every CDI container provides; the brick still declares the Jakarta platform APIs it
+  uses directly as `provided` (mansart#35). Checked: mansart reactor 634 tests, Weld 5/5 and Open Liberty 2/2
+  portability tests, Jakarta Data TCK 74/74, and a Vidocq application (`cassini-rest`, `mansart-data`, `mansart-pool`,
+  `mansart-transactions`, `flyway-migration`) built with these jars and booted with `vidocq:dev` on PostgreSQL:
+  `@Transactional` save then derived query answer 200.
+
+## MANSART-034 — A `@Find` without parameter names ran a query without its condition, returning every row
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `feat/repositories-from-dependency-jars-40` (mansart#40)
+- **Severity**: high (a wrong result, silently)
+- **Symptom**: a repository compiled without `-parameters` (a library jar), `@Find List<Book> byAuthor(String author)`
+  on an entity with two `String` attributes: the run-time path left the parameter unbound and `byAuthor("Zola")`
+  returned every book; the processor, run over the class file, matched the parameter to an attribute named `arg0`.
+- **Minimal reproduction**: `RuntimeFindWithoutParameterNamesTest`, `ProcessorClassFileInputTest`.
+- **Cause**: without a `MethodParameters` attribute, javac and reflection name the parameters `arg0`, `arg1`…; the
+  run-time `FindBindings` fell back to the single attribute of the parameter's type and, when there was none or
+  several, dropped the parameter; the processor used the name as the attribute.
+- **Fix**: both bind a nameless parameter to the entity's only attribute of its type, as the run-time path did, and
+  otherwise fail naming the method and suggesting `@By` or `-parameters` — the processor at build time, the run-time
+  path when it creates the repository.
+
+## MANSART-033 — On Weld, Mansart Transactions publishes no TransactionManager: its producer cannot be loaded
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `test/portability-35` (mansart#35)
+- **Severity**: high on another CDI container (every `@Transactional` bean and every injection of
+  `TransactionManager` fails); none under Vidocq
+- **Symptom**: under Weld SE, `MansartTransactionsProducer` fails to load with
+  _NoClassDefFoundError: io/vidocq/vauban/api/ProxyLink_; Weld drops the bean. Found by `mansart-it-weld`.
+- **Cause**: the Vauban build weaves a `(ProxyLink)` entry constructor into the normal-scoped producer, while
+  `vauban-api` was a `provided` dependency, absent outside Vauban (the rule of vidocq-workspace#17).
+- **Fix**: `vauban-api` is a runtime dependency of `mansart-transactions-cdi` (its Jakarta CDI dependencies
+  excluded) and a plain `requires`. `WeldPortabilityTest`.
+
+## MANSART-032 — On Weld, every injection of TransactionManager is ambiguous
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `test/portability-35` (mansart#35)
+- **Severity**: high on another CDI container; none under Vidocq
+- **Symptom**: _WELD-001409: Ambiguous dependencies for type TransactionManager with qualifiers @Default_ at
+  deployment. Found by `mansart-it-weld`.
+- **Cause**: `MansartTransactionsExtension` adds the producer and the six `@Transactional` interceptors at
+  `@Discovery` (`ScannedClasses.add`, the route Vauban's build-time index sees), and the jar's `beans.xml` made a
+  container that scans the archive discover them a second time.
+- **Fix**: the `beans.xml` of `mansart-transactions-cdi` excludes its package from the scan; the extension stays
+  the only source of these beans on every container. `WeldPortabilityTest`.
+
+## MANSART-031 — On Weld or Open Liberty, a generated repository is never a bean
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `test/portability-35` (mansart#35)
+- **Severity**: high on another CDI container (_WELD-001408: Unsatisfied dependencies for type Books_); none
+  under Vidocq
+- **Symptom**: an application on Weld SE with a `@Repository` whose implementation the processor generated fails
+  at deployment, the repository unsatisfied. Found by `mansart-it-weld`.
+- **Cause**: the generated `*Impl` is `@Singleton`, a pseudo-scope that is not a bean defining annotation: Vauban
+  manages it, a container in an `annotated` bean archive does not discover it. `MansartDataExtension` skipped the
+  synthetic bean for any implementation carrying `@Singleton`, assuming the container managed it.
+- **Fix**: the extension records at `@Registration` the classes the container really manages as beans, and
+  `@Synthesis` registers the synthetic bean for every implementation that is not one of them. A container that
+  never runs `@Registration` keeps the former rule. `WeldPortabilityTest`, `OpenLibertyPortabilityIT`.
+
+## MANSART-030 — A repository method no query derives from compiles, then answers 500
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/derived-query-null-keyword`
+- **Severity**: medium (the mistake is only seen when the method is first called)
+- **Symptom**: a method name the processor cannot derive (an unsupported keyword, a misspelled attribute) compiles
+  with a warning, and the generated implementation throws _UnsupportedOperationException: … no matching CRUD or
+  derived-query rule_ at run time. Reported by the vidocq-tutorial session (batch 4).
+- **Minimal reproduction**: `List<Loan> findByMembr(String member);` on a `BasicRepository<Loan, Long>`.
+- **Cause**: MANSART-002 made the processor report the method as a WARNING, not an ERROR, because one test fixture
+  (`TransactionalArticleRepository.findByTitleSensitive`) relies on the stub.
+- **Fix**: an ERROR by default, since the implementation is generated at build time; the processor option
+  `-Amansart.unresolvedMethods=warn` keeps the warning and the stub, and `mansart-data-tests` sets it for its
+  fixture. `ProcessorDerivedQueryDiagnosticsTest`.
+
+## MANSART-029 — The Jakarta Data `Null` keyword is not supported in derived queries
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/derived-query-null-keyword`
+- **Severity**: medium (a spec keyword; the workaround is a `@Query`)
+- **Symptom**: `List<Loan> findByMemberAndReturnedOnNull(String member);` throws _UnsupportedOperationException:
+  findByMemberAndReturnedOnNull: no matching CRUD or derived-query rule_. Reported by the vidocq-tutorial session
+  (batch 4), worked around with `@Query("where member = :member and returnedOn is null")`.
+- **Cause**: `QueryMethodParser` knew `IsNull`, `IsNotNull` and `NotNull`, not `Null`, the keyword of the Jakarta
+  Data 1.0 "Query by Method Name" table.
+- **Fix**: `Null` is a suffix of `IS_NULL`. `ProcessorDerivedQueryDiagnosticsTest`, and `GadgetQueriesTest` on
+  both the generated and the run-time repository.
+
+## MANSART-008 — The annotation processor ignored `@Param`, did not compile `@Find`, and required `FROM`
+
+- **Date**: 2026-10-18
+- **Status**: FIXED on `fix/41-param-find-from` (mansart#41)
+- **Module**: `mansart-data-processor` (`JdqlParser`, `RepositoryWriter`)
+- **Symptom**: in a repository compiled by the APT (from sources or, through `vidocq:generate`, from class files):
+  `@Query("… :title") byTitle(@Param("title") String t)` failed with "has no parameter with that name"; a `@Find`
+  method got a warning and a body throwing `UnsupportedOperationException`; `@Query("WHERE title = :title")` failed
+  with `Expected FROM, got: WHERE`.
+- **Minimal reproduction**: `JdqlQueryTest` (`paramAnnotationNamesTheParameter`, `queryWithoutFromTargetsThePrimaryEntity`,
+  `findMatchesParametersToAttributes`, `findWithoutParametersHonoursOrderBy`) with the matching `AuthorRepository` methods:
+  the first two fail the compilation, the `@Find` ones throw.
+- **Cause**: the processor's parser mapped `:name` to Java parameter names only, required `FROM`, and had no `@Find`
+  rule. The run-time path (`RuntimeRepositoryProxy`, `JdqlAst`) already handled all three.
+- **TCK**: the Jakarta Data TCK runner (73/73 + signature) generates its repositories at run time, so it never ran the
+  processor on these shapes; it stays 73/73 with the fix.
+- **Fix**: `JdqlParser.queryParameterName` reads `@Param`; `FROM` is optional in the processor's grammar; a `@Find` method
+  declared by the application becomes the JDQL `WHERE a = ?1 AND …` from `@By` (else the parameter name) and
+  `@OrderBy`, then goes through the `@Query` path (a trailing `PageRequest` included; `Sort`, `Order` and `Limit`
+  parameters warn). The processor's warnings name the type and the method.
+
+---
+
+## MANSART-006 — `@TransactionScoped` beans empty on the module path (context never installed)
+- **Date**: 2026-07-14 — **Status**: FIXED (root cause upstream in Vauban, VAU-CTX-001)
+- **Severity**: high (any `@TransactionScoped` state silently lost — one fresh instance per proxy call)
+
+### Symptom
+In `vidocq-runtime-mansart-h2-example`, `ProductResource.create` (`@Transactional`) records an
+entry in the `@TransactionScoped` `OperationAudit` bean and reads it back in the same method —
+and gets an EMPTY list ("TX audit: []"), silently.
+
+### Cause
+Upstream Vauban VAU-CTX-001, two silent fallbacks: on the strict module path the
+`TransactionScopedContext` registered by `MansartTransactionsExtension`
+(`MetaAnnotations.addContext`) could not be instantiated (private-lookup only, no `opens`,
+and the context class is not part of the APT-generated `_VaubanComponents` — the module-info
+comment claiming otherwise was aspirational); the failure was swallowed, and the client-proxy
+delegate then fell back to per-call `@Dependent` instances instead of throwing
+`ContextNotActiveException`.
+
+### Fix / verification
+Vauban VAU-CTX-001 (public-constructor path for BCE contexts + loud failures). Mansart side:
+new regression coverage in `mansart-transactions-cdi-jpms-it`
+(`transaction_scoped_context_works_on_the_module_path`, red before / green after) with a
+`TxScopedCounter` fixture; the IT's processor path now includes `mansart-transactions-cdi` so
+the APT sees the BCE's `@Enhancement(withAnnotations = TransactionScoped.class)` trigger and
+generates the fixture's factory + client proxy (same wiring the vidocq extension codegen
+bundles give applications). E2E: the example now logs "TX audit: [created product id=N]".
+
+## MANSART-007 — `@Transactional` does not govern mansart-data connections (no TX↔data bridge)
+- **Date**: 2026-07-14 — **Status**: FIXED
+- **Severity**: high conceptually (rollback semantics), latent in practice (no reported data loss)
+
+### Symptom
+A JTA rollback does not undo repository writes. `RepositoryRuntime` always runs each operation
+on its own autocommit connection (`ConnectionScope.withConnection`, `CURRENT` unbound), whether
+or not the caller is inside a `@Transactional` method.
+
+### Cause
+There is no bridge between mansart-transactions (JTA `TransactionManager`, used by the
+`@Transactional` interceptors and `@TransactionScoped`) and mansart-data's `ConnectionScope`:
+nothing binds `ConnectionScope.CURRENT` when a JTA transaction starts, and
+`ConnectionXAResource` (mansart-transactions-jdbc) is only exercised by tests. `@Transactional`
+on repository interfaces currently provides interception and TX lifecycle but not connection
+enlistment.
+
+### Notes
+Related: dataStore-routed repositories (MANSART-005 path) are instantiated by
+`MansartRepoCreator` and are not interceptor-enhanced at all — once the bridge exists, routed
+repositories must also join it. Design sketch: a per-(transaction × datasource) connection
+holder registered via `TransactionSynchronizationRegistry`, bound to `ConnectionScope.CURRENT`
+(or consulted by `withConnection`), committed/rolled back by a `Synchronization` — or full XA
+via `ConnectionXAResource` for multi-resource TX.
+
+### Fix / verification (2026-07-14)
+Design: `docs/superpowers/specs/2026-07-14-mansart-007-tx-data-bridge-design.md`. Delivered:
+- **data-core** — `TransactionBridge` SPI (no TX dependency), consulted by
+  `ConnectionScope.withConnection` between the programmatic `CURRENT` and the autocommit path;
+  carried by `RepositoryRuntime` / `MansartData.Builder.transactionBridge`.
+- **data-cdi** — `JtaTransactionBridge`: one connection per (transaction × datasource) stored in
+  the TSR, enlisted XA-first (`instanceof`/`unwrap` `XADataSource` → the driver's XAResource,
+  real 2PC) with a `ConnectionXAResource` LRCO fallback for plain datasources (WARN at the 2nd
+  plain resource in one TX); closed by an interposed `Synchronization` after completion.
+  `JtaBridgeActivator`/`JtaBridgeFactory` gate the optional dependencies (`requires static
+  jakarta.transaction` + `mansart-transactions-jdbc`) so TX-less deployments are untouched.
+  Wired automatically in `MansartRuntimeProducer` AND `DataStoreResolver` (routed repositories
+  join the caller's transaction — the MANSART-005 note above is addressed for the semantics
+  that matter; interceptor enhancement of routed beans remains cosmetic). A `@Named` bean
+  exposed only as `XADataSource` is now adapted (`XaBackedDataSource`) instead of rejected.
+- **transactions-core/jdbc** — `SinglePhaseResource` marker + LRCO ordering in
+  `MansartTransaction.commit()`: single-phase resources commit first (after the XA prepares,
+  before the COMMITTING record); if one fails, the prepared XA branches are rolled back and the
+  caller gets `RollbackException` (previously: commit in enlistment order, heuristic UNKNOWN).
+
+Verified (TDD, red first): `LastResourceCommitOrderTest` (ordering + rollback-on-failure),
+`JtaTransactionBridgeTest` 9/9 (rollback/commit via TM and via `@Transactional` interceptor,
+multi-datasource mix LRCO+XA, routed repository, XA-only named bean, outside-TX unchanged);
+full mansart reactor green; official Jakarta Data TCK EntityTests 73/73; e2e
+`vidocq-runtime-mansart-h2-example` on the module path unchanged and functional.
+
+**Phase 2 — DELIVERED (2026-07-14)**: `PoolConfig.xaDataSourceClassName` exposes the driver's
+`XADataSource` through the pool's `unwrap` (vidocq: `vidocq.pool[.<name>].xa=true`,
+auto-detected from the URL for H2/PostgreSQL, `xaDataSourceClass` override); the vidocq pools
+now take the real-XA path. Durable TM via the `mansart.tx.recovery.log` system property
+(vidocq: `vidocq.tx.recovery.log`) + boot-time recovery scan in the vidocq
+mansart-transactions extension (`MansartTransactionManager.recover()` over every XA-capable
+`DataSource` bean, `RecoveryReport` logged). Tests: `XaDataSourceExposureTest` (pool),
+`DurableTmBootstrapTest` (producer), vidocq `MansartPoolExtensionTest` xa cases; e2e boot log
+shows "durable recovery journal" + "recovery scan clean". Still out of scope: pooling of the
+transactional `XAConnection`s themselves (per-transaction connections are correct and simple).
+
+**XA branch identity (2026-07-14, follow-up)**: the TM handed the SAME Xid to every enlisted
+resource (bqual frozen at `{0}`) — non-conformant, and `XAER_DUPID` waiting to happen when two
+datasources reach the same resource manager. Each enlisted resource now gets its own branch
+(same gtrid, distinct bqual); every per-branch call (end/prepare/commit/rollback) reuses the
+branch's own Xid, and the recovery reconciliation matches journal records against driver
+branches by GLOBAL transaction id (a driver may hold several branches of one transaction,
+spread over several drivers — all are resolved). Regression: `BranchXidTest` (red→green),
+`JtaTransactionBridgeTest.twoRealXaBranches*` (two real XA branches commit/roll back
+atomically).
+
+## MANSART-005 — `@Repository(dataStore = "name")` routing silently lost when the APT impl is a managed bean
+- **Date**: 2026-07-14 — **Status**: FIXED
+- **Severity**: high (multi-datasource repositories silently read/write the WRONG database)
+
+### Symptom
+In `vidocq-runtime-mansart-h2-example`, `GET /api/audit` → 500 `Table "audit_log" not found`:
+`AuditEntryRepository` (`@Repository(dataStore = "audit")`) queries the **default** H2 database
+instead of the `@Named("audit")` one. Direct injection (`@Inject @Named("audit") DataSource`)
+works — only the repository path mis-routes.
+
+### Minimal repro
+```
+# example on module path, two H2 in-memory pools (default + "audit")
+cd vidocq/vidocq-runtime-examples/vidocq-runtime-mansart-h2-example && ../../mvnw vidocq:dev
+curl localhost:8080/api/audit   # 500, SELECT runs on jdbc:h2:mem:mansart-vidocq-demo
+```
+
+### Cause
+Two compounding facts on the compile-time path:
+1. `mansart-data-processor` generates `*RepositoryImpl` as `@Singleton` with an **unqualified**
+   `@Inject *(RepositoryRuntime runtime)` constructor — that always resolves the `@Default`
+   runtime (default `DataSource`), no matter what `dataStore` says.
+2. `MansartDataExtension.@Synthesis` **skips** the synthetic routing bean when the impl is
+   already a managed bean (`isAlreadyManagedBean`) — so `DataStoreResolver` (the only code that
+   honors `dataStore`) is **never invoked** (verified by instrumentation: no `resolve()` call at
+   runtime).
+
+Not a July regression: bisected back to vauban@`eefc6ea` + vidocq@`ab1b6bd` (2026-06-17, the
+day after the feature demo commit) — already broken. The June E2E validation demonstrably
+covered the direct `@Named` injection paths (`/db/audit`), not the repository routing.
+
+### Investigations
+- 2026-07-14: full bisection (vauban pre/post TCK campaign, vidocq June state) — rules out the
+  Core Profile 11 / assembled-runtime TCK campaigns. Fix direction: veto the managed impl when
+  `dataStore` is non-default (`@Enhancement` + `@Vetoed`, same idiom as ravel's
+  `ConfigCdiExtension`) and register the synthetic bean unconditionally for those repositories,
+  so `MansartRepoCreator`/`DataStoreResolver` route as designed.
+
+### Fix / verification
+Two-sided fix:
+1. **mansart-data-cdi** — `MansartDataExtension` vetoes (`@Enhancement` + `@Vetoed`) any bean
+   class implementing a `@Repository(dataStore = "name")` interface (found by reflection — the
+   index-backed lang model returns no super-interfaces for pre-indexed module-path classes),
+   and `@Synthesis` registers the routing synthetic bean unconditionally for those interfaces.
+   The default-dataStore path is untouched (managed impl keeps winning, `@Transactional`
+   interception included). Note: routed repositories are instantiated by `MansartRepoCreator`
+   and are NOT interceptor-enhanced (pre-existing property of the synthetic path).
+2. **vauban** — `EnhancementApplier.applyEnhancements` now drops a bean descriptor whose
+   enhancement adds `@Vetoed` (index-discovered beans ignored the added veto; only the
+   pre-discovery archive pass honored it). Regression test `BceVetoedEnhancementTest`.
+
+Verified: new `MultiDataStoreRoutingTest` (mansart-data-tests, Vauban SE, two H2 databases)
+red→green; full mansart reactor green; full vauban reactor green; e2e on
+`vidocq-runtime-mansart-h2-example` (module path): POST/GET `/api/audit` 201/200 with rows in
+the audit database only, `/api/products` CRUD unchanged; CDI Lite TCK re-run (see below).
+
+## MANSART-004 — Jakarta Data 1.0 TCK harness fully green (root cause was upstream in Vauban)
+- **Date**: 2026-06-02 — **Status**: FIXED
+- **Severity**: high (the official TCK could not run at all — it is the conformance contract)
+
+### Symptom
+`run-official-tck-data-1.0.sh` (and `-Ptck-run test`) reported `EntityTests` 73/73 ERROR, each failing
+in the TCK's `@BeforeEach setup()` with `expected: not <null>` on an injected read-only repository.
+The Vauban TCK enricher returns `null` when bean resolution fails, so the injected `null` was a
+**symptom**, not the cause.
+
+### Cause
+Two layers, neither in Mansart production code:
+1. **Upstream (the real cause) — Vauban `VAU-DISC-001`.** The harness bootstraps Vauban with
+   `beanArchive(false)`; `MansartDataExtension` adds the runtime producer via `ScannedClasses.add(...)`.
+   Vauban then restricted **all** bean discovery to the scanned set, dropping the test's
+   `@Singleton @Produces DataSource` (`H2DataSourceProducer`). `MansartRuntimeProducer` saw an
+   unsatisfied `Instance<DataSource>` → threw "No @Default DataSource bean found" → every
+   `@Repository`'s `RepositoryRuntime` was unsatisfied → enricher injected `null`. Fixed in Vauban.
+2. **Test-only — `MansartCdiBootstrapSmokeTest` under-specified.** It hand-built a container with just
+   3 bean classes and expected `AuthorRepository` injectable, but never added the APT-generated
+   `AuthorRepositoryImpl` (a managed `@Singleton`). The BCE `@Synthesis` correctly defers to a managed
+   impl instead of registering a duplicate synthetic bean, so with the impl absent the repo resolved to
+   nothing. Product behaviour is correct; the test now adds `Author`/`AuthorRepository`/`AuthorRepositoryImpl`
+   (mirroring `MansartArquillianSmokeTest`'s package sweep).
+
+### Fix / verification
+Vauban `VAU-DISC-001` (relaxed `BeanDiscovery` scanned-classes filter to never hide annotated beans) +
+the smoke-test correction above. Official TCK now **74/74** (EntityTests 73 + SignatureTests 1, H2 in
+memory, Maven 4.0.0-rc-5); module smoke suite 9/9. The earlier "pre-existing/environmental" diagnosis
+(baseline-confirmed 73 errors) was correct that it was independent of MANSART-002, but the cause was a
+real Vauban discovery bug, not the environment.
+
+## MANSART-002 — derived query with 3+ `And`/`Or` conditions silently mis-parsed
+
+- **Date**: 2026-06-01
+- **Status**: FIXED 2026-06-01 (see "Fix"; new `NaryDerivedQueryTest`, full data reactor 147 tests green)
+- **Severity**: medium (any repository method with ≥3 conditions; surfaced from Arago, cf. arago `ARAGO-007`)
+- **Symptom**: a derived query like
+  `List<Seat> findByRoomIdAndSeatRowAndSeatBlockIndexAndReleased(String, int, int, boolean)` **compiled
+  fine** but threw `UnsupportedOperationException` at runtime on first call. The 2-condition form
+  (`findByRoomIdAndReleased`) worked. Worse, the build was green: the failure only showed at runtime.
+- **Cause**: `QueryMethodParser.splitOnToken`/`containsToken` split on only the FIRST valid `And`/`Or`
+  and returned exactly two chunks. With 3+ conditions the remainder
+  (`SeatRowAndSeatBlockIndexAndReleased`) was bundled into one token, `parsePredicate` could not resolve
+  it as a single attribute, the whole parse returned `null`, and `RepositoryWriter` emitted a
+  `throw new UnsupportedOperationException(...)` stub **without any compiler diagnostic**.
+- **Fix**:
+  1. `QueryMethodParser` — new recursive `splitAll` (shortest-valid-left + backtracking) decomposes a
+     pure-`And` or pure-`Or` chain into N predicates; `splitOnToken`/`containsToken` delegate to it.
+     Mixed `And`/`Or` remains the documented limitation (unchanged).
+  2. `RepositoryWriter` — when a method still cannot be derived, emit a `Diagnostic.Kind.WARNING` (via
+     `Messager`, plumbed from `MansartProcessor`) so an unresolved query is visible at build time instead
+     of only at runtime. (Not an ERROR: a test fixture, `findByTitleSensitive`, intentionally relies on
+     the stub to assert `@Transactional` propagation without ever being called.)
+- **Note (separate, was pre-existing — now FIXED, see MANSART-004)**: the official Jakarta Data 1.0 TCK
+  runner used to fail to bootstrap (all `EntityTests` errored in `@BeforeEach` with the enricher injecting
+  `null`). The `null` was a symptom; the root cause was upstream in Vauban (`VAU-DISC-001`). Fixed —
+  the suite is now 74/74. Runner still needs Maven 4 (pom pins `maven-compiler-plugin:4.0.0-beta-4`) and
+  the `run-official-tck-data-1.0.sh` `sdk env` step still aborts under `set -u`; invoke mvn directly.
+
+## MANSART-001 — `boolean`/`Boolean` entity field breaks metamodel generation
+
+- **Date**: 2026-05-31
+- **Status**: FIXED 2026-05-31 (see "Fix" below; 145 tests green incl. new `BooleanAttributeTest`)
+- **Severity**: medium (blocked any entity with a boolean column; easy workaround)
+
+### Symptom
+An `@Entity` with a `boolean` (or `Boolean`) persistent field makes the APT-generated metamodel
+fail to compile:
+
+```
+_<Entity>.java: type argument java.lang.Boolean is not within bounds of type-variable V
+_<Entity>.java: cannot infer type arguments for io.vidocq.mansart.data.dialect.attribute.NumericAttribute<>
+  reason: inference variable V has incompatible bounds
+    equality constraints: java.lang.Boolean
+    upper bounds: java.lang.Number
+<Entity>RepositoryImpl.java: is not abstract and does not override abstract method ...
+```
+
+The metamodel writer emits a `NumericAttribute<Boolean>`, but `NumericAttribute<V extends Number>`
+excludes `Boolean`, so `javac` rejects the generated `_<Entity>.java` (and the repository impl that
+depends on it).
+
+### Minimal repro
+```java
+@Entity
+class Flag {
+    @Id String id;
+    boolean enabled;   // <-- Boolean also fails
+}
+
+@Repository
+interface FlagRepository extends BasicRepository<Flag, String> {}
+```
+`mvn compile` with the Mansart APT on the processor path → compilation failure above.
+
+### Cause hypothesis
+`mansart-data-processor/.../MansartMetamodelWriter` (and the parallel runtime path in
+`mansart-data-core/.../RuntimeEntityModelBuilder`) classify a `boolean`/`Boolean` field as a numeric
+attribute. There is no dedicated boolean attribute type next to
+`TextAttribute`/`NumericAttribute`/`EnumAttribute`/`TemporalAttribute` (see
+`mansart-data-dialect-spi/.../attribute/`), and boolean is not otherwise routed, so it falls through
+to `NumericAttribute`, whose type variable is bounded to `Number`.
+
+### Fix (implemented 2026-05-31)
+Added a dedicated `BooleanAttribute<E>` (record, `javaType() → Boolean.class`) to the dialect SPI and
+routed `boolean`/`Boolean` fields to it in both code paths:
+- `mansart-data-dialect-spi`: new `attribute/BooleanAttribute.java`; added to the `sealed Attribute`
+  `permits` list.
+- `mansart-data-processor`: new `AttributeKind.BOOLEAN` + `isBoolean(fqn)` check (before NUMERIC) in
+  `EntityScanner`; new `case BOOLEAN` in `MansartMetamodelWriter` (emits `BooleanAttribute<>`).
+- `mansart-data-core`: `RuntimeEntityModelBuilder.describeField` returns `BooleanAttribute` for
+  `Boolean.class` (before the numeric check).
+
+No downstream change was needed: dialects key off `Attribute.javaType()` (PostgreSQL/H2 already map
+`Boolean.class → Types.BOOLEAN`), and no exhaustive `switch` over the sealed subtypes exists.
+
+Regression test: `mansart-data-tests` — new entity `BooleanFlag` (primitive `boolean` + boxed
+`Boolean`) + `BooleanAttributeTest` asserting both APT (`_BooleanFlag`) and runtime paths type the
+fields as `BooleanAttribute`.
+
+### Historical workaround (no longer required)
+Before the fix, the flag had to be modelled as a String-backed enum. Arago's `Speaker` initially used
+an enum, then moved back to a plain `boolean` once this was fixed.
+
+---
+
+## MANSART-002 — `java.time.Instant` field fails to INSERT on PostgreSQL
+
+- **Date**: 2026-05-31
+- **Status**: FIXED 2026-05-31 (regression test `PostgresqlCrudIntegrationTest#instantFieldRoundTripsThroughTimestamptz`)
+- **Severity**: high (any entity with an `Instant` column fails to persist on PostgreSQL)
+
+### Symptom
+Saving an entity with a `java.time.Instant` field mapped to `TIMESTAMPTZ` fails on PostgreSQL:
+
+```
+org.postgresql.util.PSQLException: Cannot convert an instance of java.time.Instant to type Types.TIMESTAMP_WITH_TIMEZONE
+```
+
+Not caught earlier because the unit tests run on H2 and the existing test entities use `LocalDate`,
+not `Instant`. Surfaced by Arago (`Speaker.invitedAt` is an `Instant`).
+
+### Cause
+`PostgresqlDialect.bind` (and `H2Dialect.bind`) bound the value with
+`ps.setObject(idx, value, Types.TIMESTAMP_WITH_TIMEZONE)`. The PG JDBC driver cannot convert a raw
+`Instant` for `TIMESTAMP_WITH_TIMEZONE` — it expects an `OffsetDateTime` (or `Timestamp`).
+
+### Fix (implemented 2026-05-31)
+In both dialects' `bind`, add an `Instant` branch that binds
+`instant.atOffset(ZoneOffset.UTC)` instead of the raw `Instant`. The read path (`extract`) already
+converted `OffsetDateTime → Instant`, so only writes were affected. Regression: new `Event` entity
+(an `Instant` column) + a PG round-trip test under the `pg-it` tag.
+
+---
+
+## MANSART-003 — `@Enumerated` is parsed but ignored; `EnumStorage.ORDINAL` is dead config
+
+- **Date**: 2026-06-01 (surfaced by the Arago app — room `status`/`mode` enums)
+- **Status**: FIXED 2026-10-07 (mansart#26, branch `pr/ybl/enumerated-storage`)
+- **Severity**: low (every current entity wants STRING storage, which is what they get)
+
+### Symptom
+`MansartMetamodelWriter` always emits `EnumStorage.ORDINAL` for an enum attribute
+(`MansartMetamodelWriter.java:102`), regardless of the entity's `@Enumerated(EnumType.STRING|ORDINAL)`.
+Independently, both dialects bind/read enums **by name only**, unconditionally:
+`PostgresqlDialect.bind` → `ps.setString(idx, e.name())` (and `H2Dialect` likewise), and `extract` →
+`Enum.valueOf(type, s)`. So:
+- `@Enumerated(EnumType.STRING)` works **by accident** — the dialect's name() path matches the intent,
+  even though the metamodel says `ORDINAL`.
+- `@Enumerated(EnumType.ORDINAL)` would be **silently mis-stored** as the constant name, not the index.
+- The `EnumStorage` flag on `EnumAttribute` is never consulted at bind/read time — it is dead config.
+
+### Minimal repro
+Any `@Entity` with an enum field: the generated `_Entity` shows `EnumStorage.ORDINAL`; the row stores
+the name string. (Arago `Room.status` is `@Enumerated(STRING)` + `VARCHAR(16)` and round-trips fine,
+which is why this went unnoticed — the partial index `status IN ('DRAFT','ACTIVE')` only works because
+the dialect happens to store names.)
+
+### Cause hypothesis / fix sketch
+Two aligned changes: (1) `MansartMetamodelWriter` should read `@Enumerated` and emit the matching
+`EnumStorage`; (2) the dialects' `bind`/`extract` should honor `EnumAttribute.storage` — `name()`/
+`valueOf` for STRING, `ordinal()`/`values()[i]` for ORDINAL. Add a regression entity with an
+`@Enumerated(ORDINAL)` column. Not urgent: no current Vidocq entity needs ORDINAL.
+
+### Fix (2026-10-07)
+- `@Enumerated` is read by the processor (`EntityScanner`, with annotation defaults, so a bare `@Enumerated` is
+  ORDINAL) and by `RuntimeEntityModelBuilder`; the metamodel writer emits the matching `EnumStorage`.
+- No `@Enumerated` keeps storing the name (maintainer decision: existing tables hold names), unlike the JPA
+  default. Documented in `reference.adoc`.
+- The storage is honoured where the core knows the attribute — insert/update, row mapping, projections, WHERE
+  bindings, bulk updates by attribute, `ensureTable` DDL — through one helper, `ColumnValues` (an ORDINAL enum is
+  an `Integer` index); the dialects still bind by Java type. Not covered: a raw `SET` clause (`executeUpdateRaw`)
+  and aggregates (`scalarSelect`), which carry no attribute.
+- `EnumStorageTest` (processor, runtime builder, H2 column contents, derived query on an ORDINAL column), failing
+  first. Reactor 312 tests; Jakarta Data TCK 73/73, the same as main.
+
+
+---
+
+## MANSART-008 — `StoredProcedureQuery` lifecycle: single execution, stale/unsafe results, leaks on failure
+
+- **Date**: 2026-10-09 (parent review of the uncommitted P7 `StoredProcedureQueryImpl`, branch `persistence-work`)
+- **Status**: FIXED 2026-10-09 (uncommitted, branch `persistence-work`)
+- **Severity**: medium (API-contract violations; none surfaced by the official TCK at 1063 / 2135)
+
+### Symptom
+`mansart-jpa-core` `io.vidocq.mansart.jpa.core.query.StoredProcedureQueryImpl` (H2, `StoredProcedureQueryTest`):
+1. a second `execute()` → `IllegalStateException`; `setParameter` after an execution → `IllegalArgumentException`;
+   a failed call left the query "executed" (not retryable);
+2. `setParameter(…)` and `getParameter(int|String, Class)` on a closed entity manager → `IllegalArgumentException`
+   instead of `IllegalStateException`; `getParameterValue(Parameter)` of an unbound `IN` → `null` instead of
+   `IllegalStateException`;
+3. `setFirstResult(1)` without `setMaxResults` → `IllegalArgumentException: fromIndex(1) > toIndex(-2147483648)`
+   (`first + Integer.MAX_VALUE` overflow);
+4. a procedure returning a `null` scalar → `NullPointerException` (`List.copyOf`);
+5. `getResultList()` when the pending result is not a result set → `[]` (javadoc: `null`); `getSingleResult()`
+   then → `NoResultException` (javadoc: `null`);
+6. an unbound trailing `IN` → `IllegalStateException`, although §3.11.12 says parameters with database defaults
+   need no binding;
+7. temporal bindings stored the converted `java.sql.*` value (so `getParameterValue` did not return the bound
+   `Calendar`), rejected a `java.util.Date` for a `java.sql.Date` parameter, and `setNull` used the registered
+   type rather than the temporal type;
+8. `closeStatement()` swallowed `SQLException`, and a mapper/runtime exception between `prepareCall` and
+   `closeStatement()` leaked the `CallableStatement` (it was an instance field).
+
+### Minimal repro
+```java
+em.runWithConnection(c -> c.createStatement().execute(
+    "CREATE ALIAS ADD_ONE AS 'int addOne(int value) { return value + 1; }'"));
+var q = em.createStoredProcedureQuery("ADD_ONE", Integer.class);
+q.registerStoredProcedureParameter(1, Integer.class, ParameterMode.IN);
+q.setParameter(1, 41).execute();
+q.setParameter(1, 9);           // IllegalArgumentException: The parameter cannot be bound: 1
+```
+
+### Cause
+The first P7 implementation modelled a one-shot JDBC `CallableStatement` (kept open as a field) instead of the
+reusable `Query` contract, and copied `NativeQuery` helpers (`List.copyOf`, `first + max`) unchanged.
+
+### Fix (2026-10-09)
+- `execute()` always calls the procedure with the current bindings, replacing the previous results/outputs; a
+  failed call leaves the query unexecuted and retryable. Binding or registering a parameter makes the query
+  unexecuted, so `getResultList`/`getSingleResult[OrNull]`/`executeUpdate` (which execute only an unexecuted query,
+  §3.11.12) never read results of stale inputs, and never run a procedure twice behind the user's back.
+- The `CallableStatement` is a local try-with-resources: the primary failure is preserved, a close failure is
+  suppressed on it, or reported as `PersistenceException` on its own. All output values are read before closing.
+- `checkOpen()` on every parameter lookup; `getParameterValue(Parameter)` of an unbound input → `IllegalStateException`.
+- Paging in `long`; results kept in an unmodifiable `ArrayList` copy (nulls allowed).
+- `getResultList()` → `null`, `getSingleResult[OrNull]()` → `null` when the pending result is not a result set; the
+  single-result methods no longer mutate `maxResults` (the inherited `NativeQuery.limited` did).
+- Trailing unbound `IN` parameters are left out of the positional call so database defaults apply (works on every
+  dialect; PostgreSQL requires defaulted parameters to be trailing anyway). An unbound `IN` before a sent parameter,
+  or an unbound `INOUT`, remains an `IllegalStateException`. Named parameters are still sent positionally in
+  registration order (named-notation calls would depend on the TCK's procedure argument names: not changed).
+- Temporal bindings keep the value as given plus its `TemporalType`; the JDBC value and `setNull` type derive from
+  the temporal type; `java.util.Date`/`Calendar` parameters accept either temporal value; plain `Calendar` /
+  `java.util.Date` values are sent as timestamps.
+- 9 new `StoredProcedureQueryTest` scenarios, red first (9 failures/errors), green after.
+- Verification (2026-10-09, Temurin 25.0.4, PostgreSQL 17): clean JPA reactor 453 tests, 0 failures; full official
+  TCK 2135 tests, 1063 passed, 1068 errors, 4 skipped — identical test by test to the preserved 1063 baseline
+  (`core.StoredProcedureQuery` 38 / 40, the two XML-override tests wait for P10).
+
+---
+
+## MANSART-009 — Pool: "No suitable driver found" when the driver is in a child class loader
+
+- **Date**: 2026-10-13
+- **Status**: FIXED 2026-10-13 (mansart#42)
+- **Severity**: high (the pool is unusable under Vidocq with the driver in the application layer)
+
+### Symptom
+`MansartDataSource.getConnection()` fails with `PoolException: failed to open new connection: No suitable driver
+found for jdbc:...` when the JDBC driver jar is visible to the application's class loader but not to the pool's, as
+under Vidocq with the driver in the application layer and the pool in the runtime layer.
+
+### Minimal repro
+`DriverInApplicationLoaderTest` (`mansart-pool-tests`): the pool in one `URLClassLoader`, H2 in a child one.
+
+### Cause
+`DriverManager.getConnection` skips a registered driver its caller's class loader cannot load (caller check), and
+the pool's loader cannot see the application's driver.
+
+### Fix
+The pool resolves the driver itself at its first connection: `java.sql.Driver` providers of the context class loader
+captured at construction first, then `DriverManager`, and keeps it (`DriverLocator`, `ConnectionPool.driver()`).
+
+## MANSART-010 — Transactions: recovered Xids compare by array identity
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `fix/sonar-reliability-security`)
+- **Severity**: low (the transaction manager matches journal records through `XidKey`, by content)
+- **Module**: `mansart-transactions-core` (`FileRecoveryLog.ScannedXid`)
+
+### Symptom
+Two scans of the same recovery journal line return `Xid`s that are not `equals` and have different hash codes, so a
+caller of `MansartTransactionManager.recover()` cannot match a recovered `Xid` against another one (in a set, a map, or
+an `XAResource.recover` result held as `Xid`s). `toString()` prints array identities instead of the identifiers.
+
+### Minimal repro
+`RecoveryLogTest.scannedXidsCompareByContent`: write one journal line, scan twice, compare the two `xid()`s.
+
+### Cause
+`ScannedXid` is a record holding `byte[]` components: the generated `equals`/`hashCode`/`toString` use the array
+references (SonarQube java:S6218).
+
+### Fix
+`ScannedXid` overrides `equals`, `hashCode` and `toString` on the format id and the contents of both arrays, as
+`MansartXid` already does. Regression test: `RecoveryLogTest.scannedXidsCompareByContent`.
+
+## MANSART-011 — Dialect SPI: `Pagination.Keyset` compares its cursor by array identity
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `fix/sonar-reliability-security`)
+- **Severity**: low (no Mansart code compares keysets today; the SPI is public, a dialect or a caller may)
+- **Module**: `mansart-data-dialect-spi` (`Pagination.Keyset`)
+
+### Symptom
+Two `Pagination.Keyset` values with the same limit, order and cursor values are not `equals` and have different hash
+codes; `toString()` prints the array identity instead of the cursor values.
+
+### Minimal repro
+`PaginationKeysetTest` (`mansart-data-tests`): two keysets built from two `Object[]{42L, "b"}` arrays.
+
+### Cause
+`Keyset` is a record holding an `Object[]` component: the generated `equals`/`hashCode`/`toString` use the array
+reference (SonarQube java:S6218).
+
+### Fix
+`Keyset` overrides `equals`, `hashCode` and `toString` with `Arrays.equals`/`Arrays.hashCode`/`Arrays.toString` on the
+cursor. Regression test: `PaginationKeysetTest`.
+## MANSART-012 — `MansartData.runtimeRepository` returned the generated implementation (shared cache)
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: low (the result depended on the order of the calls on one `MansartData`)
+- **Module**: `mansart-data-core` (`MansartData`)
+
+### Symptom
+On one `MansartData`, `runtimeRepository(R.class)` after `repository(R.class)` returned the annotation-processor
+`RImpl` instead of the runtime implementation, and `repository(R.class)` after `runtimeRepository(R.class)` returned
+the runtime implementation instead of `RImpl`.
+
+### Minimal repro
+`MansartDataRepositoriesTest` (`mansart-data-tests`): call both methods for `AuthorRepository` on one `MansartData`.
+
+### Cause
+Both methods cached their instance in the same map, keyed by the repository interface only.
+
+### Fix
+`runtimeRepository` keeps its instances in a map of its own. Regression test: `MansartDataRepositoriesTest`.
+
+## MANSART-013 — Annotation processor: the `First` keyword of derived queries was ignored
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (generated repositories throw or return too many rows; the runtime proxy was right)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+In a repository implemented by the annotation processor:
+- `Optional<E> findFirstByOrderByNameDesc()` threw `NonUniqueResultException` as soon as two rows existed;
+- `List<E> findFirst2By…()` returned every matching row;
+- `E findFirstBy…()` (single-entity return) generated code that did not compile.
+`findOneBy…` behaved like `findFirstBy…` (`NonUniqueResultException` on several matches).
+
+### Minimal repro
+`DerivedFirstTest` (`mansart-data-tests`), with `AuthorRepository.findFirstByOrderByNameDesc`,
+`findFirst2ByNameNotOrderByNameAsc` and `findFirstByNameStartsWithOrderByNameAsc`, through both implementations.
+
+### Cause
+`RepositoryWriter` parsed the method name with the `QueryMethodParser.parse` overload that drops the `First<N>` limit,
+and emitted `runtime.queryOne(…)` for `findFirstBy`/`findOneBy`: one result or `NonUniqueResultException`, and an
+`Optional` even for a single-entity return.
+
+### Fix
+`RepositoryWriter.derivedBody` reads the limit and, for `First`, `First<N>` and `One`, runs the query as a list in the
+`OrderBy` order and keeps its first result(s), shaped as the method returns them (`Optional`, `Stream`, `List`, or the
+entity, `EmptyResultException` when there is none), as the runtime proxy does. `writeMethod` is split
+(`signature`, `appendTypeVariables`, `derivedBody`, `firstResults`). Regression test: `DerivedFirstTest`.
+
+## MANSART-014 — Annotation processor: a missing single result threw `MansartDataException`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: low (the exception type differs from the specification; the runtime proxy was right)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`, `JdqlParser`)
+
+### Symptom
+A generated method returning one entity (derived query or `@Query`) or one projected value threw
+`MansartDataException` ("No result", "@Query returned no result", "Projection returned no result") when nothing
+matched. Jakarta Data 1.0 specifies `jakarta.data.exceptions.EmptyResultException`, which `MansartDataException`
+does not extend, so a caller catching it missed the case.
+
+### Minimal repro
+`EmptySingleResultTest` (`mansart-data-tests`): `AuthorRepository.findByIdGreaterThan`, `jdqlOneNamed` and
+`jdqlNameOfId` without a match, through both implementations.
+
+### Fix
+The three generated `throw`s use `EmptyResultException`. Regression test: `EmptySingleResultTest`.
+
+## MANSART-015 — Projections to a primitive or a primitive array failed
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (`@Query("SELECT stock …") int stockOf(…)` failed at run time)
+- **Modules**: `mansart-data-core` (`JdqlExecutor`), `mansart-data-processor` (`JdqlParser`)
+
+### Symptom
+- Runtime proxy: `@Query("SELECT id WHERE name = ?1") long idOf(String)` failed with `MansartDataException: SQL error`
+  caused by the driver's "converting to class long" (H2: feature not supported).
+- Annotation processor: `@Query("SELECT id ORDER BY id") long[] ids()` asked the driver for a `long[]` per row
+  (`ClassCastException` inside H2), the array return falling into the single-value branch.
+
+### Minimal repro
+`EmptySingleResultTest.projectsToPrimitives` (`mansart-data-tests`): `AuthorRepository.jdqlIdOf` and `jdqlAllIds`,
+through both implementations.
+
+### Cause
+The runtime path passed the primitive return (or array component) type to `ResultSet.getObject(int, Class)`, which
+drivers only support for reference types; the processor had no array branch for single-column projections.
+
+### Fix
+`JdqlExecutor.projectionElement` boxes the element type; `JdqlParser.emitProject` reads an array's column as the
+boxed component type and copies it into the array. Regression test: `EmptySingleResultTest.projectsToPrimitives`.
+
+## MANSART-016 — Annotation processor: lifecycle methods on several entities did not compile
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (a repository declaring one fails the build; the runtime proxy was right)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+`@Insert List<E> createAll(List<E>)`, `@Insert E[] createArray(E[])`, `@Update`/`@Save` on a list and
+`@Delete void removeAll(List<E>)` generated `runtime.insertStrict(_E.$MODEL, (E) arg0)`, a cast of the list or
+array to the entity: the generated class did not compile (`incompatible types`).
+
+### Minimal repro
+`ArticleBatchRepository` + `LifecycleBatchTest` (`mansart-data-tests`), through both implementations.
+
+### Fix
+`RepositoryWriter.lifecycleBody` recognises an array or `Iterable` parameter and `batchLifecycleBody` applies the
+strict operation to each entity in order, returning nothing, a list or an array. Regression test: `LifecycleBatchTest`.
+
+## MANSART-017 — `CrudRepository.insert`, `insertAll`, `update` and `updateAll` threw `UnsupportedOperationException`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: high (four of the methods every `CrudRepository` inherits did not work, on both paths)
+- **Modules**: `mansart-data-processor` (`RepositoryWriter`), `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+On a repository extending `CrudRepository<E, K>`, `insert`, `insertAll`, `update` and `updateAll` threw
+`UnsupportedOperationException`: the annotation processor warned "Mansart could not derive a query for
+'jakarta.data.repository.CrudRepository.insert'" and generated a throwing stub; the runtime proxy reported
+"compile-time Impl missing AND not handled by runtime fallback".
+
+### Minimal repro
+`ArticleCrudRepository` + `LifecycleBatchTest.crudRepositoryInsertsAndUpdates` (`mansart-data-tests`), through both
+implementations.
+
+### Cause
+Both paths implement the inherited methods by name (`save`, `saveAll`, `findById`, `findAll`, `delete…`, `count`,
+`existsById`), a list that only covered `BasicRepository`; the lifecycle annotations these four carry are ignored on
+inherited methods on purpose (`BasicRepository.save` and `delete` have other semantics).
+
+### Fix
+`RepositoryWriter.crudBody` and `RuntimeRepositoryProxy.crudDispatcher` implement the four methods with
+`insertStrict` and `updateStrict` (one entity, or each entity of the list in order). `inheritedDispatcher` is split
+(`findAll`, `deleteAll`) to stay under the complexity limit. Regression test:
+`LifecycleBatchTest.crudRepositoryInsertsAndUpdates`.
+
+## MANSART-018 — `@Find`: the runtime proxy ignored `@By` and `@OrderBy`; the processor failed on `@By(By.ID)`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (wrong rows or order on the runtime path; a build failure on the processor path)
+- **Modules**: `mansart-data-core` (`RuntimeRepositoryProxy`), `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+- Runtime proxy: `@Find @OrderBy(value = "seatRow", descending = true) List<LabSeat> inBlock(@By("seatBlockIndex") int
+  block)` returned the rows of every block (the parameter, named neither as an attribute nor matching a single
+  attribute of its type, was not bound) and in no particular order (`@OrderBy` was not applied).
+- Annotation processor: `@Find Optional<LabSeat> seat(@By(By.ID) Long id)` stopped the compilation with
+  `@Find parse error on seat: Expected comparison operator after 'id', got: ( — JDQL: WHERE id(this) = ?1`.
+
+### Minimal repro
+`LabSeatRepository.inBlock` and `seat` + `FindByAndOrderByTest` (`mansart-data-tests`), through both implementations.
+
+### Cause
+`RuntimeRepositoryProxy`'s `@Find` binding read `@Param` only and its dispatcher started from an empty `OrderBy`;
+`RepositoryWriter.findQuery` copied `By.ID` (`id(this)`) into its JDQL as an attribute name.
+
+### Fix
+The runtime binding reads `@By` (then `@Param`, then the parameter name; `By.ID` is the entity's id) and applies the
+method's `@OrderBy` before any dynamic sort. The processor maps `By.ID` to the entity's `@Id` field; `findQuery` is
+split (`findWhere`, `findAttribute`, `findOrderBy`, `appendOrderList`). Regression test: `FindByAndOrderByTest`.
+
+## MANSART-019 — Runtime proxy: a single-entity `findFirst` without a match returned `null`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`)
+- **Severity**: low (the generated implementation already threw)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+`Author findFirstByNameStartsWithOrderByNameAsc("Zz")` returned `null` on the runtime path when nothing matched;
+Jakarta Data 1.0 and the generated implementation throw `EmptyResultException`.
+
+### Minimal repro
+`DerivedFirstTest.findFirstWithoutAMatchThrowsEmptyResultException` (`mansart-data-tests`), through both implementations.
+
+### Fix
+`RuntimeRepositoryProxy.derivedFirst` throws `EmptyResultException` for a single-entity return (an `Optional` stays
+empty). `derivedDispatcher` is split (`DerivedPlan`, `executeDerived`, `derivedFind`, `derivedFirst`, `derivedOrder`,
+`window`) to stay under the complexity limit.
+
+## MANSART-020 — Runtime proxy: a `@Find` method returning a `Collection` or an `Iterable` failed
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`)
+- **Severity**: medium (`ClassCastException` on every call)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+`@Find Collection<LabSeat> inRoom(@By("roomId") String room)` threw `ClassCastException: LabSeat cannot be cast to
+java.util.Collection` on the runtime path: only `List` returns were recognised, other return types got the first row.
+
+### Minimal repro
+`FindByAndOrderByTest.returnsEveryMatchAsACollection` (`mansart-data-tests`), through both implementations.
+
+### Fix
+`RuntimeRepositoryProxy.shapeFindResult` returns the list for `Collection` and `Iterable` returns too, as derived
+queries already did.
+
+## MANSART-021 — `@Insert` of an entity already stored inserted a copy
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`)
+- **Severity**: medium (silent duplicate rows; Jakarta Data specifies `EntityExistsException`)
+- **Module**: `mansart-data-core` (`RepositoryRuntime`)
+
+### Symptom
+With a generated id, `insert(stored)` (or `@Insert`, `insertAll`) on an entity read or inserted before stored a new
+row under a new id and overwrote the entity's id, instead of throwing `EntityExistsException`.
+
+### Minimal repro
+`LifecycleBatchTest.insertingAStoredEntityAgainFails` (`mansart-data-tests`), through both implementations.
+
+### Cause
+The INSERT leaves out a generated id column, so the database never saw the conflicting id.
+
+### Fix
+`RepositoryRuntime.insertStrict` throws `EntityExistsException` when the entity's generated id is set and a row with
+that id exists. An id set on an entity that matches no row is still replaced by the generated one.
+
+## MANSART-022 — Annotation processor: an inherited `@Find` with `@By(By.ID)` crashed the compilation
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`, SonarQube java:S2259 on mansart#53)
+- **Severity**: medium (build failure)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+A repository inheriting `@Find Optional<E> byKey(@By(By.ID) Long key)` from a plain interface (not a repository)
+stopped the compilation: `NullPointerException: Cannot invoke "TypeElement.getEnclosedElements()" because "entity"
+is null`.
+
+### Minimal repro
+`LabSeatLookups` + `LabSeatRepository extends BasicRepository<LabSeat, Long>, LabSeatLookups` and
+`FindByAndOrderByTest.bindsTheIdOfAnInheritedFindMethod` (`mansart-data-tests`).
+
+### Cause
+`RepositoryWriter.entityForRepo` looks the entity up on the method's declaring interface, which has none here.
+
+### Fix
+`entityForRepo` falls back to the entity of the repository being written. Regression test:
+`FindByAndOrderByTest.bindsTheIdOfAnInheritedFindMethod`.
+
+## MANSART-023 — JDQL: a literal shaped like `pkg.Class.MEMBER` loaded the class it named
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `fix/jdql-enum-literal-lookup`, SonarQube/Opengrep unsafe reflection)
+- **Severity**: high (security: class loading chosen by runtime input)
+- **Module**: `mansart-data-core` (`JdqlExecutor`)
+
+### Symptom
+Any string or identifier literal of a JDQL statement with at least one dot and an uppercase last segment, such as
+`WHERE label = 'com.example.payload.Gadget.RUN'`, made Mansart call `Class.forName("com.example.payload.Gadget", false,
+TCCL)` (then the same name with each dot in turn replaced by `$`), whatever the attribute compared. `JdqlExecutor.run`
+takes statements as text at run time — the Vidocq dev console's JDQL tab sends them over HTTP — so the caller chose
+which classes were looked up, and an enum it named was taken as the value even for an attribute of another type.
+
+### Minimal repro
+`JdqlEnumLiteralTest.aLiteralNamingAnotherClassIsNeverLoaded` (`mansart-data-tests`): with a context class loader
+that records each requested name, the statement above asked it for `com.example.payload.Gadget`.
+
+### Cause
+`JdqlExecutor.resolveLiteral` resolved enum literals by loading the class named by the literal's qualifier
+(`loadClassForEnum`), with no link to the entity model.
+
+### Fix
+`resolveLiteral` takes the type of the attribute the literal meets, from the entity model. A literal is an enum
+constant only when that type is an enum and the qualifier is that enum's canonical (`pkg.Outer.Inner`) or binary
+(`pkg.Outer$Inner`) name; the constant is looked up among that enum's constants. Otherwise the literal stays text.
+`loadClassForEnum` is removed: no class is loaded from a name in the statement. Regression tests:
+`JdqlEnumLiteralTest` (foreign class never requested, top-level and nested enum literals in comparisons, `IN` and
+`SET`, a literal naming another enum refused for the attribute's enum).
+
+## MANSART-024 — Runtime repository: a generic repository contract, or a default method, broke the runtime path
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/runtime-method-selection`, generated-code audit)
+- **Severity**: high (the runtime path — the one the TCK and every pre-compiled repository take — failed where the
+  generated implementation worked)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`, `RuntimeRepositoryClassGenerator`)
+
+### Symptom
+- `@Repository interface GenericArticleRepository extends ArticleBase<Article>`, with
+  `interface ArticleBase<T> extends CrudRepository<T, Long>`: `runtimeRepository` threw
+  `MansartDataException: … does not extend BasicRepository<E, K> / CrudRepository<E, K>`.
+- `@Repository interface DefaultedArticleRepository extends ArticleTitles, CrudRepository<Article, Long>` that
+  implements `ArticleTitles.featured()` with a default body: the runtime implementation overrode the default body
+  with a stub that threw `UnsupportedOperationException: … not handled by runtime fallback`.
+
+### Minimal repro
+`RepositoryShapesTest` (`mansart-data-tests`), parameterized over the generated and the runtime implementation.
+
+### Cause
+- `resolveEntityAndKey` walked the raw super-interfaces and only took a `Class` as entity argument, so the type
+  variable `T` of `ArticleBase<T>` was never bound to `Article`.
+- `RuntimeRepositoryClassGenerator.collectAbstractMethods` walked `getDeclaredMethods()` up the hierarchy and kept
+  every non-default method: the abstract method a default body implements, but also static, private and synthetic
+  methods. The annotation processor keeps the abstract members only (`getAllMembers`).
+
+### Fix
+- The entity and key are resolved through the hierarchy with the bindings of each parameterized super-interface.
+- The generator implements the abstract methods of `getMethods()` (a default body or a bridge hides what it
+  implements), the processor's rule; the dispatcher table keeps every abstract declaration of the hierarchy, so that
+  the `Proxy` safety net still finds its dispatcher, and no longer scans static, private or synthetic methods.
+
+## MANSART-025 — Runtime repositories: the `Proxy` fallback was silent
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/runtime-generation-warning`, generated-code audit)
+- **Severity**: medium (silent performance and AOT regression)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+A repository compiled without `mansart-data-processor` is implemented at run time, and when the Class-File API
+generator failed on it (`ReflectiveOperationException`, `RuntimeException` or `LinkageError`: a repository package not
+open to Mansart under strict Java Modules, a loader that cannot link the generated class), a
+`java.lang.reflect.Proxy` served it instead. Both fallbacks happened without a word in the log: an application could
+run on reflection without knowing that its build did not run the processor.
+
+### Minimal repro
+`RuntimeGenerationWarningTest` (`mansart-data-tests`): a repository interface defined by a loader that cannot link the
+generated class is served by a `Proxy`, and nothing is logged.
+
+### Cause
+`RuntimeRepositoryProxy.create` swallowed the generator's failure (`catch (… _)`) and logged neither path.
+
+### Fix
+`RuntimeGeneration` announces each repository implemented at run time with a framed `WARNING` (`MANSART — RUNTIME
+CODE GENERATION FALLBACK`), and each repository served by the `Proxy` with another (`MANSART — DYNAMIC PROXY
+FALLBACK`) that names the cause and carries the exception; once per repository and JVM. Both point to the fix: add
+`mansart-data-processor` to the annotation processor path. Documented in `internals.adoc` ("The run-time fallback").
+
+## MANSART-026 — Annotation processor: nested repositories, private repositories and invalid queries
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/processor-robustness`, generated-code audit)
+- **Severity**: medium (build failures and a repository that `MansartData.repository` never finds)
+- **Module**: `mansart-data-processor` (`MansartProcessor`, `RepositoryWriter`)
+
+### Symptom
+- Two repositories nested in different types under the same simple name (`Kennel.Pets`, `Shelter.Pets`) both
+  generated `demo.PetsImpl`: the second failed with "Attempt to recreate a file for type demo.PetsImpl".
+- A nested repository's implementation was named `PetsImpl`, but `MansartData.repository(Class)` and the CDI
+  extension's sibling check look for `<binary name>Impl` (`Kennel$PetsImpl`): never found.
+- A private nested repository got a generated class that cannot implement it, and the build failed with
+  "demo.Hidden.Pets has private access in demo.Hidden".
+- An invalid `@Query` made the processor throw out of javac (an `IllegalStateException` with its stack trace) instead
+  of reporting a compile error.
+
+### Minimal repro
+`ProcessorNestedRepositoryTest` and `ProcessorComparisonOperatorsTest.rejectsALoneExclamationMark`
+(`mansart-data-tests`).
+
+### Cause
+`RepositoryWriter.writeIfRepository` named the implementation `<simple name>Impl`. `MansartProcessor.writeRepository`
+generated an implementation for every `@Repository`, whatever its visibility, and caught only `IOException`.
+
+### Fix
+- The implementation is named after the binary name (`Outer$PetsImpl` for a nested repository; unchanged for a
+  top-level one).
+- A repository that a top-level class of its package cannot implement (private, local, nested in a private type) is
+  left to the run-time path, with a NOTE.
+- A `RuntimeException` while generating is reported as a compile error on the repository. The source is rendered in
+  memory before it is written, so no partial file is left behind.
+
+## MANSART-027 — A stale `mansart-repositories.list` entry left the repository without a bean
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/stale-repository-entry`, generated-code audit)
+- **Severity**: medium (the application fails to start with an unsatisfied dependency)
+- **Module**: `mansart-data-cdi` (`MansartDataExtension`)
+
+### Symptom
+An index entry `Itf=ItfImpl` whose implementation cannot be loaded (deleted, or left behind by an incremental build
+or a repackaged jar) made `@Inject Itf` unsatisfied: the interface was neither registered from the index nor sent
+to the runtime path.
+
+### Minimal repro
+`StaleRepositoryIndexTest` (`mansart-data-tests`): a context class loader adds an index naming a missing
+`DefaultNoteLogGoneImpl`; `container.select(DefaultNoteLog.class)` threw `UnsatisfiedResolutionException`.
+
+### Cause
+`discoverRuntimeRepositories` keeps every indexed interface off the runtime path, and `@Synthesis` skipped an entry
+silently as soon as either class failed to load, a tolerance meant for the APT-time replay, where neither is loadable.
+
+### Fix
+When the interface loads but its implementation does not, the extension logs a WARNING and registers the interface on
+the runtime path. An entry whose interface does not load is still skipped silently. Jakarta Data TCK 74/74.
+
+## MANSART-028 — A Jakarta Data metamodel Mansart did not generate made the entity unusable
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/foreign-metamodel`, generated-code audit)
+- **Severity**: medium (any repository of the entity fails)
+- **Module**: `mansart-data-core` (`EntityModels`)
+
+### Symptom
+An entity `Book` next to a `_Book` class that Mansart did not generate — the Jakarta Data static metamodel written by
+hand, or by another annotation processor, which uses the same `_Entity` name — made `EntityModels.of(Book.class)`
+throw `MansartDataException: Generated metamodel …_Book has no public static $MODEL field`.
+
+### Minimal repro
+`EntityModelsOfTest.aMetamodelWithoutModelFieldIsAnotherToolsAndTheModelIsBuiltAtRunTime` (`mansart-data-tests`),
+with the hand-written `_ForeignGadget`.
+
+### Cause
+Any `_Entity` class was taken for Mansart's own, so a missing `$MODEL` was reported as a broken generation.
+
+### Fix
+A `_Entity` class without a `$MODEL` field, or whose `$MODEL` is not an `EntityModel`, is another tool's: the model is
+built at run time, as when there is no such class. An inaccessible `$MODEL` still throws. Jakarta Data TCK 74/74.

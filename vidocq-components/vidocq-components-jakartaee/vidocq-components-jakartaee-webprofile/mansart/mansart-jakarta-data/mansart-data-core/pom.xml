@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jakarta-data</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-data-core</artifactId>
+    <name>Mansart :: Data :: Core runtime</name>
+    <description>RepositoryRuntime, ConnectionScope (ScopedValue), RowMapper. Filled in M3.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-spi</artifactId>
+        </dependency>
+        <!-- M7-29 — jakarta.data-api is the spec consumed by RepositoryRuntime, MansartPage,
+             MansartCursoredPage, etc. Brought in compile-direct since mansart-data-api
+             (which used to expose it transitively) was retired. -->
+        <dependency>
+            <groupId>jakarta.data</groupId>
+            <artifactId>jakarta.data-api</artifactId>
+        </dependency>
+        <!-- mansart-data-processor emits @Singleton + @Inject on every *RepositoryImpl, so a user
+             module driving the processor needs jakarta.inject to compile. Provided: the CDI
+             container brings it (vidocq-workspace#17) — under Vidocq the runtime extension, on
+             another container the container itself. -->
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- jakarta.transaction-api will be re-added in M3 when the runtime uses UserTransaction. -->
+    </dependencies>
+</project>

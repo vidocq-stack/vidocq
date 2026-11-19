@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The beans of this jar (the TransactionManager / UserTransaction / TSR producer and the six
+    @Transactional interceptors, enabled by @Priority) are added by MansartTransactionsExtension at
+    @Discovery through ScannedClasses, the only route Vauban's build-time index sees. The package is
+    therefore excluded from the scan: on a container that also scans this archive (Weld, Open
+    Liberty), the same classes would otherwise become a second set of beans, and every injection of
+    TransactionManager ambiguous (MANSART-032, mansart-it-weld).
+-->
+<beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
+       version="4.0"
+       bean-discovery-mode="annotated">
+    <scan>
+        <exclude name="io.vidocq.mansart.transactions.cdi.*"/>
+    </scan>
+</beans>

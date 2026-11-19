@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-root</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mansart-it-other-containers</artifactId>
+    <packaging>pom</packaging>
+    <name>Mansart :: Integration tests on other CDI containers</name>
+    <description>Portability proofs: the Mansart jars, unchanged, on CDI containers other than Vauban
+        (vidocq-workspace#15, mansart#35).</description>
+
+    <properties>
+        <!-- Test vehicles: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <jakarta.data.version>1.0.1</jakarta.data.version>
+        <jakarta.persistence.version>3.2.0</jakarta.persistence.version>
+        <jakarta.transaction.version>2.0.1</jakarta.transaction.version>
+        <h2.version>2.3.232</h2.version>
+        <assertj.version>3.27.0</assertj.version>
+    </properties>
+
+    <modules>
+        <module>mansart-it-weld</module>
+        <module>mansart-it-openliberty</module>
+    </modules>
+
+    <build>
+        <plugins>
+            <!-- The release profile publishes through central-publishing, which ignores
+                 maven.deploy.skip: without this, a release would push these modules to Central. -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
