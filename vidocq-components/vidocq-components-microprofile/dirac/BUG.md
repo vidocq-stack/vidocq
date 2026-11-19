@@ -49,21 +49,23 @@ test checks that a metric on a method inherited from a superclass, not overridde
 ## DRC-017 — The gauge of a bean that has only another qualifier than `@Default` cannot be read
 
 - **Date**: 2026-11-17
-- **Status**: OPEN. Found while fixing DRC-015 and left as it was: that fix keeps the qualifiers of the lookup. Disabled reproduction: `GaugeBeanLookupCdiIntegrationTest.theGaugeOfABeanWithAnotherQualifierIsRead`.
+- **Status**: FIXED on `fix/gauge-registration`, with DRC-016. Found while fixing DRC-015 and left as it was: that fix kept the qualifiers of the lookup. Tests: `GaugeBeanLookupCdiIntegrationTest.theGaugeOfABeanWithAnotherQualifierIsRead` on Vauban, `WeldPortabilityTest.theGaugeOfABeanWithAnotherQualifierIsRead` on Weld, both red before the fix with the cause below.
 - **Reported by**: the tests of DRC-015
 - **Minimal reproduction**: an `@ApplicationScoped` class with a qualifier of its own and a `@Gauge` method. The container starts. Each read of the gauge fails: `DiracException: Unable to read gauge value`, caused by `UnsatisfiedResolutionException: No bean found for type: …TaggedLevel with qualifiers: [@Any, @Default]`.
 - **Cause**: `GaugeRegistrationBean` looks the bean up by its class and names no qualifier, so the lookup asks for `@Default`.
+- **Fix**: the gauge is read on the bean of its class, whatever its qualifiers: among the container's beans with `@Any`, the one whose bean class is that class and that has a type of it (the raw class, or a parameterized type of it). Those with `@Default` are taken first, the others when there is none, so a producer of that class with `@Default` and another qualifier on the class change nothing. `GaugeBeanLookupCdiIntegrationTest.theGaugeOfAQualifiedBoundedGenericBeanIsReadWithoutRunningItsProducer` changes with it: the `@Tagged` bounded generic bean whose only `@Default` bean of its class is a producer was unsatisfied, and is read now, the producer still never runs.
 
 ## DRC-016 — A `@Dependent` bean with a `@Gauge` gets a new instance at every read of the gauge, and on Weld each one is kept until the container stops
 
 - **Date**: 2026-11-17
-- **Status**: OPEN. Found while fixing DRC-015, not fixed with it. Disabled reproduction: `GaugeBeanLookupCdiIntegrationTest.aDependentBeanIsCreatedOnceForItsGauge`.
+- **Status**: FIXED on `fix/gauge-registration`, with DRC-017. Found while fixing DRC-015, not fixed with it. Tests: `GaugeBeanLookupCdiIntegrationTest.aDependentBeanIsCreatedOnceForItsGaugeAndDestroyedWithTheContainer` on Vauban (red before the fix: 3 instances created, none destroyed) and `DependentGaugeBeanLifecycleTest` on Weld (red before the fix: 3 instances created, the 3 destroyed only when the container closed).
 - **Reported by**: the tests of DRC-015
 - **Minimal reproduction**: a `@Dependent` class with a `@Gauge` method and a counter in its constructor. Read the gauge three times: three instances are created (`expected: <1> but was: <3>`, Vauban `0.4.0-SNAPSHOT` of 455067f5).
 - **What happens to those instances** (measured 2026-11-18 with a throwaway probe, not committed: 50 reads, each instance held by a `WeakReference`, ten `System.gc()`):
   - **Weld**: a memory leak. 50 instances created, 50 still reachable while the container is open, 0 destroyed; the 50 `@PreDestroy` run when the container closes. Each instance is a dependent object of the `Instance<Object>` injected into `GaugeRegistrationBean`, an application-scoped bean: memory grows by one instance per read (one per gauge per scrape) until shutdown.
   - **Vauban** (455067f5): no leak, but no destruction either. 50 created, 0 still reachable, 0 `@PreDestroy` while open and 0 after the close. `beans.select(beanClass)` makes a new `InstanceImpl` at each read; the instance and its `CreationalContext` go into that child's `dependentInstances` map (`InstanceImpl.get`), and the parent creational context of an `Instance` injected into a constructor is `null` (`VaubanContainer.instanceParameter`). Dirac drops the child, so the garbage collector takes the instance, and its `@PreDestroy` never runs.
 - **Cause**: `GaugeRegistrationBean` calls `Instance.get()` at each read. For a normal-scoped bean that gives the same client proxy each time. For a `@Dependent` bean each call creates an instance. A class with a bounded type variable is not concerned: since DRC-015 its instance is created once and released when the container stops.
+- **Fix**: every gauge class is read on one reference of its bean, obtained at the first read and kept, as DRC-015 did for a class with a bounded type variable: the client proxy of a bean of a normal scope, and, for a `@Dependent` bean, one instance that `GaugeRegistrationBean` creates and releases when the container destroys it. A class with no bean of its own, an abstract superclass the extension scanned on its own say, is read on the bean of that type with `@Default`, once too. When no bean is found, each read fails, unsatisfied, as before.
 
 ## DRC-015 — The gauge of a bean whose class has a bounded type variable cannot be read
 

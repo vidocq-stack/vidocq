@@ -25,6 +25,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanContainer;
@@ -34,6 +36,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,7 +58,8 @@ public class GaugeRegistrationBean {
     // when several containers run in one JVM.
     private final Instance<Object> beans;
 
-    // The beans of this container, for a gauge class with type variables that no lookup by type finds (DRC-015).
+    // The beans of this container: a gauge is read on the bean of its class, whatever its qualifiers (DRC-017), and
+    // a class with type variables is not a type its bean can be looked up by (DRC-015).
     private final BeanContainer container;
 
     // How the target of each gauge class is obtained, decided at the first read of a gauge of that class, a failed
@@ -137,35 +141,26 @@ public class GaugeRegistrationBean {
         return lookup.target().get();
     }
 
+    /**
+     * Decides how the gauges of {@code beanClass} are read: on one reference of its bean, obtained here and kept. For
+     * a bean of a normal scope that reference is its client proxy. A {@code @Dependent} bean is created once, here,
+     * and destroyed with this bean (DRC-016): each read used to create an instance, which Weld kept until the
+     * container stopped. A failure is decided too: each read fails with its cause, and none tries again.
+     */
     private Lookup lookup(Class<?> beanClass) {
-        // The lookup by type at each read, as before, for every class but one with type variables that it does not
-        // find.
-        Lookup byType = new Lookup(() -> beans.select(beanClass).get(), null);
-        if (beanClass.getTypeParameters().length == 0 || !beans.select(beanClass).isUnsatisfied()) {
-            return byType;
-        }
-        // A class with a bounded type variable is not a type of its own bean, whose type of that class is
-        // parameterized: the raw class does not look it up (CDI 4.1 section 5.2.4). Its bean is the one whose bean
-        // class is that class and that has a parameterized type of it, among the beans the lookup above asks for
-        // (those with @Default). This leaves out a producer the class declares (its bean class is the class too)
-        // and a class whose bean types @Typed restricts: neither is ever created by a read of a gauge.
-        Set<Bean<?>> ofThatClass = new HashSet<>();
-        for (Bean<?> bean : container.getBeans(Object.class)) {
-            if (bean.getBeanClass() == beanClass && typeOfClass(bean, beanClass) != null) {
-                ofThatClass.add(bean);
-            }
-        }
-        if (ofThatClass.isEmpty()) {
-            return byType;
+        Set<Bean<?>> candidates = beansOf(beanClass);
+        if (candidates.isEmpty()) {
+            // No bean to read the gauge on: each read fails, as the lookup by type says why.
+            return new Lookup(() -> beans.select(beanClass).get(), null);
         }
         CreationalContext<?> context = null;
         try {
-            Bean<?> bean = container.resolve(ofThatClass);
+            Bean<?> bean = container.resolve(candidates);
             context = container.createCreationalContext(bean);
-            Object target = container.getReference(bean, typeOfClass(bean, beanClass), context);
+            Type type = Objects.requireNonNullElse(typeOfClass(bean, beanClass), beanClass);
+            Object target = container.getReference(bean, type, context);
             return new Lookup(() -> target, context);
         } catch (RuntimeException failure) {
-            // Decided too: each read fails with this cause, and none resolves or creates the bean again.
             if (context != null) {
                 context.release();
             }
@@ -177,10 +172,48 @@ public class GaugeRegistrationBean {
         }
     }
 
-    /** The bean type of {@code bean} whose raw type is {@code beanClass}, or {@code null} when it has none. */
+    /**
+     * The beans a gauge of {@code beanClass} may be read on. First the bean of that class: its bean class is that
+     * class, and it has a type of it, the raw class or, for a class with type variables, a parameterized type (CDI 4.1
+     * section 5.2.4). A producer the class declares is a bean of that class too, and is left out, as it has no such
+     * type. Those with {@code @Default} when there are, else whatever their qualifiers (DRC-017). When the class has
+     * no bean, the beans of that type with {@code @Default}: a superclass the extension scanned on its own is read on
+     * the bean of its subclass. A class whose bean types {@code @Typed} restricts has none of either.
+     */
+    private Set<Bean<?>> beansOf(Class<?> beanClass) {
+        Set<Bean<?>> withDefault = new HashSet<>();
+        Set<Bean<?>> otherwiseQualified = new HashSet<>();
+        for (Bean<?> bean : container.getBeans(Object.class, Any.Literal.INSTANCE)) {
+            if (bean.getBeanClass() == beanClass && typeOfClass(bean, beanClass) != null) {
+                (hasDefault(bean) ? withDefault : otherwiseQualified).add(bean);
+            }
+        }
+        if (!withDefault.isEmpty()) {
+            return withDefault;
+        }
+        if (!otherwiseQualified.isEmpty()) {
+            return otherwiseQualified;
+        }
+        return container.getBeans(beanClass);
+    }
+
+    private static boolean hasDefault(Bean<?> bean) {
+        for (var qualifier : bean.getQualifiers()) {
+            if (qualifier.annotationType() == Default.class) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The bean type of {@code bean} that is {@code beanClass} or whose raw type is {@code beanClass}, or {@code null}
+     * when it has none.
+     */
     private static Type typeOfClass(Bean<?> bean, Class<?> beanClass) {
         for (Type type : bean.getTypes()) {
-            if (type instanceof ParameterizedType parameterized && parameterized.getRawType() == beanClass) {
+            if (type == beanClass
+                    || type instanceof ParameterizedType parameterized && parameterized.getRawType() == beanClass) {
                 return type;
             }
         }

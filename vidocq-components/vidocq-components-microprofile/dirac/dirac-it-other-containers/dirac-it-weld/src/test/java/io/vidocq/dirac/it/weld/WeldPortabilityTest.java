@@ -90,4 +90,10 @@ class WeldPortabilityTest {
     void theGaugeOfABoundedGenericBeanIsRead() {
         assertEquals(3L, registry().getGauge(new MetricID("orders.level")).getValue().longValue());
     }
+
+    /** DRC-017: the bean of a gauge is found whatever its qualifiers, here as on Vauban. */
+    @Test
+    void theGaugeOfABeanWithAnotherQualifierIsRead() {
+        assertEquals(5L, registry().getGauge(new MetricID("orders.tagged.level")).getValue().longValue());
+    }
 }

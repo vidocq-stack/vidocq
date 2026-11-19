@@ -34,7 +34,6 @@ import jakarta.inject.Qualifier;
 import org.eclipse.microprofile.metrics.Gauge;
 import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricUnits;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.ElementType;
@@ -127,21 +126,22 @@ class GaugeBeanLookupCdiIntegrationTest {
     }
 
     /**
-     * A producer is a bean of the class that declares it. Here it is the only one with {@code @Default}: it is not
-     * the bean of the class, so a read of the gauge never runs it, and each read fails as it did.
+     * A producer is a bean of the class that declares it. Here it is the only one with {@code @Default}, and it is
+     * not the bean of the class: the gauge is read on the bean of the class, whose qualifier is another one
+     * (DRC-017), and a read never runs the producer. Before DRC-017 each read failed, unsatisfied.
      */
     @Test
-    void whatAProducerOfABoundedGenericClassMakesIsNotTheTargetOfItsGauge() {
+    void theGaugeOfAQualifiedBoundedGenericBeanIsReadWithoutRunningItsProducer() {
         Marker.CREATED.set(0);
         try (SeContainer container = container(TaggedBoundedLevelWithProducer.class)) {
             Gauge<?> gauge = gauge(container, "lookup.tagged.bounded");
 
-            DiracException first = assertThrows(DiracException.class, gauge::getValue);
-            DiracException second = assertThrows(DiracException.class, gauge::getValue);
+            long first = gauge.getValue().longValue();
+            long second = gauge.getValue().longValue();
 
             assertAll(
-                    () -> assertInstanceOf(UnsatisfiedResolutionException.class, first.getCause()),
-                    () -> assertInstanceOf(UnsatisfiedResolutionException.class, second.getCause()),
+                    () -> assertEquals(6L, first),
+                    () -> assertEquals(6L, second),
                     () -> assertEquals(0, Marker.CREATED.get(), "objects the producer made for two reads"));
         }
     }
@@ -199,26 +199,33 @@ class GaugeBeanLookupCdiIntegrationTest {
     }
 
     /**
-     * DRC-016, open: a lookup by type creates a new instance of a {@code @Dependent} bean at each read of
-     * its gauge.
+     * DRC-016: the gauge of a {@code @Dependent} bean is read on one instance, created at the first read and destroyed
+     * with the container. A lookup by type at each read created an instance each time.
      */
     @Test
-    @Disabled("DRC-016: three reads of the gauge of a @Dependent bean create three instances of it")
-    void aDependentBeanIsCreatedOnceForItsGauge() {
+    void aDependentBeanIsCreatedOnceForItsGaugeAndDestroyedWithTheContainer() {
         CountedLevel.CREATED.set(0);
+        CountedLevel.DESTROYED.set(0);
+        int created;
+        int destroyedWhileOpen;
         try (SeContainer container = container(CountedLevel.class)) {
             Gauge<?> gauge = gauge(container, "lookup.counted");
             gauge.getValue();
             gauge.getValue();
             gauge.getValue();
-
-            assertEquals(1, CountedLevel.CREATED.get(), "instances created by three reads");
+            created = CountedLevel.CREATED.get();
+            destroyedWhileOpen = CountedLevel.DESTROYED.get();
         }
+        int destroyedOnceClosed = CountedLevel.DESTROYED.get();
+
+        assertAll(
+                () -> assertEquals(1, created, "instances created by three reads"),
+                () -> assertEquals(0, destroyedWhileOpen, "instances destroyed while the container is open"),
+                () -> assertEquals(1, destroyedOnceClosed, "instances destroyed once the container is closed"));
     }
 
-    /** DRC-017, open: the lookup of a gauge's bean names no qualifier, so it asks for {@code @Default}. */
+    /** DRC-017: the gauge is read on the bean of its class, whatever its qualifiers; the lookup asked for @Default. */
     @Test
-    @Disabled("DRC-017: the gauge of a bean that has only another qualifier than @Default cannot be read")
     void theGaugeOfABeanWithAnotherQualifierIsRead() {
         try (SeContainer container = container(TaggedLevel.class)) {
             assertEquals(5L, gauge(container, "lookup.tagged").getValue().longValue());
@@ -433,9 +440,15 @@ class GaugeBeanLookupCdiIntegrationTest {
     static class CountedLevel {
 
         static final AtomicInteger CREATED = new AtomicInteger();
+        static final AtomicInteger DESTROYED = new AtomicInteger();
 
         CountedLevel() {
             CREATED.incrementAndGet();
+        }
+
+        @PreDestroy
+        void destroyed() {
+            DESTROYED.incrementAndGet();
         }
 
         @org.eclipse.microprofile.metrics.annotation.Gauge(name = "lookup.counted", absolute = true,
