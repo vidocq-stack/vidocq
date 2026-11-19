@@ -1,0 +1,218 @@
+= Usage
+:description: Repository patterns, derived queries, JDQL, transactions, pool sizing.
+
+[.lead]
+Common recipes for `mansart-jakarta-data`, `mansart-transactions`, and `mansart-pool`. The exhaustive reference (all annotations, all configuration options) lives in xref:reference.adoc[Reference].
+
+== Jakarta Data repositories
+
+=== `BasicRepository<T, K>` and `CrudRepository<T, K>`
+
+`BasicRepository` covers `save`, `saveAll`, `findById`, `findAll`, `deleteById`, `delete`, `deleteAll`. `CrudRepository` adds `insert`/`insertAll`/`update`/`updateAll`. To go further, declare specialized methods on the interface; the APT turns them into static query plans.
+
+[source,java]
+----
+@Repository
+public interface AuthorRepository extends CrudRepository<Author, Long> {
+    long count();
+    boolean existsById(Long id);
+}
+----
+
+=== Derived queries (by method name)
+
+Mansart parses the name into a neutral AST, then produces SQL via the target dialect. Supported keywords: `findBy`, `existsBy`, `countBy`, `deleteBy`, operators `And`, `Or`, `Not`, `Like`, `StartsWith`, `EndsWith`, `Contains`, `Between`, `In`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `True`, `False`, `Empty`, `Null` [.tag-new]#NEW# (also written `IsNull`), `NotNull`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
+
+[[unresolved-methods]]A repository method the annotation processor derives no query from fails the build [.tag-new]#NEW#: _Mansart could not derive a query for '…'_. Fix the name, or write a `@Query`. The processor option `-Amansart.unresolvedMethods=warn` turns the error back into a warning, and the generated method then throws `UnsupportedOperationException` when called.
+
+[source,java]
+----
+List<Author> findByName(String name);
+Optional<Author> findOneByName(String name);
+List<Author> findByNameLike(String pattern);
+List<Author> findByNameIgnoreCase(String name);
+List<Loan> findByMemberAndReturnedOnNull(String member);
+List<Author> findAllByOrderByNameAsc();
+long deleteByName(String name);
+----
+
+=== `@Find` (typed parameter matching)
+
+[source,java]
+----
+@Find
+List<Book> find(String title, Author author);
+----
+
+Each parameter is an equality match on the attribute that `@By` names, or else on the attribute of the parameter's own name (compile with `-parameters`). [.tag-new]#NEW# A repository compiled without `-parameters` has no names to match: each parameter then binds to the entity's only attribute of its type, and when there are several, or none, the build — or, on the run-time path, the creation of the repository — fails naming the method, instead of running a query without that condition. The annotation processor compiles `@Find` methods: `@OrderBy` gives the order, a trailing `PageRequest` pages the result, and a method without parameters returns every entity. A `Sort`, `Order` or `Limit` parameter is not supported yet: the build warns, naming the method. Range conditions (`Between`, `LessThan`, …) belong to derived method names such as `findByPublishedOnBetween(from, to)`, which the APT compiles too.
+
+[source,java]
+----
+@Find
+@OrderBy("title")
+List<Book> byAuthor(@By("author") Author writer);
+----
+
+[#query-jdql]
+=== `@Query` JDQL
+
+JDQL is the query dialect defined by {spec-data-1}[Jakarta Data 1.0]. Simpler than JPQL, sufficient for typed SELECT/UPDATE/DELETE.
+
+[source,java]
+----
+@Query("FROM Author WHERE name LIKE :pattern AND id > :minId")
+List<Author> search(String pattern, Long minId);
+
+@Query("UPDATE Author SET name = :newName WHERE name = :oldName")
+long rename(String oldName, String newName);
+----
+
+A statement is one query (`FROM …` or `SELECT … FROM …`), one `UPDATE` or one `DELETE`.`FROM` can be left out: `@Query("WHERE name LIKE :pattern")` targets the repository's entity. `@Param("name")` names a parameter for `:name` whatever the Java parameter is called, so the repository needs no `-parameters`.When Mansart parses the statement at run time — a repository generated at run time, a statement passed to xref:reference.adoc#tooling-api[`JdqlExecutor.run`] — a statement that puts an `UPDATE` or a `DELETE` after a `SELECT` clause, such as `SELECT this DELETE FROM Product`, is refused with a `MansartDataException`; it used to run as the `DELETE`.
+
+=== Pagination — offset and keyset
+
+[source,java]
+----
+Page<Author> findByNameLikeOrderByNameAsc(String pattern, PageRequest page);
+
+// Call
+var page = authors.findByNameLikeOrderByNameAsc("S%", PageRequest.ofPage(1).size(20));
+----
+
+Keyset cursors (`PageRequest.afterCursor(cursor)`) avoid drift on long pagination.
+
+=== Lifecycle annotations
+
+`@Insert`, `@Update`, `@Delete`, `@Save` typed: parameter = entity, collection or varargs; return `void`/`T`/`Iterable<T>`/`int`/`long`/`boolean`. See xref:reference.adoc[Reference].
+
+== Transactions
+
+=== `@Transactional` (CDI)
+
+The `mansart-transactions` interceptor materializes `@jakarta.transaction.Transactional` (TxType `REQUIRED`, `REQUIRES_NEW`, `MANDATORY`, `SUPPORTS`, `NEVER`, `NOT_SUPPORTED`).
+
+[source,java]
+----
+@ApplicationScoped
+public class AuthorService {
+
+    @Inject AuthorRepository authors;
+
+    @Transactional
+    public Author register(String name) {
+        return authors.save(new Author(name));
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void audit(String message) { /* ... */ }
+}
+----
+
+=== `UserTransaction` (programmatic)
+
+[source,java]
+----
+@Inject UserTransaction tx;
+
+void run() throws Exception {
+    tx.begin();
+    try {
+        authors.save(new Author("Marguerite Yourcenar"));
+        tx.commit();
+    } catch (Exception e) {
+        tx.rollback();
+        throw e;
+    }
+}
+----
+
+=== Suspend / resume
+
+`TransactionManager.suspend()` and `resume(Transaction)` cover batch / scheduler cases. The transactional context is carried in a `ThreadLocal` — a deliberate choice: the Jakarta Transactions API is imperative (`begin()` returns, `commit()` comes later from arbitrary call sites), which cannot fit `ScopedValue`'s enclosing-scope model; `ThreadLocal` works on virtual threads exactly as on platform threads.
+
+== Connection pool
+
+=== Minimal configuration
+
+[source,java]
+----
+var ds = MansartDataSource.of(PoolConfig.builder()
+    .jdbcUrl("jdbc:postgresql://db.local:5432/shop")
+    .username("shop").password("...")
+    .minIdle(4).maxSize(32)
+    .acquireTimeout(Duration.ofSeconds(5))
+    .idleTimeout(Duration.ofMinutes(10))
+    .maxLifetime(Duration.ofMinutes(30))
+    .validation(ValidationMode.ON_BORROW)
+    .build());
+----
+
+=== Sizing
+
+With virtual threads, the classic "threads = connections" sizing disappears: dimension on real DB concurrency, not application concurrency. Rule of thumb: `maxSize ≈ DB vCPUs × 2..4`. Beyond that, the DB becomes the bottleneck — see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
+
+=== Leak detection
+
+`leakDetectionThreshold(Duration)` logs a warning + acquisition stack trace when a connection stays borrowed longer than the threshold. Enable in staging, disable in production if the overhead is measured.
+
+== Named datasources (`dataStore`) in Vidocq
+
+In a Vidocq application, the pool is configured declaratively (the `vidocq-runtime-mansart-pool-extension` reads `vidocq.pool.*` keys) and one application can talk to **several databases**. Names are *structural* (fixed at build time), values are runtime MicroProfile Config.
+
+Declare a named pool alongside the default one — the name is the single path segment after `vidocq.pool.`:
+
+[source,properties]
+----
+# @Default datasource
+vidocq.pool.url=jdbc:postgresql://db.local:5432/shop
+vidocq.pool.username=shop
+vidocq.pool.maxSize=16
+
+# named datasource "audit"
+vidocq.pool.audit.url=jdbc:postgresql://db.local:5432/audit
+vidocq.pool.audit.username=audit
+vidocq.pool.audit.maxSize=4
+----
+
+Every key of `PoolConfig` has its property twin (`minIdle`, `maxSize`, `acquireTimeout`, `idleTimeout`, `maxLifetime`, `validationTimeout`, `validation`, `validationQuery`, `leakDetectionThreshold`), plus `password`, `xa` (XA enlistment) and `xaDataSourceClass`, for the default and for each name. Names can also be declared with `@VidocqDataSources({"audit"})` on the application class; the two declaration paths are merged and deduplicated.
+
+Route a repository to a named datasource with the standard Jakarta Data attribute:
+
+[source,java]
+----
+@Repository(dataStore = "audit")
+public interface AuditEntryRepository extends BasicRepository<AuditEntry, Long> { }
+----
+
+And inject the raw datasource anywhere with the generated `@Named` holder:
+
+[source,java]
+----
+@Inject
+@Named("audit")
+DataSource auditDataSource;
+----
+
+Named datasources need the `vidocq-runtime-mansart-pool-datasources-codegen` jar on the compiler's `annotationProcessorPaths` (it generates the `@Named` holder beans). The end-to-end walkthrough — including this wiring — is the xref:tutorials::rest-and-database.adoc[REST + database tutorial]; the runnable reference is `vidocq-runtime-examples/vidocq-runtime-mansart-h2-example` in the runtime repo.
+
+NOTE: Repositories routed via `dataStore` are built by the repository factory without interceptor enhancement; transactional semantics are handled, but custom CDI interceptors on such repositories are not applied today (tracked in the repo's `BUG.md`).
+
+In dev mode, the runtime's PostgreSQL Dev Service can provision one disposable container per declared datasource name — nothing to install or configure. See `DEV_SERVICES.md` in the {repo-vidocq}[Vidocq runtime repo].
+
+[#dependency-repositories]
+== Repositories shipped in a library [.tag-new]#NEW#
+
+A library compiled against the Jakarta Data API — by a third party, without Mansart's processor — can ship `@Repository` interfaces with no implementation. Mansart implements them as it does the application's own:
+
+* *Under Vidocq*, `vidocq:generate` runs Mansart's processor over the classes of the dependency jars whose bytecode names `@Repository`. The implementation, the entity metamodel and the repository index go into the jar's enriched copy, and the build log says so: `bookshelf-lib-1.0.0.jar — Mansart (3 classes, generated)`. A jar is processed once: Mansart marks it (`META-INF/io.vidocq.mansart/generated`), and a jar already compiled with Mansart's processor is left alone. See xref:vidocq::modules/vidocq-runtime-maven-plugin.adoc#brick-processors[brick processors on dependency jars].
+* *Without that build step*, the repository is implemented at run time, as any repository the processor did not see.
+
+What the library must give: derived queries (`findByTitle(String)`) and positional `@Query` parameters (`?1`) work as they are. Names need the class file to keep them: `@Find` matches attributes by parameter name, and `@Query` refers to `:name` — annotate the parameters with `@By` / `@Param`, or compile the library with `-parameters`. When a name is missing, the build fails naming the method; Mansart never guesses an attribute.
+
+A library compiled with another provider's processor also ships that provider's implementation — `Books_` for a repository `Books`, Hibernate Processor's convention. Mansart vetoes it (a log line says so) and implements `Books` itself: the other class would need its provider, and would make the repository ambiguous.
+
+== Composition with other modules
+
+* xref:vauban::index.adoc[Vauban CDI] — produces `@Repository` beans, runs the `@Transactional` interceptor.
+* xref:cassini::index.adoc[Cassini REST] — REST endpoints calling transactional services.
+* xref:vidocq::index.adoc[Vidocq Runtime] — orchestrator that assembles pool + tx + data + REST into an AOT-friendly fat jar.

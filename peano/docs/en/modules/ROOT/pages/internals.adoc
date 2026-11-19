@@ -1,0 +1,445 @@
+= Internals
+:description: Peano architecture — modules, parser, interpreter, build-time code generation.
+
+[.lead]
+Peano combines a lexer/parser, immutable AST, resolver-backed interpreter and API
+provider with build-time accessor and expression generation. The full design is
+`PLAN.md` in {repo-peano}[the repository].
+
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Peano that is the accessor table of each model
+type an expression reaches, and the expressions known at build time; the reflective member access of the
+specification's resolvers stays as the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `pkg.Type__PeanoAccessors`, an `AccessorProvider` whose `AccessorTable` reads and writes the type's properties,
+  calls its public methods and describes them (`MethodDescriptor`, annotation literals), all by direct calls
+| `peano-processor` in javac, for the types `@ELAccessible` or `-Apeano.accessorTypes` select and, with no
+  annotation, the `@Named` and `@Model` beans a page reaches by name and the application types their properties hold
+  (xref:reference.adoc#automatic-selection[Reference]); on Vidocq the `vidocq-runtime-peano-el-extension-codegen`
+  bundle puts it on the processor path
+| `AccessorCatalog`, loaded once per factory and context class loader through the `ServiceLoader` of
+  `AccessorProvider`; its resolver sits in the chain before the specification's built-in resolvers
+| The `BeanELResolver` / `RecordELResolver` of the EL API read the member by reflection, which needs the type
+  exported to `jakarta.el`.
+
+| The table that serves a container's client proxy
+| The bean's own table, when a `ProxyUnwrapper` service names the proxied class
+  (xref:reference.adoc#container-proxies[Reference]); Vidocq provides the unwrapper for Vauban's proxies
+| `AccessorCatalog`
+| The proxy falls through to the rest of the chain, as any subclass does.
+
+| Compiled expressions: the classes of the EL templates known at build
+| `peano-compiler` (`ExpressionCompiler`), called by xref:ibarra::internals.adoc#generated-code[Ibarra]'s page
+  compiler
+| The page that evaluates them
+| The expression is parsed and interpreted.
+|===
+
+=== When the fallback runs
+
+* A type from a dependency or the JDK: the processor sees only the sources of the module it compiles.
+* A type the automatic selection leaves out without an error: abstract, an ambiguous setter, a type-variable
+  property, a private enclosing class. A generated table also serves its exact class only; a subclass needs its own.
+* A static member without a table, and a serialized function restored after deserialization.
+
+=== Which path ran
+
+`-Dpeano.reflection=deny` makes every remaining reflective access fail with an `ELException` that names the type
+(`Reflection fallback denied for ...`); the default, `allow`, reflects silently. A test suite run with `deny` proves a
+page never needs the fallback.
+
+== Modules
+
+[cols="1,1,3",options="header"]
+|===
+| Artefact | Java module | Role
+
+| `peano-core` | `io.vidocq.peano.core` | Engine — syntax export qualified only to the build-time compiler; provides `jakarta.el.ExpressionFactory`
+| `peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable contract and SOURCE-retained ELAccessible annotation
+| `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating property tables — implemented, build time only
+| `peano-compiler` | `io.vidocq.peano.compiler` | AST literal/constant templates to Class-File API classes — implemented, P7, build time only
+| `peano-tck` | — | Official TCK runner, `-Ptck` profile only
+|===
+
+== Pipeline
+
+. A hand-written lexer and recursive-descent parser produce an immutable AST (records and sealed interfaces).
+. A tree-walking interpreter evaluates the AST. It is the reference behaviour and the oracle of every differential test.
+. At build time, `peano-compiler` turns ASTs known in advance into classes; `peano-processor` generates accessor tables in the application's own packages.
+
+== Creation analysis and bounded reuse
+
+ExpressionAnalysis collects canonical identity and ordered variable/function lookup
+descriptors without consulting a context. Creation then captures mapper results in
+separate phases, obtaining the function mapper once per evaluation part, including
+parts with no function descriptors. Lambda parameter names are excluded according
+to lexical scope. Single-variable snapshots avoid an intermediate mutable map.
+
+Each factory owns a ConcurrentHashMap with 128 fixed integer slots. A source hash
+selects a slot; full source equality verifies a hit. A miss returns the locally
+analyzed source even when another thread replaces that slot. Sources exceeding 4096
+characters or a 16KiB estimated artifact weight bypass retention. The estimate counts
+syntax, canonical identity, text/operator/name payloads and descriptor storage; it is
+not an exact heap-size measurement. Collisions trade hit rate for simple bounded storage.
+
+Cached data contains no expected types, contexts, bound values, Method objects or
+throwables. New expressions recapture their mapper bindings. Hits materialize fresh
+nonempty String literal values and their affected AST paths while sharing unaffected
+immutable syntax. The canonical tree remains shared data used for equality/identity;
+it does not supply evaluation values. This preserves the String identity behavior
+documented in COMP-007. Numeric literals retain evaluation-time parsing and lazy failures.
+
+== AOT compatibility
+
+Target: no bytecode generated at run time, no `opens`, no `setAccessible`.
+The spec's own `BeanELResolver` is the property-access fallback for accessible exported types.
+The interpreter uses `java.lang.reflect.Array` only for runtime-typed array coercion
+the `empty` operator and array stream sources (EL 6.0 sections 1.25.7, 1.11 and 2.3.1): allocation, element access
+and length, with no member lookup, accessibility changes or `java.desktop` dependency.
+
+== Application-owned accessor tables (P6 foundation implemented)
+
+The reflection guard follows generated and stream resolvers in the factory-supplied
+chain, before the API's member fallback. It permits direct map/list/resource-bundle/array
+property resolution, while deny mode rejects remaining bean/record/static member access.
+Explicit bare-method/function fallback, reflective metadata selection and serialized
+function restoration also check the policy.
+
+Selected functional interfaces contribute target-keyed conversion tables through the
+same provider service. Generated adapters are ordinary Java classes in the application's
+module. They invoke the EL lambda and convert its result through the caller context;
+factory conversion instead uses the lambda's captured context and factory result coercion.
+No proxy, runtime bytecode generation or reflective method lookup is involved.
+
+The processor generates separate tables for accessible source descendants of selected
+roots in the current compilation. Generated tables accept their exact class only, so
+new overloads, covariant returns and override annotations belong to the concrete table.
+Static hiding retains the most-derived signature. Generation waits for unresolved
+superclass and interface hierarchies across processing rounds; unresolved selections
+receive final diagnostics. No binary subtype scan is performed.
+
+AccessorProvider contributes a collection of AccessorTable instances, each an ELResolver
+registered for one class or interface. A Java module provides directive registers the public provider,
+even when the provider and model package have no exports or opens.
+AccessorCatalog loads providers through ServiceLoader and snapshots their
+tables in an immutable class-keyed map. The factory loads one catalog, lazily, from the context
+class loader it was created under, and every context it serves shares it (EL-019); a context
+created under another context class loader gets its own catalog, so one application never sees
+another's tables. Function calls and method metadata reach the tables outside the resolver chain,
+so the expressions a factory creates bind a resolver over its catalog into the context when none
+is bound yet. Compiled expressions (peano-api) keep their snapshot per generated expression class
+in a ClassValue, used when the context class loader is that class's own loader; any other loader
+gets a snapshot cached in the context, as before.
+The factory holds the class loader it was created under, and its catalog holds that application's
+tables. A factory shared across applications, such as the static factory of ELManager when the EL
+API and Peano sit in a server-wide library, therefore keeps the first application reachable after
+it is undeployed. Ibarra and Vidocq create one factory per application, and on an application
+server the brick ships inside the application, so neither is affected. Duplicate target registrations fail explicitly.
+A built-in Map.Entry table (core internal package, not a service) is added unless an
+application table already targets Map.Entry. It mirrors the API BeanELResolver (read-only key
+and value, the three Map.Entry methods by exact arity) and is checked differentially against it.
+An instance base matches tables by supertype lookup: the exact class, the superclasses
+nearest first, then the interfaces breadth-first (see the Reference page for the exact order).
+Each operation tries them in that order until one resolves it. The catalog caches the ordered
+list per runtime class in a ConcurrentHashMap, an empty list recording the absence of a table.
+A ClassValue is not used: it would attach one application's tables to JDK classes such as the
+Map.Entry implementations, shared by every application. ELClass bases keep the exact-class lookup.
+Tables keep evaluation state in ELContext and must support concurrent use.
+
+The factory's getStreamELResolver hook returns a composite containing the table resolver
+followed by the stream resolver. The Jakarta API places this hook after custom application
+resolvers and before its built-in resolvers. Custom claims keep precedence; unknown types
+and properties fall through. Tables claim resolved nulls through the ordinary API flag.
+No reflection or accessibility override performs table calls.
+
+The independent consumer fixture verifies a closed bean and record, direct method calls,
+typed writes, read-only metadata, nullable results and custom precedence. A comparison
+record exported only to jakarta.el produces the same value/type/read-only results through
+its table and the API RecordELResolver. The original API-only bootstrap fixture still
+compiles without a Peano API requirement.
+
+The runtime foundation validates the service contract with handwritten tables;
+the processor now emits property tables using the same contract.
+Generated method metadata is implemented. Generated tables accept their exact class only, so
+subclasses still need their own generated tables; handwritten tables keyed on an interface or a
+superclass serve every subtype that has no closer table.
+
+== APT property generation (implemented)
+
+ELAccessible or the peano.accessorTypes option selects owned model types; with no annotation, the processor also
+selects the beans a page reaches by name and the types their properties hold
+(xref:reference.adoc#automatic-selection[automatic selection]).
+PeanoAccessorProcessor is discovered on javac's processor module path and generates
+one provider per selected type through Filer, with the model as originating element.
+Source names include the application module; resource fragments target that
+single-module compilation's class output. Generated Java files carry the project license.
+Provider names use the binary model name followed by __PeanoAccessors.
+
+Generated tables call public getters and setters directly. Primitive boolean isX
+getters take precedence over getX; acronym property names retain their capitals.
+Inherited properties and write-only setters are supported; records expose read-only
+component accessors. Known null results are claimed, setter operands use ELContext
+conversion, and accessor failures preserve ELException or wrap their cause.
+Metadata queries do not execute getters.
+
+Unrelated annotations are not claimed. Explicit type names are retried across
+processing rounds, allowing another processor to generate a selected model.
+Unresolved names are errors when processing finishes. Foreign/unnamed modules,
+private enclosing types, ambiguous write-only setters and type-variable bean
+properties receive diagnostics. Compile one application module per javac invocation.
+
+The integration fixture runs the compiled consumer without the processor module.
+Generated properties are checked against API BeanELResolver on the same API-qualified
+exported bean; closed model access cannot rely on that reflective fallback.
+
+== Generated methods and metadata (implemented)
+
+MethodGenerator emits declared erased signatures, direct call branches and static
+runtime annotation literal classes for public selected-model methods.
+MethodDescriptor protects its parameter/annotation arrays and creates fresh Jakarta
+MethodInfo data. Annotation literals implement Java equality/hashCode, including
+nested annotations, enums, class constants, arrays, NaN and signed zero.
+Array-valued members return fresh arrays. No dynamic annotation proxy is created.
+
+MethodSelection shares overload rules with the API-accessible reflective metadata
+fallback. Declared primitive/wrapper descriptors remain distinct; equally matched
+unrelated overloads remain ambiguous. Conversion probes use ELContext.
+Generated varargs branches allocate typed arrays in Java source; neither reflective
+array allocation nor runtime bytecode generation prepares method parameters.
+
+The table resolver binds its immutable catalog in ELContext during ordinary
+resolver callbacks, including conversion callbacks that leave resolution unclaimed.
+Metadata reads reuse that snapshot; custom contexts can discover it lazily through
+the same services. Generated metadata is queried before public-member reflection.
+References retain raw evaluated parameters without invoking the referenced method.
+
+Invocations preserve custom resolver precedence. Captured FunctionMapper calls
+first consult their declaring owner's generated static table, then retain the
+documented API fallback if unresolved. Getter/setter and method exceptions preserve
+ELException or wrap the underlying failure as its cause.
+
+Metadata constants must be accessible to the owning application package/module.
+Specialized inherited generic parameters are diagnosed. Object-declared methods,
+constructors and synthetic stream/optional metadata retain their existing fallback
+or pending status; generated tables still require separately selected subclasses.
+All emitted Java platform names are qualified to survive application names such as Class or Object.
+
+== Lexer (implemented)
+
+The internal `syntax` package tokenizes eval-expression bodies, without their expression delimiters.
+Composite text and expression delimiters are handled by `ExpressionParser`.
+Tokens are immutable records with the original text and a half-open UTF-16 source span.
+String tokens also retain the decoded value; numeric conversion belongs to evaluation.
+
+The lexer follows EL 6.0 sections 1.3, 1.17 and 1.26 for literals, reserved words,
+identifier character ranges, whitespace and longest-match operators.
+Both quote escapes are accepted with either string delimiter, as permitted by section 1.3.
+Illegal characters and malformed strings raise `ELException` with a zero-based source offset.
+Each tokenization owns its cursor and returns an immutable list ending in an EOF token.
+
+== Parser and AST (implemented)
+
+`Parser` uses recursive descent to turn expression-body tokens into a sealed AST
+of records. Operator precedence and associativity follow EL 6.0 section 1.16.
+The grammar includes navigation, function and method calls, assignment, sequences,
+lambdas, lists, sets and maps. Parsing these constructs does not yet evaluate them.
+All AST collections are copied into immutable lists.
+
+`ExpressionParser` handles literal text, immediate and deferred delimiters, and
+composite expressions (section 1.2). It balances collection braces and quoted strings,
+rejects nested eval-expressions and mixed immediate/deferred composites, and delegates
+bodies to `Parser`. Errors and token spans use offsets in the original expression.
+
+== Constant evaluation and coercions (implemented)
+
+Numeric domain selection uses stateless helpers with the caller's ELContext passed
+explicitly. Every required operand conversion still visits ELContext.convertToType;
+this removes helper object allocation without replacing converter hooks or changing
+numeric promotion, evaluation order and arithmetic error handling (EL 6.0 section 1.7).
+
+The interpreter evaluates literals, arithmetic, comparison, logic, `empty`,
+conditional expressions, string concatenation and constant sequences.
+`and`, `or` and `?:` discard the unused branch without evaluating it.
+Single eval-expressions retain their value type; composites concatenate string values
+before conversion to the expected type.
+
+Numeric operators select `Long`, `Double`, `BigInteger` or `BigDecimal` according
+to section 1.7. Decimal equality respects scale, while ordering uses numeric comparison.
+Coercions distinguish primitive null defaults from nullable reference targets, and cover
+strings, numeric types, booleans, characters, enums and arrays (section 1.25).
+
+`PeanoExpressionFactory` is registered with `provides` in the core module.
+Its package is neither exported nor opened. Value expressions apply the expected
+type through `ELContext.convertToType`, allowing the context to override conversion.
+Operator operand conversions also use the evaluation context.
+
+Java platform conversion uses 46 statically compiled adapters; selected application
+interfaces use generated adapters. Application-owned PropertyEditor converters use
+the existing ELResolver hook. Optional peano-beans-compat supplies automatic registry
+discovery through TypeConversionProvider without adding java.desktop to core.
+Evaluation listeners and value/method expression serialization are implemented.
+
+== Resolver-backed values (implemented)
+
+The interpreter resolves identifiers in this order: lambda-scope arguments,
+captured variables, the context's resolver chain, imported static fields and imported classes.
+VariableMapper entries are captured when an expression is created; later mapper changes
+do not change its bindings. No VariableMapper is required when the context disables it.
+
+Property reads use `ELResolver.getValue`; a resolved null value remains distinct from
+an unresolved name. Null bases and keys short-circuit reads, while terminal lvalue
+operations reject null dereferences. Each resolver operation clears the resolution flag
+before invocation and checks whether the resolver claimed the property.
+
+ValueExpression getType, isReadOnly and setValue delegate the terminal operation to
+the resolver without invoking the terminal getter. Writes convert to the property's
+actual writable type through ELContext before setValue for non-root properties.
+Root namespace writes pass the original value to the resolver without inferring
+a type from a current bean value. This supports reassignment of null or dynamically
+typed names and avoids the API BeanNameELResolver null-type defect (API-003).
+Root ownership checks use isReadOnly instead of inspecting the current value type.
+getValueReference retains the
+evaluated base and key. Metadata reports writable types from the resolver rather than
+inferring them from current values; read-only static fields have a null writable type.
+Resolver runtime failures are wrapped in ELException with their original cause.
+
+The independent Java module fixture verifies maps, a hidden bean through an application
+resolver, an API fallback denied by module boundaries, and a record package exported
+only to `jakarta.el`. It uses no classpath, opens or access overrides.
+
+Known upstream limitation: jakarta.el 6.0.1 ArrayELResolver rejects boxed values when
+writing primitive arrays (API-001 in BUG.md). Object-array writes and primitive-array
+reads are supported; Peano preserves custom resolver precedence and does not bypass
+resolver failures with a direct array write.
+
+== Functions, methods and assignments (implemented)
+
+FunctionMapper methods are captured at expression creation and must be public/static.
+Functions invoke the captured declaring class/name/parameter descriptor through the
+API's StaticFieldELResolver; changes to the mapper do not change existing expressions.
+Ordinary method calls delegate to the context resolver's invoke operation, including
+static imports and constructors. Custom application resolvers keep invocation precedence.
+Bare MethodExpression references additionally use the documented API BeanELResolver
+or StaticFieldELResolver fallback if the chain does not handle invocation (section 1.6).
+Thrown resolver failures remain failures; inline calls receive no extra fallback.
+
+MethodExpression supports bare references, inline parameters, MethodExpression-valued
+variables and literal text. Inline arguments override invocation arguments, expected
+parameter arrays are copied, and actual return types are checked when requested.
+MethodInfo and MethodReference evaluate targets/arguments without invoking the referenced
+method; argument expressions themselves may perform evaluation. References include
+the base, declared signature, annotations and evaluated argument values.
+
+The temporary MethodMetadata fallback scans public signatures and annotations accessible
+to the Jakarta API module, including accessible interface/superclass declarations.
+It distinguishes exact primitive/wrapper descriptors and requires a unique most-specific
+match among equally scored candidates. It performs no member invocation, access override
+or bytecode generation. Generated accessor metadata takes precedence for selected models.
+Closed-package custom invocation works without metadata; generated tables supply metadata
+and requested return-type validation for selected hidden methods.
+
+Assignments freeze the left-hand base/key before evaluating the right-hand expression,
+including variable aliases, then return the original right-hand value. Non-lvalues and
+lambda arguments are rejected. Semicolon and string concatenation retain their EL semantics.
+
+The API's inaccessible-method fallback currently produces a wrapped NPE instead of
+MethodNotFoundException (API-002). It remains unable to invoke the closed-package method;
+the custom resolver path works, and no fallback weakens module boundaries.
+
+== Lambdas and collection construction (implemented)
+
+Capture bookkeeping allocates a mutable map only after finding an actual lexical
+argument. Empty snapshots are immutable and shared; nonempty snapshots preserve null
+values behind an immutable wrapper. Small parameter membership reuses the immutable
+syntax list, while larger/nested scopes use hash membership. Free names still receive
+one lookup per capture and parameter shadowing remains intact. The compiled runtime
+helper uses the same empty-snapshot policy without changing generated class ABI.
+Every invocation still enters and exits its scopes, including empty snapshots, and
+cleanup remains in `finally` (EL 6.0 section 1.20).
+
+API-004 records the API 6.0.1 limitation where an inner null argument can expose an
+outer same-name value. It predates this optimization and remains upstream work.
+
+Lists, sets and maps evaluate their element/key/value expressions left to right and
+return fresh mutable collections. Nulls are retained, sets remove duplicate values
+using Java equality, and later map entries replace earlier values for equal keys.
+
+Lambda AST nodes create Jakarta LambdaExpression values backed by an interpreter body.
+Parameters use the API's ELContext lambda scopes. Free enclosing lambda arguments are
+captured at construction, including null values, so closures returned inside collections
+retain their lexical environment. Own and nested parameter names are excluded from capture.
+Body scopes are restored in finally blocks, including failed evaluations.
+The API enforces argument counts and ignores extra arguments according to section 1.20.
+No proxy, member reflection, bytecode generation or module access override is added.
+
+Java functional conversion uses ordinary compiled private records implementing
+all 43 public java.util.function interfaces plus Runnable, Callable and Comparator.
+Adapters invoke the EL lambda, preserve array arguments, and coerce primitive results
+through the caller context; closures and scope cleanup remain intact. Factory conversion
+uses the lambda's captured context and intrinsic result coercion. Selected application
+interfaces use build-time generated adapters. No dynamic proxy or runtime bytecode
+generation is introduced.
+
+Expression equality and hash codes use normalized immutable syntax, ignoring
+whitespace, operator aliases and the choice of immediate/deferred delimiter.
+Operand order, literal text, expected types and captured bindings remain significant.
+Original source and positions are retained for diagnostics and getExpressionString.
+
+== Collection pipelines (implemented)
+
+The factory supplies StreamELResolver through the Jakarta API's getStreamELResolver hook.
+Application resolvers retain precedence. Collections and both object and primitive
+arrays expose stream(). Map collection views can serve as sources too.
+Private pipeline and optional records use direct dispatch inside the closed core
+module, without reflective member invocation, exports or opens.
+
+Java streams implement lazy filter, map, flatMap, distinct, sorted, peek, limit and
+substream pipelines. Terminal operations implement forEach, iterator, toArray,
+toList, reduce, min, max, average, sum, count, anyMatch, allMatch, noneMatch and findFirst.
+The EL callbacks invoke Jakarta LambdaExpression directly with their evaluation context.
+Count traverses elements so peek callbacks are not skipped by Java's sized-source optimisation.
+Sources are unaffected by sorting, and toList returns a fresh mutable list.
+Pipelines hold single-use Java stream state; obtain another stream from the source
+to perform another terminal operation.
+
+EL optional results distinguish absence from a present null element. Empty aggregates
+and searches use empty optionals, including all three match operations.
+Get on an empty result throws ELException; orElseGet and ifPresent execute their
+callbacks only when needed. Arithmetic uses the interpreter's context-aware numeric rules.
+
+These operations are available through value-expression invocation. MethodExpression
+metadata and declared return-type checks for synthetic stream/optional operations
+remain future work. Selected closed-package application methods now have generated metadata.
+
+== Evaluation events and serialization (implemented)
+
+Text ValueExpression.getValue and MethodExpression.invoke/getMethodReference notify
+the supplied context before evaluation and after successful completion, following
+the Jakarta API hooks and reference implementation. Failed evaluation or conversion
+does not report successful completion. Metadata lookup and value writes do not emit
+outer evaluation events. Object-valued variable bindings do not emit synthetic events.
+Property notifications stay with ELContext.setPropertyResolved(base, property);
+the interpreter adds no duplicate property event. Listeners and their exception
+handling are owned by the Jakarta API context.
+
+Value and method expressions serialize through an internal serialization proxy.
+It stores the expression source, expected types, captured variable expressions and
+public static function descriptors. Restoration parses a fresh AST and rebuilds
+the saved bindings; it does not capture the original context or consult the receiving
+context's variable/function mappings to replace saved bindings.
+Function descriptors restore public method metadata with Class.getMethod, while
+invocation remains delegated to Jakarta's resolver and preserves Java module boundaries.
+The parser tree and java.lang.reflect.Method objects are not serialized.
+
+Captured object values must themselves support Java serialization, otherwise
+ObjectOutputStream reports NotSerializableException. Evaluated streams and arbitrary
+lambda objects are not added to the serializable payload contract.
+Named-consumer tests round-trip a pipeline, an API-qualified mapped function and
+a method bound to a serializable record, with no exports or opens toward the core.

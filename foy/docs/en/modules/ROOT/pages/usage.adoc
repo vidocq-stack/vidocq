@@ -1,0 +1,682 @@
+= Usage recipes
+:description: Filters, listeners, async, multipart, sessions, dispatchers, default servlet, welcome files, legacy descriptors, virtual hosts, Vauban CDI integration.
+
+[.lead]
+This page collects recipes for using Foy beyond "hello world". It follows the canonical chapters of Jakarta Servlet 6.1.
+
+== Filters
+
+[source,java]
+----
+import jakarta.servlet.*;
+import jakarta.servlet.annotation.WebFilter;
+import java.io.IOException;
+
+@WebFilter(urlPatterns = "/*")
+public class RequestIdFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain)
+            throws IOException, ServletException {
+        var id = java.util.UUID.randomUUID().toString();
+        req.setAttribute("requestId", id);
+        ((jakarta.servlet.http.HttpServletResponse) resp).addHeader("X-Request-Id", id);
+        chain.doFilter(req, resp);
+    }
+}
+----
+
+Filter ordering: for `@WebFilter` beans the Servlet 6.1 spec (§6.2.4) leaves the order unspecified — Foy uses the discovery order: the `CdiWebComponents` index order first, then any web-annotated beans missing from the indexes (BeanManager order). Filters declared in `web.xml` follow the `<filter-mapping>` document order and are contributed **after** the annotation-discovered ones. `FilterRegistry` preserves that registration order; the chain executes in list order.
+
+== Listeners
+
+`@WebListener` covers `ServletContextListener`, `HttpSessionListener`, `ServletRequestListener` and their `*AttributeListener` variants. All are enrolled by `ListenerRegistry` from beans discovered by Vauban.
+
+[source,java]
+----
+import jakarta.servlet.ServletContextEvent;
+import jakarta.servlet.ServletContextListener;
+import jakarta.servlet.annotation.WebListener;
+
+@WebListener
+public class StartupHook implements ServletContextListener {
+    @Override
+    public void contextInitialized(ServletContextEvent sce) {
+        sce.getServletContext().setAttribute("started-at", java.time.Instant.now());
+    }
+}
+----
+
+`contextInitialized` fires when `FoyChappeBoot.Builder.build()` deploys the web application; `contextDestroyed` fires when the returned `FoyChappeBoot.Mounted` is closed (`Mounted` is `AutoCloseable`).
+
+== Async (`AsyncContext`)
+
+Foy implements `request.startAsync()`, `AsyncContext.start(...)`, `dispatch(...)`, `complete()`, `setTimeout` and `AsyncListener`. Each request runs on a *virtual thread* — switching to async carries no extra cost (no platform pool to protect).
+
+[source,java]
+----
+@WebServlet(value = "/long", asyncSupported = true)
+public class LongServlet extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
+        var ctx = req.startAsync();
+        ctx.setTimeout(5_000);
+        Thread.startVirtualThread(() -> {
+            try {
+                Thread.sleep(2_000);
+                resp.getWriter().write("done");
+                ctx.complete();
+            } catch (Exception e) {
+                ctx.complete();
+            }
+        });
+    }
+}
+----
+
+The async lifecycle follows Servlet 6.1 section 2.3.3.3:
+
+* **One cycle at a time.** A cycle ends with `complete()`, a `dispatch(...)`, a timeout or an error; `onStartAsync` fires on the listeners when a dispatched target calls `startAsync()` again, and `onComplete` fires once, when the last cycle ends.
+* **Timeout.** The default timeout is 30 s (`setTimeout(0)` disables it). On timeout the listeners get `onTimeout`; if none of them calls `complete()` or `dispatch(...)`, the container raises an error dispatch with status `500`, which goes through the `<error-page>` mechanism, then completes the request.
+* **Errors.** An exception escaping the servlet after `startAsync()`, or an async dispatch target, reaches the listeners' `onError` and then the error dispatch, as for a timeout.
+* **No async in an error page.** `startAsync()` throws `IllegalStateException` when called from an error page (an `ERROR` dispatch): the container would never drive the cycle.
+* **One writer at a time.** When a cycle ends, the container takes the response output back before any listener runs: a thread started by `AsyncContext.start` that keeps writing afterwards gets an `IOException` (through the `PrintWriter`, the characters are dropped and `checkError()` turns true). A thread the application manages itself (its own executor) is not known to the container and cannot be fenced the same way (BUG-20261010-02, partial).
+
+[NOTE]
+====
+`ReadListener.onError` is not called when the async cycle times out: the timeout goes to the `AsyncListener`s and the error dispatch only. The specification does not require it and the TCK does not test it.
+====
+
+== Streaming and response buffering
+
+The response is buffered up to `getBufferSize()` bytes (8192 by default, changed with `setBufferSize` before any content is written). While the content fits, the response is not committed: `reset()`, `resetBuffer()`, `sendError` and an error page can still replace it, and a response that ends there is sent whole with a `Content-Length` (chunked instead when trailer fields are set).
+
+The response is committed, and its head sent, at the first of:
+
+* a write that would overflow the buffer;
+* `flushBuffer()`, or `flush()` on the stream or writer;
+* the declared `Content-Length` written in full.
+
+From then on the body goes to the client while the servlet keeps writing: small writes are coalesced in the buffer and pushed when it fills, on a flush, and at the end of the request. Without a declared `Content-Length`, an HTTP/1.1 body is sent chunked; on HTTP/2 it is sent as DATA frames. A client that reads slowly slows the writing servlet down (the pipe between the servlet and the connection is bounded): memory stays bounded whatever the body size.
+
+An exception that escapes after the commit cannot change the response any more: it is logged and the body is aborted (connection aborted on HTTP/1.x, stream reset with `RST_STREAM` `INTERNAL_ERROR` on HTTP/2), so the client sees a truncated body rather than a complete-looking one.What the servlet flushed before the exception still reaches the client first: the head and the bytes already sent to the connection are delivered, then the body ends.
+
+== Non-blocking I/O (`ReadListener`, `WriteListener`)
+
+On an async-started request (or an upgraded connection, see below), `ServletInputStream.setReadListener` and `ServletOutputStream.setWriteListener` switch the stream to non-blocking mode (Servlet 6.1 section 3.7):
+
+* **Reading.** `onDataAvailable` fires when request bytes are buffered; read while `isReady()` is `true`, then return. `onAllDataRead` fires once at the end of the body, `onError` if the upload fails (a client that resets the connection, a body cut short). Callbacks never overlap.
+* **Writing.** Write while `isReady()` is `true`; a write never blocks. When `isReady()` answers `false`, `onWritePossible` fires again once the client has taken the pending bytes. `onError` fires if the client goes away.
+* A `read()` when no data is available, or a `write()` after `isReady()` answered `false` (while bytes still wait for the client), throws `IllegalStateException`, as the specification requires.
+
+[source,java]
+----
+@WebServlet(value = "/upload", asyncSupported = true)
+public class UploadServlet extends HttpServlet {
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        AsyncContext ac = req.startAsync();
+        ServletInputStream in = req.getInputStream();
+        in.setReadListener(new ReadListener() {
+            long total;
+            @Override public void onDataAvailable() throws IOException {
+                byte[] buf = new byte[8192];
+                while (in.isReady()) {
+                    int n = in.read(buf);
+                    if (n < 0) break;
+                    total += n;
+                }
+            }
+            @Override public void onAllDataRead() throws IOException {
+                resp.getWriter().print(total);
+                ac.complete();
+            }
+            @Override public void onError(Throwable t) { ac.complete(); }
+        });
+    }
+}
+----
+
+Limits:
+
+* A `WriteListener` is not resumed after an `AsyncContext.dispatch(...)`: the dispatched target runs with a blocking stream (the listener stays set, but `onWritePossible` is not called again). Set the listener in the cycle that writes.
+* When a cycle ends with bytes still waiting for the client, the container sends them in blocking mode at the end of the request, in order. Foy sets no bound of its own on that wait: a client that never reads keeps the request thread until chappe's write timeout (30 s per blocked write by default) closes the connection (BUG-20261010-03).
+* If a `ReadListener` is still waiting for upload bytes when the request ends (the client went silent mid-body), the response is sent first and the connection is then closed instead of being kept alive: the unread part of the body cannot be skipped safely. An unread body that the client keeps sending is drained by Chappe as before.
+
+== Response trailers
+
+`HttpServletResponse.setTrailerFields(Supplier<Map<String, String>>)` sends trailer fields after the body: on HTTP/1.1 in the trailer section of a chunked body, on HTTP/2 in a final HEADERS frame. The supplier is called once, after the last byte of the body. It is refused (`IllegalStateException`) on HTTP/1.0, once the response is committed, and on HTTP/1.1 when a `Content-Length` is already declared. A failing supplier is logged and no trailer is sent. Names that RFC 9110 section 6.5.1 forbids in trailers (framing, routing, authentication, `Set-Cookie`, ...) are dropped.
+
+Limits:
+
+* The supplier runs on chappe's connection thread after `service()` has returned: it must not use request-scoped state (the request, the session, a CDI request scope, a `ThreadLocal` of the request thread). Compute the values in the servlet and let the supplier return them.
+* On HTTP/1.1, setting a `Content-Length` after `setTrailerFields` makes the body fixed-length: the trailers are then silently dropped.
+* On HTTP/1.1, a response sent with `Connection: close` is not chunked, so its trailers are dropped.
+* `reset()` keeps the supplier: call `setTrailerFields(null)` to remove it.
+
+== HTTP Upgrade (`HttpUpgradeHandler`)
+
+`HttpServletRequest.upgrade(Class)` hands the connection to an `HttpUpgradeHandler` once the servlet returns (Servlet 6.1 section 2.3.3.5). The application sets the `101` status and the `Upgrade`/`Connection` headers itself; the container sends that head, discards any body written to the response, ends the request lifecycle (`requestDestroyed`) and calls `init(WebConnection)`.
+
+[source,java]
+----
+@WebServlet("/echo")
+public class EchoUpgradeServlet extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException, ServletException {
+        resp.setStatus(101);
+        resp.setHeader("Upgrade", "echo");
+        resp.setHeader("Connection", "Upgrade");
+        req.upgrade(EchoHandler.class);
+    }
+}
+----
+
+* The handler is instantiated by the container, through the same component factory as servlets, filters and listeners (CDI included); an instantiation failure is a `ServletException`.
+* `upgrade` throws `IOException` on HTTP/1.0 and HTTP/2, and `IllegalStateException` after `startAsync()` or when called twice; `startAsync()` after `upgrade()` throws `IllegalStateException` too. `upgrade` also throws `IllegalStateException` during an async dispatch.
+* A status other than `101` is sent as set, with a warning in the log. A status or header that cannot go into the upgrade head (an invalid header name or value) is logged as a warning and answered with a `500`; the handler is then never initialised, and `destroy()` is not called.
+* `WebConnection.getInputStream()` and `getOutputStream()` are blocking by default and support `ReadListener` and `WriteListener`.
+* `destroy()` is called once, when the connection ends: `WebConnection.close()`, a read or write error, or the undeployment of the application (which closes every upgraded connection it still holds).
+* `WebConnection.close()` lets a non-blocking write still in flight reach the wire first (the usual `out.write(lastFrame); connection.close();` from `onWritePossible`), waiting at most 2 seconds: past that, a peer that does not read gets the connection closed anyway.
+* A handler that neither reads nor closes keeps the connection open until a write fails or the application is undeployed: there is no idle timeout once a connection is upgraded.
+
+WebSocket is not built on top of this yet (Jakarta WebSocket is not implemented).
+
+[#http2-server-push]
+== HTTP/2 server push
+
+Not supported. `HttpServletRequest.newPushBuilder()` returns `null`, which Servlet 6.1 allows when push is unavailable: code that pushes resources must check for `null`.
+
+Why:
+
+* push is deprecated in Servlet 6.1, and browsers no longer accept it: a pushed resource was often already in the client's cache;
+* Chappe, Foy's transport, sends no `PUSH_PROMISE` frame, and has no `Upgrade: h2c` handshake (cleartext HTTP/2 works with prior knowledge only), see xref:chappe::usage.adoc#http2[Chappe HTTP/2].
+
+The replacement the HTTP world settled on, `103 Early Hints` (RFC 8297), is not offered either: Servlet 6.1 has no API to send it, and Chappe sends no informational response other than `100 Continue`. To get a resource loaded early, send a `Link: <...>; rel=preload` header on the final response.
+
+The 7 push tests of the official TCK are skipped through the TCK's own switch, see xref:tck.adoc#what-is-skipped[What is skipped].
+
+[#file-upload]
+== File upload (`@MultipartConfig`)
+
+[source,java]
+----
+import jakarta.servlet.annotation.MultipartConfig;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.*;
+
+@WebServlet("/upload")
+@MultipartConfig(location = "uploads", fileSizeThreshold = 64 * 1024,
+        maxFileSize = 10 * 1024 * 1024, maxRequestSize = 20 * 1024 * 1024)
+public class UploadServlet extends HttpServlet {
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws Exception {
+        String title = req.getParameter("title"); // a form field of the same multipart body
+        Part part = req.getPart("file");
+        String submitted = part == null ? null : part.getSubmittedFileName(); // raw client input
+        if (submitted == null) { // no part, or a plain field instead of a file
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+        var name = java.nio.file.Path.of(submitted.replace('\\', '/')).getFileName();
+        if (name == null || name.toString().equals(".") || name.toString().equals("..")) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+        part.write(name.toString()); // relative: resolved against the location
+        resp.setStatus(204);
+    }
+}
+----
+
+The body is parsed while it streams in (RFC 7578): a part is held in memory up to `fileSizeThreshold`, then written to an owner-only temporary file. The first call to `getParts()`, `getPart(name)` or, on a POST, `getParameter*` parses it once; every later call sees the same parts.
+
+Configuration::
+A multipart configuration is required: `@MultipartConfig` on the servlet, `<multipart-config>` in its `web.xml` declaration, or `ServletRegistration.Dynamic.setMultipartConfig(...)` before the context is initialised. Without one, `getParts()` and `getPart()` throw `IllegalStateException`; on a request that is not `multipart/form-data` they throw `ServletException`. The configuration that applies is the one of the servlet executing the call, so a forward to another servlet changes it.
+
+`location`::
+Where the temporary files go and where a relative `Part.write` name is resolved. Empty (the default): the context temporary directory (`ServletContext.TEMPDIR`). Relative: under that directory. Absolute: used as is.
+
+`fileSizeThreshold`::
+The size up to which a part stays in memory. With `0` (the default), every non-empty part goes to disk.
+
+`maxFileSize` and `maxRequestSize`::
+Checked while the body streams in, and `maxRequestSize` also against a declared `Content-Length` before any byte is read. Exceeded, `getParts()` and `getPart()` throw `IllegalStateException`; the parts parsed so far are discarded, and their files deleted by the end of the request at the latest.
+
+Cleanup::
+Every temporary file is deleted at the end of the request, at the end of the async cycle when the request went asynchronous, and on a failed parse. A file moved by `Part.write` is no longer a temporary file: it belongs to the application.
+
+`Part.write(name)`::
+A relative name is resolved against the location; a name that leaves it (`..`, a symbolic link to elsewhere) is refused with an `IOException`. An absolute name is used as provided. `Part.delete()` deletes the part's temporary file.
+
+`getSubmittedFileName()`::
+Returned raw, as the client sent it: it can hold `..`, `/`, `\` or a full Windows path. Sanitise it before using it as a file name, as the example above does: replace `\` with `/`, then keep only `Path.of(name).getFileName()`, and refuse a missing, empty, `.` or `..` name. `getSubmittedFileName()` is `null` for a part sent as a plain field.
+
+Form fields as parameters::
+The parts without a file name are request parameters, after the query-string parameters, on a POST to a servlet with a multipart configuration, or on any request once `getParts()` ran. A field's charset is the part's own `Content-Type` charset, else the request encoding (`setCharacterEncoding`, the request `Content-Type`, `request-character-encoding`), else the value of a `_charset_` field, else ISO-8859-1. Request listeners, which run before any servlet, see the query-string parameters only. The fields together count against `maxFormBodySize` (2 MiB by default; file parts do not count): above it, the first `getParameter*` call throws `IllegalStateException` and the parameters keep the query string only, while `getParts()` still returns every part.
+
+Body ownership::
+The body is read once. After `getInputStream()` or `getReader()`, `getParts()` throws `IllegalStateException`; after `getParts()`, `getInputStream()` and `getReader()` return an empty stream.
+
+Strict framing::
+The boundary is at most 70 characters (RFC 2046) and every line must end with CRLF: bare LF line endings are not tolerated and make the body malformed. A malformed body makes `getParts()` throw an `IOException`; read through `getParameter*`, it surfaces as an unchecked exception and the client sees `500`, not `400`.
+
+Errors the application does not catch::
+A multipart limit (`maxFileSize`, `maxRequestSize`, the container limits below) or the container body cap thrown out of a servlet answers `413` on a synchronous dispatch. Thrown from a `Runnable` passed to `AsyncContext.start`, it still answers `500`. A form body above `maxFormBodySize` also answers `500` when uncaught.
+
+After a successful parse, the rest of the body (the epilogue after the closing delimiter) is read to its end, within the same limits, so the trailer fields of a chunked body are ready. A client that stalls after the closing delimiter of a `Content-Length` body therefore delays the return of `getParts()` until it sends the rest or the read times out.
+
+=== Container request body limits
+
+`FoyChappeBoot` sets four container ceilings that apply to every application it deploys, whatever their `@MultipartConfig`:
+
+[source,java]
+----
+FoyChappeBoot.builder()
+        .maxMultipartParts(20)              // default 50
+        .maxFormBodySize(512 * 1024)        // default 2 MiB
+        .maxChunkedRequestBodySize(-1)      // default 10 MiB; -1 lifts the ceiling
+        .maxMultipartPartHeaderSize(4096)   // default 8 KiB
+        // ...
+----
+
+See xref:reference.adoc#request-body-limits[Request body limits] for what each one bounds and what happens when it is exceeded.
+
+== Sessions
+
+The internal `SessionManager` is backed by `InMemorySessionStore` by default. Timeout is driven by `FoyChappeBoot.builder().sessionTimeoutSeconds(...)` or by `<session-config>` in `web.xml`; a `ServletContext.setSessionTimeout(...)` call from a `ServletContainerInitializer` or a `ServletContextListener` overrides both.
+
+Expired sessions are invalidated with their listeners (`sessionDestroyed`, then `valueUnbound`/`attributeRemoved`), either when a request asks for them or by a reaper running on a virtual thread every `min(60 s, max(1 s, timeout / 2))`. A session used by an in-flight request never expires, and `getLastAccessedTime()` is the time of the previous request. On undeploy the reaper stops and every live session is invalidated the same way: Foy does not persist sessions across deployments, and once undeploy started `getSession(true)` throws `IllegalStateException`. A `<session-timeout>` (or `setSessionTimeout`) of zero or less means that sessions never expire.
+
+`changeSessionId()` keeps the session's attributes, fires `HttpSessionIdListener.sessionIdChanged` and sends the new session cookie. The default tracking modes are `COOKIE` and `URL` (a `<tracking-mode>` or `setSessionTrackingModes` replaces them), and they also govern input: the session cookie is read only when `COOKIE` is effective and then wins over a `;jsessionid=` path parameter, which is read only without a session cookie and when `URL` is effective. When the effective tracking modes include `URL`, `encodeURL`/`encodeRedirectURL` add `;jsessionid=<id>` to URLs of the application while the client does not send the session cookie. Without `COOKIE` in the tracking modes, no session cookie is sent. On a secure request the session cookie is `Secure`, unless the application set the flag through `SessionCookieConfig.setSecure` or `<secure>`.The session cookie is `HttpOnly` and `SameSite=Lax` by default: a `SameSite` attribute set by the application (`SessionCookieConfig.setAttribute("SameSite", "Strict")`, or an `<attribute>` in `<cookie-config>`) replaces `Lax`. The default is the container's: `SessionCookieConfig.getAttribute("SameSite")` stays `null` until the application sets it.
+
+For a distributed or persistent session, implement `io.vidocq.foy.spi.session.SessionStore` (see xref:reference.adoc[Reference]).
+
+== `RequestDispatcher`: forward and include
+
+[source,java]
+----
+@WebServlet("/router")
+public class Router extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws Exception {
+        var rd = req.getRequestDispatcher("/target?key=42");
+        rd.forward(req, resp); // or rd.include(req, resp);
+    }
+}
+----
+
+`ForwardedRequest` and `IncludedRequest` inject the standard attributes (`jakarta.servlet.forward.*`, `jakarta.servlet.include.*`) and reuse the Chappe routing. The semantics, all covered by the TCK `requestdispatcher` and `srlistener` suites:
+
+* The query string of the target is merged with the original parameters: the target's values come first, the original ones follow.
+* Every query string is decoded as UTF-8, the request's own as well as those of forward, include and async dispatch, whatever the request character encoding; the encoding applies to the form body only. A pair with a malformed escape is skipped.
+* Every request or response wrapper passed to `forward` or `include`, HTTP or not, reaches the target: the container's own dispatch wrapper sits under the application's chain for the duration of the dispatch and is restored afterwards, as in Tomcat. A zero-argument `AsyncContext.dispatch()` called after the forward or include has returned uses the request's own path, because the application's wrapper chain has already been restored; Tomcat behaves the same way.
+* The request URI and URL of a forward or async dispatch, the `jakarta.servlet.include.request_uri` attribute and the error page URI are percent-encoded; existing `%XX` triplets are kept. A zero-argument `AsyncContext.dispatch()` keeps a decoded `?` in the path.
+* `getNamedDispatcher(name)` reaches every registered servlet, mapped or not, and sets no `forward.*` attribute.
+* A nested forward keeps the attributes of the first forward (the original request), and the `forward.*` attributes are visible only to the forwarded target, the `include.*` ones only to the included target.
+* An exception thrown by the target propagates unchanged to the caller. After a forward returns, the response is closed: whatever the forwarding servlet writes afterwards is dropped.
+* `forward` and `include` may reach resources under `WEB-INF/` and `META-INF/`, which a client request cannot.
+* `getRequestDispatcher` with a path above the context root returns `null`.
+
+== Filter mappings
+
+A filter is chained by URL pattern first, then by servlet name (`<filter-mapping><servlet-name>`, `addMappingForServletNames`), each group in registration order (Servlet 6.1 §6.2.4). A filter matched both ways runs once. The servlet name of the container default servlet is `foy.default`, so a filter can be mapped to static content by name.
+
+== Default servlet and static content
+
+Foy deploys a container default servlet, named `foy.default`, mapped to `/` unless the application maps something to `/` itself. It is not an application registration: `ServletContext.getServletRegistrations()` does not list it. It serves the static resources of the application, the ones `ServletContext.getResource` reaches (`META-INF/resources/` of the application roots and fragment jars, or the `ResourceProvider` set on the builder):
+
+* `GET` and `HEAD` (same headers, no body) are served, `OPTIONS` answers an `Allow: GET, HEAD, OPTIONS` header, any other method answers 405. A directory is 404: there is no listing.
+* `Content-Type` comes from `mime-mapping` and the built-in table, `Last-Modified` from the file time (or the jar entry time) and a weak `ETag` from length and time. `If-None-Match` wins over `If-Modified-Since`; both answer 304.
+* A single `Range` (`bytes=a-b`, `a-`, `-n`) answers 206, an unsatisfiable one 416. Several ranges answer 200 with the whole body (no `multipart/byteranges`). `If-Range` is honoured by date.
+* A client request cannot reach `WEB-INF/` or `META-INF/` (404, in any case and with trailing dots or spaces), whichever servlet the path would map to: the request bridge refuses it before mapping, and `/WEB-INF` without a slash is not redirected. A forward, include, async or error dispatch can, for instance an error page kept under `WEB-INF/`.
+* A resource is served only under its exact real name: on macOS and Windows, a request whose path differs in case from the file name answers 404, so a security constraint matched by case cannot be bypassed. On a Linux case-insensitive mount (ext4 casefold, vfat/exFAT, CIFS) the check cannot see the folding; serve static resources from jars or from a case-sensitive file system there.
+* A custom `ResourceProvider` may implement `metadata(path)` to give the length and the modification time without opening the resource. `ClassPathResourceProvider` does, and never opens a jar connection per request.
+
+[source,java]
+----
+// META-INF/resources/index.html is served at /index.html
+// map a servlet to "/" and it replaces the default servlet.
+@WebServlet("/")
+public class Fallback extends HttpServlet { /* ... */ }
+----
+
+A resource larger than the response buffer is streamed to the client while it is read, with its `Content-Length` when nothing was written to the response before (see <<streaming-and-response-buffering>>).
+
+== Welcome files
+
+`<welcome-file-list>` is applied by the default servlet only. For a request to a directory path ending with `/` (the context root included), Foy tries each welcome file in declaration order: first as a static resource, then as a servlet mapping (`/dir/index.jsp` can be a servlet mapped to `*.jsp`). A welcome file under `WEB-INF/` or `META-INF/` is never resolved, since the welcome re-entry is a client request. The first match wins, and `getRequestURI` keeps the original URI while `getServletPath`, `getPathInfo` and `getHttpServletMapping` describe the target.
+
+A directory request without a trailing slash that has a welcome file is redirected (302) to the slash form. The `Location` is built from the re-encoded canonical path, never from the raw one, so `//evil.example/` cannot become a protocol-relative redirect; it goes through `encodeRedirectURL`, so a session tracked by URL is kept. An application servlet mapped to `/`, or an exact, prefix or extension servlet, handles the path itself and no welcome file is looked up.
+
+== Request path canonicalisation
+
+Before any mapping (servlet, filter, welcome file, default servlet), Foy canonicalises the request path as Servlet 6.1 §3.5.2 requires: path parameters are removed from each segment (`;jsessionid=` included), the path is percent-decoded exactly once as UTF-8, then normalised (repeated slashes collapsed, `.` and `..` resolved). `getRequestURI` stays raw and encoded, `getServletPath` and `getPathInfo` are decoded.
+
+A request answers `400 Bad Request` before any filter or servlet runs when the path:
+
+* has an encoded separator or NUL (`%2F`, `%5C`, `%00`, any case);
+* has a malformed percent escape or invalid UTF-8;
+* holds a raw backslash, a control character or a non-ASCII character (a stricter choice than the grammar requires: send non-ASCII names percent-encoded);
+* has a segment made only of dots and spaces (`...`, `..%20`), or a `..` climbing above the context root.
+
+A path outside the context path (`/app2/x` for context `/app`) is 404; the context path is stripped on a segment boundary. `OPTIONS *` is passed unchanged to the default servlet. The context path configured on the builder is validated at deployment; the root context is the empty string everywhere (`ServletContext.getContextPath()`, `HttpServletRequest.getContextPath()`, the session cookie path is `/`).
+
+== Error pages
+
+`<error-page>` entries match an exception type (the class hierarchy is walked first, then, for a `ServletException`, its root cause) or a status code. The error attributes `jakarta.servlet.error.status_code`, `message`, `exception`, `exception_type`, `request_uri`, `servlet_name` and, new in 6.1, `error.query_string` are set on the error dispatch, which uses `DispatcherType.ERROR`. The error page sees the path elements of its own location (servlet path, path info, request URI and URL, and mapping), whatever resource it is; the original values stay in the `jakarta.servlet.error.*` attributes. If the response is already committed when an exception escapes, no error page is dispatched, the committed content stands and the exception is logged at `ERROR`.
+
+== JSP forwarding from an included page
+
+Page-engine bindings can use the optional `JspEngine.ForwardDispatcher` interface
+on Foy request dispatchers. After validating and clearing its JSP buffers, the
+engine calls `forwardFromJsp(request, currentResponse)` with its current application
+wrapper chain. Foy owns the Servlet response buffer reset and forward completion;
+the engine must not reset the Servlet buffer again.
+
+Foy gives the destination a forwarding view of that chain, preserving application
+wrapper delegates and cached writer or stream transformations. Each operation
+through the view temporarily applies forward policy to Foy-owned INCLUDE scopes.
+Original INCLUDE references keep their header and reset restrictions, including
+on other virtual threads. Retained forwarding writers and streams re-enter the
+same policy when used after the call returns. A started or queued async cycle
+keeps the response open and dispatches through its captured response chain.
+Concurrent forwarding operations on one response require application coordination;
+conflicting scope ownership fails explicitly and releases any scopes already acquired.
+
+The interface adds no dependency on a particular page engine and needs no new
+exports or opens. Ordinary Servlet `forward` and `include` remain available through
+`RequestDispatcher`.
+
+== Response semantics
+
+`sendError` and `sendRedirect` reset the buffer and the declared `Content-Length` and commit the response.When no error page handles it, `sendError(sc, msg)` answers the container's minimal HTML page with the status and the message, HTML-escaped, so a message that carries a request value cannot inject markup; the `jakarta.servlet.error.message` attribute an error page reads keeps the raw message, which that page escapes itself. `setStatus`, headers, `setLocale`, `setContentType` and charset changes are ignored once the response is committed (on buffer overflow, after `flushBuffer`, or once the declared `Content-Length` is reached; see <<streaming-and-response-buffering>>). A cookie with a `Max-Age` also carries an `Expires` attribute (RFC 6265). The default character encoding follows `<response-character-encoding>`, then the `ISO-8859-1` default, and a `Content-Type` charset or locale-encoding mapping overrides it until `getWriter` is called.The `Content-Type` header names a charset only when one was set, configured with `<response-character-encoding>` or `ServletContext.setResponseCharacterEncoding`, or fixed by `getWriter` (`ISO-8859-1` by default): bytes written through `getOutputStream` with nothing set, a static file of the default servlet for instance, go out as `text/html` with no charset, so the browser follows the page's own `<meta charset>`. `getCharacterEncoding()` still answers `ISO-8859-1` then.A `Content-Type` set with `setHeader` or `addHeader` counts as `setContentType` for its media type: a later charset change or `getWriter` keeps that type, and `getContentType()` reports it.
+
+== Legacy deployment descriptors
+
+`web.xml` files written for Servlet 2.2 and 2.3 (with a `<!DOCTYPE web-app PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN" ...>`) are accepted. The DOCTYPE is parsed but never resolved: no external DTD is fetched, no external entity is read and an entity reference in the content is rejected, so the descriptor cannot be used for XXE or entity-expansion attacks. The DOCTYPE implies the version: a descriptor older than 2.5 is `metadata-complete` (annotations and fragments are ignored), and for versions before 2.4 a `url-pattern` without a leading slash is accepted and given one.
+
+== Native layout: descriptors, fragments and resources
+
+A native Foy application has no WAR: it is a set of jars (or directories) on the class path or module path. Each WAR concept has a native counterpart:
+
+[cols="2,3",options="header"]
+|===
+| WAR concept | Native Foy
+
+| `WEB-INF/classes`
+| the application classes (processed by `foy-processor`)
+
+| `WEB-INF/lib/*.jar`
+| the Maven dependencies on the class path or module path
+
+| `WEB-INF/web.xml`
+| `WEB-INF/web.xml`, else `META-INF/web.xml`, looked up through the class loader (or `Builder.webXml(InputStream)`, which wins)
+
+| `WEB-INF/lib/x.jar!/META-INF/web-fragment.xml`
+| `META-INF/web-fragment.xml` in any jar or directory root visible to the class loader
+
+| static content at the WAR root
+| `META-INF/resources/` in any jar or directory root
+
+| `ServletContainerInitializer`
+| `META-INF/services/jakarta.servlet.ServletContainerInitializer`, or `provides ... with` in a `module-info.java`; found through `ServiceLoader`
+|===
+
+Discovery is on by default and is driven by `FoyChappeBoot.builder()`:
+
+* `discoverPluggability(false)` turns off the discovery of both the fragments and the initializers, for embedders that assemble the application themselves.
+* `applicationRoot(URL...)` declares jars or directories as the application itself: their initializers always run, whatever the absolute ordering. A root holding a `web.xml` without a fragment, and the roots of the CDI-discovered annotated components, are application roots without being declared.
+* `contextPath(...)` wins; otherwise web.xml's `<default-context-path>` applies, else `/`. The element is web.xml-only: a fragment's is ignored with a warning.
+* `resourceProvider(...)` replaces the default `ClassPathResourceProvider`, which serves `META-INF/resources/` of the application roots, then of the ordered fragments' jars, then of any other root. It rejects empty and dot segments and never follows a symbolic link out of the root. `getResource*` does reach the `WEB-INF/` and `META-INF/` subtrees of the resource root, as the spec allows; the default servlet refuses them for a client request (see <<default-servlet-and-static-content>>).
+* `applicationLayer(ModuleLayer)` names the layer of the application's modules (default `ModuleLayer.boot()`; `null` throws `NullPointerException`). The JSP engine is looked up there, in its named modules and their ancestors only: a provider on the class path is never found, and two visible engines fail the deployment. The same layer is given to `JspEngine.hasPages` and `JspEngine.deploy`. It is independent of `classLoader(...)`: fragments, initializers, descriptors, resources and CDI adapters still come from the class loader, so a layer whose modules hold them also needs a class loader that reaches them.
+* `componentSource(Function<Class<?>, URL>)` tells Foy which jar or directory a discovered class comes from (default: the code source of the class; `null` throws `NullPointerException`). It drives the absolute-ordering exclusion, the `metadata-complete` exclusion, the application roots and the attribution of `ServletContainerInitializer`s. A `null` result means "unknown" and keeps the class; an exception fails `build()` with a `ServletException` naming the class. Its scope is limited to these four uses: the `@HandlesTypes` scan and `META-INF/resources/` are still decided by the jar URLs. The hook must return the jar URL under the same spelling that the class loader reports for that jar's `META-INF/web-fragment.xml`: nested-archive URLs and symbolic-link aliases are not normalised, and such a class is kept. It is meant for a harness that loads the classes of several jars from one class loader, where the code source names the shared jar and not the jar of the fragment (BUG-20261012-01, vidocq#228).
+* `virtualServerName(...)` sets `ServletContext.getVirtualServerName()` (default `vidocq`).
+
+Fragments are ordered per Servlet 6.1 §8.2.2: an `<absolute-ordering>` in `web.xml` replaces any `<ordering>` in the fragments; without it, `<before>`/`<after>` constraints and `<others/>` apply. Initializers run in `ServiceLoader` order, restricted to the roots the ordering retains (§8.2.4). A jar excluded by an absolute ordering contributes neither its fragment, nor its annotations, nor its initializers, nor its `META-INF/resources/` (in no lookup tier, the "any other root" fallback included), nor its classes to a `@HandlesTypes` initializer (its class index is not read and it is not scanned).
+
+[NOTE]
+====
+Static content is served over HTTP by the container default servlet (see <<default-servlet-and-static-content>>) and is also reachable through `ServletContext.getResource*` and `getRealPath` (which answers a path only for a resource held in a directory). Security constraints are parsed but not enforced yet.
+====
+
+== Virtual hosts and WAR deployment
+
+Foy can be started:
+
+* programmatically through `FoyChappeBoot.builder()` — one container per contextPath;
+* by mounting multiple `Mounted` handlers on the same Chappe `Router` (one `Router.Builder.mount(prefix, handler)` per contextPath) to serve several applications on the same connector.
+
+Runtime WAR deployment is **not supported**: Foy boots embedded, programmatically, from the native layout above. (The Arquillian container in `foy-tck` deploys the TCK wars, but it is test harness machinery, not a product feature.)
+
+== Build-time code generation
+
+Add `foy-processor` to the compiler's annotation processor path. It generates, at compile time, a companion class for every web component, so Foy needs neither classpath scanning nor reflection to instantiate them. `foy-processor` is a build-time tool with zero dependency (it requires only `java.compiler`); it never reaches the application.
+
+[source,xml]
+----
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-compiler-plugin</artifactId>
+    <configuration>
+        <annotationProcessorPaths combine.children="append">
+            <path>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-processor</artifactId>
+                <version>${foy.version}</version>
+            </path>
+            <!-- CDI users: also let vauban-processor run the Foy build compatible extension -->
+            <path>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-processor</artifactId>
+                <version>${vauban.version}</version>
+            </path>
+            <path>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-cdi-vauban</artifactId>
+                <version>${foy.version}</version>
+            </path>
+        </annotationProcessorPaths>
+    </configuration>
+</plugin>
+----
+
+* Only the first `path` is needed without CDI. The `vauban-processor` and `foy-cdi-vauban` paths are for applications using `foy-cdi-vauban`; they are build-time only.
+* `foy-cdi-vauban` must be on the processor path too, not only on the compile class path: once `annotationProcessorPaths` is set, javac looks for processors and their service providers on those entries alone, so vauban-processor finds the `FoyWebExtension` build compatible extension only there. Without it the extension never runs: unscoped web components do not become `@Dependent` beans, so Foy never sees them, and the others get no `CdiWebComponents` index entry. Foy still discovers such a bean by walking the `Servlet`, `Filter` and `EventListener` beans, but logs one `WARNING` per class when another archive does carry an index.
+* In a named Java Module, the processor suggests (as a compiler note) the `provides io.vidocq.foy.spi.gen.WebComponent with ...` clause to add to your `module-info.java`.
+* Spec misuse (for example a `@WebServlet` class that is not a `Servlet`) fails the compilation.
+* In a named module, the name-based companion lookup uses `publicLookup`: either declare `provides io.vidocq.foy.spi.gen.WebComponent with ...` (as the processor note suggests; no export needed) or export the package. Otherwise resolution falls to the Class-File tier, which then needs `opens`.
+* Classes that were not processed (third-party jars) still work: Foy decodes their annotations from the class bytes. In a named module this needs `opens <package> to io.vidocq.foy.core`; class-path code needs nothing. See xref:internals.adoc#component-resolution-tiers[Component resolution tiers].
+
+== CDI integration through Vauban
+
+`foy-cdi-vauban` is a thin bridge: its single class, `FoyVaubanBootstrap`, hands the current Vauban `BeanManager` to `FoyChappeBoot`.
+
+[IMPORTANT]
+====
+Foy does **not** (yet) expose `ServletContext`, `HttpServletRequest` or `HttpSession` as injectable CDI beans — there are no `@ApplicationScoped` / `@RequestScoped` / `@SessionScoped` producers for the Servlet API objects. Use the request/response parameters passed to `service()`/`doGet()`.
+
+Your own `@RequestScoped` beans do work: Foy activates the CDI request context for each request, under Vauban or any other CDI container. `@SessionScoped` beans do not: the session context is not activated (xref:reference.adoc#other-containers[Other CDI containers]).
+====
+
+Servlet, Filter and Listener instances **are** resolved through the `BeanManager`, so they can `@Inject` your application beans:
+
+[source,java]
+----
+import jakarta.inject.Inject;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.*;
+
+@WebServlet("/me")
+public class MeServlet extends HttpServlet {
+    @Inject MyBusinessService service;
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws Exception {
+        resp.getWriter().write(service.greet(req.getRemoteUser()));
+    }
+}
+----
+
+Resolution is fully build-time through xref:vauban::index.adoc[Vauban] — no runtime dynamic proxy, no hot-path reflection.
+
+[#application-security]
+== Application security
+
+Foy enforces the Servlet 6.1 security model (chapter 13): `<security-constraint>` and `@ServletSecurity` per url-pattern, `<deny-uncovered-http-methods/>`, the transport guarantee, BASIC and FORM login, `security-role-ref`, and the programmatic `login`/`logout`/`authenticate`. The concepts are in xref:concepts.adoc#application-security[Concepts], the contracts in xref:reference.adoc#security[Reference].
+
+=== Declaring the users
+
+The user base (the container "realm") is given to `FoyChappeBoot`. For a fixed set of users, declare them on the builder; Foy keeps each password only as a salted SHA-256 digest, so the caller may wipe the array afterwards:
+
+[source,java]
+----
+char[] pw = readSecret();
+var mounted = FoyChappeBoot.builder()
+        .beanManager(bm)
+        .user("alice", pw, "admin", "user")
+        .user("bob", readOtherSecret(), "user")
+        .build();
+java.util.Arrays.fill(pw, '\0');
+----
+
+For a persistent or shared user base (database, LDAP, an identity provider), plug an `IdentityStore` instead; `identityStore(...)` and `user(...)` are exclusive:
+
+[source,java]
+----
+IdentityStore store = (username, password) -> myDirectory.check(username, password)
+        .map(roles -> Identity.of(username, roles));
+FoyChappeBoot.builder().beanManager(bm).identityStore(store).build();
+----
+
+With neither, every login fails: protected resources stay unreachable. The store contract (constant-time comparison, no logging, an exception counts as a refusal) is in xref:reference.adoc#security[Reference].
+
+Two more settings:
+
+* `confidentialPort(int)` — the HTTPS port a CONFIDENTIAL or INTEGRAL constraint redirects plain HTTP requests to (`302`). By default (`-1`) such a request gets `403`.
+* `rotateSessionIdOnLogin(boolean)` — a successful login changes the id of an existing session (session fixation defence). On by default; turning it off re-opens session fixation.
+
+=== Constraints and login in `web.xml`
+
+[source,xml]
+----
+<security-constraint>
+  <web-resource-collection>
+    <web-resource-name>admin</web-resource-name>
+    <url-pattern>/admin/*</url-pattern>
+  </web-resource-collection>
+  <auth-constraint>
+    <role-name>admin</role-name>
+  </auth-constraint>
+  <user-data-constraint>
+    <transport-guarantee>CONFIDENTIAL</transport-guarantee>
+  </user-data-constraint>
+</security-constraint>
+<deny-uncovered-http-methods/>
+
+<login-config>
+  <auth-method>FORM</auth-method>
+  <realm-name>Back office</realm-name>
+  <form-login-config>
+    <form-login-page>/login.html</form-login-page>
+    <form-error-page>/login-error.html</form-error-page>
+  </form-login-config>
+</login-config>
+
+<security-role>
+  <role-name>admin</role-name>
+</security-role>
+----
+
+* `BASIC` sends `401` with `WWW-Authenticate: Basic realm="<realm-name>"` (`Restricted` when no `realm-name` is given). A missing `login-config`, or one without `auth-method`, means BASIC.
+* `FORM` forwards an unauthenticated request to `form-login-page` (the browser keeps the original URL). The login page posts `j_username` and `j_password` to `j_security_check`, with `POST` only. On success the client is redirected to the saved target (the protected `GET` that triggered the login), or to the context root; on failure the request is forwarded to `form-error-page`.
+* `CLIENT-CERT` authenticates from the TLS client certificate: see <<client-cert>>.
+* `DIGEST` and any other method are not supported: their protected resources answer `403`.
+
+The same constraints can be put on a servlet class:
+
+[source,java]
+----
+@WebServlet("/reports/*")
+@ServletSecurity(value = @HttpConstraint(rolesAllowed = "user"),
+        httpMethodConstraints = @HttpMethodConstraint(value = "DELETE", rolesAllowed = "admin"))
+public class ReportServlet extends HttpServlet { ... }
+----
+
+A descriptor constraint on exactly the same url-pattern wins over the annotation. `ServletRegistration.Dynamic.setServletSecurity` sets the same element programmatically, before the context is initialised.
+
+[#client-cert]
+=== Client certificates (CLIENT-CERT)
+
+`<auth-method>CLIENT-CERT</auth-method>` authenticates the caller from the certificate it presented in the TLS handshake. It needs a TLS listener that asks for one, an identity mapped to the certificate, and nothing else in the application.
+
+*The TLS listener.* The Chappe server must request a client certificate: `Server.Builder.tls(sslContext, ClientAuth.WANT)`, or `ClientAuth.NEED` to refuse a connection without one. The mode belongs to the listener, not to a URL: TLS 1.3 and HTTP/2 allow no renegotiation, so a certificate cannot be requested later only for a protected resource. Use `WANT` when only part of the application needs a certificate, and let Foy answer `403` where it is missing.
+
+*Trust.* The trust material is the `SSLContext`'s. Pass a `TrustManager` built from your client CA: `init(keyManagers, null, ...)` trusts the JDK's default public CAs, which is almost never what a client-certificate listener wants.
+
+*Identities.* Map a certificate to an identity with `FoyChappeBoot.Builder.certificateUser(subjectDn, roles...)`, or plug an `IdentityStore` that overrides `validate(X509Certificate[] chain)` (the chain is the one the peer sent, leaf first). Foy compares the leaf subject with the declared DN strictly: spacing and the case of attribute names and values are ignored, but otherwise the DN must be the same string. There is no Unicode folding (a fullwidth or dotless letter is a different letter) and the RDN order must be the same. Only the leaf subject is compared, never its issuer: every CA the listener trusts can vouch for any mapped DN, so trust only the CAs that issue your client certificates. Subjects whose values are encoded as BMPString or TeletexString never match a declared DN; they need a custom `IdentityStore`. The principal name is the leaf subject in RFC 1779 form, for example `CN=CTS, OU=Java Software, O=Sun Microsystems Inc., L=Burlington, ST=MA, C=US`. `certificateUser` is exclusive with `identityStore`.
+
+[source,java]
+----
+// The server key and the CA(s) that issue client certificates, from your own key stores.
+KeyStore serverKeys = KeyStore.getInstance(Path.of("server.p12").toFile(), "changeit".toCharArray());
+KeyStore clientCas = KeyStore.getInstance(Path.of("client-cas.p12").toFile(), "changeit".toCharArray());
+KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+kmf.init(serverKeys, "changeit".toCharArray());
+TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+tmf.init(clientCas);
+SSLContext tls = SSLContext.getInstance("TLS");
+tls.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+var mounted = FoyChappeBoot.builder()
+        .webXml(Files.newInputStream(Path.of("WEB-INF/web.xml")))
+        .certificateUser("CN=Alice Example, OU=Ops, O=Example, C=FR", "admin")
+        .build().orElseThrow();
+Server server = Server.builder().port(8443).tls(tls, ClientAuth.WANT)
+        .handler(Router.builder().mount(mounted.mountPrefix(), mounted.handler(), false).build())
+        .build();
+----
+
+*Behaviour.*
+
+* `getAuthType()` is `CLIENT_CERT`, and `getUserPrincipal()` carries the RFC 1779 name above.
+* A request with no certificate, with a certificate no identity is mapped to, or whose store fails, answers `403` without `WWW-Authenticate`: there is nothing to challenge.
+* `request.authenticate(response)` without a certificate answers `403` and returns `false`.
+* `request.login(user, password)` still works, through the store's password path.
+* A CONFIDENTIAL or INTEGRAL constraint is satisfied by the TLS listener. On plain HTTP it redirects to `confidentialPort`, or answers `403` when none is set.
+* The identity is read from the connection, never from the request attributes below, so an application cannot forge it.
+
+*Request attributes (Servlet 6.1 section 3.10).* On a TLS connection Foy seeds these attributes without firing `ServletRequestAttributeListener`s. After that they belong to the application, which may replace or remove them.
+
+[cols="2,1,3",options="header"]
+|===
+| Attribute | Type | Value
+
+| `jakarta.servlet.request.X509Certificate`
+| `X509Certificate[]`
+| The peer chain, leaf first; absent when the client sent no certificate.
+
+| `jakarta.servlet.request.cipher_suite`
+| `String`
+| The negotiated cipher suite, for example `TLS_AES_128_GCM_SHA256`.
+
+| `jakarta.servlet.request.key_size`
+| `Integer`
+| Derived from the cipher-suite name (128, 256, 168 for 3DES, and so on); absent when the suite is unknown.
+
+| `jakarta.servlet.request.ssl_session_id`
+| `String`
+| The TLS session id in lowercase hexadecimal; absent when the id is empty.
+
+| `jakarta.servlet.request.secure_protocol`
+| `String`
+| The negotiated protocol, for example `TLSv1.3`. New in Servlet 6.1.
+|===
+
+=== Programmatic login and logout
+
+* `request.login(user, password)` checks the credentials against the identity store and sets the configured mechanism as the auth type. It rotates the id of an existing session; under FORM it also keeps the identity in the session (creating one), so the following requests are authenticated. Under BASIC the identity lasts for the request only.
+* `request.logout()` clears the identity of the request and of its session. The session itself, and its attributes, stay; call `session.invalidate()` to drop them.
+* `request.authenticate(response)` returns `true` when the request already has an identity; otherwise it runs the mechanism's challenge (`401` for BASIC, the login page for FORM) and returns `false`.
+
+== Cohabitation with Cassini
+
+Foy and xref:cassini::index.adoc[Cassini] share the same Chappe runtime. On the same Chappe `Router` you can mount `/app` (Foy) and `/api` (Cassini) — each owns its contextPath, the two containers do not interact.

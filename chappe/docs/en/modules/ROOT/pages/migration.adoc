@@ -1,0 +1,222 @@
+= Migration
+:description: From Netty, Undertow, Jetty, JDK HttpServer.
+
+[.lead]
+This page collects the API mappings and the typical pitfalls when migrating an existing HTTP service to Chappe. For comparative performance numbers, see link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md].
+
+[CAUTION]
+====
+Chappe is at `{project-version}`. A production migration is premature. The tables below document the API mapping; validate every use case with your service's integration tests before switching.
+====
+
+[#upgrading]
+== Upgrading from {release-version}
+
+Chappe is still in `0.x`, and this release is a minor bump (`{release-version}` to `{project-version}`). No versioning policy is published beyond that. In `0.x`, a minor release may break the source or binary API. This one does, for `ServerConfig` and `Server.Builder` (see below), so read every bullet before upgrading.
+
+* **`writeTimeout` now closes stalled connections** — up to {release-version}, `Server.Builder.writeTimeout(Duration)` was accepted and never applied. It now bounds each blocking write of an HTTP/1.1 response, 30 s by default: if a client stops reading and the socket refuses the bytes for longer than that, Chappe closes the connection and the client receives a truncated body. Idle gaps with nothing to send are not timed, so a quiet Server-Sent Events stream is not affected. If one of your clients legitimately takes longer than 30 s to accept bytes, set a larger `writeTimeout`. See xref:reference.adoc#timeouts[Reference — timeouts].
+* **`writeTimeout` now bounds HTTP/2 writes too** — HTTP/2 connections used to ignore `writeTimeout`: a client that stopped reading blocked the connection's writes forever, every stream with them. Each flush of an HTTP/2 connection (at most 16 KiB) is now bounded by `writeTimeout` as well. Because the streams share one connection, a stalled peer is cut after `writeTimeout` together with all its streams, where HTTP/1.1 loses one connection and one response. As for HTTP/1.1, keep `writeTimeout` well above the pauses of your slowest legitimate client. See xref:reference.adoc#timeouts[Reference — timeouts].
+* **A zero or negative `writeTimeout` now means no bound** — on HTTP/1.1, `writeTimeout(Duration.ZERO)` or a negative value used to arm a deadline that had already passed, so a response could be cut after its first bytes and the connection closed. It now writes without a bound, as `readTimeout` already did for zero or negative values. Set a positive value to keep a bound. Closing a TLS connection stays bounded even then: the `close_notify` and the alert of a rejected handshake are each bounded by 2 s, so a client that stopped reading cannot hold a closing connection. See xref:reference.adoc#timeouts[Reference — timeouts].
+* **Invalid response headers now fail** — `Response.builder().header(...)` (and `headers`, `trailer`, `trailers`), `Filter.addHeader*`, the `WebSocketUpgrade` subprotocol and `GrpcCall.addHeader` / `addTrailer` throw `IllegalArgumentException` for a name that is not an RFC 9110 token or a value holding CR, LF, NUL, another control or a char above `U+00FF`. Thrown from a handler, it becomes a `500`. Such a value used to reach the wire truncated to one byte per char (header injection). Encode non-Latin-1 text before setting it, for example `Content-Disposition: attachment; filename*=UTF-8''…` (RFC 8187). See xref:concepts.adoc#header-validation[Concepts — header and trailer validation].
+* **An oversized `Content-Length` now gets `413`, not `400`** — a request whose `Content-Length` is above `maxRequestSize` is answered `413 Content Too Large` (RFC 9110 §15.5.14) instead of `400 Bad Request`, still before the handler runs. If a client or a test of yours checks for the `400`, update it. See xref:reference.adoc#request-body-limits[Reference — request body limits].
+* **Chunked request bodies over `maxRequestSize` now fail** — reading a chunked body past `maxRequestSize` (10 MiB by default) throws `RequestBodyTooLargeException`, and the connection closes after the response. If your service accepts larger chunked uploads, raise `maxRequestSize`. See xref:reference.adoc#request-body-limits[Reference — request body limits].
+* **Unread bodies over 1 MiB close the connection** — a handler that answers without reading a body larger than `maxDrainSize` (1 MiB) now ends the keep-alive connection instead of having Chappe read the whole body. Clients reconnect for their next request. Raise `maxDrainSize` to keep such connections. See xref:reference.adoc#request-body-limits[Reference — request body limits].
+* **`ServerConfig` gains a `maxDrainSize` component** — the record now has a `long maxDrainSize` component right after `maxHeaderSize`, so its canonical constructor takes one more argument. Code that constructs `ServerConfig` directly must pass it (`1024L * 1024` keeps the default); prefer `Server.builder()`, which is unaffected. The constructor refuses a negative `maxDrainSize` with `IllegalArgumentException`, as the builder does. The change breaks both source and binary compatibility: a deconstruction pattern `ServerConfig(...)` must also name the new component, and code compiled against {release-version} that calls the old constructor must be recompiled.
+* **`Server.Builder` gains an abstract `maxDrainSize(long)` method** — `Server.Builder` is a public interface, and the new method has no default. Code that only calls `Server.builder()` is unaffected. A class of yours that implements `Server.Builder`, for instance a wrapper or a test double, no longer compiles until it implements `maxDrainSize(long)`.
+* **`isSecure()` is now `true` over TLS** — up to {release-version}, a request received over TLS reported `isSecure() == false`, scheme `http` and no addresses, and HTTP/2 requests reported no addresses. Code that worked around this (for example by trusting `X-Forwarded-Proto` on a TLS listener) can drop the workaround. See xref:reference.adoc#connection-metadata[Reference — connection metadata].
+* **HTTP/2 header lists: a larger advertised limit, and `431` instead of `GOAWAY`** — the `SETTINGS_MAX_HEADER_LIST_SIZE` Chappe advertises changes from a fixed 8,192 to `maxHeaderSize + 32 * 100`, 11,392 by default, so raising `maxHeaderSize` now raises it too. An oversized but decodable header list now gets `431 Request Header Fields Too Large` on its stream instead of `GOAWAY(ENHANCE_YOUR_CALM)` for the whole connection; oversized trailers get `RST_STREAM(ENHANCE_YOUR_CALM)`. With S the advertised `SETTINGS_MAX_HEADER_LIST_SIZE`, the cap on a header block (HEADERS plus CONTINUATION) is now `max(4 * S, 64 KiB)` encoded bytes (65,536 by default), and a decoded list past `max(8 * S, 256 KiB)` bytes (262,144 by default) still ends the connection. No API changes. See xref:reference.adoc#http-capabilities[Reference — HTTP capabilities].
+* **Slow TLS handshakes are now cut** — up to {release-version}, the TLS handshake had no time bound. A TLS client that takes longer than `idleTimeout` (60 s by default) to finish its handshake is now disconnected, even if it keeps sending bytes. Raise `idleTimeout` if some of your clients legitimately need longer. See xref:reference.adoc#timeouts[Reference — timeouts].
+* **TLS 1.2 renegotiation closes the connection** — a TLS 1.2 client that renegotiates on an established connection is now disconnected: Chappe sends a `close_notify`, but no alert saying why (no `no_renegotiation`). Clients that renegotiate to refresh keys should use TLS 1.3 (KeyUpdate is unaffected) or open a new connection.
+* **`NONE` clears the need and want flags of a custom `SSLContext`** — Chappe now sets the client authentication mode of every engine from `ClientAuth`, so a context whose engines were configured to want or need a client certificate no longer does under `tls(sslContext)` or `ClientAuth.NONE`. Use `tls(sslContext, ClientAuth.WANT)` or `NEED` to ask for one. The last `tls(...)` call wins for both context and mode. See xref:usage.adoc#client-certificates[Usage — client certificates].
+* **`ServerConfig` gains a `clientAuth` component** — the record now has a `ClientAuth clientAuth` component right after `sslContext`, so its canonical constructor takes one more argument. Code that constructs `ServerConfig` directly must pass it (`ClientAuth.NONE` keeps the previous behaviour); prefer `Server.builder()`, which is unaffected. The change breaks both source and binary compatibility: a deconstruction pattern `ServerConfig(...)` must also name the new component, and code compiled against {release-version} that calls the old constructor must be recompiled.
+* **`Server.Builder` gains an abstract `tls(SSLContext, ClientAuth)` method** — the new method has no default (`tls(SSLContext)` is now a default method calling it with `ClientAuth.NONE`). Code that only calls `Server.builder()` is unaffected. A class of yours that implements `Server.Builder`, for instance a wrapper or a test double, no longer compiles until it implements `tls(SSLContext, ClientAuth)`.
+* **Public constructors in `chappe-http` changed signature** — the constructors of `io.vidocq.chappe.http.HttpConnection` and `io.vidocq.chappe.http.h2.Http2Connection` that take separate read and write channels (used for TLS) take a new `ConnectionInfo` argument, and `HttpRequestImpl.initConnectionInfo(SocketChannel, boolean)` became `initConnectionInfo(ConnectionInfo)`. The convenience constructors that take a `SocketChannel` keep their signature. These are implementation classes in exported packages: code outside Chappe should not construct them, and code that does must be updated and recompiled (source and binary break). Use `Server.builder()` instead.
+* **`ConnectionInfo` gains a leading `id` component** — the public record `io.vidocq.chappe.http.ConnectionInfo` in `chappe-http` is now `(long id, InetSocketAddress remoteAddress, InetSocketAddress localAddress, TlsInfo tls)`, and `Request.connectionId()` and `Request.streamId()` report the identity it carries. Code that constructs `ConnectionInfo` directly must pass an id first (`ConnectionInfo.of(SocketChannel, TlsInfo)` assigns one), and a deconstruction pattern must name the new component. Source and binary break, in an implementation class of an exported package: code outside Chappe should not construct it.
+* **Public HPACK and HTTP/2 writer methods were removed from `chappe-http`** — in the exported package `io.vidocq.chappe.http.h2`, `Http2FrameWriter.writeHeaders(int, byte[], boolean)` is replaced by `Http2FrameWriter.writeHeaderBlock(int, HeaderBlockEncoder, boolean)`, or by `Http2Connection.writeResponseHeaders(Http2Stream, int, Headers, boolean)` and `Http2Connection.writeTrailers(Http2Stream, Headers)`, which encode and write a header block in one step: an HPACK block written apart from its encoding could reach the wire out of order (CHAPPE-034). `Http2Connection.hpackEncoder()` is removed with no replacement, for the same reason: use the two `Http2Connection` methods. `HpackDecoder.updateMaxTableSize(int)` is removed with no replacement: the decoder's table is now bounded by the size the server advertises, and only the peer's size updates lower it (CHAPPE-033). These are implementation classes in exported packages: code outside Chappe should not use them, and code that does must be updated and recompiled (source and binary break).
+* **`readTimeout` now closes stalled uploads** — up to {release-version}, `readTimeout` was never applied. A request body read that receives nothing for 30 s now fails with `SocketTimeoutException`, and the HTTP/1.1 connection closes. Over HTTP/2, a body read that waits 30 s for the next DATA frame fails the same way, and the stream is reset if its body has not ended. Calls routed to a gRPC handler, or to a gRPC-Web handler in binary mode, are exempt; a gRPC-Web call in text mode is not. Set a larger `readTimeout`, or `Duration.ZERO` to disable it, if your clients pause longer mid-upload. See xref:reference.adoc#timeouts[Reference — timeouts].
+* **HTTP/2 bodies over `maxRequestSize` are refused** — an HTTP/2 request body past `maxRequestSize` now gets a `413` (or `RST_STREAM(CANCEL)` once the response started) instead of being read to its end; the handler's read throws `RequestBodyTooLargeException`. A `RequestBodyTooLargeException` that escapes a handler is now answered `413`, not `500`, over HTTP/1.1 as over HTTP/2. Calls routed to a gRPC handler, or to a gRPC-Web handler in binary mode, are not capped. A gRPC-Web call in text mode is capped and ends with `RESOURCE_EXHAUSTED`: raise `maxRequestSize` if your browser clients upload more in text mode. See xref:reference.adoc#request-body-limits[Reference — request body limits].
+
+== Overview
+
+[mermaid]
+....
+flowchart LR
+    subgraph existing["Existing stack"]
+        netty["Netty<br/>EventLoopGroup<br/>ChannelHandler"]
+        jetty["Jetty<br/>QueuedThreadPool<br/>ServletContextHandler"]
+        undertow["Undertow<br/>RoutingHandler<br/>ResourceHandler"]
+        jdk["JDK HttpServer<br/>HttpHandler"]
+    end
+    subgraph chappe_["Chappe"]
+        api["Server.builder()<br/>Router · Handler<br/>Filter · StaticFileHandler<br/>virtual threads"]
+    end
+    netty --> api
+    jetty --> api
+    undertow --> api
+    jdk --> api
+....
+
+== From Jetty
+
+[cols="2,2,3"]
+|===
+| Jetty | Chappe | Note
+
+| `Server` + `ServerConnector`
+| `Server.builder().port(...).build()`
+| Tighter API; no separate connector.
+
+| `ServletContextHandler`
+| xref:foy::index.adoc[Foy] on Chappe
+| Servlet via the Foy bridge.
+
+| `org.eclipse.jetty.util.thread.QueuedThreadPool`
+| `Executors.newVirtualThreadPerTaskExecutor()` (default)
+| No platform pool; no tuning.
+
+| `Handler.Sequence`
+| `Filter#andThen` composition
+| Simpler model, no `nextHandler()`.
+
+| `ResourceHandler`
+| `StaticFileHandler.builder().addPath(...).build()`
+| `cacheInMemory(true)` on the Chappe side for classpath resources.
+
+| `GzipHandler`
+| `Filter.gzip()` or pre-compressed sidecars
+| Auto-skip on `Cache-Control: no-transform` or non-text-like MIME.
+|===
+
+== From Netty
+
+[cols="2,2,3"]
+|===
+| Netty | Chappe | Note
+
+| `EventLoopGroup`
+| Virtual threads
+| No application-side event loop.
+
+| `ChannelInitializer` / `ChannelPipeline`
+| No direct equivalent
+| Compose via `Filter` and `Router`. For a custom binary protocol, Chappe is not the right fit.
+
+| `ChannelHandler`
+| `Handler` (lambda)
+| Synchronous model — Loom makes it scalable.
+
+| `ByteBuf`
+| `Body` (`InputStream` / `OutputStream`)
+| No buffer pool exposed to user code. The `chappe-http` `ByteBufferPool` is internal.
+
+| `HttpServerCodec` + `HttpObjectAggregator`
+| Built-in
+| HTTP/1.1 and HTTP/2 parsing live in `chappe-http`.
+|===
+
+[NOTE]
+====
+Migrating a complex Netty pipeline (for example a multi-protocol proxy with custom backpressure) is a real project. Chappe does not match Netty's low-level extensibility at the channel layer. If you write your own binary protocol or need fine-grained write-side backpressure control, Chappe is probably not the right tool.
+====
+
+== From Undertow
+
+[cols="2,2,3"]
+|===
+| Undertow | Chappe | Note
+
+| `Undertow.builder().addHttpListener(port, host)`
+| `Server.builder().port(port).host(host)`
+| Equivalent API.
+
+| `RoutingHandler`
+| `Router.builder()`
+| Fluent API, same verbs.
+
+| `ResourceHandler`
+| `StaticFileHandler`
+| Native filesystem → classpath fallback chain.
+
+| `BlockingHandler` wrapper
+| Not needed
+| All Chappe handlers are synchronous blocking on a virtual thread.
+
+| `XnioWorker` threads
+| Virtual threads
+| No pool tuning.
+
+| `HttpString` cache
+| Internal headers
+| Zero-allocation `ArrayHeaders` on the hot path.
+|===
+
+== From JDK 25 `HttpServer`
+
+`com.sun.net.httpserver.HttpServer` is minimal and not designed for production. Pros: no dependency. Cons: no HTTP/2, no virtual threads by default, limited multiplexing.
+
+[cols="2,2,3"]
+|===
+| JDK HttpServer | Chappe | Note
+
+| `HttpServer.create(addr, backlog)`
+| `Server.builder().port(...).host(...).backlog(...).build()`
+| Fluent builder.
+
+| `createContext("/path", handler)`
+| `Router.builder().get("/path", req -> ...).build()`
+| Match by method + path, not just by prefix.
+
+| `HttpHandler#handle(HttpExchange)`
+| `Handler#handle(Request) -> Response`
+| Pure function; no direct socket access.
+
+| `setExecutor(Executors.newVirtualThreadPerTaskExecutor())`
+| Default
+| No setup needed.
+|===
+
+== Switching to the standalone CLI
+
+If your need is just "serve a static site in production" (Docker case), swap your Java launcher for `chappe serve`:
+
+[source,bash]
+----
+java \
+     -jar chappe-cli/target/chappe-cli-*-shaded.jar \
+     serve --root /var/www/site --port 8080 --gzip
+----
+
+Configuration via YAML, environment-conditional headers, build-time `.gz` sidecars through the Maven plugin. See xref:reference.adoc#_chappe_serve_cli[Reference — `chappe serve` CLI].
+
+== Typical migration switch points
+
+[cols="2,3"]
+|===
+| Existing feature | Chappe replacement
+
+| HTTP access logger (Tomcat, Jetty `RequestLog`)
+| Custom `Filter` writing to `System.Logger` or `java.util.logging`. Chappe ships no logger.
+
+| Brotli runtime compression
+| Not supported. `.br` sidecars produced by an external build pipeline, served when `Accept-Encoding: br`.
+
+| WebSocket
+| Shipped — `Router.builder().webSocket(pattern, handler)`, RFC 6455 over HTTP/1.1 (handshake, TEXT/BINARY framing, close handshake, auto-PONG).
+
+| Full Servlet API
+| xref:foy::index.adoc[Foy] on Chappe (Jakarta Servlet 6.1).
+
+| JAX-RS / REST
+| xref:cassini::index.adoc[Cassini] on Chappe (Jakarta REST 4.0).
+
+| Native PEM TLS loading
+| Not supported on the Chappe side. Convert to PKCS12 via `openssl` or `keytool`, then load through `KeyStore`.
+|===
+
+== Migration-ready capabilities
+
+* link:usage.html#standalone-cli[Standalone CLI] (`chappe serve --config …`) — direct Docker packaging, ~50 MB jlink image.
+* `Filter.gzip()` + `StaticFileHandler.preferPrecompressed(true)` — negotiated compression + `.br` / `.gz` sidecars.
+* `StaticFileHandler.spaFallback("/index.html")` / `.notFoundFile("/404.html")` — SPA routing and custom 404.
+* `Filter.addHeaderIfEnv("STAGING", "true", "X-Robots-Tag", "noindex, nofollow")` — environment-conditional headers.
+* `Router.mount(prefix, handler)` — Servlet/REST extensions composed without coupling.

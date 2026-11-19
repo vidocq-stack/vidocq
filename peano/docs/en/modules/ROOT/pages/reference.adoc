@@ -1,0 +1,434 @@
+= Reference
+
+== Static function construction
+
+`CompiledFunctionMapper` supplies `FunctionDescriptor` values containing the owner
+class, existing immutable `MethodDescriptor` metadata and a serializable
+`CompiledFunctionInvoker`. Compiled expressions capture signatures and direct
+callbacks before trying the standard reflective FunctionMapper path. The callback
+owns exact argument conversion and calls a statically validated public static
+method; it must be safe for concurrent reuse and retain no request state.
+
+The callback path needs only Peano API and Jakarta EL at runtime. It does not
+discover providers or resolve reflective members. The descriptor mapper's
+reflective getter rejects interpretation explicitly; legacy construction remains
+available. Void results are null; failures follow existing ELException handling.
+
+`ExpressionCompiler.functions(source)` returns immutable FunctionReference
+occurrences from the parser, including each prefix, name and argument count.
+Repeated functions with differing arities remain separate; quoted colon text
+and unprefixed calls do not become qualified function references.
+:description: Peano coordinates, Java modules, dependencies and planned configuration keys.
+
+[.lead]
+Reference data for Peano `{project-version}`. Entries marked _planned_ do not exist yet.
+
+== Artefacts
+
+[cols="2,2,3",options="header"]
+|===
+| Maven coordinates | Java module | Notes
+
+| `io.vidocq.peano:peano-core` | `io.vidocq.peano.core` | Engine, `provides jakarta.el.ExpressionFactory`
+| `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable SPI, MethodDescriptor/MethodSelection and SOURCE-retained ELAccessible annotation
+| `io.vidocq.peano:peano-processor` | `io.vidocq.peano.processor` | APT property tables, build time only; exports nothing, provides javax.annotation.processing.Processor
+| `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | Literal/constant template compiler, build time only; Java Class-File API
+|===
+
+== Annotation processor discovery
+
+peano-processor supports both --processor-module-path discovery and Maven's
+annotationProcessorPaths discovery. The latter uses a build-only service resource
+on Maven's processor classpath, approved on 2026-10-11; module-info.java remains
+unchanged. The application being compiled and the generated tables still belong to
+named modules. Runtime classpath execution is not part of this exception.
+
+== Build-time expression compiler
+
+ExpressionCompiler.compile(binaryName, source) returns a fresh Java 25 class file
+for literal text and templates whose evaluation parts are scalar literal and operator trees.
+It supports null, boolean, string, integer and floating values, minus, not/! and empty,
+including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) and
+% (mod), logical operators, conditional ?:, scalar comparisons, concatenation += and
+sequences are emitted directly. Standalone root identifiers and property navigation are
+also supported, including resolved arithmetic/comparisons and inline member calls.
+Assignments compile over supported root/property targets.
+Namespaced/default-prefix mapped functions, named callables and imported constructors/static methods
+are supported. Lambda construction, immediate/chained invocation and lexical closures are supported.
+List, set and map literals emit fresh mutable JDK collections, preserving order, nulls
+and duplicate handling. Their elements can include captured root/property values and
+supported operator/collection trees.
+Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
+qualified binary names raise IllegalArgumentException. The caller owns output placement.
+
+[source,java]
+----
+byte[] bytes = ExpressionCompiler.compile("example.generated.Answer", "${42}");
+Files.write(output.resolve("example/generated/Answer.class"), bytes);
+----
+
+The generated public class extends CompiledValueExpression in peano-api. Every
+compiled value expression class, whatever its tree shape, has two public constructors:
+one receiving the expected result Class, and one receiving the creation ELContext and
+the expected result Class:
+
+[source,java]
+----
+ValueExpression answer = new example.generated.Answer(Long.class);
+ValueExpression same = new example.generated.Answer(context, Long.class);
+Long value = answer.getValue(context);
+----
+
+The context form rejects a null context with NullPointerException("creationContext").
+Trees that reference names, properties, calls, functions or lambdas use it to capture
+creation-time bindings (see below). Constant trees ignore the context: both forms build
+equal expressions with the same metadata and serialized form. A caller such as a page
+compiler can therefore always use the context form without knowing the tree shape.
+
+The application module requires io.vidocq.peano.api. Neither peano-core nor
+peano-compiler is required by the emitted class; the caller supplies an ELContext.
+The compiler itself is build tooling with internal core/API dependencies and
+java.compiler for name validation, without external tooling dependencies.
+Only the compiler can read the core syntax package through its qualified export.
+Generated subclasses evaluate directly; the shared API base owns conversion,
+events, parsed identity, read-only metadata and serialization.
+Identity keys are opaque compiler output and must represent normalized parsed form;
+bindingIdentity contributes captured bindings when subclasses need them.
+
+Emitted serialization UIDs fingerprint normalized structure and the emission-schema
+version. Equivalent templates remain compatible across regenerated classes; changed
+expression bodies reject old streams with InvalidClassException. Artifacts from the
+initial fixed-UID prototype and pre-v3 emission rules must be regenerated. Each nonempty
+parsed text literal has a distinct private final instance String to preserve conversion
+effects at equality's identity shortcut, including between captured expression instances.
+Constructors initialize those values; serialization preserves their expression-local scope.
+Unary getType reevaluates the body,
+preserving caller conversion effects. Arithmetic evaluates both operands before math
+coercion and preserves the interpreter's Long/Double domains and error causes for the
+supported scalar trees.
+
+Logical and/&&, or/|| and conditional ?: compile to lazy branches. Evaluated operands use the caller's
+boolean conversion; discarded operands remain inactive. Numeric overflow raises
+ELException with a NumberFormatException cause only if its literal is evaluated.
+Operator getType retains the same operand and conversion effects.
+Conditional results can be null or select different scalar types. Numeric operations
+promote from the actual selected values; empty inspects the actual selected value.
+Scalar comparison preserves reference/null shortcuts, numeric/boolean/text precedence,
+NaN behavior and guarded conversion errors. Concatenation evaluates both operands before
+String conversion. Sequences evaluate the left operand before returning the right value.
+
+Standalone identifiers extend the API CompiledRootValueExpression protocol.
+Their public Class constructor uses dynamic resolver lookup without VariableMapper
+capture. Their public ELContext/Class constructor captures the root binding at creation;
+changing the mapper later does not remap that expression. No context is retained.
+Lambda arguments take precedence over captured bindings. Root metadata, writes and
+references delegate to the captured ValueExpression or resolver without reading a getter.
+Root resolver writes do not coerce against a declared property type. Import lookup,
+resolution flags, error causes, evaluation events and binding serialization are preserved.
+Captured ValueExpressions and their payloads must be serializable; their implementation
+modules must remain available when restoring them.
+Generated root classes run with core and compiler absent in both reflection modes;
+resolver implementations retain responsibility for their own member access.
+
+Standalone property trees extend CompiledPropertyValueExpression. Like every compiled
+value expression, they have both constructor forms; the context form captures each
+distinct root/key binding once.
+Generated evaluation short-circuits null bases and keys. Metadata and writes reject
+null locations and evaluate parent/key expressions without reading the final getter.
+Property writes consult the resolver's type before caller conversion and assignment.
+Nested/indexed paths and scalar computed keys are supported. Resolver flags, captured
+binding identity and serialization follow the root protocol's boundaries.
+Collection literals support nested structures and content equality; empty checks actual
+contents. Ordered comparisons use Comparable fallback or raise ELException when unsupported.
+Captured values also compose in logical/conditional bodies, concat, sequences and templates.
+Readonly bodies return no location; composite metadata remains String without getter reads.
+Empty checks runtime primitive/reference array length through the documented java.base exception.
+Resolved numeric operands support all EL arithmetic domains: BigDecimal and BigInteger
+promotion, floating/integral operations, HALF_UP decimal division and modulo rules.
+Unary minus preserves Byte, Short, Integer, Long, Float, Double, BigInteger and BigDecimal
+types. Both operands are read before numeric conversion; null becomes Long zero, and
+math guards preserve ELException or wrap other RuntimeExceptions with their cause.
+Resolved comparisons retain BigDecimal/floating/BigInteger/integral/boolean/enum/string
+precedence, reference/null shortcuts, scale-sensitive decimal equality and NaN ordering.
+Equality passes raw RHS conversion results to equals. Enum conversion targets the
+declaring class; Object.equals and Comparable callbacks remain available as fallbacks.
+Inline member calls evaluate base/key first, convert a non-null key to String, then
+evaluate arguments left to right. Null bases/keys discard arguments. Invocation uses
+the supplied resolver with inferred parameter types and retains flags, claimed nulls
+and exception causes. No direct member reflection or bare-method fallback is added;
+resolver implementations own their access policy. Call bodies are readonly and their
+getType evaluates the raw result; calls can also be parents in property navigation.
+Assignment prepares the lvalue before evaluating its RHS. Property and alias locations
+are frozen once; readonly/lambda/invalid/null targets fail before RHS effects. Namespace
+resolution and declared property conversion happen when writing. The expression returns
+the original RHS, retains readonly metadata and reevaluates its write in getType.
+Temporary precompiled writers add no expression fields or serialized context state.
+Namespaced functions extend CompiledFunctionValueExpression and require creation-time
+FunctionMapper bindings. Their context constructor freezes public/static owner, method,
+parameter and return descriptors; mapper changes do not remap an existing expression.
+Unmapped namespaced functions fail at creation, including in discarded branches.
+Descriptors serialize without Method objects or member lookup when restoring.
+
+Named calls first consult lambda arguments, captured variables and caller-owned roots.
+Lambda values take precedence over captured default-prefix functions, then imported
+constructors and static methods. Targets resolve before argument evaluation and remain
+fixed while arguments run. Invalid targets fail before argument effects. Imported calls
+use the supplied ELResolver.invoke chain; arbitrary callable results must be lambdas.
+
+Lambda-containing expressions extend CompiledLambdaValueExpression. Bodies are emitted
+into the same class, selected through a protected dispatcher. A precompiled API adapter
+retains the expression, body ordinal and lexical argument snapshot, including nulls.
+Parameters are excluded from creation-time variable/function capture; inner parameters
+shadow outer parameters. Captured scopes unwind after success or failure. The API
+LambdaExpression retains its evaluation context, as for interpreted lambdas; the body
+adapter and compiled expression do not retain a context or a runtime syntax tree.
+
+Registered static AccessorProvider tables run before the API StaticFieldELResolver
+fallback; the fallback follows peano.reflection. Catalogs are immutable snapshots in
+ELContext, reused for a loader and refreshed when it changes. Direct table calls work
+with core/compiler absent, including deny-mode restoration. Allowed API reflection
+fallback needs an ExpressionFactory provider because ELUtil performs provider-backed
+coercion during method matching (EL-017); Peano core supplies that provider when installed.
+Captured owner/parameter/return classes and their modules must remain available on restore.
+
+=== Compiled method expressions
+
+ExpressionCompiler.compileMethod(binaryName, source) emits a public final
+CompiledMethodExpression subclass for literal text, a single variable, a property
+method reference or an inline property call. Other method-expression shapes fail at
+build time. Constructors accept (Class, Class[]) or (ELContext, Class, Class[]) for the
+expected return type, expected parameter types and optional creation-time capture.
+Inline calls provide their own arguments and accept null expected parameter types;
+other forms require a parameter array. Parameter arrays are defensively copied.
+
+The emitted class evaluates its target and inline arguments directly. A private
+precompiled API bridge reuses variable/function capture and lambda support without
+retaining a context or syntax tree. Generated accessor tables supply MethodReference
+metadata first. The existing public-member metadata fallback follows peano.reflection
+and Jakarta API package exportability. Method invocation uses the caller's resolver
+chain; only bare references may use API BeanELResolver/StaticFieldELResolver fallback.
+Return validation, literal conversion, listener callbacks, variable delegates, identity
+and serialization retain the interpreter contracts. Allowed API invocation fallback
+requires an ExpressionFactory provider as described above.
+
+=== Benchmark tooling
+
+The opt-in bench profile adds the non-published peano-bench module. JMH 1.37 and
+its annotation generator provide the measurement harness; Expressly 6.0.0 supplies
+the comparison implementation. JMH's jopt-simple 5.0.4 and commons-math3 3.6.1 are
+benchmark-only transitive dependencies. exec-maven-plugin 3.6.3 launches build-time
+expression emission as a named Java module. These dependencies avoid writing a
+measurement harness or a competing EL implementation and do not enter shipped Peano artifacts.
+
+The harness runs on the module path, including forked JVMs. JMH and Expressly are
+automatic modules confined to benchmark tooling. Public benchmark/generated packages
+have qualified exports to jmh.core; no opens are needed. The compiler is provided,
+required statically and excluded from the copied runtime dependencies and semantic test
+execution. Trial setup asserts named modules and compiler absence. Install, deploy,
+source/Javadoc packaging, signing and Central publication are disabled for this module.
+JMH owns platform benchmark threads for CPU timing; runtime I/O conventions are unchanged.
+The JDK jdk.jfr module is used only by this non-published module to validate archived
+CPU/allocation profiles. Archive tests reject other event types without printing
+their values; scrub-bench-profiles.sh filters recordings before publication.
+The isolated run-cache-retention.sh diagnostic uses JDK java.management through a
+command-local read edge. Its sources are outside Maven's normal roots and are not
+packaged; core does not require java.management. ConcurrentCreationBenchmark shares
+a factory while keeping contexts thread-owned. Reproduction and measurement limits
+are documented in xref:performance.adoc[Performance] and BENCH.md.
+
+Peano's accessor processor also generates the shared public-getter benchmark table.
+Its provider is declared in the benchmark module; the model package is exported only
+to jakarta.el for Expressly's reflective baseline. No opens are introduced. Compiled
+arithmetic, property, lambda and collection fixtures are emitted at process-classes.
+
+== Legacy property-editor boundary
+
+Core, API, processor and compiler do not require java.desktop. Optional artifact
+`io.vidocq.peano:peano-beans-compat` (module `io.vidocq.peano.beans.compat`) enables
+PropertyEditorManager discovery. Build it with `./mvnw -ntp -Pbeans-compat install`
+and include its jar on the runtime module path; service binding can resolve java.desktop.
+Without that artifact, nonempty text without a converter raises ELException and empty
+text to an otherwise unsupported reference target returns null.
+
+The API TypeConversionProvider service runs after built-in coercions and before the
+unsupported-target empty-text fallback. Providers run by descending priority and class
+name; the editor provider has lowest priority. Context-local ELResolver converters win.
+Factory and context conversion both use installed providers. Each editor conversion
+obtains a fresh editor, observes registry updates and returns successful empty-text results.
+Failed empty text returns null; invalid nonempty text raises ELException with its cause.
+Editor packages instantiated by the JDK may need exports qualified to java.desktop.
+Installing the optional artifact enables registry compatibility in both reflection modes.
+
+An application that already uses java.beans can explicitly require java.desktop
+and add its own ELResolver converter to the context. Construct an editor for each
+conversion, claim the operation with setPropertyResolved(true), call setAsText,
+then return the typed getValue result. If an editor fails on empty text, return null;
+on other invalid text, raise ELException. This explicit integration is verified in
+a closed application module under reflection-denial mode.
+
+ELContext conversion can use that resolver; ExpressionFactory.coerceToType has no
+caller context and does not inherit context-local converters. Use the optional artifact
+when automatic registry discovery is needed for factory conversion.
+
+See https://jakarta.ee/specifications/expression-language/6.0/jakarta-expression-language-spec-6.0[EL 6.0 sections 1.25 and 1.25.9].
+
+== Dynamic expression creation reuse
+
+Each Peano ExpressionFactory owns a bounded syntax/analysis cache. Reusing a factory
+allows repeated source creation to reuse parsing, canonical identity and ordered
+binding descriptors. Every new expression still snapshots its own variable/function
+mapper results and expected type; a cache hit does not freeze context state globally.
+
+Retention uses 128 fixed slots with an exact source check, a 4096-character source
+limit and a 16KiB estimated artifact limit per entry. These internal bounds are not
+configuration keys or exact heap-byte measurements. Collisions replace entries,
+and oversized sources/artifacts bypass storage. Unique-source misses incur analysis
+and storage overhead; see BENCH.md for the measured tradeoffs.
+
+Contexts remain caller-owned and must not be shared across concurrent evaluations.
+Nonempty literal values remain owned by each expression. Generated classes and
+serialization schema are unchanged; existing compiled artifacts need no regeneration
+for this creation optimization.
+
+== Reflection policy
+
+The system property peano.reflection accepts allow (default) or deny. Other values
+raise ELException. Set it before application startup.
+In deny mode, Peano's member fallback rejects ungenerated bean/record access, static
+fields and methods, constructors and reflective method metadata, naming the target type.
+Custom resolvers and generated tables run first. Direct map/list/resource-bundle/array
+properties and collection pipelines remain available.
+Restoring serialized captured functions requires allow, including functions whose
+invocation has a generated table: their Method descriptor is restored by lookup.
+The setting governs Peano's fallback; application resolvers and API import handling
+retain their own implementation responsibility.
+
+== Accessor table selection
+
+An instance base matches the AccessorTables registered for, in order:
+
+. its exact runtime class;
+. each superclass, nearest first (`java.lang.Object` excluded);
+. its interfaces, breadth-first over the type hierarchy: the exact class's own interfaces
+  in declaration order, then the next level, where the superinterfaces of those interfaces
+  come before the interfaces declared by the direct superclass, and so on up the hierarchy.
+  An interface reached twice is visited once.
+
+Each operation (getValue, getType, setValue, isReadOnly, method invocation and method
+metadata) tries the matching tables in that order and stops at the first one that resolves it:
+the table sets the resolution flag, or returns a method reference. A table that leaves the
+operation unresolved passes it to the next matching table. Generated tables accept their exact
+class only — or a container proxy of it, see below — so a subclass without its own table falls through its generated superclass table
+to, for instance, a handwritten table on an interface it implements. When no matching table
+resolves the operation, it falls through to the rest of the resolver chain, which applies the
+reflection policy above. getCommonPropertyType comes from the first matching table that reports
+one. A table keyed on a public interface therefore serves anonymous and private implementations,
+which no table can name. The ordered list of matching tables is cached per runtime class,
+including an empty list. The tables and that cache are built once per factory and shared by
+the contexts it creates; a context created under a different thread context class loader gets
+its own, so applications never share tables.
+
+An ELClass base (static fields and methods) uses its exact class only: static members are not
+inherited through EL. Functional-interface conversion keeps its exact target-interface lookup.
+
+Peano ships a built-in table for `java.util.Map.Entry`, so `${e.key}` and
+`${e.value}` work in deny mode on the JDK's private entry classes (`HashMap$Node`, the entries
+of `Map.of` and of unmodifiable views). It gives the results of the API BeanELResolver, the
+reflective path:
+
+* `key` and `value` are read-only: `isReadOnly` is true, `getType` is null and a write raises
+  PropertyNotWritableException. `Map.Entry.setValue` returns the previous value, so it is not a
+  JavaBeans setter; peano-processor applies the same rule.
+* `getCommonPropertyType` is `String.class`, as for generated tables.
+* `getKey()`, `getValue()` and `setValue(Object)` are callable as methods, with method metadata.
+  The table claims a call only when its name and arity (and declared parameter types, when
+  given) match one of these three methods. Any other call, such as an application overload
+  `getValue(String)`, stays unresolved.
+
+The table also runs in allow mode, ahead of BeanELResolver: what it resolves never reaches
+BeanELResolver, with the same results. Operations it leaves unresolved (other properties,
+other methods) fall through to the next matching table, then to the rest of the resolver chain
+and the reflection policy. An application table keyed on `Map.Entry` itself replaces the
+built-in table. A table for a concrete entry class, or for another supertype found earlier in
+the lookup order, comes first and takes precedence only for what it resolves. Two application
+tables for the same type remain a registration conflict.
+
+== Java functional-interface conversion
+
+Peano includes statically compiled adapters for all 43 java.util.function interfaces
+and java.lang.Runnable, java.util.concurrent.Callable and java.util.Comparator
+(EL 6.0 section 1.25.8). Generic contracts use erasure; primitive specializations
+coerce lambda results to their descriptor's return type. Consumers and Runnable
+discard results. Default methods retain Java behavior.
+ELContext conversion preserves custom converters for both the target and result;
+ExpressionFactory.coerceToType retains the lambda's captured context and uses intrinsic
+result conversion. These adapters work as typed Java callbacks and as generated method
+arguments in reflection-denial mode. EL member navigation on adapters retains the
+normal fallback policy.
+
+== Runtime dependencies
+
+`jakarta.el:jakarta.el-api:6.0.1` — nothing else. Peano does not require `java.desktop`.
+
+== Official TCK tooling
+
+The unpublished peano-tck runner uses
+`jakarta.tck:jakarta-expression-language-tck:6.0.1` from the official distribution
+and `jakarta.tck:sigtest-maven-plugin:2.3` as its signature-test runtime, matching
+the distribution's embedded metadata. Both are test dependencies behind
+`-Ptck,tck-official`; none ships with peano-core.
+The signature runtime's Maven tooling dependencies remain test-only.
+Local installation uses a minimal POM to avoid importing the TCK's release-build parent.
+
+The upstream suite is non-modular. Its runner uses the classpath and selects
+Peano via the Jakarta ExpressionFactory property, an exception confined to this
+test harness. Independent named-consumer tests enforce the production module boundaries.
+
+== Annotation processor selection (implemented)
+
+Selected application interfaces generate lambda adapters when annotated with
+java.lang.FunctionalInterface and non-sealed (EL 6.0 section 1.25.8).
+Use the same ELAccessible annotation or explicit-types option and register the emitted
+AccessorProvider fragment. Child interfaces require their own selection. Generic
+interface signatures use erasure; generic functional methods receive diagnostics.
+
+Annotated and explicit roots also select accessible source descendants in the current
+compilation, including nested and later-round declarations. Each type has its own
+provider and registration fragment. Register every required provider in module-info.java.
+[[container-proxies]][.tag-new]#NEW# A CDI container hands EL a client proxy of a normal-scoped bean: a subclass
+that delegates every call to the contextual instance. A generated table serves it as it serves its target when a
+`io.vidocq.peano.spi.ProxyUnwrapper` service, found next to the accessor providers, names the target as the class
+the proxy stands for (`AccessorTable.serves`). Vidocq provides the unwrapper for Vauban's proxies. Without one, the
+proxy falls through to the rest of the chain, as any subclass does.
+
+Binary descendants are not inferred; unselected private descendants are skipped.
+This family selection depends on compilation roots and is not build-tool isolating
+incremental processing.
+
+* `io.vidocq.peano.annotation.ELAccessible`: SOURCE-retained TYPE annotation on an owned class or record.
+* [[automatic-selection]][.tag-new]#NEW# Automatic selection, with no annotation: the classes and producer methods
+  annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` — the beans a page reaches by name — and,
+  transitively from them and from the types selected above, the classes and records of the module their readable or writable properties hold, through
+  collections, maps, optionals and arrays. A reached type that cannot get a table (abstract, ambiguous setter,
+  type-variable property, private enclosing class) is left to the reflective fallback without an error.
+  `-Apeano.autoAccessors=false` turns it off.
+* `-Apeano.accessorTypes=pkg.Type,pkg.Other`: comma-separated owned type names, including models produced by another processor in a later round.
+* Generated provider: `pkg.Type__PeanoAccessors` (nested binary names retain their dollar separators).
+* Registration fragment: `META-INF/peano/accessor-providers/pkg.Type__PeanoAccessors.txt`.
+*Services file: `META-INF/services/io.vidocq.peano.spi.AccessorProvider`, every provider of the module; on an incremental build, the providers already listed stay while their class is in the output.
+
+Put peano-processor, peano-api and jakarta.el-api on javac's processor module path.
+Only peano-api and peano-core are needed at application runtime.
+The processor uses java.compiler and the internal API, with no external tooling dependency.
+AccessorTable.getMethodReference supplies generated metadata. MethodDescriptor snapshots
+erased signatures and runtime annotations; MethodSelection chooses overloads from those
+constants, using the evaluation context for coercion probes.
+
+== Configuration keys (planned)
+
+[cols="1,3",options="header"]
+|===
+| Key | Meaning
+
+| `peano.reflection` | `allow` (default) or `deny` — whether types without a generated accessor table may be resolved reflectively. Name to validate.
+|===

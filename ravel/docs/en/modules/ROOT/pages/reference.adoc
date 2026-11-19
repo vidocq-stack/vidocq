@@ -1,0 +1,393 @@
+= Reference
+:description: Complete API reference for Ravel.
+
+== ConfigProvider
+
+Entry point for accessing configuration.
+
+[source,java]
+----
+public final class ConfigProvider {
+    public static Config getConfig();
+    public static Config getConfig(ClassLoader loader);
+}
+----
+
+=== getConfig()
+
+Returns the `Config` instance cached for the current thread context class loader, with the default configuration sources and the discovered sources and converters.
+
+[source,java]
+----
+Config config = ConfigProvider.getConfig();
+String value = config.getValue("key", String.class);
+----
+
+A non-cached instance with the same content can be built programmatically:
+
+[source,java]
+----
+ConfigBuilder builder = ConfigProviderResolver.instance().getBuilder();
+Config config = builder
+    .addDefaultSources()
+    .addDiscoveredSources()
+    .addDiscoveredConverters()
+    .build();
+----
+
+== ConfigProviderResolver
+
+SPI class that backs `ConfigProvider` and hands out builders. `ConfigProvider` has no builder method — `getBuilder()` lives here.
+
+[source,java]
+----
+public abstract class ConfigProviderResolver {
+    public static ConfigProviderResolver instance();
+
+    public abstract Config getConfig();
+    public abstract Config getConfig(ClassLoader loader);
+    public abstract ConfigBuilder getBuilder();
+    public abstract void registerConfig(Config config, ClassLoader classLoader);
+    public abstract void releaseConfig(Config config);
+}
+----
+
+=== getBuilder()
+
+Returns a new, empty `ConfigBuilder` for programmatic configuration.
+
+[source,java]
+----
+ConfigBuilder builder = ConfigProviderResolver.instance().getBuilder();
+builder.withSources(new MySource());
+builder.withConverter(Color.class, 100, new ColorConverter());
+Config config = builder.build();
+----
+
+[[layered-release]]
+=== Releasing the configurations of a layer [.tag-new]#NEW#
+
+Ravel keeps one `Config` per class loader for the life of the JVM, and a `Config` reaches the classes of its application (custom sources and converters, the converters generated at build). A runtime that boots the application in a layer of its own, with a class loader of its own, must therefore release the configuration of that layer when it stops, or the stopped layer stays reachable: a `vidocq dev` hot reload used to keep every previous layer in memory. `releaseConfig(Config)` needs the `Config` itself, while a container reads its configuration under several loaders (the layer's, and those it builds on top of it). The resolver of Ravel therefore also implements `io.vidocq.ravel.spi.LayeredConfigProviderResolver`:
+
+[source,java]
+----
+if (ConfigProviderResolver.instance() instanceof LayeredConfigProviderResolver layered) {
+    layered.releaseConfigs(layerClassLoader); // that loader and every loader below it
+}
+----
+
+The configuration of an unrelated class loader is left alone. Vidocq's Config extension calls it for you when a layer stops.
+
+== Config
+
+Main configuration interface for reading properties.
+
+[source,java]
+----
+public interface Config {
+
+    <T> T getValue(String propertyName, Class<T> propertyType);
+    ConfigValue getConfigValue(String propertyName);
+    <T> List<T> getValues(String propertyName, Class<T> propertyType);          // default method
+    <T> Optional<T> getOptionalValue(String propertyName, Class<T> propertyType);
+    <T> Optional<List<T>> getOptionalValues(String propertyName, Class<T> propertyType); // default method
+
+    Iterable<String> getPropertyNames();
+    Iterable<ConfigSource> getConfigSources();
+    <T> Optional<Converter<T>> getConverter(Class<T> forType);
+    <T> T unwrap(Class<T> type);
+}
+----
+
+=== getValue()
+
+Get a required property, converted to the target type.
+
+[source,java]
+----
+String name = config.getValue("app.name", String.class);
+int port = config.getValue("app.port", int.class);
+String[] items = config.getValue("app.items", String[].class);
+----
+
+Throws `NoSuchElementException` if key is not found.
+
+Array types are supported directly (`String[].class`, `int[].class`, …). Collection types are **not** — `getValue("app.items", List.class)` has no converter; use `getValues()` / `getOptionalValues()` instead.
+
+=== getConfigValue()
+
+Get the value together with its resolution metadata (raw value, source name, source ordinal).
+
+[source,java]
+----
+ConfigValue cv = config.getConfigValue("app.name");
+String raw = cv.getRawValue();
+String sourceName = cv.getSourceName();
+----
+
+=== getValues()
+
+Get a required multi-valued property (comma-separated) as a `List<T>`. This spec default method builds on the array conversion path.
+
+[source,java]
+----
+List<String> items = config.getValues("app.items", String.class);
+----
+
+=== getOptionalValue()
+
+Get an optional property.
+
+[source,java]
+----
+Optional<String> version = config.getOptionalValue("app.version", String.class);
+String v = version.orElse("1.0.0");
+----
+
+Returns `Optional.empty()` if key is not found; does **not** throw.
+
+=== getPropertyNames()
+
+List all available property names.
+
+[source,java]
+----
+for (String name : config.getPropertyNames()) {
+    System.out.println(name);
+}
+----
+
+=== getConfigSources()
+
+Access the ordered list of config sources.
+
+[source,java]
+----
+for (ConfigSource source : config.getConfigSources()) {
+    System.out.println(source.getName() + " (ordinal: " + source.getOrdinal() + ")");
+}
+----
+
+== ConfigBuilder
+
+Programmatic builder for `Config` instances, obtained from `ConfigProviderResolver.instance().getBuilder()`.
+
+[source,java]
+----
+public interface ConfigBuilder {
+    ConfigBuilder addDefaultSources();
+    ConfigBuilder addDiscoveredSources();
+    ConfigBuilder addDiscoveredConverters();
+    ConfigBuilder forClassLoader(ClassLoader loader);
+    ConfigBuilder withSources(ConfigSource... sources);
+    ConfigBuilder withConverters(Converter<?>... converters);
+    <T> ConfigBuilder withConverter(Class<T> type, int priority, Converter<T> converter);
+    Config build();
+}
+----
+
+=== withSources()
+
+Add custom configuration sources.
+
+[source,java]
+----
+builder.withSources(
+    new DatabaseConfigSource(),
+    new RemoteConfigSource()
+);
+----
+
+The builder starts empty: call `addDefaultSources()` to include the built-in sources (system properties, environment variables, `microprofile-config.properties`) alongside yours.
+
+=== withConverters()
+
+Add multiple converters at once.
+
+[source,java]
+----
+builder.withConverters(
+    new ColorConverter(),
+    new DurationConverter()
+);
+----
+
+=== withConverter()
+
+Add a converter for a specific type, with an explicit priority (the standard application priority is 100; the highest priority wins).
+
+[source,java]
+----
+builder.withConverter(Color.class, 100, new ColorConverter());
+builder.withConverter(MyCustomType.class, 100, value -> new MyCustomType(value));
+----
+
+=== build()
+
+Create the `Config` instance.
+
+[source,java]
+----
+Config config = builder.build();
+----
+
+== ConfigSource
+
+SPI for implementing custom configuration sources.
+
+[source,java]
+----
+public interface ConfigSource {
+
+    String CONFIG_ORDINAL = "config_ordinal";
+    int DEFAULT_ORDINAL = 100;
+
+    String getName();
+    default int getOrdinal();               // reads config_ordinal, falls back to DEFAULT_ORDINAL
+
+    String getValue(String propertyName);
+    Set<String> getPropertyNames();
+    default Map<String, String> getProperties();
+}
+----
+
+=== getName()
+
+Human-readable name for the source (used in logs and introspection).
+
+=== getOrdinal()
+
+Priority order for source lookup (higher = higher priority).
+
+Built-in ordinals:
+
+* System Properties: 400
+* Environment Variables: 300
+* microprofile-config.properties: 100
+
+=== getValue()
+
+Return a property value or `null` if not found.
+
+=== getProperties()
+
+Return all properties from this source.
+
+== Converter
+
+SPI for implementing type converters.
+
+[source,java]
+----
+public interface Converter<T> extends Serializable {
+    T convert(String value) throws IllegalArgumentException, NullPointerException;
+}
+----
+
+Implement to convert string values to custom types:
+
+[source,java]
+----
+public class ColorConverter implements Converter<Color> {
+    @Override
+    public Color convert(String value) {
+        if (value.startsWith("#")) {
+            return Color.decode(value);
+        }
+        // ... other parsing logic
+        throw new IllegalArgumentException("Invalid color: " + value);
+    }
+}
+----
+
+== @ConfigProperty
+
+CDI injection annotation (from MicroProfile Config spec).
+
+[source,java]
+----
+@Inject
+@ConfigProperty(name = "key")
+String value;
+
+@Inject
+@ConfigProperty(name = "key", defaultValue = "default")
+String valueWithDefault;
+
+@Inject
+@ConfigProperty(name = "key")
+Optional<String> optionalValue;
+----
+
+Attributes:
+
+* `name` — configuration key
+* `defaultValue` — fallback value if key not found (makes injection optional)
+
+== ConfigSourceProvider
+
+SPI for dynamic source discovery.
+
+[source,java]
+----
+public interface ConfigSourceProvider {
+    Iterable<ConfigSource> getConfigSources(ClassLoader forClassLoader);
+}
+----
+
+Implement to provide multiple sources based on runtime conditions:
+
+[source,java]
+----
+public class MySourceProvider implements ConfigSourceProvider {
+    @Override
+    public Iterable<ConfigSource> getConfigSources(ClassLoader cl) {
+        return List.of(
+            new Source1(),
+            new Source2()
+        );
+    }
+}
+----
+
+== Environment variables mapping
+
+For a property name, the environment is searched with three name forms, in order (MicroProfile Config §7.6):
+
+. the exact property name (e.g. `app.name`);
+. the property name with every non-alphanumeric character replaced by `_`, original case preserved (e.g. `app_name`);
+. the second form uppercased (e.g. `APP_NAME`).
+
+The first form that yields a value wins:
+
+[cols="1,1",options="header"]
+|===
+| Env var | Matches config key
+
+| `APP_NAME` | `app.name`
+| `APP_DB_HOST` | `app.db.host`
+| `my_property` | `my.property`
+| `MY_PROPERTY` | `my.property`
+|===
+
+== Property name patterns
+
+* Valid characters: `a-z`, `0-9`, `.`, `-`, `_`
+* Case-sensitive (environment variables are reached through the three-form mapping above)
+* Hierarchical via `.` (e.g., `app.database.host`)
+
+== Special properties
+
+* `mp.config.profile` — active configuration profile; resolved like any other property, from whichever registered config source defines it (highest ordinal wins)
+
+== Exceptions
+
+* `NoSuchElementException` — property not found in `getValue()` (required)
+* `IllegalArgumentException` — type conversion failed, or expression cycle detected
+* `DeploymentException` — CDI injection failed (missing required key)
+
+== Next
+
+* xref:usage.adoc[Usage] — programmatic configuration
+* xref:tck.adoc[TCK] — conformance testing
+

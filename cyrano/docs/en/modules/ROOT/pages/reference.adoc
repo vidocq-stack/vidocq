@@ -1,0 +1,296 @@
+= Reference
+:description: Maven artefacts, Java modules, supported annotations, MP Config keys, public SPI.
+
+[.lead]
+This page lists every artefact published by Cyrano, the Java modules they export, the MicroProfile Rest Client 4.0 annotations supported, and the full set of MicroProfile Config keys recognised.
+
+== Maven artefacts
+
+[cols="2,1,3"]
+|===
+| Artefact | Recommended scope | Role
+
+| `io.vidocq.cyrano:cyrano-mp-rest-client-api:{project-version}`
+| `compile` (transitive via `cyrano-api`)
+| Explicit Java Modules repackage of `microprofile-rest-client-api` 4.0 — neutralises the upstream automatic module.
+
+| `io.vidocq.cyrano:cyrano-api:{project-version}`
+| `compile`
+| Controlled re-export of the spec + stable public SPI (`io.vidocq.cyrano.spi`, `io.vidocq.cyrano.spi.gen`).
+
+| `io.vidocq.cyrano:cyrano-processor:{project-version}`
+| annotation processor path (or `provided`)
+| APT processor `CyranoClientProcessor` — generates `<Interface>$$CyranoClient` sources (proxy + literal descriptor + ServiceLoader-able `Factory`) at compile time for every `@RegisterRestClient` interface. The primary proxy path.
+
+| `io.vidocq.cyrano:cyrano-core:{project-version}`
+| `runtime`
+| Implementation: `CyranoRestClientBuilder`, `ClientProxyRegistry` resolution chain, `CyranoInterfaceScanner` + `CyranoProxyGenerator` (Class-File API, runtime fallback), `CyranoInvocationHandler`, `CyranoHttpTransport`.
+
+| `io.vidocq.cyrano:cyrano-cdi-vauban:{project-version}`
+| `runtime` (optional)
+| Vauban BCE `CyranoRestClientCdiExtension` — `@RegisterRestClient` discovery, synthetic `@RestClient`-qualified bean, MP Config resolution.
+
+| `io.vidocq.cyrano:cyrano-tck:{project-version}`
+| `test` (in-reactor, `tck` Maven profile)
+| Official MicroProfile Rest Client 4.0 TCK runner — invoked through `run-official-tck-mp-rest-client-4.0.sh`.
+|===
+
+NOTE: `cyrano-tck` is **in-reactor, gated behind the `tck` Maven profile** (TCK harmonisation, `vidocq-runtime-tck-*` pattern): a plain `mvn install` neither downloads nor runs anything TCK-related. The historical out-of-reactor constraint (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 POMs) disappeared with the Maven 3.9.16 / Model 4.0.0 migration. See xref:tck.adoc[TCK].
+
+== Exported Java modules
+
+[cols="2,3"]
+|===
+| Module | Exported packages
+
+| `io.vidocq.cyrano.mp.rest.client.api`
+| `org.eclipse.microprofile.rest.client`, `org.eclipse.microprofile.rest.client.annotation`, `org.eclipse.microprofile.rest.client.ext`, `org.eclipse.microprofile.rest.client.inject`, `org.eclipse.microprofile.rest.client.spi`.Also: `uses RestClientBuilderResolver` and `uses RestClientBuilderListener`, the lookups `RestClientBuilder.newBuilder()` makes (MP Rest Client §10.1) — without them a named module may not make them, and `newBuilder()` threw `ServiceConfigurationError` on the module path.
+
+| `io.vidocq.cyrano.api`
+| `io.vidocq.cyrano.spi` and `io.vidocq.cyrano.spi.gen` (the SPI consumed by APT-generated client code).
+
+| `io.vidocq.cyrano.processor`
+| No exported package — consumed exclusively through `provides javax.annotation.processing.Processor with CyranoClientProcessor` (javac ServiceLoader).
+
+| `io.vidocq.cyrano.core`
+| `io.vidocq.cyrano.runtime` only (`io.vidocq.cyrano.internal` stays unexported). Also: `provides RestClientBuilderResolver with CyranoRestClientBuilderResolver`, `uses io.vidocq.cyrano.runtime.ProviderInstantiator`, `uses io.vidocq.cyrano.spi.gen.ClientProxyFactory` (module-layer resolution of generated factories).`uses RestClientBuilderListener` and `uses RestClientListener` (MP Rest Client §10.1, §10.2): a listener another module provides — the `RestClientListener` of humboldt-rest, for example — is found on the module path. `requires static org.reactivestreams`: see <<reactive-streams,Reactive Streams for `Publisher`>>.
+
+| `io.vidocq.cyrano.cdi.vauban`
+| `io.vidocq.cyrano.cdi.internal`. Three `provides`: `BuildCompatibleExtension` with `CyranoRestClientCdiExtension`, `io.vidocq.cyrano.runtime.ProviderInstantiator` with `CyranoCdiProviderInstantiator` (CDI-aware provider instantiation), and `io.vidocq.vauban.api.VaubanComponentProvider` with the APT-generated `_VaubanComponents` (no `opens ... to io.vidocq.vauban.core` needed).
+|===
+
+== Supported annotations
+
+[cols="2,3"]
+|===
+| Annotation | Spec / Level
+
+| `@org.eclipse.microprofile.rest.client.inject.RegisterRestClient`
+| MP Rest Client §6.1 — registers the interface with CDI.
+
+| `@org.eclipse.microprofile.rest.client.inject.RestClient`
+| MP Rest Client §6.2 — injection qualifier.
+
+| `@org.eclipse.microprofile.rest.client.annotation.RegisterProvider`
+| MP Rest Client §5 — declares a provider.
+
+| `@org.eclipse.microprofile.rest.client.annotation.RegisterProviders`
+| Repeating container of `@RegisterProvider`.
+
+| `@org.eclipse.microprofile.rest.client.annotation.ClientHeaderParam`
+| MP Rest Client §4 — static or dynamic header (`default` method).
+
+| `@org.eclipse.microprofile.rest.client.annotation.RegisterClientHeaders`
+| MP Rest Client §4 — `ClientHeadersFactory` (propagation from inbound request).
+
+| `@org.eclipse.microprofile.rest.client.annotation.ClientHeaderParams`
+| Repeating container of `@ClientHeaderParam`.
+
+| `@jakarta.ws.rs.Path`, `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS`
+| JAX-RS — HTTP method + path template. Custom verbs meta-annotated with `@jakarta.ws.rs.HttpMethod` are honoured too.
+
+| `@PathParam`, `@QueryParam`, `@HeaderParam`, `@CookieParam`, `@MatrixParam`, `@FormParam`, `@DefaultValue`, `@BeanParam`
+| JAX-RS — parameters.
+
+| `@Consumes`, `@Produces`
+| JAX-RS — content negotiation (request side / response side).
+|===
+
+== Supported return types
+
+[cols="2,3"]
+|===
+| Type | Semantics
+
+| Primitives and their wrappers
+| Conversion from the text body or JSON-B types.
+
+| `String`
+| Raw decoded body (charset = `Content-Type`).
+
+| POJO / record
+| JSON-B deserialisation through Champollion.
+
+| `Optional<T>`
+| Present if status < 400 and body non-empty; `Optional.empty()` otherwise.
+
+| `List<T>`, `Set<T>`, `Map<K,V>`
+| JSON-B deserialisation.
+
+| `jakarta.ws.rs.core.Response`
+| Access to status, headers and raw body.
+
+| `CompletionStage<T>`
+| Async through `HttpClient.sendAsync`.The response is processed (filters, readers, `AsyncInvocationInterceptor.applyContext`) on a new virtual thread, or on the builder's `executorService` when one is set — never on the caller's thread. See xref:usage.adoc#async[Async].
+
+| `org.reactivestreams.Publisher<T>`
+| Server-sent events (MP Rest Client 4.0). Needs the Reactive Streams dependency: see <<reactive-streams,Reactive Streams for `Publisher`>>.
+
+| `void`
+| The response is consumed and discarded.
+|===
+
+[#reactive-streams]
+=== Reactive Streams for `Publisher`
+
+`cyrano-core` declares `org.reactivestreams:reactive-streams` as an **optional** dependency, and its descriptor says `requires static org.reactivestreams`: a Rest Client application does not get the jar, and links with jlink. That jar has no module descriptor, only an `Automatic-Module-Name`, and jlink refuses automatic modules (`jlink does not support automatic modules: org.reactivestreams`); until {release-version} it came with `cyrano-core` into every application, so none of them could be linked.
+
+An application whose client methods return `Publisher` declares the dependency itself:
+
+[source,xml]
+----
+<dependency>
+  <groupId>org.reactivestreams</groupId>
+  <artifactId>reactive-streams</artifactId>
+  <version>1.0.4</version>
+</dependency>
+----
+
+Such an application cannot be linked with jlink until an explicit `org.reactivestreams` module exists; it runs on the module path as usual.
+
+[[mp-config]]
+== MicroProfile Config keys
+
+All keys follow the `<key>/mp-rest/<attribute>` pattern, where `<key>` is either the declared `configKey` (`@RegisterRestClient(configKey = "x")`) or the interface's FQN (when no `configKey` is set).
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `<key>/mp-rest/url`
+| Base URL (host + base path). Medium priority.
+
+| `<key>/mp-rest/uri`
+| Full base URI. High priority (wins over `url`).
+
+| `<key>/mp-rest/scope`
+| CDI scope of the synthesised bean (`jakarta.enterprise.context.Dependent` by default, spec §6.3; a scope annotation on the interface or this key overrides it).
+
+| `<key>/mp-rest/providers`
+| Comma-separated list of provider FQNs.
+
+| `<key>/mp-rest/connectTimeout`
+| Connect timeout in milliseconds.
+
+| `<key>/mp-rest/readTimeout`
+| Read timeout in milliseconds.
+
+| `<key>/mp-rest/followRedirects`
+| `true` to follow redirections (3xx).
+
+| `<key>/mp-rest/queryParamStyle`
+| `MULTI_PAIRS`, `COMMA_SEPARATED` or `ARRAY_PAIRS` (serialisation style for multivalued `@QueryParam`).
+
+| `<key>/mp-rest/trustStore`
+| Truststore location — `classpath:` or URL (e.g. `classpath:/truststore.jks`).
+
+| `<key>/mp-rest/trustStoreType`
+| Truststore type (default `JKS`).
+
+| `<key>/mp-rest/trustStorePassword`
+| Truststore password.
+
+| `<key>/mp-rest/keyStore`
+| Client keystore location — `classpath:` or URL.
+
+| `<key>/mp-rest/keyStoreType`
+| Keystore type (default `JKS`).
+
+| `<key>/mp-rest/keyStorePassword`
+| Keystore password.
+
+| `<key>/mp-rest/hostnameVerifier`
+| FQN of a `javax.net.ssl.HostnameVerifier` implementation.
+|===
+
+Each key resolves against the interface FQN first, then the `configKey`. The global (non-per-client) property `microprofile.rest.client.disable.default.mapper` (spec §8.1) is also read from MP Config; an explicit builder property wins.
+
+HTTP proxying is configured programmatically through `RestClientBuilder.proxyAddress(host, port)` — no `proxy*` MP Config key is read.
+
+Resolution priority for the base URL (strongest to weakest): `mp-rest/uri` > `mp-rest/url` > `@RegisterRestClient(baseUri=...)`. Other attributes have a single priority (MP Config wins over the builder's defaults).
+
+== Public SPI
+
+Two stable SPI packages are exported by `cyrano-api`, plus one runtime SPI in `cyrano-core`:
+
+[cols="2,3"]
+|===
+| Type | Role
+
+| `io.vidocq.cyrano.spi.Cyrano`
+| Implementation metadata constants (`IMPLEMENTATION_NAME`, `SPEC_VERSION`, `IMPLEMENTATION_VERSION`) for TCK tests and runtime integration.
+
+| `io.vidocq.cyrano.spi.gen.ClientProxyFactory`
+| The contract implemented by every APT-generated `$$CyranoClient$Factory` — `clientInterface()`, `descriptor()`, `newProxy(ClientInvoker)`. Resolved by `ClientProxyRegistry` through the module layer (`provides ... with ...`) or `META-INF/services`.
+
+| `io.vidocq.cyrano.spi.gen.ClientInvoker`
+| The invocation contract a generated proxy delegates to; implemented by `CyranoInvocationHandler` in `cyrano-core`.
+
+| `io.vidocq.cyrano.spi.gen.ClientDescriptor` (+ `ClientMethodDescriptor`, `ClientParamDescriptor`, `DynamicHeaderDescriptor`)
+| Literal, reflection-free description of the client interface embedded in the generated code; converted back to internal `RequestSpec`s by `DescriptorConverter`.
+
+| `io.vidocq.cyrano.runtime.ProviderInstantiator`
+| Provider instantiation SPI (`uses` in `cyrano-core`): lets adapters supply managed instances for filters/mappers — `cyrano-cdi-vauban` provides the CDI-aware `CyranoCdiProviderInstantiator`.
+
+| `io.vidocq.cyrano.runtime.CyranoRestClientBuilderResolver`
+| The spec's `RestClientBuilderResolver`, published via `provides` and `META-INF/services`.
+|===
+
+There is no transport-substitution SPI: the transport is `java.net.http.HttpClient`, and the extension points around a request are the standard JAX-RS/MP providers (`ClientRequestFilter`, `ClientResponseFilter`, `MessageBodyReader`/`Writer`, `ResponseExceptionMapper`, `ParamConverterProvider`, `ClientHeadersFactory`).
+
+[#runtime-prerequisites]
+== Runtime prerequisites
+
+* JDK 25+ — for the Class-File API and virtual threads.
+* Java Modules: one `module-info.java` per application Maven module consuming Cyrano.
+* The Jakarta REST API— `provided` in every Cyrano jar: the Vidocq Rest Client extension brings it, and so does an application server.
+* A JSON-B implementation: xref:champollion::index.adoc[Champollion]. The Vidocq Rest Client extension brings it; elsewhere, declare one (`runtime` scope) or use the server's.
+* Optional — an MP Config implementation (xref:ravel::index.adoc[Ravel]) for `<key>/mp-rest/*`.
+
+[#other-containers]
+== Other CDI containers
+
+Cyrano does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `cyrano-it-other-containers`, prove it on every build (cyrano#34):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `cyrano-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config, Champollion for JSON-B: an `@Inject @RestClient` interface calls a local HTTP stub through the proxy `cyrano-processor` generated, and a client built with `RestClientBuilder` for an interface the processor never saw takes the run-time fallback.
+| `cyrano-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, JSON-B 3.0, MicroProfile Config 3.1), with Liberty's `mpRestClient` feature off: the same two clients, calling a stub served by Liberty, checked over HTTP.
+|===
+
+Neither module is published. Nothing in Cyrano is tied to Vauban: `cyrano-cdi-vauban` registers the `@RestClient` beans through a standard build compatible extension, and has no normal-scoped bean.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own Rest Client off** — `mpRestClient` on Open Liberty. Cyrano ships its own `RestClientBuilderResolver`; with the server's MicroProfile Rest Client enabled, two implementations compete for `RestClientBuilder.newBuilder()`.
+* **Enable the server's Jakarta REST, JSON-B and MicroProfile Config** — `restfulWS-3.1`, `jsonb-3.0` and `mpConfig-3.1` on Open Liberty. Cyrano leaves the Jakarta REST API `provided` and uses the server's JSON-B implementation and configuration.
+* **Nothing to exclude** — the WAR carries the MicroProfile Rest Client, JSON-P and JSON-B API jars that `cyrano-api` and `cyrano-core` pull in; with the features above, the server's copies are loaded first. `cyrano-it-openliberty` builds its WAR with exactly these dependencies.
+* **Run `cyrano-processor` on the application's build** — without it every client takes the run-time fallback, which works, but generates its proxy class at run time.
+====
+
+== Utility scripts
+
+[cols="2,3"]
+|===
+| Script | Effect
+
+| `./mvnw -ntp install -DskipTests`
+| Build the reactor (no TCK).
+
+| `./mvnw test`
+| Unit tests (cyrano-api, cyrano-core, cyrano-cdi-vauban).
+
+| `./run-official-tck-mp-rest-client-4.0.sh`
+| Smoke mode (fast).
+
+| `./run-official-tck-mp-rest-client-4.0.sh all`
+| Full official TCK suite.
+
+| `./run-official-tck-mp-rest-client-4.0.sh -Dtest=ConfigKeyTest`
+| Targeted TCK test.
+|===

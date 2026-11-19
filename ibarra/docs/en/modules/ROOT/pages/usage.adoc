@@ -1,0 +1,60 @@
+= Usage
+:description: Precompiled page usage and the remaining tag and development-mode work.
+
+[.lead]
+Precompiled pages and the initial Foy binding are available. Sections marked
+planned describe work that remains.
+
+== Precompiled pages (default)
+
+`ibarra-maven-plugin` translates `.jsp` / `.jspx` pages during the build and
+generates a constructor-based index. Foy maps `*.jsp` / `*.jspx` to Ibarra's
+router, which finds pages in that index. Runtime deployment needs neither
+class loading by name nor compiler modules. See
+xref:modules/foy-binding.adoc[the binding reference] for application layers and lifecycle.
+
+== Scoped beans
+
+`jsp:useBean` supports page, request, session and application scopes with direct
+build-validated constructors. For example:
+
+[source,jsp]
+----
+<jsp:useBean id="settings" class="example.Settings" scope="application">
+  <jsp:setProperty name="settings" property="title" value="Ibarra"/>
+</jsp:useBean>
+<jsp:getProperty name="settings" property="title"/>
+----
+
+The body runs only when this action creates the bean; an existing scoped value
+is reused. Session beans require session participation. A type-only declaration
+requires an existing value and raises InstantiationException when absent.
+Shared-scope lookup, construction and publication are coordinated; the creator's
+body runs after unlocking and is not part of that atomic operation. See
+xref:reference.adoc#scoped-beans[the runtime contract] for concurrency boundaries.
+
+== Custom tags (initial I6)
+
+TLD listener declarations are already discovered at build time and registered
+through Foy's normal listener lifecycle. They do not require any tag calls or
+JSP pages. See xref:modules/foy-binding.adoc[the binding reference]. The tag
+handler/file scope is described in xref:modules/tag-handlers.adoc[the tag reference].
+
+TLDs are read at build time. Classic and simple handler invocations use direct
+constructors/setters, with generated scriptless body fragments for SimpleTag.
+The independent precompiled-pages example includes a private application handler.
+Tag files under `WEB-INF/tags` remain planned.
+
+== `jsp-config`
+
+The Maven plugin reads root `web.xml` property groups at translation time.
+Foy separately exposes root/fragment configuration through the standard
+Servlet API at deployment. Automatic fragment-aware translation is pending.
+
+== Development mode (planned, degraded)
+
+A page without a precompiled class can be translated on first request through `javax.tools`. This needs the `java.compiler` module, logs a warning per page, and is off by default in production.
+
+== Out of scope
+
+JSTL (the Jakarta Standard Tag Library) is a separate specification and is not provided by Ibarra.

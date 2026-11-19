@@ -1,0 +1,166 @@
+= Reference
+:description: Ibarra coordinates, Java modules, dependencies and planned configuration keys.
+
+[.lead]
+Reference data for Ibarra `{project-version}`. Entries marked _planned_ do not exist yet.
+
+== Artefacts
+
+[cols="2,2,3",options="header"]
+|===
+| Maven coordinates | Java module | Notes
+
+| `io.vidocq.ibarra:ibarra-core` | `io.vidocq.ibarra.core` | I1 runtime; qualified container binding API
+| `io.vidocq.ibarra:ibarra-api` | `io.vidocq.ibarra.api` | Immutable page options, descriptors and constructor-based index SPI
+| `io.vidocq.ibarra:ibarra-compiler` | `io.vidocq.ibarra.compiler` | I2 parser/model and initial I3 generator/compiler
+| `io.vidocq.ibarra:ibarra-maven-plugin` | — | xref:modules/maven-plugin.adoc[`precompile` goal], build time only
+| `io.vidocq.ibarra:ibarra-foy` | `io.vidocq.ibarra.foy` | xref:modules/foy-binding.adoc[Initial Foy binding]
+| `io.vidocq.ibarra:ibarra-arquillian` | — (test class path) | xref:modules/arquillian-adapter.adoc[Arquillian adapter], test tooling only
+|===
+
+== Runtime dependencies
+
+The core depends on the internal `ibarra-api` SPI and `jakarta.servlet.jsp:jakarta.servlet.jsp-api:4.0.0`, with `jakarta.servlet-api:6.1.0` and `jakarta.el-api:6.0.1`. The API module requires Jakarta Pages transitively because its public factories return `HttpJspPage`. At run time an Expression Language implementation (Peano) and a servlet container (Foy) complete the picture.
+
+Build-only Maven dependencies are named and justified in xref:modules/maven-plugin.adoc[the Maven plugin reference]. They do not ship in application runtime artifacts.
+
+The test tooling dependencies of `ibarra-arquillian` (Arquillian container SPI and ShrinkWrap, both Apache-2.0) are named in xref:modules/arquillian-adapter.adoc#test-tooling-dependencies[the Arquillian adapter reference]. Consumers take the adapter at `test` scope only.
+
+`ibarra-compiler` depends on the internal API for shared page-path validation. Its parser requires the
+JDK `java.xml` module; generation/compilation needs a full Java 25 JDK.
+The compiler's build-only `io.vidocq.peano:peano-compiler` dependency emits EL bytecode
+through the Class-File API, avoiding runtime parsing. Its core/API transitives stay
+on the build machine. Generated applications with EL explicitly depend on Peano API;
+Ibarra core/binding dependencies remain unchanged. JUnit and Ibarra core are
+test-scoped in the compiler; Peano core remains test-scoped in Ibarra core.
+See xref:modules/compiled-el.adoc[the compiler integration reference].
+
+`GenerationOptions.DEFAULT` disables startup EL. `withStartupEl(true)` explicitly
+enables the preview interpreter path; production packaging rejects that option.
+`PageGenerator`, `GeneratedPage`, `GeneratedClass`, `PageCompiler`, `JspPropertyGroup`
+and `GenerationOptions` are in `io.vidocq.ibarra.compiler`.
+
+`PagePrecompiler` stages page compilation and constructor-based index generation,
+then updates the application's Java module service declaration with the JDK
+Class-File API. `PageIndex.pages()` returns immutable `PageDescriptor` values;
+`createPage()` calls a generated constructor factory. Core discovery uses
+`ServiceLoader` and rejects duplicate web resource paths. A page descriptor
+does not own servlet initialization or deployment lifecycle.
+
+`PageIndex.listeners()` returns immutable `ListenerDescriptor` factories and
+defaults to an empty list for existing providers. Listener types are deduplicated
+without construction; factories return the exact declared class. Build-only
+`TldParser` / `TagLibraryDescriptor` metadata and generated listener lifecycle
+are described in xref:modules/foy-binding.adoc[the Foy binding reference].
+
+== Generated-page policies
+
+Generated application modules must explicitly require both `jakarta.servlet.jsp`
+and `io.vidocq.ibarra.api`. Generated pages implement the exported
+`io.vidocq.ibarra.spi.PageOptions` interface with a final constant
+`errorOnELNotFound()` method. This option is request-independent and introduces
+no reflective access or application-global policy flag.
+
+`JspPropertyGroup` supports `error-on-el-not-found` and
+`error-on-undeclared-namespace`, both defaulting to `false`. The page directive
+`errorOnELNotFound` overrides its property-group default. Missing EL identifiers
+raise `PropertyNotFoundException` in strict mode; explicitly resolved nulls and
+missing map keys retain normal EL semantics. Startup EL remains preview-only.
+
+Strict namespace checking applies to standard pages; XML already requires bound
+prefixes. Translation expands includes/preludes before validating declaration
+order, preserving the offending resource's source coordinates. A taglib must
+precede uses of its prefix, regardless of the strict namespace flag. Declared
+custom tags use the initial xref:modules/tag-handlers.adoc[handler generator] when
+their TLD metadata is available during the build.
+
+Boolean group properties and page attributes accept only `true` or `false`;
+invalid values fail translation with `PageParseException` source diagnostics.
+
+[[scoped-beans]]
+== Scoped beans
+
+Generated session/application `jsp:useBean` actions obtain a lock through the
+exported `io.vidocq.ibarra.spi.BeanScopeContext` contract implemented by Ibarra's
+PageContext. Lookup, direct construction and publication run inside try/finally;
+the body runs after unlocking, only for the request that published the new bean.
+Type-only shared lookups use the same coordination. Missing typed values raise
+InstantiationException; incompatible existing values retain ClassCastException.
+The normal page error boundary preserves those failures.
+
+One reentrant lock belongs to each runtime application context. This deliberately
+serializes shared-bean lookup/construction/publication across all sessions and
+application names in that application. It supports virtual-thread waiting and
+avoids session facade identity assumptions, session-ID rotation, hidden attributes
+or an unbounded registry. Applications have independent locks; undeployment
+releases the application context after requests drain. Released/uninitialized
+page contexts and unsupported scopes are rejected by the SPI.
+
+The coordination follows
+https://jakarta.ee/specifications/pages/4.0/jakarta-server-pages-spec-4.0.pdf[Pages 4.0 section 5.1].
+It does not make arbitrary servlet attribute writes or bean methods thread-safe.
+Other requests may observe the published bean while its creator's body is still
+initializing it. A failed constructor publishes nothing and permits a later
+retry. A failed body leaves the published bean in its scope and is not retried
+automatically. `beanName` serialized-bean loading remains unsupported.
+
+== Translation and encodings
+
+Static includes, preludes and codas can mix standard and XML syntax. Each XML
+resource must be well-formed independently. Global page/EL directives apply to
+the expanded translation unit; text whitespace and escapes follow each file's
+own syntax. XML namespace declarations are separate from directive attributes.
+Standard taglib declarations cannot redefine an enclosing XML prefix to a
+different URI.
+
+For JSP documents, `jsp:output` settings are collected at translation time across
+static includes. Documents without a `jsp:root` emit an XML declaration by default;
+namespace-qualified JSP roots omit it. Explicit `yes`/`true` omit the declaration,
+while `no`/`false` include it using the response character encoding. Differing
+repeated literal omission settings are diagnosed, including equivalent aliases.
+Each DOCTYPE action requires `doctype-root-element` and `doctype-system` together;
+`doctype-public` is optional and requires SYSTEM. Identical DOCTYPE values are
+deduplicated across the unit and conflicts carry source diagnostics. Generated
+order is declaration, DOCTYPE, then page body. Output actions emit no local content,
+even inside conditional bodies; tagdependent raw payloads remain opaque. Output
+identifiers are literals and never trigger DTD/resource lookup. Input DOCTYPE and
+external entities remain rejected. XML tag-file output is not yet implemented.
+
+`pageEncoding` applies only to its source file and may occur once per file.
+Encoding aliases are compared using `Charset`; malformed or conflicting
+encodings produce source diagnostics. Included encodings do not set response
+defaults. Without explicit content type, standard pages use `text/html` and XML
+pages use `text/xml`. XML response encoding defaults to UTF-8 regardless of source
+encoding; standard pages use the requested page's configured/directive encoding,
+or leave the Servlet response default unchanged.
+
+`PageParser` accepts decoded `String` sources. `PageGenerator.generate` also
+accepts a `byte[]` requested source; `GenerationOptions.withByteSources` supplies
+independently encoded includes, preludes and codas. Text and bytes cannot name
+the same included resource. Byte arrays are defensively copied and options
+equality/hash codes compare byte content.
+
+Standard pages decode using their BOM, configured encoding, `pageEncoding`,
+content-type charset, or ISO-8859-1, in that order. XML pages use byte signatures
+and their named prolog encoding, defaulting to UTF-8. UTF-8, UTF-16BE/LE and
+UTF-32BE/LE BOMs are removed. The EBCDIC signature uses IBM037 to read the prolog,
+then honors its named variant. Generic UTF-16/32 declarations accept the detected
+byte order. Unsupported charset names, contradictory named encodings and malformed
+byte sequences produce translation errors with source diagnostics.
+
+For XML, a derived default/BOM encoding controls decoding; consistency checks
+between configuration and page directives compare named prolog encodings as
+specified in Pages 4.0 Appendix B.1. A standard-page BOM also chooses response
+encoding; BOMs of included files do not affect the requested page's response.
+
+The complete XML view remains pending. Unknown property-group keys
+are rejected; broader URL-pattern validation remains pending.
+
+== Configuration keys (planned)
+
+[cols="1,3",options="header"]
+|===
+| Key | Meaning
+
+| `ibarra.runtime-translation` | `allow` or `deny` (production default) — whether pages without a precompiled class may be translated on first request. Name to validate.
+|===

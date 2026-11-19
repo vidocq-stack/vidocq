@@ -1,0 +1,285 @@
+= Reference
+:repo-noether: https://codefloe.com/Vidocq/noether
+:description: Maven artefacts, annotations, configuration, dialects, Java modules.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
+
+[.lead]
+Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Getting started]. For everyday patterns, see xref:usage.adoc[Usage].
+
+== Maven artefacts
+
+[cols="2,3"]
+|===
+| Artefact | Role
+
+| `io.vidocq.mansart:mansart-data-core`
+| Runtime: `RepositoryRuntime`, query execution, `ResultSet` mapping. Annotations come from the standard `jakarta.data-api` / `jakarta.persistence-api`.
+
+| `io.vidocq.mansart:mansart-data-cdi`
+| CDI 4.1 Lite bootstrap (BCE): `@Repository` beans, `RepositoryRuntime` producer, `dataStore` routing.
+
+| `io.vidocq.mansart:mansart-data-dialect-h2` / `mansart-data-dialect-postgresql`
+| Shipped SQL dialects (`mansart-data-dialect-spi` is pulled transitively).
+
+| `io.vidocq.mansart:mansart-data-processor`
+| APT — static metamodel + `*RepositoryImpl` generation. Declare under `<annotationProcessorPaths>`.
+
+| `io.vidocq.mansart:mansart-data-dialect-spi`
+| Dialect SPI (`Dialect`, `DialectFactory`, neutral query AST).
+
+| `io.vidocq.mansart:mansart-data-dialect-h2`
+| H2 dialect (test reference + embedded).
+
+| `io.vidocq.mansart:mansart-data-dialect-postgresql`
+| PostgreSQL dialect (production target).
+
+| `io.vidocq.mansart:mansart-data-cdi`
+| CDI 4.1 bootstrap — Vauban-compatible BCE that discovers `@Repository` via `META-INF/mansart-repositories.list`.
+
+| `io.vidocq.mansart:mansart-pool-api`
+| Pool public API: `PoolConfig`, `PoolMetrics`, `PoolException`, `ValidationMode`.
+
+| `io.vidocq.mansart:mansart-pool-core`
+| `MansartDataSource` implementation.
+
+| `io.vidocq.mansart:mansart-transactions-{api,core,cdi,jdbc}`
+| `mansart-transactions` itself is a POM aggregator — depend on `-cdi` (`@Transactional` interceptor, `@TransactionScoped`, Vauban BCE; pulls `-core`'s `MansartTransactionManager`/`UserTransaction`) and `-jdbc` for the connection bridge.
+
+| `io.vidocq.noether:noether-jpa`
+| POM aggregator. Runtime applications use `noether-jpa-core`, a `noether-jpa-dialect-*` adapter and, for container injection, `noether-jpa-cdi`; APT uses `noether-jpa-processor`. See xref:noether::index.adoc[implemented modules].
+|===
+
+== Java modules
+
+[cols="1,3"]
+|===
+| Module | Exports
+
+| `io.vidocq.mansart.data.core`
+| `io.vidocq.mansart.data.core` (`MansartData`, `RepositoryRuntime`); `requires transitive` the dialect SPI and `jakarta.inject`.
+
+| `io.vidocq.mansart.pool.api` / `io.vidocq.mansart.pool.core`
+| `io.vidocq.mansart.pool` (`PoolConfig`, `PoolMetrics`, `ValidationMode`) / `io.vidocq.mansart.pool.core` (`MansartDataSource`).
+
+| `io.vidocq.mansart.transactions.api` / `.core` / `.cdi` / `.jdbc`
+| `…transactions.api` (re-exports `jakarta.transaction`) / `…transactions.core` (`MansartTransactionManager`) / CDI interceptor + BCE / JDBC enlistment bridge.
+
+| `io.vidocq.noether.jpa.core`, `.dialect.spi`, `.dialect.h2`, `.dialect.postgresql`, `.processor`, `.cdi`
+| The core publicly exports the generated-access SPI; model packages have qualified exports to the processor. Dialects and CDI integration are service-based modules. See xref:noether::index.adoc[implemented modules].
+|===
+
+All modules are strict Java Modules — minimal `exports`, no unjustified `opens`, no classpath.
+
+[#application-modules]
+=== Your entities and repositories need no `opens` [.tag-new]#NEW#
+
+Mansart reaches an application's entities and repositories without reflection, so a named application module needs neither `opens` nor `exports` for their packages:
+
+* the generated metamodel (`_Book`) builds the entity's accessors inside the application's own module, and the generated repository uses it directly;
+* the processor writes, in each package of entities or repositories, a `_MansartComponents` class declared in `META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents`. Mansart asks it for an entity's model (`EntityModels.of`, JDQL run at run time, the Vidocq dev console) and for a repository implementation (`MansartData.repository`, a repository bound to a named data store), by plain calls. Under Vidocq the service file is enough; a module launched outside Vidocq's application layer also declares it with `provides io.vidocq.mansart.data.core.GeneratedComponents with ….`;
+* a JDQL projection into a record (`SELECT id, title FROM Book` into `List<IdTitle>`) is built by code the processor generates next to the repository, not through the record's constructor by reflection.
+
+Reflection remains the fallback where the generated code is absent: an entity or repository compiled without `mansart-data-processor`, or a container that does not load the service (Weld, Open Liberty — reflection is fine there). A repository served on the run-time path says so once, at start-up, with its cause.
+
+[.tag-new]#NEW# The calls that stay reflective are made once, not on every call or for every class:
+
+* a JDQL statement the processor leaves to the run time (an arithmetic `UPDATE`, for instance) finds its repository method once, in a holder class of the generated method;
+* `@Transactional` resolves the annotation of a method once per bean class and method, then reads it from a cache;
+* at startup, the CDI extension loads only the classes that can be a repository implementation it vetoes — a generated implementation the repository index lists, or a `<repository>_` class of another provider — instead of loading and inspecting every class of the archive.
+
+[#bean-archives]
+=== Bean archives
+
+`mansart-data-cdi` and `mansart-transactions-cdi` are explicit bean archives. Each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore treats them as bean archives too. The default `RepositoryRuntime` producer (`MansartRuntimeProducer`) does not depend on discovery mode: the `mansart-data-cdi` extension adds it at `@Discovery`. [.tag-new]#NEW# So does `mansart-transactions-cdi` for its `TransactionManager` producer and its six `@Transactional` interceptors; its `beans.xml` excludes its own package from the scan, so a container that also scans the archive does not declare them twice.
+
+[#other-cdi-containers]
+=== Other CDI containers [.tag-new]#NEW#
+
+The Mansart jars run unchanged on CDI containers other than Vauban. Under Vidocq, the repository implementations, the `RepositoryRuntime` producer and the `@Transactional` interceptors are generated at build time, and neither `mansart-data-cdi` nor `mansart-transactions-cdi` opens a package. On another container the same jars take the standard route — the build compatible extensions run there, and the container reaches the beans by reflection, which is its own business.
+
+Two test modules prove it, never published:
+
+* `mansart-it-weld` — Weld SE 6.0 (CDI 4.1) on a class path, no Vauban: a repository generated by the processor, injected and queried on an H2 data source, and `@Transactional` from Mansart Transactions committing and rolling back its writes.
+* `mansart-it-openliberty` — a WAR on Open Liberty 26.0.0.10 (Jakarta EE 11 Web Profile distribution, `cdi-4.1`, `restfulWS-4.0`, `jdbc-4.3`): a repository routed to Liberty's `java:comp/DefaultDataSource` through `@Repository(dataStore = "java:comp/DefaultDataSource")`, its writes inside Liberty's own transactions.
+
+What the jars rely on:
+
+* **Jakarta APIs are `provided`.** Following the ecosystem's dependency rule, `mansart-data-core`, `mansart-data-cdi`, `mansart-transactions-api` and `mansart-transactions-cdi` leave the CDI, Inject, Interceptor and Annotation APIs to the container. Under Vidocq the runtime extensions bring them; on an application server the server does. Jakarta Data, Persistence and Transactions — the specifications Mansart implements — stay normal dependencies.
+* **`vauban-api` is a runtime dependency** of `mansart-data-cdi` and `mansart-transactions-cdi`, under any container. It holds API types only: the generated `_VaubanComponents` providers, inert outside Vauban, and the `ProxyLink` constructor the Vauban build adds to the normal-scoped producer of Mansart Transactions. Without it, Weld cannot load that class and drops the bean.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own Jakarta Data provider off** (Open Liberty: no `data-1.0` feature), or it implements the repositories instead of Mansart.
+* **Use the server's transactions, not Mansart Transactions.** Leave `mansart-transactions-cdi` out of the WAR: the server publishes its own `@Transactional` interceptors and enlists the connections of its data sources. Mansart Transactions is meant for Vidocq and for a plain CDI SE container such as Weld SE.
+* **Route repositories to the server's data source through JNDI**: `@Repository(dataStore = "java:comp/DefaultDataSource")`, or a `java:` name of your own. A repository with the default `dataStore` needs a `@Default DataSource` bean instead.
+* **The WAR carries** `mansart-data-cdi` and a dialect (`mansart-data-dialect-h2` or `-postgresql`) with what they bring transitively, and the repository implementations the processor generated at compile time (`mansart-data-processor` in `annotationProcessorPaths`). The Jakarta platform APIs are `provided`; the JDBC driver belongs to the server's data source.
+====
+
+== Entity annotations
+
+Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
+
+[#table-names]
+=== Table and column names [.tag-new]#NEW#
+
+Mansart chooses table and column names itself; the annotations change them.
+
+[cols="1,2,2",options="header"]
+|===
+| Name | Default | Examples
+| Table | the entity's simple class name in snake_case, plural | `Book` -> `books`, `OrderLine` -> `order_lines`, `Category` -> `categories`, `Address` -> `addresses`
+| Column | the attribute name in snake_case | `publishedOn` -> `published_on`
+| Foreign key column (`@ManyToOne`, `@OneToOne`) | the attribute name in snake_case, then `_id` | `author` -> `author_id`
+|===
+
+`@Table(name = "...")` (and its `schema`) chooses the table, `@Column(name = "...")` the column, `@JoinColumn(name = "...")` the foreign key column.
+
+IMPORTANT: The table default is **not** Jakarta Persistence's. Although entities use `@jakarta.persistence.Entity`, a Jakarta Persistence provider names the table after the entity name (`Book`), Mansart after the plural (`books`). `@Entity(name = "...")` does not change Mansart's table either: to keep a schema made for Jakarta Persistence, or created after the class name, put `@Table(name = "book")` on the entity.
+
+Mansart quotes every table and column name in its SQL, so the database must hold them in the same case. PostgreSQL stores unquoted names in lower case, which matches. H2 stores them in upper case: a migration's `CREATE TABLE books (...)` makes `BOOKS`. With H2, quote the names in the migration (`CREATE TABLE "books" (...)`) or add `DATABASE_TO_LOWER=TRUE` to the JDBC URL.
+
+When the table does not exist, the repository's first statement fails with a `MansartDataException` that names the entity, the table it looked for, how that name was chosen, and the ways out:
+
+----
+The table "books" of entity com.example.shelf.book.Book does not exist. Mansart names an entity's table after its
+class, in snake_case and plural (Book → books), not after the entity name as Jakarta Persistence does by default;
+@Entity(name = …) does not change it. Create the table (with Flyway, a migration in src/main/resources/db/migration),
+or give the existing one with @Table(name = "…") on Book.
+----
+
+[#migration-check]
+==== Checked at build time [.tag-new]#NEW#
+
+When the application ships Flyway SQL migrations, the annotation processor reads them and warns, while compiling, about an entity whose table none of them creates — the usual case being a table made after the class name:
+
+----
+[WARNING] [mansart-data] No migration in db/migration creates the table "books" of entity com.example.shelf.book.Book:
+Mansart names a table after its class, in snake_case and plural (Book → books). A migration creates "book": add
+@Table(name = "book") to Book, or create "books". If the database is managed elsewhere, ignore this, or turn the
+check off with -Amansart.migrationCheck=off.
+----
+
+* It reads `db/migration` in the class output, where Maven copies `src/main/resources/db/migration` before compiling (Flyway's default location). `-Amansart.migrations=<dir>[,<dir>…]` names other directories.
+* It understands `CREATE TABLE` and `CREATE VIEW` (with `IF NOT EXISTS`, a schema prefix, quoted names) and `ALTER TABLE … RENAME TO`, comments aside. A quoted name must match exactly, an unquoted one in any case.
+* It is a warning, not an error: the database may be created elsewhere (another service, a script, Java migrations). With no SQL migration at all, there is nothing to check and nothing is said. `-Amansart.migrationCheck=off` turns it off.
+
+[#enum-storage]
+An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
+
+The storage applies wherever Mansart knows which attribute a value belongs to: inserts and updates, row mapping, projections, `WHERE` bindings, bulk updates by attribute, and the table DDL Mansart generates (an integer column for `ORDINAL`). Two paths do not know it yet and still bind a value by its Java type: an aggregate (`SELECT MAX(…)`, …) over an `ORDINAL` enum, and a JDQL `UPDATE … SET` that Mansart runs at run time rather than compiling it (a `SET` with an arithmetic expression, or a statement passed to `JdqlExecutor.run`). Before 0.4, `@Enumerated` was ignored and every enum was stored by its name; see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0] for existing `ORDINAL` columns.
+
+**Outside the Jakarta Data backend scope**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Persistence implements these within its documented mapping boundaries.
+
+== Repository annotations
+
+[cols="2,3"]
+|===
+| Annotation | Usage
+
+| `@jakarta.data.repository.Repository`
+| On the interface — triggers APT generation.
+
+| `@Find`
+| Finder method by typed parameters: each one matches the attribute `@By` names, else the attribute of its name. Compiled by the APT, with `@OrderBy` and a trailing `PageRequest`.
+
+| `@Query("...")`
+| JDQL — SELECT/UPDATE/DELETE with named parameters (`:name`, named by `@Param` or by the Java parameter) or positional ones (`?1`); `FROM` may be left out.
+
+| `@Insert`, `@Update`, `@Delete`, `@Save`
+| Lifecycle annotations — parameter = entity, collection or varargs; return `void`/`T`/`Iterable<T>`/`int`/`long`/`boolean`.
+
+| `OrderBy<Attr><Asc\|Desc>` (method-name infix)
+| Static order on a derived finder; dynamic order via `Sort`/`Order`/`Limit` call parameters.
+
+| `@Repository(dataStore = "name")`
+| Routes the repository to a named datasource (`@Default` datasource otherwise).
+|===
+
+== Transaction annotations
+
+[cols="2,3"]
+|===
+| Annotation | Usage
+
+| `@jakarta.transaction.Transactional(TxType)`
+| CDI interceptor. TxType: `REQUIRED` (default), `REQUIRES_NEW`, `MANDATORY`, `SUPPORTS`, `NEVER`, `NOT_SUPPORTED`.
+
+| `@jakarta.transaction.TransactionScoped`
+| CDI scope whose lifetime matches the transaction.
+|===
+
+== `PoolConfig` configuration
+
+[cols="2,1,3"]
+|===
+| Property | Type | Description
+
+| `jdbcUrl` | `String` | Full JDBC URL.
+| `username` | `String` | DB login.
+| `password` | `String` | Password.
+| `minIdle` | `int` | Idle connections kept warm (default 0).
+| `maxSize` | `int` | Hard pool bound (default 10).
+| `acquireTimeout` | `Duration` | Timeout on `getConnection()` (default 30 s).
+| `idleTimeout` | `Duration` | Eviction of an idle connection (default 10 min).
+| `maxLifetime` | `Duration` | Eviction of an old connection (default 30 min).
+| `validation` | `ValidationMode` | `NEVER`, `ON_BORROW` (default when `validationQuery` is set), `PERIODIC`.
+| `validationQuery` | `String` | SQL used by `ON_BORROW` (falls back to `Connection.isValid`).
+| `leakDetectionThreshold` | `Duration` | Leak stack-trace if a connection is borrowed longer than the threshold.
+| `validationTimeout` | `Duration` | Bound on a validation probe (default 1 s).
+| `driverProperties` | `Map<String,String>` | Extra driver properties (`driverProperty(k, v)` on the builder).
+| `xaDataSourceClassName` | `String` | Explicit `XADataSource` class when auto-detection from the URL is not enough.
+|===
+
+== Pluggable dialects
+
+[cols="2,1,3"]
+|===
+| Dialect | Status | Notes
+
+| H2 | ✅ Delivered | Test reference + embedded. `MERGE INTO` upsert, `LIMIT/OFFSET` pagination.
+| PostgreSQL | ⏳ M4 | Production target. `ON CONFLICT`, `RETURNING`, `UUID`/`JSONB` types.
+| MariaDB / MySQL | ❌ Backlog | —
+| SQL Server | ❌ Backlog | —
+| Oracle | ❌ Backlog | —
+| SQLite | ❌ Backlog | —
+|===
+
+Discovered via `ServiceLoader` (`provides DialectFactory with H2DialectFactory`).
+
+[#tooling-api]
+== The core API for tools
+
+`io.vidocq.mansart.data.core` (artefact `mansart-data-core`) exposes what a tool needs to describe an application's entities and to run a JDQL statement typed as text, without re-reading annotations or reflecting on generated classes. The Vidocq dev console uses it for its Mansart Data catalogue and its JDQL prompt. An application does not need it: repositories cover that.
+
+`EntityModels.of(Class<E>)`::
+The `EntityModel<E>` Mansart uses for an entity: the generated `<package>._<Entity>.$MODEL` when the processor wrote one, otherwise a model built at run time from the entity's fields and its `jakarta.persistence` annotations. It throws a `MansartDataException` when Mansart cannot map the class (no id field, no no-arg constructor, a package not open to `io.vidocq.mansart.data.core`). The model's attributes carry the getter and setter handles Mansart reads and writes the entity with; a tool may use them as Mansart does, but must not change the model.
++
+The model is cached with its class (a `ClassValue`): a second call returns the same instance, and the model goes away with the class's loader. Under a dev reload, where the application layer is replaced while Mansart stays, a discarded layer is no longer kept in memory by Mansart.
+
+`JdqlExecutor.run(jdql, parameters, model, runtime)`::
+Parses one statement (`FROM …`, `SELECT … FROM …`, `UPDATE … SET …` or `DELETE FROM …`) against `model`, takes each named parameter `:name` from `parameters.get("name")`, and runs it on `runtime` as a `@Query` method's statement would, in whatever transaction the caller has begun. A `String` value compared or assigned to an attribute that is not text is converted to the attribute's type: an enum by constant name, the `java.time` types by ISO parsing, numbers exactly (`BigDecimal` and `BigInteger` included), `Boolean` from `true`/`false`, `UUID`. A positional parameter (`?1`), a parameter without a value, a value no parameter uses and a value that does not convert are refused before anything runs.
++
+The result is a sealed `JdqlResult`: `Entities`, `Rows` (the columns and rows of a projection), `Count` (the rows counted, or changed by an `UPDATE` or a `DELETE`) or `Value` (an aggregate's value).
+
+`JdqlExecutor.run(jdql, parameters, model, runtime, maxRows)`::
+The same, reading at most `maxRows` entities or projected rows in the statement's order, through the dialect's pagination (a SQL `LIMIT`): no more is ever read from the database. A count, an aggregate, an `UPDATE` and a `DELETE` are not affected. `maxRows` below 1 is refused.
+
+`JdqlExecutor.isWrite(jdql)`, `JdqlExecutor.target(jdql)`::
+Read a statement's first keyword (is it an `UPDATE` or a `DELETE`?) and the entity it names, without parsing it. Since a statement that puts an `UPDATE` or a `DELETE` after a `SELECT` clause is refused, a tool can rely on the first keyword to tell a read from a write.
+
+== Compatibility
+
+* Java 25 (LTS), Maven 3.9.16.
+* {spec-data-1}[Jakarta Data 1.0] (delivered), {spec-jpa-3-2}[Jakarta Persistence 3.2] (P0–P12 delivered within documented scope), Jakarta Transactions 2.0.
+* {spec-cdi-4-1}[CDI 4.1 Lite] via xref:vauban::index.adoc[Vauban].
+* Virtual Threads for any JDBC execution.
+
+== See also
+
+* link:{repo-mansart}/src/branch/main/PLAN.md[Mansart PLAN.md] — global vision and work order.
+* link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data PLAN.md] — detailed plan of the Data module.
+* link:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md] — pool design.
+* link:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] — transactions roadmap.

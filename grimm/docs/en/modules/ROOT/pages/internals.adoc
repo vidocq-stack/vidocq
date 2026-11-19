@@ -1,0 +1,170 @@
+= Internals
+:description: OpenAPI document build pipeline, Vauban BCE, threading model, implementation choices.
+
+[.lead]
+Grimm refuses per-request classpath scanning: all the work happens once, at CDI container startup, and the result is cached. This page describes the exact pipeline sequence, the role of the Vauban BCE, and the threading invariants.
+
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Grimm that is the OpenAPI fragment of each
+resource class, built at compile time; the annotation scan of the <<build-pipeline>> stays as the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `<Resource>$$GrimmModel`, an `OpenApiContribution`: the class's OpenAPI fragment as a JSON literal, built in
+  javac with Grimm's own model objects and schema generator, so it matches what the scan would produce
+| `grimm-processor` in javac, for the resource classes within its subset (class and method `@Path`, HTTP verbs,
+  scalar path, query and header parameters without Bean Validation constraints, `@Produces`, inferred 200
+  responses); on Vidocq the `vidocq-runtime-grimm-openapi-extension-codegen` bundle puts it on the processor path
+| Step 3 of the pipeline, once when the container activates: `ContributionRegistry` tries the `ServiceLoader` of
+  `OpenApiContribution` (module layer aware), then `Class.forName(<resource>$$GrimmModel)`, and `FragmentMerger`
+  folds the fragments in
+| `AnnotationScanner` reads the class by reflection when the container activates.
+
+| `META-INF/grimm/openapi-definitions`, the classes carrying `@OpenAPIDefinition`
+| `grimm-processor`
+| The pipeline, which reads the definition from those classes
+| The scan finds the definition.
+
+| The list of application classes the scan covers
+| `GrimmExtension`, a Build Compatible Extension that Vauban runs in javac when `grimm-cdi-vauban` is on the
+  processor path; `ScannedTypesCreator` adds the classes listed in the processor's service file
+| `GrimmModelCache` when it builds the document
+| The extension runs at boot.
+
+| The dispatch of Grimm's own `/openapi` endpoint
+| `cassini-processor`, at Grimm's own build (xref:cassini::internals.adoc#generated-code[Cassini])
+| Cassini
+| Cassini's fallback.
+|===
+
+Not generated yet, so described by the scan: a resource class that returns or takes a non-scalar type (an
+application POJO), consumes a request body, has a sub-resource locator, is nested or generic, or carries MicroProfile
+OpenAPI annotations or Bean Validation constraints on its methods. Most real resources return a POJO, so on most
+applications the scan still does the bulk of the work.
+
+=== When the fallback runs
+
+* A resource class outside the subset: the processor skips the whole class rather than describe it in part.
+* A class compiled without `grimm-processor`, such as the TCK's classes.
+
+=== Which path ran
+
+* The build says in one compiler note how many classes it left to the scan; `-Agrimm.processor.verbose=true` lists
+  them with their reason (xref:reference.adoc#processor-verbose[Reference]).
+* `ContributionRegistry.serviceLoaderHits()`, `preGeneratedHits()` and `scanFallbacks()` count which tier described
+  each class.
+
+== `grimm-core` / `grimm-cdi-vauban` separation
+
+`grimm-core` is plain Java. It knows nothing about CDI or JAX-RS runtime — only the spec types (`@Path` is read as an annotation, not as a handler). It is usable outside any container, for example by a Maven tool that produces an OpenAPI document at build time.
+
+`grimm-cdi-vauban` is the integration layer: it plugs `grimm-core` into the Vauban Build Compatible Extension, exposes the `/openapi` resource, and supplies the `Supplier<OpenAPI>` consumed by downstream tools.
+
+[#build-pipeline]
+== Build pipeline
+
+Six steps, executed once when the container activates (`ModelBuilder` in `grimm-core`), with the result stored in `GrimmModelCache`:
+
+[mermaid]
+....
+flowchart LR
+  S1["1. ModelReaderInvoker<br/>application OASModelReader"]
+  S2["2. StaticFileReader<br/>META-INF/openapi.{yaml,yml,json}"]
+  S3["3. Annotation source<br/>$$GrimmModel fragments + AnnotationScanner"]
+  Merge["4. ModelMerger<br/>annotations > static > reader"]
+  Cfg["5. ConfigApplier<br/>mp.openapi.servers*, mp.openapi.schema.*"]
+  S4["6. FilterInvoker<br/>application OASFilter"]
+  Cache["GrimmModelCache<br/>cached OpenAPI"]
+
+  S1 --> Merge
+  S2 --> Merge
+  S3 --> Merge
+  Merge --> Cfg
+  Cfg --> S4
+  S4 --> Cache
+....
+
+. **`ModelReaderInvoker`** — if `mp.openapi.model.reader` is set, instantiates the class (CDI lookup preferred, no-arg constructor as fallback) and calls `buildModel()`: the starting model.
+. **`StaticFileReader`** — searches for `META-INF/openapi.yaml`, `.yml`, then `.json`. Read through the current classloader. Returns `Optional<OpenAPI>`.
+. **Annotation source** — compile-time `$$GrimmModel` fragments contributed by `grimm-processor` are folded in first (`ContributionRegistry` + `FragmentMerger`); `AnnotationScanner` then walks the remaining application classes recorded by the BCE — `@Path` resources as well as `@Schema` POJOs and the `Application` subclass — and builds a partial `OpenAPI`. The output is tagged by `AnnotationSource` (sealed sub-type of `ModelSource`).The processor leaves to the runtime scan any class with a `jakarta.validation.constraints.*` or `javax.validation.constraints.*` annotation on an operation parameter, as it does for the other constructs outside its subset, so the constraints the scan derives (`minimum`, `pattern`, …) reach the document.
+. **`ModelMerger`** — merges the three `ModelSource` instances (sealed: `StaticFileSource`, `ReaderSource`, `AnnotationSource`) into a single `OpenAPI`, with the spec priority annotations > static file > reader (the static file overrides the conflicting elements of the reader model, the annotations those of both).The reader is invoked before the static file is read, and the merge order follows (it was static file, then reader, up to {release-version}); see xref:concepts.adoc#how-the-sources-combine[How the sources combine].
+. **`ConfigApplier`** — applies the configuration overrides on the merged document: `mp.openapi.servers`, `mp.openapi.servers.path.<path>`, `mp.openapi.servers.operation.<operationId>`, and the `mp.openapi.schema.<FQCN>` schema overrides (registered before the scan so that references resolve, applied here).
+. **`FilterInvoker`** — if `mp.openapi.filter` is set, loads the `OASFilter` (CDI lookup or no-arg constructor) and walks it across the tree. The filter is dispatched recursively via a typed visitor that `switch`es on the sealed model types.
+
+The final `OpenAPI` is then stored in **`GrimmModelCache`**: a one-time initialisation guarded by a `ReentrantLock`, published through a `volatile` field.
+
+== Vauban BCE: `GrimmExtension`
+
+The class discovery lives in `io.vidocq.grimm.cdi.GrimmExtension`, a Build Compatible Extension that uses exactly two CDI 4.1 Lite hooks — no `@Synthesis`, no synthetic bean:
+
+[source,java]
+----
+@Discovery
+public void resetForNewDeployment(ScannedClasses classes) {
+    // One container boot = one deployment: drop everything collected
+    // by a previous boot in the same JVM before this deployment's
+    // @Enhancement phase runs.
+}
+
+@Enhancement(types = Object.class, withSubtypes = true)
+public void registerApplicationClass(ClassConfig classConfig) {
+    // Records every application class found by the CDI scanner —
+    // spec §4.4: the annotation scan covers all application classes,
+    // not only @Path resources. Grimm's own classes (io.vidocq.grimm.*)
+    // are skipped so the /openapi endpoint never documents itself.
+}
+----
+
+The recorded class names belong to the extension instance, so to one container. Its `@Synthesis` phase registers a synthetic `ScannedTypes` bean whose parameter lists them, and `ScannedTypesCreator` resolves them in the container, through the application's class loader. The creator also adds every resource class `grimm-processor` described in the application's `META-INF/services/io.vidocq.grimm.spi.gen.OpenApiContribution`: in `annotated` discovery mode a `@Path` class with no bean-defining annotation is not a bean, so the extension never sees it, and its generated description is what puts it in the document. Up to {release-version}, the names lived in a `static` set, shared by every container of the class loader (grimm#22).
+
+`GrimmConfigProducer` `@Produces` the `GrimmConfig` (read from MicroProfile Config). `GrimmModelCache` is a regular `@ApplicationScoped` bean, which takes the `ScannedTypes` through an `Instance` (the synthetic bean only exists once the extension ran) and whose `@PostConstruct` runs the pipeline once; `getDocument()` simply returns the cached reference.
+
+== Threading model
+
+[#virtual-threads]
+=== One-time locking, `volatile` reads
+
+`GrimmModelCache` stores the document in a `volatile` field, initialised once in `@PostConstruct` behind a `ReentrantLock` (double-checked: `initialize()` is idempotent and subsequent calls are no-ops). After that build, `getDocument()` is a single `volatile` read on the fast path — the lock is only re-taken to lazily create an empty skeleton if the cache was never initialised. No `synchronized` anywhere, so a virtual thread never pins its carrier. The BCE guards its discovered-names set the same way, with a `ReentrantLock` held only during the container build phase.
+
+=== Virtual threads for potentially blocking operations
+
+Invoking an application-supplied `OASModelReader` or `OASFilter` may, in theory, trigger blocking calls (file or database reads). When the host runtime (Cassini + Chappe) runs on the default virtual executor (`Executors.newVirtualThreadPerTaskExecutor()`), these invocations inherit the virtual context — Grimm creates no platform-thread pool of its own.
+
+=== No `ThreadLocal`
+
+Per the module's `CLAUDE.md` contract, production code uses no `ThreadLocal` and no `synchronized`. When shared state is needed, `ConcurrentHashMap`, `ScopedValue` or `ReentrantLock` are preferred.
+
+== YAML and JSON serialization
+
+`grimm-core` ships two hand-written serializers (no SnakeYAML, no Jackson):
+
+* `JsonSerializer` — emits raw JSON 2020-12, dependency-free.
+* `YamlSerializer` — emits OpenAPI 3.1-compatible YAML 1.2 with two-space indentation and block scalars for multi-line strings.
+
+Symmetrically, `JsonDeserializer` and `YamlDeserializer` consume the static files.
+
+`OpenApiModelMapper` and `OpenApiValueMapper` translate between the serialised tree and the internal `OpenAPI` model.
+
+== `/openapi` endpoint
+
+`OpenApiResource` is an `@ApplicationScoped` JAX-RS bean in `grimm-cdi-vauban`. Its constructor injects `GrimmModelCache`. The `getOpenApi(format, accept)` method:
+
+. Resolves the format via `?format=` (priority, spec §2.3) then `Accept` (spec §2.2, YAML default).
+. Reads the document from the cache.
+. Serialises it to YAML or JSON depending on the resolved format.
+. Returns a `Response` with the matching `Content-Type`.
+
+No lock is taken; serialisation itself can parallelise safely.
+
+On Cassini, `OpenApiResource` is served by an adapter built with `grimm-cdi-vauban` [.tag-new]#NEW#: the module runs `cassini-processor`, with a compile-only `requires static io.vidocq.cassini.api`. Cassini finds the adapter by name in the resource's package, so building the stack no longer generates it at run time. On another JAX-RS runtime the class is present but never loaded, and the module does not need Cassini.
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — sources, merge, configuration.
+* xref:tck.adoc[TCK] — execution and status.
+* xref:reference.adoc[Reference] — annotations and MP Config keys.

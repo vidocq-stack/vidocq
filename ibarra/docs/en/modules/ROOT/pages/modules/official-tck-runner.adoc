@@ -1,0 +1,57 @@
+= Official TCK runner
+:description: Runner of the official Jakarta Pages 4.0 TCK on the published Arquillian adapter.
+
+`ibarra-tck` is unpublished and enters the reactor only under `-Ptck`.
+`-Ptck,tck-official` additionally resolves the official Pages 4.0.0 suite.
+See xref:tck.adoc[TCK status] for the measured baseline and certification limits.
+
+`ibarra-tck` takes the published `ibarra-arquillian` module at `test` scope, with no
+configuration property set. The adapter (precompilation, modular Foy server, runtime
+isolation and WAR adaptations) is documented in
+xref:modules/arquillian-adapter.adoc[Arquillian adapter]; this page keeps what is
+specific to the Pages TCK.
+
+[source,bash]
+----
+./run-official-tck-pages-4.0.sh smoke
+./run-official-tck-pages-4.0.sh all
+./run-official-tck-pages-4.0.sh -Dtest=ee.jakarta.tck.pages.api.jakarta_servlet.jsp.jspwriter.URLClientIT
+----
+
+The script verifies distribution checksums, preserves the upstream Maven POM,
+installs the non-Central artifacts, clean-installs Ibarra (which runs the adapter
+tests of `ibarra-arquillian`), runs the runner tests with `-Ptck -pl ibarra-tck`,
+and runs the requested official tests. Java 25, Maven 3.9.16 and Python 3 are
+required. Local ZIP overrides and skip switches are documented in
+link:{repo-ibarra}/src/branch/main/ibarra-tck/README.md[the runner README].
+Retained server logs are under `ibarra-tck/target/pages-deployments`, and Surefire
+reports under `ibarra-tck/target/surefire-reports`.
+
+== Test tooling dependencies
+
+The runner uses `ibarra-arquillian` (whose Arquillian container SPI and ShrinkWrap
+dependencies are named on xref:modules/arquillian-adapter.adoc#test-tooling-dependencies[its page]),
+JUnit and the official
+`jakarta.tck:jakarta-pages-tck:4.0.0` jar with its original dependencies,
+including `jakarta.tck:common`, `runtime`, `libutil`, signature tooling,
+Apache HttpClient and `javatest:javatest:5.0`. This last tool is extracted from
+an earlier Eclipse distribution because the Pages 4.0 ZIP omits it.
+Only that tool is used from the older distribution; all tests are Pages 4.0.
+These dependencies are test-only and never enter application artifacts.
+
+== Artifact preparation
+
+`prepare-tck.py` uses Python's standard library and the Maven wrapper. It checks the
+SHA-256 digests of the distributions, preserves the official jar's embedded Maven POM
+and installs the jar and `javatest:javatest:5.0` into the local Maven repository.
+The fingerprints and the `TCK_PAGES_ZIP` / `TCK_JAVATEST_ZIP` overrides are listed in
+link:{repo-ibarra}/src/branch/main/ibarra-tck/README.md[the runner README].
+
+== Official API signature check
+
+The official profile also uses `maven-dependency-plugin` 3.8.1 to stage the
+configured Pages/Servlet/EL API jars for the unchanged API signature driver.
+`sigTestClasspath` contains only those API jars and the driver's extracted
+`java.base` image (`jimage.dir`). Signature expectations are not rewritten;
+this build-side classpath does not change application/host module isolation.
+The `-Ptck` profile alone does not copy these signature resources.

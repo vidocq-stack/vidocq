@@ -1,0 +1,131 @@
+= TCK MicroProfile OpenAPI 4.2
+:description: Status, runner execution, out-of-reactor architecture, documented exclusions.
+
+[.lead]
+The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm's TCK run passes at *367 / 367* on TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot), run on 2026-10-04; the run will be repeated on the 4.2 final. The 367 tests are the 364 tests of the official TCK plus 3 Grimm harness tests (`GrimmTckSmokeTest`, 1 test; `DotNameCompatibilityTest`, 2 tests). For reference, the same run counted 349 tests on the 4.1 TCK (passed 349 / 349 in May 2026). 4.2-RC5 adds 18: `ExternalDocumentationAnnotationTest` (1 method, run once per JSON and YAML format: 2), `SchemaExtensionPropertyTest` (6 plain model tests, run once each: 6), the 4 new `@Digits` methods of `BeanValidationTest` (run once per format: 8) and `testExamplesInHeaders` (run once per format: 2).
+
+== Status
+
+[cols="2,1"]
+|===
+| Metric | Value
+
+| Tests executed
+| 367 (364 official TCK tests + 3 Grimm harness tests)
+
+| Passed
+| 367 ✅
+
+| Failed
+| 0
+
+| Errors
+| 0
+
+| Skipped
+| 0
+|===
+
+Any future regression must be logged in the repository's `TCK.md` with: test name, reason, remediation plan.
+
+== Prerequisites
+
+The `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` artefact is published on Maven Central, like the 4.1 TCK before it: Maven resolves it during the run, with no manual installation.
+
+[source,bash]
+----
+sdk env                              # Java 25 + Maven 3.9.16
+./mvnw -ntp install -DskipTests     # installs grimm-core and grimm-cdi-vauban
+----
+
+== Runner execution
+
+The `run-official-tck-mp-openapi-4.2.sh` script at the repository root drives every variant.
+
+[source,bash]
+----
+# Smoke suite (default) — runs GrimmTckSmokeTest to validate the installation
+./run-official-tck-mp-openapi-4.2.sh
+
+# Full suite — 367 tests: the 364 official TCK tests + 3 Grimm harness tests
+./run-official-tck-mp-openapi-4.2.sh all
+
+# Readiness matrix — runs one test (default PetStoreAppTest) under three profiles:
+#   default-readiness (10 s timeout)
+#   extended-readiness (30 s timeout)
+#   no-readiness-probe
+./run-official-tck-mp-openapi-4.2.sh matrix PetStoreAppTest
+
+# Targeted test via -Dtest=
+./run-official-tck-mp-openapi-4.2.sh -Dtest=AirlinesAppTest
+----
+
+The runner uses Arquillian + TestNG, invoking `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test` after a `clean install` of the reactor, so the harness is always compiled from scratch. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
+
+== Runner architecture
+
+`grimm-tck` is **deliberately outside the reactor**: its `pom.xml` uses standalone `modelVersion 4.0.0`, with no `<parent>`.
+
+[NOTE]
+====
+This detachment is deliberate: it keeps the released runtime decoupled from the official TCK, so a normal build of Grimm never resolves or runs any TCK artifact. The runner has no `<parent>` and is not listed as a module of the root POM; it is run with `./mvnw -f grimm-tck/pom.xml` (or `./run-official-tck-mp-openapi-4.2.sh`).
+====
+
+Stack assembled by the runner:
+
+[cols="1,3"]
+|===
+| Layer | Component
+
+| Spec
+| `microprofile-openapi-api` 4.2 (the build pins `4.2-RC5` until the final reaches Maven Central), `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1
+
+| OpenAPI implementation
+| `grimm-core` + `grimm-cdi-vauban`
+
+| CDI container
+| Vauban (`io.vidocq.vauban.core`), embedded mode
+
+| Arquillian container
+| `GrimmDeployableContainer` — deploys the archive, instantiates the cache bean, exposes `/openapi`
+
+| HTTP transport
+| Chappe (`io.vidocq.chappe.http`) on a random port (`grimm.tck.port=0`)
+
+| Test framework
+| TestNG (upstream constraint — not JUnit)
+|===
+
+== Readiness matrix variants
+
+The readiness probe is parameterisable:
+
+[cols="2,3"]
+|===
+| Profile | Semantics
+
+| `default-readiness`
+| Active wait up to 10 s before running the test requests.
+
+| `extended-readiness`
+| Wait up to 30 s — useful on slow CI machines.
+
+| `no-readiness-probe`
+| Runs the test immediately without waiting — surfaces startup regressions.
+|===
+
+== Documented exclusions
+
+None to date: the full suite runs and passes at 367/367. Should an exclusion ever be added, it would be declared as a Surefire exclusion in `grimm-tck/pom.xml` and tracked in `TCK.md`.
+
+== Quality contract
+
+Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 367/367 score before merge. A TCK regression is a CI blocker: the PR does not pass.
+
+Every pull request runs the full suite. The root `pom.xml` declares it in `ci.tck.command`, which the shared `pr-validate` workflow runs once the reactor is installed at the pull request's version: `mvn -f grimm-tck/pom.xml -Ptck-official test`, with `grimm.version` set to that version, since `grimm-tck` is outside the reactor and would otherwise test the published snapshot. A single failing test fails the check. The suite takes under a minute on a fresh runner. A pull request that changes only documentation skips it.
+
+== Further reading
+
+* xref:internals.adoc[Internals] — understand what the TCK validates.
+* xref:reference.adoc[Reference] — annotations and keys exercised by the tests.
+* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.

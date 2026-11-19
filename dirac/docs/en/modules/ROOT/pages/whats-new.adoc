@@ -1,0 +1,24 @@
+= What's new
+:description: Everything that changed in this component since the 0.3.0 release, release candidate by release candidate.
+
+[.lead]
+Everything that landed in this component since the 0.3.0 release, newest first: <<rc2,Added in 0.4.0-RC2>>, <<rc1,Brought by 0.4.0-RC1>>. The documentation of the earlier release candidates is no longer published, so their entries are kept here. Every entry links to the section that documents it, and the [.tag-new]#NEW# badges on those pages mark what 0.4.0-RC2 added. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them.
+
+// cumulative what's new
+
+[#rc2]
+== Added in 0.4.0-RC2 (since 0.4.0-RC1)
+
+* xref:internals.adoc#generated-code[Generated code and reflective fallback] — one table lists what Dirac generates at build (the `$$DiracMetrics` companions, what its extension records), what uses it at run time and what runs when it is missing, followed by when the annotation scan still runs.
+* xref:internals.adoc[Metrics registered once when the extension runs twice] — when `DiracExtension` runs at build time (the Vidocq Metrics codegen bundle) and again when the container starts, the metrics of both runs are registered once, instead of the start-up failing on two `DiscoveredMetrics` beans (DRC-008).
+
+[#rc1]
+== Brought by 0.4.0-RC1 (since 0.3.0)
+
+=== CDI containers other than Vauban
+
+* **Explicit bean archives** — `dirac-cdi-vauban` and `dirac-rest` now ship a `META-INF/beans.xml` (`bean-discovery-mode="annotated"`) (DRC-003, dirac#23). `0.3.0` shipped none, so the jars were implicit bean archives: Weld SE, which does not scan those by default, saw neither the `@Counted` / `@Timed` interceptors nor the `MetricRegistry` producer nor the `GET /metrics` resource, and metrics silently stayed empty. Nothing changes under Vauban. xref:reference.adoc#bean-archives[Bean archives].
+* **Proven on Weld and Open Liberty** — two new test modules run the Dirac jars, unchanged, without Vauban: `dirac-it-weld` on Weld SE 6.0 (class path, plus two containers in one JVM) and `dirac-it-openliberty` as a WAR on Open Liberty 26.0.0.10 (MicroProfile 7, CDI 4.0) with Liberty's own `mpMetrics` off. Neither is published (dirac#23). xref:reference.adoc#other-containers[Other CDI containers].
+* **`vauban-api` is now a runtime dependency** of `dirac-cdi-vauban` and `dirac-rest` — it was `provided`, so outside Vauban the registry producer, the gauge registration and the `/metrics` resource could not be loaded, and the deployment failed (DRC-004). It no longer brings the CDI API: an application that compiled against CDI through Dirac alone now declares `jakarta.enterprise.cdi-api` itself (the Vidocq runtime is not affected). xref:reference.adoc#other-containers[Other CDI containers].
+* **Two containers keep their metrics apart** — the metrics `DiracExtension` discovers used to live in `static` sets, shared by every container of the class loader: two applications starting together on one server could register each other's gauges. They now belong to each container (DRC-005). xref:internals.adoc[Internals].
+* **Open Liberty can deploy an application with Dirac** — the extension also visits the server's own beans there, and reported every one it could not load as an error, which failed the deployment. Those classes are now skipped (DRC-006). xref:reference.adoc#other-containers[Other CDI containers].

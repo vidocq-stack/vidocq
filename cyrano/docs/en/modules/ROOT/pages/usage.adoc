@@ -1,0 +1,255 @@
+= Usage
+:description: MicroProfile Rest Client patterns supported by Cyrano — parameters, headers, async, exception mapping, providers, BeanParam, context propagation.
+
+[.lead]
+This page covers the common usage patterns for a Cyrano-typed REST client. All examples compile and execute against a `java.net.http.HttpClient` endpoint; the interface proxy is generated at compile time by the `cyrano-processor` annotation processor (`<Interface>$$CyranoClient`), with runtime Class-File API generation kept strictly as fallback for interfaces compiled without the processor.
+
+== HTTP methods
+
+Eight verb forms are supported: the seven standard JAX-RS annotations — `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS` — plus any custom verb whose annotation is meta-annotated with `@jakarta.ws.rs.HttpMethod`:
+
+[source,java]
+----
+@RegisterRestClient(configKey = "blog-api")
+@Path("/posts")
+public interface BlogClient {
+
+    @GET
+    List<Post> list();
+
+    @GET
+    @Path("/{id}")
+    Post get(@PathParam("id") long id);
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    Post create(Post body);
+
+    @PUT
+    @Path("/{id}")
+    Post replace(@PathParam("id") long id, Post body);
+
+    @PATCH
+    @Path("/{id}")
+    Post update(@PathParam("id") long id, Post body);
+
+    @DELETE
+    @Path("/{id}")
+    void delete(@PathParam("id") long id);
+
+    @HEAD
+    @Path("/{id}")
+    Response head(@PathParam("id") long id);
+
+    @OPTIONS
+    Response options();
+}
+----
+
+== Parameters
+
+[cols="2,3"]
+|===
+| Annotation | Client-side semantics
+
+| `@PathParam("id")`
+| Replaces `\{id}` in the path template.
+
+| `@QueryParam("limit")`
+| Appends `?limit=...` to the URL.
+
+| `@HeaderParam("X-API-Key")`
+| Adds an HTTP header whose value is computed at runtime.
+
+| `@CookieParam("session")`
+| Adds an HTTP cookie.
+
+| `@MatrixParam("color")`
+| Adds a matrix parameter (`;color=red`).
+
+| `@FormParam("name")`
+| Adds a field to an `application/x-www-form-urlencoded` body.
+
+| `@DefaultValue("0")`
+| Fallback value when the argument is `null`.
+
+| `@BeanParam`
+| Aggregates several parameters into one object (`record` recommended).
+|===
+
+`@BeanParam` example:
+
+[source,java]
+----
+public record SearchFilters(
+    @QueryParam("q") String query,
+    @QueryParam("limit") @DefaultValue("20") int limit,
+    @HeaderParam("X-Trace") String trace
+) {}
+
+@GET
+@Path("/search")
+List<Post> search(@BeanParam SearchFilters filters);
+----
+
+== Static and dynamic headers
+
+`@ClientHeaderParam` lets you attach a header **without passing it as a parameter** to every call. Literal value or `default` method:
+
+[source,java]
+----
+@RegisterRestClient(configKey = "blog-api")
+@ClientHeaderParam(name = "User-Agent", value = "cyrano/0.1")
+public interface BlogClient {
+
+    @GET
+    @ClientHeaderParam(name = "X-Request-Id", value = "{newRequestId}")
+    List<Post> list();
+
+    default String newRequestId() {
+        return java.util.UUID.randomUUID().toString();
+    }
+}
+----
+
+`@RegisterClientHeaders` attaches a `ClientHeadersFactory` that can read the inbound request's headers — useful to propagate `Authorization`, `X-Forwarded-For`, etc.
+
+== JSON serialisation
+
+Common Java types are serialised/deserialised through Jakarta JSON-B (impl xref:champollion::index.adoc[Champollion]):
+
+* Records, POJOs, classes annotated with `@JsonbProperty`.
+* `Optional<T>`, `List<T>`, `Set<T>`, `Map<K,V>`.
+* Primitive types and their wrappers, `String`, `BigDecimal`, `LocalDate`, `Instant`.
+* `jakarta.ws.rs.core.Response` — access to status and raw headers.
+
+Remember to add `opens com.example.dto to jakarta.json.bind;` in the `module-info.java` of the module that contains the DTOs.
+
+[#async]
+== Async — `CompletionStage<T>`
+
+A `CompletionStage<T>` return triggers `HttpClient.sendAsync`. The `CompletionStage` is completed on a virtual thread.
+
+The response — response filters, readers, `AsyncInvocationInterceptor.applyContext` — is processed on a new virtual thread for each call, or on the builder's `executorService(...)` when one is set, and never on the thread that called the method, even when the response is already there when the call returns (a fast local server, or a request a filter aborts with `abortWith`). Up to {release-version}, such a response was processed on the caller's thread.
+
+[source,java]
+----
+@GET
+CompletionStage<List<UserDto>> listUsersAsync();
+
+CompletionStage<Greeting> chained = client.listUsersAsync()
+    .thenApply(users -> users.size())
+    .thenApply(n -> new Greeting("Found " + n + " users"));
+----
+
+No configuration is required — the internal `HttpClient` is already built with `Executors.newVirtualThreadPerTaskExecutor()`.
+
+== Exception mapping
+
+By default, any HTTP status ≥ 400 is converted into `jakarta.ws.rs.WebApplicationException` (spec §8, priority 1). To map finer-grained, implement `ResponseExceptionMapper`:
+
+[source,java]
+----
+public class NotFoundMapper implements ResponseExceptionMapper<UserNotFound> {
+
+    @Override
+    public boolean handles(int status, jakarta.ws.rs.core.MultivaluedMap<String, Object> headers) {
+        return status == 404;
+    }
+
+    @Override
+    public UserNotFound toThrowable(jakarta.ws.rs.core.Response response) {
+        return new UserNotFound("User not found");
+    }
+
+    @Override
+    public int getPriority() {
+        return 100; // < 1 (default) — wins over WebApplicationException
+    }
+}
+----
+
+Registration:
+
+[source,java]
+----
+@RegisterRestClient(configKey = "users-api")
+@RegisterProvider(NotFoundMapper.class)
+public interface UsersClient { /* ... */ }
+----
+
+or via the builder:
+
+[source,java]
+----
+RestClientBuilder.newBuilder()
+    .register(NotFoundMapper.class)
+    .build(UsersClient.class);
+----
+
+== Request/response filters
+
+For logging, attaching global headers, measuring latency — use the JAX-RS `ClientRequestFilter` and `ClientResponseFilter`:
+
+[source,java]
+----
+public class LoggingRequestFilter implements ClientRequestFilter {
+
+    @Override
+    public void filter(ClientRequestContext ctx) {
+        System.out.println(">>> " + ctx.getMethod() + " " + ctx.getUri());
+    }
+}
+----
+
+Registration is identical to exception mappers (`@RegisterProvider` or `register(...)`).
+
+[#programmatic-builder]
+== Programmatic builder
+
+Without CDI or for dynamic cases (URL resolved at runtime, conditional providers):
+
+[source,java]
+----
+RestClientBuilder builder = RestClientBuilder.newBuilder()
+    .baseUri(URI.create(System.getenv("BLOG_API_URL")))
+    .connectTimeout(2, TimeUnit.SECONDS)
+    .readTimeout(5, TimeUnit.SECONDS)
+    .register(LoggingRequestFilter.class)
+    .register(NotFoundMapper.class);
+
+BlogClient blog = builder.build(BlogClient.class);
+----
+
+[#listeners]
+=== Builder and client listeners
+
+The two listener SPIs of the specification are looked up with `ServiceLoader`, and work on the module path: a module provides them with `provides org.eclipse.microprofile.rest.client.spi.RestClientBuilderListener with ...` or `provides org.eclipse.microprofile.rest.client.spi.RestClientListener with ...`, and Cyrano's descriptors declare the matching `uses`.
+
+* `RestClientBuilderListener.onNewBuilder` runs **once per builder**, when `RestClientBuilder.newBuilder()` creates it — never from `build()`. Up to {release-version} it ran up to three times for one builder.
+* `RestClientListener.onNewClient` runs once per `build()`, as before.
+
+Before these `uses` were declared, `RestClientBuilder.newBuilder()` threw `ServiceConfigurationError` on the module path, and so did `@Inject @RestClient`, which goes through it.
+
+== Configuration through MP Config
+
+Everything (URL, timeouts, providers, CDI scope, follow redirects, query param style) can be overridden without touching the code:
+
+[source,properties]
+----
+blog-api/mp-rest/url=https://staging.example.com
+blog-api/mp-rest/connectTimeout=2000
+blog-api/mp-rest/readTimeout=5000
+blog-api/mp-rest/scope=jakarta.enterprise.context.ApplicationScoped
+blog-api/mp-rest/providers=com.example.LoggingRequestFilter,com.example.NotFoundMapper
+blog-api/mp-rest/followRedirects=true
+blog-api/mp-rest/queryParamStyle=COMMA_SEPARATED
+----
+
+See xref:reference.adoc#mp-config[the complete list] of supported keys.
+
+== Vidocq Runtime integration
+
+In a complete Vidocq runtime, the `vidocq-runtime-cyrano-rest-client-extension` wrapper declares the Cyrano module as a **side-effect-free runtime extension**: `@RestClient` synthetic beans become available as soon as the application starts, and MP Config resolution is wired through xref:ravel::index.adoc[Ravel] without additional configuration.
+
+To publish on the server side the interface consumed by the client, see xref:cassini::index.adoc[Cassini] — the same `@Path("/users")` can act as a shared contract.

@@ -1,0 +1,427 @@
+= Reference
+:description: Java modules, Maven artifacts, OTEL_* configuration keys, applied semantic conventions.
+
+[.lead]
+This page consolidates Humboldt's public surface: artifacts to declare, exported Java modules, configuration keys recognized by `HumboldtAutoConfigure`, and OTel semantic conventions applied by the automatic filters.
+
+== Maven artifacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.humboldt`
+| `humboldt-api`
+| Public façade and stable SPI (`io.vidocq.humboldt.spi.*`).
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-common`
+| `Resource`, `Clock`, `IdGenerator`, `Attributes`.
+
+| `io.vidocq.humboldt`
+| `humboldt-context`
+| `ContextStorageProvider` SPI used by `Context.current()`.
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-trace`
+| `SdkTracerProvider`, samplers, processors, `BatchSpanProcessor`.
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-metric`
+| `SdkMeterProvider`, sync and async instruments, `PeriodicMetricReader`.
+
+| `io.vidocq.humboldt`
+| `humboldt-sdk-log`
+| `SdkLoggerProvider`, `LogRecordProcessor`, batch.
+
+| `io.vidocq.humboldt`
+| `humboldt-propagator-w3c`
+| `W3CPropagators.get()` facade composing TraceContext + Baggage.
+
+| `io.vidocq.humboldt`
+| `humboldt-exporter-otlp-http`
+| OTLP/HTTP exporter (JSON encoding only — no protobuf) via `java.net.http.HttpClient`.
+
+| `io.vidocq.humboldt`
+| `humboldt-cdi`
+| `WithSpanInterceptor`, Tracer/Meter/Logger producers.
+
+| `io.vidocq.humboldt`
+| `humboldt-rest`
+| JAX-RS filters `HumboldtServerRequestFilter` / `ResponseFilter`.
+
+| `io.vidocq.humboldt`
+| `humboldt-runtime`
+| Aggregator, `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
+
+| `io.vidocq.humboldt`
+| `humboldt-otel-api`
+| Java Modules re-bundle of `io.opentelemetry:opentelemetry-api` (named module).
+
+| `io.vidocq.humboldt`
+| `humboldt-otel-context`
+| Java Modules re-bundle of `io.opentelemetry:opentelemetry-context`.
+
+| `io.vidocq.humboldt`
+| `humboldt-otel-instrumentation-annotations`
+| Java Modules re-bundle of `opentelemetry-instrumentation-annotations`.
+
+| `io.vidocq.humboldt`
+| `humboldt-otel-interop`
+| Optional bridge to the OTel SDK autoconfigure SPI: discovers `Configurable*Provider` / `ResourceProvider` / `AutoConfigurationCustomizerProvider` implementations via `ServiceLoader` and wires them into the Humboldt SDK. The OTel SDK artifacts stay provided-scope — supplied by the consumer, never bundled.
+
+| `io.vidocq.humboldt`
+| `humboldt-tck`
+| Official MicroProfile Telemetry 2.2 TCK runner — in-reactor, gated by the `tck` Maven profile. Do not declare as an application dependency.
+|===
+
+All versions are `{project-version}`.
+
+[#java-modules]
+== Java modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `io.vidocq.humboldt.api`
+| `io.vidocq.humboldt.spi.*` (public SPI: `SpanExporterProvider`, `MetricReaderProvider`, `LogRecordExporterProvider`, `SamplerProvider`, `ResourceProvider`).
+
+| `io.vidocq.humboldt.sdk.common`
+| `Resource`, `Clock`, `IdGenerator` (Random128).
+
+| `io.vidocq.humboldt.context`
+| `HumboldtContextStorageProvider`, `HumboldtContextStorage`: the current `Context` is held in a `ThreadLocal<Context>`. A `ScopedValue` storage is a post-MVP option, not implemented (see xref:internals.adoc#_context_storage_threadlocal_vs_scopedvalue[Context storage]).
+
+| `io.vidocq.humboldt.sdk.trace`
+| `SdkTracerProvider`, `SdkSpan`, `Sampler` (AlwaysOn/Off, TraceIdRatioBased, ParentBased), `SpanProcessor` (Simple, Batch).
+
+| `io.vidocq.humboldt.sdk.metric`
+| `SdkMeterProvider`, instruments (`LongCounter`, `DoubleHistogram`, async `Gauge`), `PeriodicMetricReader`, views.
+
+| `io.vidocq.humboldt.sdk.log`
+| `SdkLoggerProvider`, `SdkLogger`, `SdkLogRecordBuilder`, Simple + Batch processors.
+
+| `io.vidocq.humboldt.propagator.w3c`
+| `W3CPropagators.get()` — composite TraceContext + Baggage.
+
+| `io.vidocq.humboldt.exporter.otlp.http`
+| `OtlpHttpSpanExporter`, `OtlpHttpMetricExporter`, `OtlpHttpLogExporter`, exponential retry. The OTLP/JSON encoders (`OtlpJsonEncoder` and friends) live in the non-exported `...otlp.http.internal` package.
+
+| `io.vidocq.humboldt.cdi`
+| `@WithSpan` annotation (re-exported), `WithSpanInterceptor`, `HumboldtBuildCompatibleExtension`, Tracer/Meter/Logger producers.
+
+| `io.vidocq.humboldt.rest`
+| `HumboldtServerRequestFilter`, `HumboldtServerResponseFilter` (JAX-RS `@Provider`). Reads the MicroProfile Rest Client API through `requires static io.vidocq.cyrano.mp.rest.client.api`, the module Vidocq ships (`io.vidocq.cyrano:cyrano-mp-rest-client-api`), for `HumboldtMpRestClientListener`; it no longer names the automatic module `microprofile.rest.client.api`.
+
+| `io.vidocq.humboldt.runtime`
+| `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
+
+| `io.vidocq.humboldt.otel.interop`
+| `OtelSpiAutoConfiguration` — ServiceLoader discovery of OTel SDK autoconfigure SPI providers (exporters, samplers, propagators, resources) supplied by the consumer.
+
+| `io.opentelemetry.api`, `io.opentelemetry.context`, `io.opentelemetry.instrumentation_annotations`
+| Java modules of the public OTel artifacts, rebundled with explicit `module-info`.
+|===
+
+[#otel-jars-on-the-module-path]
+Upstream, the OpenTelemetry jars are automatic modules, which export every package. The rebundled modules differ in three ways, so that the OpenTelemetry SDK and OTLP exporter jars can run next to them on the module path:
+
+* Packages that are not API but that the OpenTelemetry jars use across jars are exported, each only to the OpenTelemetry 1.67 stable modules whose classes reference it (found with `jdeps`; the lists are in the two `src/main/moditect/module-info.java` descriptors): `io.opentelemetry.api.internal`, `io.opentelemetry.api.impl` and `io.opentelemetry.api.trace.propagation.internal` from `io.opentelemetry.api`, `io.opentelemetry.context.internal.shaded` from `io.opentelemetry.context`.
+* A qualified export reaches only target modules of the same module layer or of a parent layer. When `humboldt-otel-interop` discovers an OpenTelemetry provider defined in another layer (a child layer of Humboldt's modules, for instance), the two modules add the exports their descriptors name to the modules of that layer, at run time. An OpenTelemetry component that the application builds itself, outside that discovery, does not get them. Limitation: when `humboldt-otel-interop` itself sits in a child layer of `io.opentelemetry.api` / `io.opentelemetry.context`, it cannot call the layer helper (the package is exported to the interop module by name, which reaches only the same layer or a parent layer). The provider is still kept, but its layer's exports are not extended and the exporter can later fail with an `IllegalAccessError`; keep interop in the same layer as the two API modules (as the Vidocq runtime does), or add the `--add-exports` by hand.
+* `io.opentelemetry.context` ships Humboldt's own `io.opentelemetry.common.ServiceLoaderComponentLoader`, the default `ComponentLoader`: it adds the `uses` of a service to the module before loading it, so an exporter finds its sender and its compressor.
+
+A module-layer test checks the result with `opentelemetry-exporter-otlp` 1.67 and the JDK sender: a span, a metric and a log record are exported (to a closed port, the only failure being the connection), with the exporter in the same layer as Humboldt's modules and in a child layer. The other modules of the lists (the OkHttp sender, the Jaeger remote sampler, ...) rest on `jdeps` only. An artifact that is not in the lists, such as an incubating (`-alpha`) one, must be given `--add-exports <module>/<package>=<consumer>` for each package it uses, where `<module>` is the Humboldt module that holds the package: `io.opentelemetry.api` for the `io.opentelemetry.api.*` packages, `io.opentelemetry.context` for `io.opentelemetry.context.internal.shaded` and `io.opentelemetry.common.impl` (`opentelemetry-common` is shaded into `humboldt-otel-context`). For 1.66.0-alpha, `opentelemetry-sdk-extension-incubator` uses `io.opentelemetry.context.internal.shaded` and `opentelemetry-api-incubator` uses `io.opentelemetry.common.impl`. The option applies to the boot layer only.
+
+`io.vidocq.humboldt.internal.*` packages are never exported. Any direct access fails with a clear Java Modules crash.
+
+[#bean-archives]
+=== Bean archives
+
+`humboldt-cdi` and `humboldt-rest` are explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the `@WithSpan` interceptor, the telemetry producers (`Tracer`, `Meter`, `Span`, ...), the server request and response filters and the span finalizer. Without it, `@WithSpan` did nothing there, and no error was reported (BUG-20261009-01).
+
+[#other-containers]
+=== Other CDI containers
+
+Humboldt does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `humboldt-it-other-containers`, prove it on every build (humboldt#23):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `humboldt-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: a `@WithSpan` method opens a span with its `@SpanAttribute`, the injected `Span` is the current one, the injected `Tracer` records spans, and the produced `OpenTelemetry` is the installed one.
+
+| `humboldt-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, MicroProfile Rest Client 4.0), with Liberty's `mpTelemetry` feature off: a request produces a SERVER span, a MicroProfile Rest Client call carries the trace context to the callee, a `WebApplicationException` keeps its status, and an exception escaping a resource is recorded on its SERVER span.
+|===
+
+Neither module is published. What it takes:
+
+* **Install the SDK once.** Under Vidocq the Telemetry extension builds the SDK and sets it as `GlobalOpenTelemetry`. Elsewhere nothing does, and the API stays a no-op: `@WithSpan` runs, but no span is recorded. Install it when the application starts, with the same `OTEL_*` keys as under Vidocq. MicroProfile Telemetry keeps the SDK off unless `OTEL_SDK_DISABLED` is `false`:
++
+[source,java]
+----
+@ApplicationScoped
+public class TelemetryBootstrap {
+
+    void install(@Observes @Initialized(ApplicationScoped.class) Object started) {
+        GlobalOpenTelemetry.set(HumboldtAutoConfigure.configure(EnvConfig.system())); // humboldt-runtime
+    }
+}
+----
+* **`vauban-api` is a runtime dependency** of `humboldt-cdi`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into the normal-scoped `HumboldtTelemetryProducers`; a container that cannot load that type cannot load the class, and Weld drops the producers with an INFO message (`WELD-000119`), then fails on the first injected `Tracer` or `Span` (BUG-20261010-01). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban.
+* **The Jakarta APIs come from the container** — CDI, Annotation and Jakarta REST are `provided` in `humboldt-cdi` and `humboldt-rest`. The Vidocq Telemetry extension brings Jakarta REST itself, so an application with no REST endpoint still starts.
+* **The span finalizer only records the exception.** `HumboldtSpanFinalizer`, an `ExceptionMapper<Throwable>`, records an exception escaping a resource on the current SERVER span and answers 500; the response filter ends the span. A `WebApplicationException` keeps its own response. It used to inject `ContainerRequestContext`, which Jakarta REST does not make injectable into a provider, and to answer 500 for everything: on RESTEasy every application exception, even a 404, became an internal error (BUG-20261010-02).
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own telemetry off** — `mpTelemetry` on Open Liberty, the OpenTelemetry subsystem elsewhere. The WAR carries Humboldt's repackaged OpenTelemetry API (`humboldt-otel-api`, `humboldt-otel-context`); a server that also exposes its own `io.opentelemetry` API to applications gives you two copies and two SDKs.
+* **The MicroProfile Rest Client API is `provided`** in `humboldt-rest`: enable the server's Rest Client feature (`mpRestClient-4.0` on Open Liberty) for client spans, or leave `humboldt-rest`'s `RestClientListener` unused.
+* **Nothing else to exclude** — the Jakarta APIs are `provided`. `humboldt-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== Configuration keys
+
+Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent system properties (`SCREAMING_SNAKE_CASE` → `lower.dot.case`). Env vars take priority.
+
+=== SDK gate
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_SDK_DISABLED` / `otel.sdk.disabled`
+| **`true`**
+| Per MP Telemetry 2.2 the SDK is **disabled by default**: the OTel API stays usable but nothing is exported. Set explicitly to `false` to enable telemetry.
+|===
+
+=== Service identification
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_SERVICE_NAME` / `otel.service.name`
+| `humboldt`
+| `service.name` attribute of the `Resource`.
+
+| `OTEL_RESOURCE_ATTRIBUTES` / `otel.resource.attributes`
+| _(empty)_
+| `key1=value1,key2=value2` list merged into the `Resource`.
+|===
+
+=== Exporter per signal
+
+[cols="2,1,2"]
+|===
+| Key | Default | Values
+
+| `OTEL_TRACES_EXPORTER`
+| `otlp`
+| `otlp`, `none`, `in-memory`, `logging`
+
+| `OTEL_METRICS_EXPORTER`
+| `otlp`
+| `otlp`, `none`, `in-memory`, `logging`
+
+| `OTEL_LOGS_EXPORTER`
+| `otlp`
+| `otlp`, `none`, `in-memory`, `logging`
+|===
+
+[[exporter-defaults]]An exporter key left unset is `otlp` [.tag-new]#NEW#, through the OpenTelemetry SPI discovery too: setting `OTEL_EXPORTER_OTLP_ENDPOINT` (and enabling the SDK) is enough to export the three signals. Until now the discovery set the unset keys to `none`, and nothing was exported unless the three keys were named. A bridged OpenTelemetry exporter (`OTEL_TRACES_EXPORTER=in-memory` from an SPI provider, as the TCK does) still replaces Humboldt's own.
+
+=== OTLP HTTP endpoint
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_EXPORTER_OTLP_ENDPOINT`
+| `http://localhost:4318`
+| Common endpoint (suffix `/v1/traces` etc. added automatically).
+
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
+| _(inherited)_
+| Traces override.
+
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
+| _(inherited)_
+| Metrics override.
+
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`
+| _(inherited)_
+| Logs override.
+
+| `OTEL_EXPORTER_OTLP_HEADERS`
+| _(empty)_
+| Comma-separated HTTP headers `key1=value1,key2=value2`.
+
+| `OTEL_EXPORTER_OTLP_TIMEOUT`
+| _(not read)_
+| Not read by Humboldt — the request timeout is the exporter-builder default (10 s).
+
+| `OTEL_EXPORTER_OTLP_PROTOCOL`
+| _(not read)_
+| **Not read** — the exporter always sends OTLP/HTTP with JSON encoding; there is no protobuf variant to switch to.
+|===
+
+[[checkpoint-restore]]
+=== Checkpoint and restore (CRaC) [.tag-new]#NEW#
+
+Each OTLP exporter keeps its connections to the collector in the pool of a JDK `HttpClient`, and a CRaC checkpoint
+refuses a process with an open socket. `AutoConfiguredHumboldt.release()` exports what the processors and the metric
+readers hold, waits for the requests in flight, then closes the client of each OTLP exporter; `reopen()` builds new
+ones after the restore. The providers, processors and exporters stay the same objects, so an application or an
+instrumentation that holds them keeps working. Between `release()` and `reopen()` an export fails at once and its data
+is dropped, with a warning. The exporters implement `io.vidocq.humboldt.sdk.common.Releasable`, for an application that
+assembles them itself. Under Vidocq, the Telemetry extension calls both around the checkpoint.
+
+=== Sampling
+
+[cols="2,1,2"]
+|===
+| Key | Default | Values
+
+| `OTEL_TRACES_SAMPLER`
+| `parentbased_always_on`
+| `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`
+
+| `OTEL_TRACES_SAMPLER_ARG`
+| `1.0`
+| Ratio for `traceidratio` (0.0 to 1.0).
+|===
+
+=== Metric reading
+
+[cols="2,1,2"]
+|===
+| Key | Default | Effect
+
+| `OTEL_METRIC_EXPORT_INTERVAL`
+| `60000` ms (`in-memory` = `60min`)
+| Period of `PeriodicMetricReader`.
+
+| `OTEL_METRIC_EXPORT_TIMEOUT`
+| _(not read)_
+| Not read by Humboldt.
+|===
+
+=== MicroProfile Telemetry keys
+
+The runtime reads **no** `mp.telemetry.*` key: enabling/disabling goes through `OTEL_SDK_DISABLED` (see the SDK gate above), and propagators default to W3C TraceContext + Baggage. The single exception lives in the optional `humboldt-otel-interop` bridge, whose SPI autoconfiguration accepts `mp.telemetry.propagators` as an alias of `otel.propagators` (MP Telemetry §3.3).
+
+[[context-debug]]
+=== Context diagnostics [.tag-new]#NEW#
+
+[cols="2,1,3",options="header"]
+|===
+| System property | Default | Effect
+
+| `humboldt.context.debug`
+| `false`
+| Records, for every attach of a context, the stack it was made from, and adds the stacks to the `Context attach/detach order mismatch` warning: the stack of the detach, and, as a suppressed exception, the stack of the attach that was found current and never closed.
+|===
+
+The warning is logged when a scope is closed while another context, attached after it, is still current on the thread; the storage restores the context that preceded the scope, so nothing fails. Without the property the warning names the two spans only. The recording costs one exception per attach, so leave it off in production. A client span is no longer a cause: the CLIENT filter does not hold a scope across the call, and a call that gets no response (timeout, connection error, shutdown) leaves the calling thread's context as it found it.
+
+== Applied semantic conventions
+
+`humboldt-rest` applies the OpenTelemetry HTTP semantic conventions automatically on the server side. It does not depend on `opentelemetry-semconv`: the attribute names are written in its code, against conventions 1.27. The REST tests of the official MicroProfile Telemetry 2.2-RC3 TCK check them, with `opentelemetry-semconv` 1.44.0 in the runner, and pass:
+
+[cols="2,3"]
+|===
+| Attribute | Source
+
+| `http.request.method`
+| `ContainerRequestContext.getMethod()`
+
+| `url.path`
+| `getUriInfo().getPath()` normalized to `/`
+
+| `url.scheme`
+| `getUriInfo().getRequestUri().getScheme()`
+
+| `http.response.status_code`
+| `ContainerResponseContext.getStatus()` (long)
+
+| `error.type`
+| Added to the `http.server.request.duration` histogram attributes when `status_code ≥ 400` (the status code as a string — OTel SemConv 1.27+ §HTTP).
+
+| span status `ERROR`
+| Set on the server span only when `status_code ≥ 500` (4xx leaves the span status `UNSET` — OTel HTTP convention).
+|===
+
+For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate them automatically: set them in application code (either as plain `AttributeKey`s, or with the constants from `opentelemetry-semconv` — an artifact Humboldt itself does not ship). Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
+
+[#exception-attributes]
+== Exception attributes
+
+`Span.recordException(Throwable)` and the log API's `LogRecordBuilder.setException(Throwable)` derive the same attributes, as the OpenTelemetry SDK 1.66 does:
+
+[cols="2,3"]
+|===
+| Attribute | Value
+
+| `exception.type`
+| The exception's canonical class name (`com.acme.Outer.Nested`, not the binary name `com.acme.Outer$Nested`). A class without a canonical name (anonymous or local) falls back to its binary name, where the OpenTelemetry SDK leaves the attribute out.
+
+| `exception.message`
+| `Throwable.getMessage()`, when not `null`.
+
+| `exception.stacktrace`
+| The printed stack trace.
+|===
+
+On a span, the additional attributes passed to `recordException(Throwable, Attributes)` are applied last and override the derived ones. On a log record, an attribute already set on the builder under one of these keys is kept. `@WithSpan` records the exception a method throws through `recordException` (see xref:usage.adoc#with-span[Instrument a method with `@WithSpan`]); the JUL bridge passes the exception of a JUL record to `setException` (see xref:usage.adoc#log-record-content[What a log record carries]).
+
+== Registered propagators
+
+`AutoConfiguredHumboldt.getPropagators()` returns by default a composite `TextMapPropagator`:
+
+. `W3CTraceContextPropagator` — headers `traceparent`, `tracestate`.
+. `W3CBaggagePropagator` — header `baggage`.
+
+No B3 by default. With the optional `humboldt-otel-interop` bridge on the module path, `otel.propagators` (alias `mp.telemetry.propagators`) can select `tracecontext`, `baggage`, `b3`, `b3multi`, `jaeger`, or any propagator discovered through the OTel `ConfigurablePropagatorProvider` SPI.
+
+== Outputs and formats
+
+[cols="2,3"]
+|===
+| Exporter | Output
+
+| `otlp`
+| OTLP/HTTP POST, JSON encoding — always; `OTEL_EXPORTER_OTLP_PROTOCOL` is not read and there is no protobuf encoder.
+
+| `in-memory`
+| `InMemorySpanExporter` / `InMemoryMetricExporter` / `InMemoryLogRecordExporter` buffers — used by tests, accessible via the `AutoConfiguredHumboldt` accessors.
+
+| `logging`
+| `System.getLogger(...).log()` human-readable format.
+
+| `none`
+| No processor registered — signal disabled.
+|===
+
+[#otlp-json-encoding]
+=== OTLP/JSON encoding
+
+The `otlp` exporter follows the OTLP JSON encoding, as the OpenTelemetry Java 1.66 JSON marshalers do:
+
+* **Metrics** — sums and gauges carry their long points as `asInt` (a JSON string) and their double points as `asDouble`, so double counters, double up-down counters and double gauges are exported with their data points. A synchronous gauge (`InstrumentType.GAUGE`) is exported as a gauge, like an observable one.
+* **Non-finite doubles** — `NaN`, `+∞` and `-∞` are written as the strings `"NaN"`, `"Infinity"` and `"-Infinity"`, in attributes (plain, in arrays, nested in a `Value`), double points and histogram `sum`/`min`/`max`, since JSON has no literal for them.
+* **Complex attributes** — an attribute set through `setAttribute(String, Value)` on a span or a log record is encoded recursively: scalars as `stringValue`/`boolValue`/`intValue`/`doubleValue`, arrays as `arrayValue`, maps as `kvlistValue`, bytes as base64 `bytesValue`, and an empty value as an `AnyValue` with no field set.
+* **Log records** — structured bodies are encoded as `AnyValue`, and the event name as the `eventName` field (see xref:usage.adoc#log-record-content[What a log record carries]).
+* **A metric batch that cannot be encoded fails** — a data point that does not match its metric (a histogram point in a sum or a gauge, a number point in a histogram) or an instrument type with no OTLP encoding makes the batch fail instead of being dropped silently. The exporter sends nothing, returns a failed `CompletableResultCode`, and logs the first such batch at `WARNING` with the metric, its instrument type and the point type. `humboldt-sdk-metric` never produces such data; a `MetricData` built elsewhere may.
+
+[#compatibility]
+== Compatibility
+
+* Java 25 LTS minimum (compile and runtime).
+* [.tag-new]#NEW# OpenTelemetry API and context 1.67.0, `opentelemetry-instrumentation-annotations` 2.31.1, repackaged in the `humboldt-otel-*` artifacts. OpenTelemetry SDK, autoconfigure SPI and exporter jars you supply next to `humboldt-otel-interop` belong to the same 1.66 line; the semantic conventions used by the TCK harness are 1.44.0.
+* Maven 3.9.16 or later (Model 4.0.0 everywhere; the TCK runner is in-reactor behind the `tck` profile).
+* Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). Also proven on Weld SE 6.0 and on Open Liberty (CDI 4.0, Jakarta REST 3.1): see <<other-containers>>.
+
+Next: xref:internals.adoc[Internals].

@@ -1,0 +1,202 @@
+= Concepts
+:description: Chappe vocabulary — connection, frame, multiplexing, virtual thread per request, scoped values.
+
+[.lead]
+This page defines the Chappe vocabulary. The names line up with the HTTP RFCs (9110/9112/9113/9114) and modern Java 25 APIs (`ScopedValue`, virtual threads). No in-house jargon — every term should ring a bell to a regular HTTP developer.
+
+== Server, Router, Handler
+
+Three interfaces hold the entire public API.
+
+[cols="1,3"]
+|===
+| Type | Role
+
+| `Server`
+| Lifecycle: `start()` opens the listener, `close()` shuts it down. Built via `Server.builder()`.
+
+| `Router`
+| Request dispatcher by method + path. Fluent builder. Supports exact routes, path params (`\{id\}`), wildcards (`*`), `mount(prefix, handler)`, `group(prefix, ...)`, filters.
+
+| `Handler`
+| Functional interface: `Response handle(Request req)`. Everything is a handler — a router, a static file handler, a composed filter, a lambda.
+|===
+
+== Request and Response
+
+Both types are **immutable** at the API surface. `Response` is built through a builder; `Request` is provided by the engine.
+
+[source,java]
+----
+// Request — read-only access
+req.method()           // HttpMethod: GET, POST, ...
+req.path()             // String relative to the mount, no query string
+req.queryParams()      // Map<String, List<String>>
+req.pathParams()       // Map<String, String>
+req.headers()          // Headers (case-insensitive)
+req.body()             // Body (asInputStream(), contentLength(), ...)
+req.contextPath()      // mount prefix, "" otherwise
+req.pathInfo()         // alias of path() for mounts
+req.remoteAddress()    // client SocketAddress
+req.isSecure()         // true if TLS
+req.scheme()           // "http" or "https"
+req.attribute(k, v)    // mutable per-request attributes (Servlet-compat)
+----
+
+== Body
+
+`Body` abstracts the request or response body. The interface is deliberately small — `contentLength()`, `asInputStream()`, `asPublisher()` — and is **not** sealed. Several final implementations live in `chappe-api`, created through the `Body` static factories (`Body.of(...)`, `Body.ofFile(...)`, `Body.ofOutputStream(...)`):
+
+[cols="1,3"]
+|===
+| Type | Use case
+
+| `EmptyBody`
+| 204, 304, body-less requests.
+
+| `ByteArrayBody`
+| Short responses (text, inline JSON). Single allocation.
+
+| `InputStreamBody`
+| Wraps an `InputStream` (proxying, transformations).
+
+| `OutputStreamBody`
+| Push streaming: `Body.ofOutputStream(out -> out.write(...))`. Compatible with `ServletOutputStream`.
+
+| `FileBody`
+| Zero-copy via `FileChannel.transferTo()` — `Body.ofFile(path)`.
+|===
+
+On HTTP/1.1, in-memory and file bodies are written with as few socket writes as possible. A body of unknown length (`contentLength() < 0`) is sent chunked on a keep-alive connection, one flushed chunk per read. A body of known length is sent under its `Content-Length` and fills full write buffers while its stream reports bytes ready (`available() > 0`). This is the case for classpath and jar resources. Whenever the next read could block, the buffered bytes are flushed, so a client sees each part while the producer is still running.
+
+After the last chunk of a chunked body, the transport calls `Response.trailers()` and writes the fields it returns into the trailer section (RFC 9112 §7.1.2). Choosing which names may appear in a trailer section is left to the caller: RFC 9110 §6.5.1 forbids framing fields such as `Content-Length` or `Transfer-Encoding` there. HTTP/2 sends the same trailers as a final HEADERS frame.
+
+[#header-validation]
+=== Header and trailer validation
+
+Every response field follows one rule, so that no field can be injected into the response head and none reaches the wire truncated:
+
+* the name must be an RFC 9110 token (letters, digits and `!#$%&'*+-.^_`|~`);
+* the value may hold only visible ASCII, obs-text (`U+0080`–`U+00FF`, written as ISO-8859-1), space and tab. CR, LF, NUL, other controls and any char above `U+00FF` are refused. Such a char has no one-byte form, and truncating it could forge a CR or LF.
+
+Where the rule is checked:
+
+* `Response.builder()` (`header`, `headers`, `trailer`, `trailers`), `Filter.addHeader*`, `ConnectionUpgrade`, the `WebSocketUpgrade` subprotocol and `GrpcCall.addHeader` / `addTrailer` throw `IllegalArgumentException` at once. The message names the field and never echoes its value.
+* A response built without the builder (a custom `Response` or `Headers`) is checked again by the transport before anything is written. Over HTTP/1.1 an invalid header, or an invalid custom reason phrase, answers `500` and closes the connection. Over HTTP/2 an invalid header answers `500`, and the HPACK dynamic table is left untouched. An invalid trailer is dropped, over both protocols.
+
+Encode any other text before setting it, for example with RFC 8187 (`filename*=UTF-8''…`) or percent-encoding.
+
+[#filters]
+== Filters
+
+A `Filter` is a declarative middleware. It turns a `Handler` into another `Handler`:
+
+[source,java]
+----
+Filter logging = next -> req -> {
+    System.out.println(req.method() + " " + req.path());
+    return next.handle(req);
+};
+----
+
+Helpers shipped on `Filter`:
+
+* `Filter.addHeader(name, value)` — add a header to every response.
+* `Filter.addHeaderIf(predicate, name, value)` — conditional header (predicate evaluated per request).
+* `Filter.addHeaderIfEnv(envVar, expected, name, value)` — gate on an environment variable (typical: staging).
+* `Filter.gzip()` / `Filter.gzip(threshold)` — on-the-fly compression negotiated through `Accept-Encoding`.
+
+These helpers keep the handler's trailers: the filtered response asks the original for them once the body has been read, so trailers computed from the body survive.
+
+WARNING: Chappe recognises a connection takeover by the type of the response: a handler returns a
+`WebSocketUpgrade` or a `ConnectionUpgrade`, and the connection checks it with `instanceof`. A
+filter that rebuilds the response (for example with `Response.builder()` to add a header) returns a
+plain `Response`. The upgrade type is then lost and the takeover never happens. A filter must
+return an upgrade response unchanged: test `instanceof WebSocketUpgrade` and
+`instanceof ConnectionUpgrade` first, and pass the response through.
+
+== Connection, frame, multiplexing
+
+HTTP/2 vocabulary (RFC 9113), reused by HTTP/3 (RFC 9114) over a different transport.
+
+[cols="1,3"]
+|===
+| Term | Meaning in Chappe
+
+| **Connection**
+| A TCP socket (HTTP/1.1, HTTP/2) or a QUIC stream-set (HTTP/3). One virtual thread per connection.
+
+| **Frame**
+| HTTP/2 transport unit: `HEADERS`, `DATA`, `SETTINGS`, `WINDOW_UPDATE`, `GOAWAY`, `CONTINUATION`, `PING`, `RST_STREAM`, `PRIORITY`. Implemented in `io.vidocq.chappe.http.h2.Http2Frame`.
+
+| **Stream**
+| Logical sub-flow multiplexed over an HTTP/2 connection — one request + one response. `Http2Stream` carries the FSM (idle, open, half-closed, closed).
+
+| **Multiplexing**
+| Several streams in flight on one connection. HTTP/1.1 cannot do it (pipelining ≠ multiplexing); HTTP/2 and HTTP/3 can.
+
+| **HPACK**
+| HTTP/2 header compression (RFC 7541) — static table + dynamic table + Huffman. Implemented in `HpackEncoder` / `HpackDecoder` / `HpackHuffman` / `HpackDynamicTable` / `HpackStaticTable`.
+
+| **Flow control**
+| Per-stream and per-connection byte windows (HTTP/2); `WINDOW_UPDATE` frames as the receiver consumes.
+|===
+
+== Virtual thread per request
+
+Chappe enforces a strict rule: **one virtual thread per connection**. No platform pool, no `EventLoopGroup`, no application-side `Selector`.
+
+* `Executors.newVirtualThreadPerTaskExecutor()` is the only executor used.
+* The Java 25 VM multiplexes virtual threads onto a handful of carrier threads.
+* Application code writes **synchronous blocking** style: `body.asInputStream().readAllBytes()` is fine, never a scalability regression.
+* No `ThreadLocal` — see `RequestContext` below.
+
+== `RequestContext` and Scoped Values
+
+`RequestContext.CURRENT` is a `ScopedValue<RequestContext>` (JEP 506, finalized in Java 25). It carries request attributes, tenant, authenticated user — everything `ThreadLocal` carried in classic servers, only cleaner:
+
+* explicit propagation via `ScopedValue.where(...).run(...)`;
+* automatic cleanup when the scope ends;
+* virtual-thread compatible without pinning risk.
+
+[source,java]
+----
+// Read it from anywhere in the call chain
+Request req = RequestContext.currentRequest();
+----
+
+== Mount, contextPath, pathInfo
+
+`Router#mount(prefix, handler)` delegates a whole path prefix, all verbs included. The prefix is stripped before the call:
+
+* `request.path()` is relative to the mount (`/dashboard`),
+* `request.contextPath()` is the prefix (`/admin`),
+* `request.pathInfo()` is an alias of `path()` for mounts.
+
+Resolution order inside a `Router`:
+
+. exact routes (first match by path + method),
+. `405 Method Not Allowed` if the path matches but the method does not (sets the `Allow` header),
+. mounts (first matching prefix, registration order),
+. `notFound` (`404` fallback).
+
+== ServerProvider SPI
+
+`ServerProvider` is a `ServiceLoader` service. `chappe-core` registers `ChappeServerProvider` via `provides`/`with` in its `module-info`. An alternate implementation (e.g. `cassini-jdk-http`, which falls back on the JDK `HttpServer` for tests) can register alongside.
+
+== Diagram: concept graph
+
+[mermaid]
+....
+flowchart LR
+    Server --> Router
+    Router --> Handler
+    Filter --> Handler
+    Router -. mount .-> Router
+    Handler --> Response
+    Request --> Handler
+    Body -. read by .-> Request
+    Body -. carried by .-> Response
+    RequestContext -. ScopedValue .-> Handler
+    ServerProvider -. ServiceLoader .-> Server
+....

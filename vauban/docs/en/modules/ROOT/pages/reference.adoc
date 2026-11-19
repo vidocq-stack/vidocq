@@ -1,0 +1,557 @@
+= Reference
+:description: Maven artefacts, exported Java Modules packages, Maven plugin, JUnit extension, Lite vs Full comparison.
+
+[.lead]
+This page lists every artefact published by Vauban, the Java Modules packages they export, the Maven-plugin goals, and the comparison between the CDI Lite and Full profiles.
+
+== Maven artefacts
+
+[cols="2,1,3"]
+|===
+| Artefact | Recommended scope | Role
+
+| `io.vidocq.vauban:vauban-api:{project-version}`
+| `compile`
+| Version marker (`Vauban.VERSION`), the generated-code SPI (`ProxyLink`, `VaubanComponentProvider`), and `AnnotationInstanceFactory`, which builds an annotation instance from members written as text (provided by `vauban-core`)
+
+| `io.vidocq.vauban:vauban-core:{project-version}`
+| `runtime`
+| CDI 4.1 Lite container runtime
+
+| `io.vidocq.vauban:vauban-processor:{project-version}`
+| `provided`
+| APT (emits `_ClientProxy`, `$$Intercepted` and `_VaubanComponents` at `process-classes`)
+
+| `io.vidocq.vauban:vauban-indexer:{project-version}`
+| `provided`
+| Build-time bean indexer (zero dependency)
+
+| `io.vidocq.vauban:vauban-maven-plugin:{project-version}`
+| `build`
+| Maven plugin (goals: `generate`, `dist`, `encrypt`, `enhance-dependencies`, `modularize`)
+
+| `io.vidocq.vauban:vauban-classloader-spi:{project-version}`
+| `runtime`
+| ClassLoader SPI (`ByteSourcePlugin`, `ArchiveReader`)
+
+| `io.vidocq.vauban:vauban-classloader:{project-version}`
+| `runtime`
+| Universal class-loader engine (`VaubanClassLoader`, `VaubanLayerFactory`) and the Java SE launcher (`Launch`)
+
+| `io.vidocq.vauban:vauban-webcontexts:{project-version}`
+| `runtime`
+| The session context for a web container to drive (`WebContexts`, `SessionStore`), see xref:usage.adoc#web-contexts[Web contexts]
+
+| `io.vidocq.vauban:vauban-naming:{project-version}`
+| `runtime`
+| The JNDI `java:` namespace answered by the running container (`JavaNaming`, `JndiBindings`, `JndiTarget`, `JndiNameProvider`, `NamingService`), see xref:jndi.adoc[The JNDI java: namespace]
+
+| `io.vidocq.vauban:vauban-weaver:{project-version}`
+| `runtime`
+| Client-proxy weaving transforms (Class-File API), also packaged as a load-time agent
+
+| `io.vidocq.vauban:vauban-sjar:{project-version}`
+| `runtime` (optional)
+| `.sjar` (AES-256-GCM encrypted) implementation
+
+| `io.vidocq.vauban:vauban-junit:{project-version}`
+| `test`
+| JUnit 5 extension (`@VaubanTest`)
+
+| `io.vidocq.vauban:vauban-test-suite:{project-version}`
+| `test`
+| Official integration test suite
+
+| `io.vidocq.vauban:vauban-bench`
+| not published
+| JMH benchmarks of qualifier resolution on injection, lookups, events and interceptors, run from `vauban-bench/target/benchmarks.jar`; results in `BENCH.md`, read in xref:performance.adoc[Performance]. JMH is build tooling: no published artefact depends on it.
+|===
+
+== Exported Java modules
+
+[cols="2,3"]
+|===
+| Module | Exported packages
+
+| `io.vidocq.vauban.api`
+| `io.vidocq.vauban.api`
+
+| `io.vidocq.vauban.core`
+| `io.vidocq.vauban.core`, `.container`, `.langmodel`, `.langmodel.declarations`, `.langmodel.types`, `.types`, `.bean.model`, `.bean.discovery`, `.bean.resolution`, `.bean.validation`, `.context`, `.event`, `.interceptor`, `.enrichment`, `.extensions`, `.weaving`; `.proxy` is a qualified export to `io.vidocq.vauban.processor`
+
+| `io.vidocq.vauban.indexer`
+| `io.vidocq.vauban.indexer`, `.indexer.codegen`, `.indexer.model`, `.indexer.scanner`
+
+| `io.vidocq.vauban.processor`
+| (internal — requires `java.compiler`)
+
+| `io.vidocq.vauban.classloader.spi`
+| `io.vidocq.vauban.classloader.spi`
+
+| `io.vidocq.vauban.classloader`
+| `io.vidocq.vauban.classloader`
+
+| `io.vidocq.vauban.weaver`
+| `io.vidocq.vauban.weaver`
+
+| `io.vidocq.vauban.webcontexts`
+| `io.vidocq.vauban.webcontexts`
+
+| `io.vidocq.vauban.naming`
+| `io.vidocq.vauban.naming`
+
+| `io.vidocq.vauban.sjar`
+| `io.vidocq.vauban.sjar`, `.sjar.cli`
+
+| `io.vidocq.vauban.junit`
+| `io.vidocq.vauban.junit`
+|===
+
+`io.vidocq.vauban.core` provides `jakarta.enterprise.inject.spi.CDIProvider` (`VaubanCDIProvider`), `jakarta.enterprise.inject.se.SeContainerInitializer` (`VaubanSeContainerInitializer`) and `jakarta.enterprise.inject.build.compatible.spi.BuildServices` (`VaubanBuildServices`) via `provides`. No unjustified `opens`.
+
+== Maven plugin goals
+
+[cols="1,3"]
+|===
+| Goal | Role
+
+| `vauban:generate`
+| Bound to `process-classes`. Scans the dependency JARs and the project classes for CDI beans, writes the `META-INF/vauban-beans.list` bean index into `${project.build.outputDirectory}`, and weaves the client-proxy marker constructor into the compiled normal-scoped beans. For a produced type whose proxy cannot live in the producer's package — a package-private or `protected` overridable member, or no accessible constructor — it also ships the proxy pre-generated under `META-INF/vauban/placed/` and adds the type to `META-INF/vauban/required-opens.list`, merging with what the annotation processor already wrote. It then reports those types at build time, and says plainly that they need the application to start through `Launch` or `Vidocq.run`, since whether a Vauban layer exists is decided at launch, not at build.It pre-generates the `$$Intercepted` subclass of every bean the container would wrap: a bean with a class-level binding, as before, and now also one intercepted through a method-level binding (declared, inherited from a superclass, or on an interface default method), a constructor binding, or an `@AroundInvoke` method of its own. It lists those subclasses in the `_VaubanComponents` it writes, so a module it built boots on the strict module path without `opens`, where the container used to fail with `Could not define interceptor subclass`. It writes no subclass for an `@Interceptor` class, which the container never wraps, and skips with a warning a bean whose members cannot be linked on the plugin's class path.It runs the `@Enhancement` phase of the build compatible extensions on the plugin's class path, and skips with a warning, naming `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`, a provider listed there that cannot be loaded or instantiated; the other extensions still run. Its output is reproducible (xref:internals.adoc#reproducible-output[Internals]).
+
+| `vauban:modularize`
+| Bound to `prepare-package`, **opt-in** (declare an execution). Gives the non-modular dependency jars of the closure a `module-info` of their own, in `target/vauban-modularized/` under the original file name, so tooling can substitute them. `requires` is derived from the types each jar actually uses, every package is exported, `META-INF/services` becomes `provides`, and the `ServiceLoader` lookups found in the bytecode become `uses` — an automatic module may consume any service, an explicit one only what it declares. Fails on a split package between two automatic jars, since the module system could not host them side by side. A jar whose own lookup cannot be declared legally (a module cycle, typically) is left automatic and the reason is written to `report.txt`. Nothing is installed, deployed or redistributed: the copies never leave `target/`. Moved here from the Vidocq runtime plugin, which is where it used to live as `vidocq:modularize`. Full reference: <<modularize>>. A caller that builds its own copy, such as `vidocq:generate`, uses `Modularizer.synthesizeOne` instead: the same descriptor for one jar, written nowhere.
+
+| `vauban:dist`
+| Bound to `package`. Packages the application as a distribution ZIP (launch scripts, application JAR and all dependencies), attached with classifier `dist`.
+
+| `vauban:encrypt`
+| Bound to `package`. Encrypts the internal classes of a modular JAR in-place with AES-256-GCM (`vauban-sjar` reads it back); classes in `exports`/`opens` packages stay in clear text.
+
+| `vauban:enhance-dependencies`
+| Bound to `package`, **opt-in** and a *last resort* (does nothing unless `<enhancedTypes>` lists the produced types to enhance). Reach for it only when the shipped in-package proxy cannot work: no Vauban layer at launch, a library that exports nothing, or a GraalVM native image. It warns, per type, when the class loader could have shipped the same proxy without touching the jar. Writes an enhanced *copy* of a third-party dependency JAR under `target/vauban-enhanced-deps/` so a produced type that is not fully public can still be proxied at build time: the co-located `<Type>_ClientProxy`, a per-package `_VaubanComponents`, and a rewritten `module-info.class` that `provides` it. Placed ahead of the original on the module path, it resolves with zero `opens` and no agent. The copy declares itself: it drops the inherited signature files and the manifest's per-entry digests, and records `Vauban-Enhanced-From` (the source coordinates), `Vauban-Enhanced-Digest` (`sha256:` of the exact source JAR) and `Vauban-Enhanced-By` in the manifest. It is a modified redistribution of a third-party artefact, so declare it to your SBOM/attestation tooling — that governance cost is why the goal is opt-in. See xref:internals.adoc#proxy-strategies[Internals — client-proxy strategies].
+|===
+
+[#modularize]
+=== `vauban:modularize` in detail
+
+A jar with no `module-info.class` is an _automatic module_ on the module path: it works, but it
+reads every module, exports every package, and `jlink` refuses to link it. This goal writes a copy
+of it into `target/vauban-modularized/`, under the *original file name*, with a synthesized
+descriptor: `requires` derived from the types the jar uses, every package exported,
+`META-INF/services` promoted to `provides`, and an `open module` by default. How the descriptor is
+derived is described in xref:internals.adoc#module-descriptor[Internals]; the runnable example is
+`vauban-examples/example-legacy-app`.
+
+The goal has no binding of its own — declare an execution. Its default phase is `prepare-package`:
+
+[source,xml]
+----
+<plugin>
+    <groupId>io.vidocq.vauban</groupId>
+    <artifactId>vauban-maven-plugin</artifactId>
+    <executions>
+        <execution>
+            <id>modularize</id>
+            <goals><goal>modularize</goal></goals>
+            <configuration>
+                <mode>all-automatic</mode>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+----
+
+Nothing is installed, deployed or redistributed: the copies live in `target/` and only this build
+sees them. The Vidocq runtime plugin's `dev`, `jlink` and `package` goals resolve every dependency
+through that directory first, so a patched copy replaces the original jar on the module path, in
+the staged image and in the distribution's `lib/`.
+
+[[jar-without-classes]]A jar that holds no class, such as a Maven aggregator (`vaadin-core` ships
+only `META-INF/maven/**`), gets an empty module: no package, no `requires` beyond `java.base`. It used to fail
+the whole goal (vauban#160). A jar whose classes all sit in the unnamed package still fails, naming the jar: no
+named module can hold them.
+
+[[resource-packages]]A directory that holds only resources, such as
+`com/vaadin/flow/server/frontend/dependencies/workbox/package.json` in Vaadin's `flow-server`, is a package of the
+module too: `jlink` counts it, and refuses a descriptor that lists fewer packages than the jar holds. `META-INF` and
+directory names that are no legal package name stay out. A resource directory that another jar of the closure also
+holds stays out as well, since two modules cannot hold one package (a split package). The build prints one block of
+warnings per such directory, `jlink will refuse <jars>: they all hold files under <dir>/ …`, and `report.txt` lists it
+as `shared resource directory: <dir>/ — <jars>`. Running on the module path is not affected; `jlink` refuses those
+jars until the library puts that directory in one jar. Vaadin's `flow-server` and `flow-react` share
+`com/vaadin/flow/server/frontend/` (vauban#163).
+
+==== `uses` directives, and only legal ones
+
+The descriptor also carries `uses` directives, scanned off the bytecode of the whole dependency
+closure. They are not optional: an automatic module may consume any service, an explicit one only
+what it declares, so a jar promoted without them fails its own `ServiceLoader.load` with
+_module … does not declare `uses`_. Lookups written through a helper that takes the service type
+as a `Class` parameter are followed across jars, since it is the module reaching `ServiceLoader` —
+not the one naming the service — that must declare the directive.They are followed
+through an interface or superclass method as well, when an implementation in the closure forwards to
+`ServiceLoader` (vauban#167). A service type passed as a
+variable rather than a class literal cannot be seen by any bytecode scan; declare that one by hand.
+
+Every `ServiceLoader` factory is covered: `load(Class)`, `load(Class, ClassLoader)`,
+`load(ModuleLayer, Class)` and `loadInstalled(Class)`.The `ClassLoader` argument
+can now also come from a computed `Class`, such as `getClass().getClassLoader()` as Vaadin's
+`FeatureFlags` writes it, or a `Class` or `ClassLoader` variable (vauban#158).
+
+Only the directives the module system will accept are emitted. A `uses` is not a hint: the JVM
+rejects the whole graph at resolution time with _Module M uses S but does not read a module that
+exports P to M_, so a directive that cannot be satisfied trades one broken lookup for a runtime
+that does not start at all. A scanned service is kept only when its type resolves to a package of
+the closure or of the JDK, *and* the declaring module can read the module exporting it (following
+`requires`, and the transitive closure of `requires transitive`). Everything else is dropped,
+listed in `report.txt` and logged as a warning naming the jar, the service and the reason:
+`not in closure`, `<module> cannot read <exporter>`, or `not a class literal`.
+
+[[provides-legality]]`provides` follows the same rule. A service file naming a type that no module
+of the closure or of the JDK defines, typically an optional dependency left out (`reactor-core` lists a
+micrometer `ContextAccessor`), gives no `provides`: the build logs `dropped provides: <jar> — <service> (not in
+closure)`, and the provider class stays in the jar, unused, as it was on the class path. A service type from
+another jar of the closure adds a `requires` on that jar's module, even when the provider's bytecode never
+names it. The application layer applies the same rule when it promotes services files to `provides`: a service
+type the module cannot read is not promoted (vauban#162).
+
+==== Why some jars stay automatic
+
+A jar whose own code reaches `ServiceLoader` for a type defined in a jar that depends on it has no
+legal explicit form at all. LangChain4j is the textbook case: `langchain4j-core` ships a generic
+`ServiceHelper.loadFactories(Class)`, and `langchain4j` calls it with types from its own packages.
+`ServiceLoader` checks the *calling* class's module, so the JVM demands the `uses` on
+`langchain4j.core` — but the service type belongs to `langchain4j`, which already
+`requires langchain4j.core`. Declaring it would need a `requires` back, and Java modules allow no
+cycle. No descriptor satisfies both constraints.
+
+Such a jar is left automatic rather than patched into a graph that cannot resolve. The build logs a
+`kept automatic:` line naming the jar and the lookup that cannot be declared, and `report.txt`
+records it. Automatic modules work on the module path, so a development loop or a plain
+`--module-path` run is unaffected; only `jlink` refuses them, and an application depending on such
+a library cannot be linked into an image until it changes upstream — each caller doing its own
+`ServiceLoader.load`, or the library shipping a hand-written `module-info`.
+
+Set `vauban.modularize.forceExplicit` to patch the jar anyway, the illegal directives still dropped,
+when you know the failing lookup is one your application never reaches.
+
+==== `derived` or `all-automatic`
+
+[cols="1,2,2",options="header"]
+|===
+| `<mode>` | Patches | Use it when
+
+| `derived` (default)
+| only jars whose automatic name is derived from the file name — no `Automatic-Module-Name` in the
+  manifest
+| you want to stabilise the modules nobody has named yet, and leave untouched every jar whose author
+  already committed to a name
+
+| `all-automatic`
+| every automatic jar, including those declaring `Automatic-Module-Name`
+| you link an image with `jlink` or `jpackage`: they reject *any* automatic module, so all of them
+  must become named modules
+|===
+
+==== Module naming
+
+By default a patched jar keeps the very name it already had as an automatic module — the
+`Automatic-Module-Name` entry, or the name the JDK derives from the file name. That is deliberate:
+it is the name `javac` saw when it compiled your `module-info.java` against the original jar, so
+the `requires` you wrote keeps resolving after patching.
+
+`<moduleNames>` overrides that name per `artifactId`:
+
+[source,xml]
+----
+<moduleNames>
+    <langchain4j-open-ai>dev.langchain4j.openai</langchain4j-open-ai>
+</moduleNames>
+----
+
+An override is a *run-time-only* rename. Compilation still resolves against the original jar,
+which announces its automatic name, so a module renamed out from under a `requires <old.name>;`
+compiles and then fails resolution at run time. Only override the name of a jar your code does not
+`requires` by name — one reached transitively or through services — or whose derived name is not a
+legal module name at all.
+
+==== Split packages fail the build
+
+Two automatic jars sharing a package cannot both become named modules, and the module system would
+reject them side by side anyway. The goal checks the whole automatic closure up front and fails
+with the package and the jars holding it:
+
+[source,text]
+----
+vauban:modularize — split package(s) between dependency jars, the module system cannot host them together:
+  com.acme.util in acme-core-1.2.jar, acme-legacy-1.2.jar
+----
+
+`<excludes>` does not silence this: leaving one side unpatched does not make the packages any less
+split. Remove one side from the dependency graph with a Maven `<exclusion>`.
+
+==== `report.txt`
+
+Every run writes `target/vauban-modularized/report.txt` with, per patched jar, the module name, why
+it was selected and the descriptor it received, plus one line per jar left as is. The output
+directory is emptied at the start of each run, so the report always describes the jars next to it.
+
+==== Licence gate (opt-in)
+
+Patching rewrites someone else's jar. When `<allowedLicenses>` is set, every artifact that ends up
+patched must declare one of the listed licences, or the build fails:
+
+[source,xml]
+----
+<allowedLicenses>
+    <license>Apache-2.0</license>
+    <license>EPL-2.0</license>
+    <license>MIT</license>
+</allowedLicenses>
+----
+
+Names are normalised before comparison (`The Apache Software License, Version 2.0` matches
+`Apache-2.0`). An artifact declaring no licence at all is a violation. Left empty — the default —
+the gate is off.
+
+==== Other parameters
+
+[cols="2,1,4",options="header"]
+|===
+| Parameter / property | Default | Effect
+
+| `vauban.modularize.skip`
+| `false`
+| Skip the goal.
+
+| `<includes>` / `<excludes>`
+| empty
+| Restrict patching to, or away from, these `artifactId`s. Both only ever restrict: an explicit
+  module named in `<includes>` stays untouched.
+
+| `vauban.modularize.open` (`<openModules>`)
+| `true`
+| Generate `open module` descriptors, so a reflective library keeps working. `false` generates a
+  closed module that `exports` and `opens` every package.
+
+| `vauban.modularize.forceExplicit` (`<forceExplicit>`)
+| `false`
+| Patch a jar even when one of its own `ServiceLoader` lookups cannot be declared legally — see
+  _Why some jars stay automatic_.
+|===
+
+==== A development loop needs an earlier binding
+
+Vidocq's `dev` goal does not fork a lifecycle: its rebuild loop runs `mvn process-classes`. Bound at
+its default `prepare-package`, `modularize` never runs in such a session, and dev mode sees the
+original jars. Bind it to `process-classes` when dev mode must run against the patched copies:
+
+[source,xml]
+----
+<execution>
+    <id>modularize</id>
+    <phase>process-classes</phase>
+    <goals><goal>modularize</goal></goals>
+</execution>
+----
+
+== Annotation-processor options
+
+`vauban-processor` accepts these APT options (`-A` flags on `javac`, `<compilerArgs>` in Maven):
+
+[cols="1,3"]
+|===
+| Option | Effect
+
+| `-Avauban.validation=false`
+| Skips the static deployment validation (unsatisfied/ambiguous, unproxyable and circular-dependency checks). Useful when beans rely on injections that only a runtime Build Compatible Extension can satisfy (e.g. MicroProfile `@Claim`, `@RegisterRestClient`) and the BCE is not on the APT classpath. Prefer putting the BCE on the APT classpath when it supports it: Ravel's does, so `@ConfigProperty` needs no such option (xref:concepts.adoc#extension-phase[Build time or container start]). The runtime container still runs the full validation at start; this option only silences the compile-time check, it does not disable wiring.
+
+| `-Avauban.validation.scope=all`
+| Default `main`: validation only runs on the principal source set and is skipped automatically when the processor detects a `testCompile` invocation (default output pointing at `target/test-classes`). Set to `all` to enforce validation on test sources too.
+
+| `-Avauban.mainOutput=<dir>`
+| For a test compilation in a layout the processor does not recognise: the main sources' output directory, whose indexes it merges into its own and whose provider its `_VaubanComponentsTests` sits next to. Maven's `target/test-classes` and Gradle's `build/classes/java/test` need nothing (vauban#101). xref:usage.adoc#test-sources-beans[Beans in the test sources].
+
+| `-Avauban.producerProxy=error\|warn\|note`
+| Default `note`. Severity of the diagnostic emitted when a normal-scoped `@Produces` returns a class type that is not build-time proxyable across a module boundary (the runtime then falls back to reflective proxy generation, which needs an `opens`). Set to `error` to enforce zero fallback, `warn` to surface it without failing the build. See xref:internals.adoc#proxy-strategies[Internals — client-proxy strategies].
+
+| [[generation-round]]`-Avauban.generationRound=last` [.tag-new]#NEW#
+| Default `early`: the processor writes its classes in the first round, from the second on, whose new classes brought no bean, instead of javac's last round, where each file created costs a "created in the last round will not be subject to annotation processing" warning. It still waits for the last round when there is no second round, or when a bean class carries an `@Inherited` annotation that is not CDI's, JAX-RS's or MicroProfile OpenAPI's, since its subclasses would reach the other processors. A bean another processor generates later fails the build by name; `last` restores the former behaviour.
+
+| `-Avauban.providesHint=false`
+| Default `true`: the note on each generated `_VaubanComponents` tells the module to declare it, `provides io.vidocq.vauban.api.VaubanComponentProvider with <pkg>._VaubanComponents;`, which a named module needs for `ServiceLoader` to find it. A runtime that turns the module's `META-INF/services` entries into `provides` when it loads the module, as Vidocq does, needs no such declaration: `false` keeps the note and drops the advice (VAU-APT-004).
+|===
+
+[#beans-of-other-modules]
+=== Injection points satisfied by another module [.tag-new]#NEW#
+
+The static validation resolves an injection point against the beans of the compilation, and against the beans of the
+modules it depends on:
+
+* a dependency type that is itself a bean, found through `Elements` on the compile path (vauban#23);
+* since VAU-APT-006, a bean of a *bean archive module* on the module path, a named module that
+  `provides io.vidocq.vauban.api.VaubanComponentProvider`. Each implementation of that service is the
+  `_VaubanComponents` of one package of its beans. The processor reads those packages through `Elements`, from their
+  class files, without loading or running anything of theirs, and replays bean discovery on them. An application that
+  injects `JsonWebToken` now validates against the producer of `cervantes-cdi-vauban` instead of warning that the
+  type is unsatisfied.
+
+Those beans of other modules only take part in resolution: their own module validates their injection points,
+generates their artefacts and lists them in its `vauban-beans.list`. An ambiguity among them is the container's to
+decide, with every archive in view, and stays a warning. Still deferred to the container, with the
+_resolution deferred to the runtime container_ warning: a module on the class path, whose directives cannot be read;
+a bean a Build Compatible Extension adds when it runs at start-up only; a type no archive declares.
+
+[#system-properties]
+== System properties
+
+[cols="1,3"]
+|===
+| Property | Effect
+
+| `-Dvauban.weaving.loadtime=disabled`
+| Turns off the load-time weaving tier. Beans missing the `ProxyLink` entry constructor then fail deployment validation with the regular diagnostic instead of being woven at class definition. See xref:internals.adoc#weaving-tiers[Internals — weaving tiers].
+
+| `-Dvauban.opens.auto=true`
+| Lets the container open a third-party module's package to itself at boot (`Instrumentation.redefineModule`) when a producer's type is not build-time proxyable. **Off by default, deliberately**: opening another module behind the user's back is what this project faults runtime CDI implementations for needing, and it makes the application silently depend on dynamic agent attachment — a defect that surfaces late, on a locked-down JVM. Left off, the container refuses and logs every way to avoid it. A last resort: integrity by default is closing dynamic agent attachment, so prefer a fully-public produced type or `vauban:enhance-dependencies`. See xref:internals.adoc#proxy-strategies[Internals — client-proxy strategies].
+| `-Dvauban.annotations.reflection=allow\|warn\|forbid`
+| What the container may do when an annotation reaches it as an object rather than as index data. Matching itself never reflects — qualifiers and interceptor bindings are compared as normalized keys — and injection takes a point's qualifiers from its descriptor. Four things still can, and each goes through this switch: reading the members of an annotation instance, reading what an annotation type declares when neither the index nor a class file describes it, building an instance to hand to application code, and reading the annotations off a field or a parameter no descriptor describes. `allow` (the default) reflects when needed; `warn` logs the first time each one happens; `forbid` throws — a type of its own, which no `catch (Exception)` on the way out swallows. Set it to `forbid` in a test to prove a deployment needs no reflection, or to `warn` to see what a GraalVM native image would need metadata for. A module compiled with the Vauban APT ships what its own annotation types declare, so it needs none of the four — and it carries a literal for a **public** qualifier of a dependency built without the processor too, in the package that uses it. What is left over is a qualifier that is not public and comes from a module compiled without the processor: no other package can implement it, and the message says so. See xref:internals.adoc#aot[Internals — AOT compatibility].
+
+| `-Dvauban.launch.keep=<prefixes>`
+| Comma-separated module-name prefixes that the Java SE launcher (`io.vidocq.vauban.classloader.Launch`) keeps in the boot layer instead of re-layering them. They add to the built-in rules: the `java.`, `jdk.` and `jakarta.` prefixes, the Vauban container modules, automatic modules, modules with a `javax.`, `sun.` or `com.sun.` package, and every module a kept module reads. Use it for a test framework or an agent-attached library that must not move. See xref:se.adoc[Vauban in Java SE].
+|===
+
+== Java SE launcher
+
+[source,shell]
+----
+java -p mods --add-modules ALL-MODULE-PATH \
+     -m io.vidocq.vauban.classloader/io.vidocq.vauban.classloader.Launch <module>/<main-class> [args]
+----
+
+`--add-modules ALL-MODULE-PATH` is required: with `-m`, the launcher is the only root module. `Launch` re-layers the application modules of the boot layer under a Vauban class loader and invokes the application's `public static void main(String[])` from inside the layer. `Launch.run(target, args)` is the programmatic form: it returns `true` when it ran the target in a fresh layer, and `false`, doing nothing, when the calling thread already runs in one — so `if (Launch.run("app/app.Main", args)) return;` can open an application's own `main`. In a Vauban layer, in-package client proxies of the libraries it re-layers are *placed* (zero `opens`, no agent, no rewritten jar), their constructors do not run for the proxy, and unwoven beans are woven at definition without the load-time agent. The selection is public as `VaubanLayerFactory.applicationPaths(configuration, keptPrefixes, roots)`, which `Vidocq.run` uses too, with the Vidocq bricks as extra kept prefixes. A named target module is a root: no keep prefix holds it back. Full story: xref:se.adoc[Vauban in Java SE].
+
+[#junit-extension]
+== JUnit extension (`vauban-junit`)
+
+`@VaubanTest` boots a lightweight container for tests:
+
+[source,java]
+----
+@VaubanTest
+@AddBeans(GreetingService.class)
+class GreetingServiceTest {
+    @Inject GreetingService greeting;
+
+    @Test
+    void hello() {
+        assertEquals("Hello, Vauban!", greeting.hello("Vauban"));
+    }
+}
+----
+
+Bean selection:
+
+* `@VaubanTest` — a plain marker (no members). Boots the container via `VaubanContainer.builder()` before all tests, closes it after the last one, and injects the test instance's `@Inject` fields.
+* `@AddBeans({Foo.class, Bar.class})` — a separate annotation that registers the listed classes on the container builder (`addBeanClass(...)`).
+
+[[junit-lifecycles]]
+=== Test instance lifecycles
+
+Both JUnit lifecycles get their `@Inject` fields. With the default `@TestInstance(PER_METHOD)`, each test gets a new instance, injected from the container of the class. With `@TestInstance(PER_CLASS)`, JUnit creates the single instance before the "before all" callbacks run, so the extension starts the container when it injects that instance; either way the class has one container, closed after its last test.
+
+[#lite-vs-full]
+== CDI 4.1 Lite vs Full comparison
+
+[cols="2,1,1,3"]
+|===
+| Feature | Lite | Full | Vauban
+
+| Managed beans, standard scopes
+| ✅
+| ✅
+| ✅
+
+| Producers, disposers
+| ✅
+| ✅
+| ✅
+
+| Events (`Event<T>`, `@Observes`, `@ObservesAsync`)
+| ✅
+| ✅
+| ✅
+
+| Interceptors (`@AroundInvoke`, `@AroundConstruct`)
+| ✅
+| ✅
+| ✅
+
+| Build Compatible Extensions (BCE)
+| ✅
+| ✅
+| ✅
+
+| Portable Extensions (runtime `Extension` SPI)
+| ❌
+| ✅
+| ❌
+
+| `RequestContextController`, `@ActivateRequestContext`
+| ✅
+| ✅
+| ✅ xref:usage.adoc#activating-the-request-context[Activating the request context]
+
+| `@ConversationScoped`
+| ❌
+| ✅
+| ❌
+
+| `@SessionScoped`
+| ❌
+| ✅
+| ✅ with `vauban-webcontexts`, driven by a web container (Foy). xref:usage.adoc#web-contexts[Web contexts]
+
+| Passivation, bean serialisation
+| ❌
+| ✅
+| ❌
+
+| `@Specializes`
+| ❌
+| ✅
+| ❌
+
+| EL for managed beans
+| ❌
+| ✅
+| ❌
+
+| Decorators
+| Optional
+| ✅
+| // TODO@user: validate coverage
+|===
+
+== Configuration
+
+Vauban needs no application configuration file. Bean selection happens via:
+
+* the `module-info.java` (Java Modules visibility);
+* the bootstrap strategy (`scanLocal()`, `scanClasspath()`, `addBeanClass()`).
+
+For dynamic application configuration, use MicroProfile Config through xref:vidocq::index.adoc[Vidocq Runtime].
+
+== Bugs
+
+* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+
+== Compatibility
+
+* Java 25 (LTS), Maven 3.9.16.
+* Generated class files target Java 25 (class file 69) whatever JDK runs the build, so a brick built
+  on a newer JDK still loads on the baseline runtime and passes `jlink`. Weaving keeps the version of
+  the class it patches.
+* Strict Java Modules, named modules only.
+* CDI 4.1 — Lite profile.
+* Project Leyden CDS and `jlink` images. GraalVM `native-image` needs reflection metadata today: see xref:internals.adoc#aot[AOT compatibility].

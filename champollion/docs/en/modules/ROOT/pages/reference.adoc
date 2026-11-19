@@ -1,0 +1,296 @@
+= Reference
+:description: Public API, JSON-B annotations, configuration, exported Java Modules attributes.
+
+[.lead]
+Consolidated reference for the Maven artifacts, Java modules, supported annotations, `JsonbConfig` properties, and runtime configuration points of Champollion.
+
+== Maven artifacts
+
+[cols="3,5"]
+|===
+| `groupId:artifactId` | Role
+
+| `io.vidocq.champollion:champollion-api`
+| Pure re-exposition of the Jakarta specs (`jakarta.json`, `jakarta.json.bind`). Useful for consumer modules that don't want to depend on an implementation.
+
+| `io.vidocq.champollion:champollion-jsonp`
+| JSON-P 2.1 implementation (parser, generator, object model, Patch / Pointer / Merge Patch). `JsonProvider` ServiceLoader.
+
+| `io.vidocq.champollion:champollion-jsonb`
+| JSON-B 3.0 implementation (`Jsonb`, `JsonbBuilder`, `JsonbConfig`). Depends on `champollion-jsonp`.
+
+| `io.vidocq.champollion:champollion-codegen-apt`
+| Annotation Processor (scope `provided`) generating `JsonbBinding<T>` at compile time.
+
+| `io.vidocq.champollion:champollion-codegen-maven-plugin`
+| `champollion:generate` Mojo bound to `generate-sources`; generates bindings for the record FQNs listed explicitly in `<targets>` (no classpath scanning) — for types you cannot annotate yourself.
+
+| `io.vidocq.champollion:champollion-bench`
+| JMH — Parsson/Yasson/Jackson comparisons. No runtime scope.
+
+| `io.vidocq.champollion:champollion-examples`
+| Runnable examples.
+
+| `io.vidocq.champollion:champollion-tck` (in-reactor, `tck` Maven profile)
+| Official TCK runner JSON-P 2.1 + JSON-B 3.0. Joins the reactor only under `-Ptck`; invoke through `run-official-tck-*.sh` (see xref:tck.adoc[]).
+|===
+
+== Java modules
+
+[cols="2,3,3"]
+|===
+| Module | Public exports | SPI / provides
+
+| `io.vidocq.champollion.api`
+| `io.vidocq.champollion.spi` (stable public SPI, e.g. `RawJsonKeyWriter`); `requires transitive jakarta.json` and `jakarta.json.bind`
+| —
+
+| `io.vidocq.champollion.jsonp`
+| No public exports (one qualified export: `io.vidocq.champollion.jsonp.internal` to `io.vidocq.champollion.jsonb` only, for the P9 parser pool)
+| `provides jakarta.json.spi.JsonProvider with io.vidocq.champollion.jsonp.internal.ChampollionJsonProvider`
+
+| `io.vidocq.champollion.jsonb`
+| `io.vidocq.champollion.jsonb.spi` (`JsonbBinding`, `@JsonbStatic`, `PrimedJsonParser`, `JsonbLeaf`, `JsonbContexts`)
+| `provides jakarta.json.bind.spi.JsonbProvider with io.vidocq.champollion.jsonb.internal.ChampollionJsonbProvider`; `uses io.vidocq.champollion.jsonb.spi.JsonbBinding`
+
+| `io.vidocq.champollion.codegen.apt`
+| —
+| `provides javax.annotation.processing.Processor with io.vidocq.champollion.codegen.apt.JsonbStaticProcessor`
+|===
+
+Internal packages (`*.internal`) are **not exported** — do not depend on them, they may break between versions. The provider classes above live in `internal` packages on purpose: they are reached through `ServiceLoader`, never referenced directly.
+
+[[bound-types-access]]
+=== Bound types and `opens` [.tag-new]#NEW#
+
+Without a generated binding (`@JsonbStatic`, or <<rest-bindings,the binding of a type a REST resource exchanges>>), Champollion binds a type by reflection. On the module path, the module holding the type must then open its package to `io.vidocq.champollion.jsonb`, or export it when the type and the members bound are public. When it does not, the `JsonbException` names the module, the package and the line to add:
+
+----
+Failed to read property author: module com.example.lib does not open package com.example.lib.book to io.vidocq.champollion.jsonb — add `opens com.example.lib.book;` to its module-info.java
+----
+
+[[rest-bindings]]
+=== Bindings for the types REST resources exchange [.tag-new]#NEW#
+
+With `champollion-codegen-apt` on the processor path, the types a JAX-RS resource of the compilation takes or returns get a generated binding, with no annotation: the return type and the entity parameter of each resource method (`@GET`, `@POST`…), through `List`, `Set`, `Collection`, `Map<String, V>`, `Optional` and `CompletionStage`, then the types their properties hold. JSON-B maps them without reflection, so their packages need no `opens` for JSON-B. In a Vidocq application, the processor is on the processor path already.
+
+A binding is generated for:
+
+* a record: its components, in declaration order;
+* [.tag-new]#NEW# a class with a no-argument constructor, `final` or not, with superclasses or not: its public getters and setters, or public fields, those it inherits included — the properties of each class of the hierarchy, from the top one down, lexicographically within a class, as the runtime orders them. Like the runtime, the binding of a declared type writes an instance of a subclass with the declared type's properties; a subclass compiled with it gets its own binding too, used when the subclass is the declared type;
+* [.tag-new]#NEW# an interface carrying `@JsonbTypeInfo` whose `@JsonbSubtype`s are records: the binding writes the discriminator of the value's record then its members, and reads the discriminator (first, as Champollion writes it) to pick the record; a value of a class no `@JsonbSubtype` lists (the interface not being sealed) goes to the runtime, by its class, as before. A record implementing such an interface writes and checks its own discriminator, as the runtime does. A class subtype, or `@JsonbTypeInfo` on several levels, keeps the runtime;
+* [.tag-new]#NEW# a class with a `@JsonbCreator` constructor or static factory: the binding calls it directly, then sets the other properties present in the document, as the runtime does. A parameter's JSON name is its `@JsonbProperty` name, else its own name, read from the source (the reflective runtime reads it from the class file, which holds it only when compiled with `-parameters`). A class file compiled without `-parameters` — in a dependency — keeps the runtime, and the build says to compile it with `-parameters` or name the parameters with `@JsonbProperty`;
+
+whose properties are primitives, the types JSON-B maps natively (`String`, boxed numbers, `BigDecimal`, `BigInteger`, `UUID`, `URI`, the `java.time` types), enums, other such types, [.tag-new]#NEW# arrays of any of them (primitives included, but not of a generic type), and `List`/`Set`/`Collection`/`Optional`/`Map<String, V>` of them; with `@JsonbProperty`, `@JsonbTransient` and `@JsonbNillable`, and [.tag-new]#NEW# `@JsonbDateFormat`, `@JsonbNumberFormat`, `@JsonbTypeAdapter`, `@JsonbTypeSerializer` and `@JsonbTypeDeserializer`. The output is the runtime's, character for character: the native values go through `JsonbLeaf`, the runtime's own codecs (a formatted date or number through the codec the runtime builds for that pattern and locale, created once), and a configuration that changes the mapping (naming strategy, null values, date format, adapters…) makes the runtime serve every type, as for `@JsonbStatic`.
+
+[.tag-new]#NEW# A property typed by an interface (without `@JsonbTypeInfo`), an abstract class or `Object` is mapped by the class of its value, as the runtime maps it: the binding hands the value to the runtime's context, which uses the binding of that class — generated for the implementations compiled with the type — and reflection only for another class. Reading such a property fails as the runtime fails, the type being one it cannot create.
+
+[.tag-new]#NEW# A `@JsonbTypeAdapter` on a property is called directly, and the adapted type, which must itself be one the binding maps, is mapped like any other. An adapter that is neither a CDI bean nor creatable with a no-argument constructor, or one on a primitive or `Optional` property, keeps the runtime.
+
+[[jsonb-cdi]]
+[.tag-new]#NEW# *Adapters, serializers and deserializers that are CDI beans* — `champollion-jsonb-cdi`, kept out of the core, which stays free of CDI:
+
+* its build compatible extension finds, at build, the classes `@JsonbTypeAdapter`, `@JsonbTypeSerializer` and `@JsonbTypeDeserializer` name, and fails the deployment, with the class and the annotated member, when one is ambiguous (several beans have its type) or injects without being a bean (its injections would stay null). Under Vauban it runs at build, on the processor path, so the build fails; it registers no synthetic bean, so its second run, at boot, changes nothing;
+* its registry, a bean of the container, hands the generated bindings and the runtime the container's instance of each, obtained once and destroyed with its dependents when the container stops — a `@Dependent` one included. It is installed for the application's class loader when the container starts, so two containers, one after the other in one JVM, each serve their own; two running at once for the same class loader, both with a bean of the class, make JSON-B fail with a clear error rather than pick one. A generated binding keeps the instance it got until a container starts or stops;
+* without it — no CDI, or a container that runs no build compatible extension (CDI before 4.0) — the standard behaviour applies: the bean from `CDI.current()` when the class looks like one (a scope, `@Singleton`, an `@Inject` member), else an instance created with its no-argument constructor; the `Jsonb` that obtained a bean destroys it when it closes. Outside Vidocq, that path may use reflection.
+
+The jar ships the components the Vauban processor generated for its registry when it was built, so it opens no package, with or without `vidocq:generate`; on another container they are inert.
+
+The processor also warns about a class with `@Inject` members but no bean-defining annotation.
+
+[.tag-new]#NEW# A `@JsonbTypeSerializer` or `@JsonbTypeDeserializer` on a class's property is called directly too, under the same conditions as an adapter, obtained the same way, on a property whose type is a plain class. It gets the context of the `Jsonb` that called the binding (`JsonbBinding.write(generator, value, context)` and `read(parser, context)`, which the runtime calls), or, for a binding called without one, the context of a `Jsonb` of the default configuration (`JsonbContexts`). On a record component, where the runtime does not call them, they keep the runtime.
+
+[.tag-new]#NEW# `@JsonbPropertyOrder` on a class, a superclass or a record puts the properties it names first, in its order, the others keeping the default one (a record's: its components' order), as the runtime writes them. `@JsonbVisibility` keeps the runtime: its strategy is application code that judges the reflective `Field` and `Method` objects at run time, and a field it makes visible is private, out of reach of any code but reflection.
+
+[.tag-new]#NEW# `@JsonbDateFormat`, `@JsonbNumberFormat` and `@JsonbNillable` apply where the runtime applies them: on the property (its getter, setter or field; a record component), else on its class or the closest superclass carrying them, else on the package of one of them. A record component takes them from its record type and package too, as any property does.
+
+Any other type keeps the reflective mapping, and the compiler says why in a note, for instance:
+
+----
+Champollion: com.example.shop.Legacy keeps the reflective JSON-B mapping at run time: abstract
+----
+
+The usual reasons: an abstract class as the type itself (its properties are those of its value's class), a JSON-B annotation on a property the binding cannot honour (an adapter that is neither a bean nor creatable, a creator parameter without a name in a class file…), or `@JsonbVisibility` on the class, a superclass or their package, an annotated interface method a getter implements, an array of a generic type, a property declared on several classes of a hierarchy (an overridden getter), an interface with a default getter. The processor option `-Achampollion.jsonb.rest=false` turns the generation off.
+
+[.tag-new]#NEW# The entity of a `Response` shows in no signature: JAX-RS hands it to JSON-B at run time. The processor reads the method bodies of the compilation — resources, exception mappers, helpers — with the compiler's tree API (`jdk.compiler`, optional) and takes the static type of the entity given to `Response.ok(x)`, `Response.ok(x, type)`, `Response.accepted(x)` and `ResponseBuilder.entity(x)` in any chain (`Response.status(…).entity(x)`, `Response.created(uri).entity(x)`), and the `T` of a `new GenericEntity<T>(…)`, anonymous subclass or not. Those types get their binding like the others, and are listed, by binary name, in `META-INF/champollion/rest-entity-types`: Vidocq's module check opens the packages of those still bound by reflection. An entity whose static type is `Object` keeps the runtime, its class being known at run time only. A compiler that does not expose its trees gets a note, and the entities keep the runtime.
+
+[.tag-new]#NEW# A type of a dependency that the resources reach is compiled elsewhere, so the application's compilation cannot bind it: the processor lists it, by binary name, in `META-INF/champollion/dependency-types`. Run over the dependency with `-Achampollion.jsonb.types=<names>` (comma-separated), the processor binds those types, and the types they reach, there, with no annotation in the dependency. Vidocq's `generate` goal does this for the application's dependencies and writes the bindings into its enriched copy of the jar.
+
+The generated bindings implement a type of `io.vidocq.champollion.jsonb`, so a named module must read that module (`requires io.vidocq.champollion.jsonb;`, directly or through a `requires transitive`) to get them. A module that does not read it keeps the reflective mapping for all its types, and the compiler says so once:
+
+----
+Champollion: module shop does not read io.vidocq.champollion.jsonb; the types its resources exchange keep the reflective JSON-B mapping at run time
+----
+
+== Supported JSON-B annotations
+
+Standard Jakarta JSON Binding 3.0 annotations — all supported:
+
+[cols="2,5"]
+|===
+| Annotation | Effect
+
+| `@JsonbProperty("name")`
+| Renames the JSON property. On a constructor parameter: used for resolution.
+
+| `@JsonbTransient`
+| Excludes the property (read **and** write).
+
+| `@JsonbDateFormat("yyyy-MM-dd")`
+| Date / time format. Applies to `java.time.*`, `java.util.Date`, `Calendar`.
+
+| `@JsonbNumberFormat("#,##0.00")`
+| Numeric format (cf. `DecimalFormat`).
+
+| `@JsonbTypeAdapter(MyAdapter.class)`
+| Adapter on a property or class.
+
+| `@JsonbTypeSerializer(MySer.class)` / `@JsonbTypeDeserializer(...)`
+| Custom serializer / deserializer.
+
+| `@JsonbVisibility(MyStrategy.class)`
+| Visibility strategy (fields vs accessors).
+
+| `@JsonbCreator`
+| Constructor or factory used for deserialization. Records natively supported without annotation.
+
+| `@JsonbNillable`
+| Forces writing of `null` for this property (or class).
+
+| `@JsonbPropertyOrder({"a", "b", "c"})`
+| Property write order.
+
+| `@JsonbTypeInfo` + `@JsonbSubtype`
+| Polymorphism with discriminator (new in JSON-B 3.0).
+|===
+
+Champollion-specific annotations:
+
+[cols="2,5"]
+|===
+| `@JsonbStatic` (`io.vidocq.champollion.jsonb.spi`)
+| Marks a **record** for binding generation by `champollion-codegen-apt`. It is the APT's only trigger — types carrying just `@JsonbProperty` etc. stay on the runtime introspection path.
+|===
+
+== `JsonbConfig` properties
+
+All standard `jakarta.json.bind.JsonbConfig` properties are supported (cf. {spec-jsonb-3-0}):
+
+[cols="2,5"]
+|===
+| Property | Description
+
+| `JSONB_FORMATTING` (`withFormatting`)
+| Pretty-print with indentation.
+
+| `JSONB_NULL_VALUES` (`withNullValues`)
+| Include `null` properties in the output.
+
+| `JSONB_LOCALE` (`withLocale`)
+| Locale for date / number formats.
+
+| `JSONB_DATE_FORMAT` (`withDateFormat`)
+| Global date / time format.
+
+| `JSONB_PROPERTY_NAMING_STRATEGY`
+| `IDENTITY`, `LOWER_CASE_WITH_DASHES`, `LOWER_CASE_WITH_UNDERSCORES`, `UPPER_CAMEL_CASE`, `CASE_INSENSITIVE`...
+
+| `JSONB_PROPERTY_ORDER_STRATEGY`
+| `LEXICOGRAPHICAL`, `ANY`, `REVERSE`.
+
+| `JSONB_BINARY_DATA_STRATEGY`
+| `BYTE`, `BASE_64`, `BASE_64_URL`.
+
+| `JSONB_ENCODING`
+| `UTF-8` by default.
+
+| `withAdapters(...)`, `withSerializers(...)`, `withDeserializers(...)`
+| Global registration.
+|===
+
+There are **no Champollion-specific configuration properties** — configuration is the standard `JsonbConfig` surface only. Static bindings are discovered automatically via `ServiceLoader` (`META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding`); to audit which types are statically bound, inspect that services file in the produced jar.
+
+== `JsonProvider` & `JsonbProvider`
+
+Auto-discovered via `ServiceLoader`:
+
+* `META-INF/services/jakarta.json.spi.JsonProvider` → `io.vidocq.champollion.jsonp.internal.ChampollionJsonProvider`
+* `META-INF/services/jakarta.json.bind.spi.JsonbProvider` → `io.vidocq.champollion.jsonb.internal.ChampollionJsonbProvider`
+
+To force the implementation (multi-impl on the classpath) — JSON-P defines a system property; JSON-B is selected programmatically:
+
+[source,properties]
+----
+-Djakarta.json.provider=io.vidocq.champollion.jsonp.internal.ChampollionJsonProvider
+----
+
+[source,java]
+----
+Jsonb jsonb = JsonbBuilder.newBuilder(
+        "io.vidocq.champollion.jsonb.internal.ChampollionJsonbProvider").build();
+----
+
+[#other-containers]
+== Other containers
+
+Champollion does not depend on CDI or on Vauban. When a CDI container runs, it resolves JSON-B adapters, serializers and deserializers through `CDI.current()` first, as JSON-B 3.0 §5 requires, and falls back to their no-arg constructor otherwise. Two integration-test modules, grouped under `champollion-it-other-containers`, prove it on every build (champollion#19):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `champollion-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: `JsonProvider.provider()` and `JsonbBuilder.create()` answer with Champollion, and a `@JsonbTypeAdapter` adapter is a CDI bean with an injected field, in both directions.
+
+| `champollion-it-openliberty`
+| A WAR bundling `champollion-jsonb` on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1): the same checks, over HTTP.
+|===
+
+Neither module is published.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's JSON-B off** — `jsonb-3.0` on Open Liberty. With it, `JsonbBuilder.create()` answers with the server's provider (Yasson), not with the Champollion the application bundles; `champollion-it-openliberty` catches it. The server's JSON-P (`jsonp-2.1`, which `restfulWS-3.1` brings) is harmless: `JsonProvider.provider()` still answers with Champollion. Open Liberty's "bring your own provider" features, `jsonpContainer-2.1` and `jsonbContainer-3.0`, are not part of the MicroProfile 7 distribution.
+* **Without the server's JSON-B, Jakarta REST does not map JSON entities** — read and write the body with `Jsonb` yourself, or register a `MessageBodyReader`/`MessageBodyWriter` that does.
+* **Nothing to exclude** — the WAR carries `champollion-jsonb`, `champollion-jsonp`, `champollion-api` and the JSON-P and JSON-B API jars; with `jsonb-3.0` off, the application's copies are used. `champollion-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== `champollion-codegen-maven-plugin` Maven plugin
+
+[source,xml]
+----
+<plugin>
+  <groupId>io.vidocq.champollion</groupId>
+  <artifactId>champollion-codegen-maven-plugin</artifactId>
+  <version>${champollion.version}</version>
+  <executions>
+    <execution>
+      <goals><goal>generate</goal></goals>
+    </execution>
+  </executions>
+  <configuration>
+    <targets>
+      <target>com.acme.dto.Order</target>
+      <target>com.acme.dto.Customer</target>
+    </targets>
+  </configuration>
+</plugin>
+----
+
+Bound to `generate-sources`. `<targets>` takes **explicit record FQNs** (present on the compile classpath) — there is no package scanning, no wildcards, no excludes. For each target the Mojo emits a `<FQN>$$Trigger.java` annotated `@JsonbStatic` and runs `javac` with `JsonbStaticProcessor` — 100% delegation to `champollion-codegen-apt`, no duplicated generation logic. Generated sources land in `target/generated-sources/champollion` (added to the compile source roots). If your types are annotated `@JsonbStatic` directly, you do not need this plugin: the APT runs during normal compilation.
+
+== Compatibility
+
+* **Java**: 25 (LTS).
+* **Maven**: 3.9.16 (Model 4.0.0 — the whole Vidocq stack moved to Maven 3.9; see xref:tck.adoc[] for the historical ShrinkWrap note).
+* **Java Modules**: strict, every module has a `module-info.java`.
+* **Virtual threads**: no `synchronized`; the only thread-local state is an internal per-thread parser cache, invisible to applications.
+* **AOT**: GraalVM `native-image` and Leyden CDS friendly in static codegen mode.
+* **Specs**: conformant to {spec-jsonp-2-1} and {spec-jsonb-3-0}.
+
+== Resources
+
+* link:{repo-champollion}/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks vs Parsson / Yasson / Jackson
+* link:{repo-champollion}/src/branch/main/TCK.md[TCK.md] — TCK details
+* link:{repo-champollion}/src/branch/main/ROADMAP.md[ROADMAP.md] — phases M0..M7
