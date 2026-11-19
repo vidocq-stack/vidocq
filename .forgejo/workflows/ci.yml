@@ -1,0 +1,102 @@
+name: CI
+
+# Post-merge flow of the monorepo (push on main): every module built and tested, then every published module
+# deployed as a SNAPSHOT (maven.vidocq.dev, then central-snapshots), incubator included (MONOREPO.md §4).
+on:
+  push:
+    branches: [main]
+
+# One main run at a time, queued, never cancelled: a newer merge must not cut a deploy halfway.
+concurrency:
+  group: publish-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: vidocq-runner
+    steps:
+      # This job holds the publishing credentials and the signing key: every action it runs is pinned
+      # to a commit (workspace CYBER_SECU.md, F-04). Bump the SHAs on purpose, never to a branch.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, the commit Vidocq/ci pins
+
+      - name: Check documented version numbers stay in sync
+        run: ./vidocq-runtime/check-doc-versions.sh
+
+      - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
+        shell: bash
+        env:
+          MIRROR_URL:  ${{ secrets.MIRROR_ASD_URL }}
+          MIRROR_USER: ${{ secrets.MIRROR_ASD_USER }}
+          MIRROR_PASS: ${{ secrets.MIRROR_ASD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
+          host="${MIRROR_URL#https://}"; host="${host#http://}"; host="${host%/}"
+          ci_sha=f79ddba722c722227e6d5b013d4b94a39c68009b
+          git clone --quiet --branch main \
+            "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
+            .ci-action
+          git -C .ci-action checkout --quiet --detach "$ci_sha"
+          test "$(git -C .ci-action rev-parse HEAD)" = "$ci_sha"
+
+      - uses: ./.ci-action/setup-maven
+
+      # One pass: the deploy builds and tests the whole reactor. deployAtEnd (vidocq-parent, the runtime's BOM and
+      # parent) holds every upload until every module built and passed its tests. gib.disable: main builds
+      # everything, whatever the checkout's branch looks like to the incremental builder.
+      - name: Build, test & deploy
+        uses: ./.ci-action/deploy-maven
+        with:
+          maven-args: -B -ntp -U -Dgib.disable=true
+          skip-tests: "false"
+          central-username: ${{ secrets.CENTRAL_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_PASSWORD }}
+          snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}
+          snapshot-password: ${{ secrets.REPOSILITE_PASSWORD }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      # vidocq-runtime-crac-extension requires jdk.crac: built and deployed alone on Azul Zulu CRaC.
+      - name: Install Azul Zulu CRaC
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./vidocq-runtime/install-zulu-crac.sh "$RUNNER_TEMP/zulu"
+          echo "CRAC_JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
+
+      - name: Deploy the CRaC extension (built on a CRaC JDK)
+        uses: ./.ci-action/deploy-maven
+        env:
+          JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
+        with:
+          maven-args: -B -ntp -Dgib.disable=true -Pcrac -pl vidocq-runtime/vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension
+          skip-tests: "true"
+          central-username: ${{ secrets.CENTRAL_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_PASSWORD }}
+          snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}
+          snapshot-password: ${{ secrets.REPOSILITE_PASSWORD }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.ci-action/notify-slack
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: failure
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+
+      - name: Notify Slack on success
+        if: success()
+        uses: ./.ci-action/notify-slack
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: success
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+          sha: ${{ github.sha }}
+          commit-message: ${{ github.event.head_commit.message }}
+          commit-author: ${{ github.event.head_commit.author.name }}

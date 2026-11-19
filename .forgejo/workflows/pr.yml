@@ -1,0 +1,169 @@
+# Pull-request validation of the monorepo (MONOREPO.md §4 and §5, Sunday step 1).
+#
+#   pr-state           what the pull request is now (ready, WIP, train member), read through the API
+#                      (Vidocq/ci pr-validate-gate, mode state).
+#   governance-checks  CLA, GPG signature, Signed-off-by. Required context
+#                      `pr-validate / governance-checks (pull_request)`.
+#   producer           gitflow-incremental-builder (.mvn/extensions.xml, gib.* in the root pom): the modules the
+#                      pull request changes, their upstream without tests and every downstream module with its
+#                      tests. Then the TCK each impacted component declares in its root pom (ci.tck.modules,
+#                      ci.tck.command), as each repository's own pull request did before the monorepo.
+#   impacted           no repository outside depends on a pull request any more: a shared API change fixes every
+#                      caller in the same pull request (MONOREPO.md §6). erasmus, tassis, verne and VCU build
+#                      against the SNAPSHOTs of main. The job stays because the verdict reads it: no consumer.
+#   downstream         skipped, for the same reason.
+#   pr-validate        the aggregator (pr-validate-gate, mode verdict). Required context
+#                      `pr-validate / pr-validate (pull_request)`.
+#
+# Not yet here: the title check (§7, a warning first), one `tck / <component>` job per impacted spec (§9), the
+# reuse of a validated tree.
+name: pr-validate
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+jobs:
+  pr-state:
+    runs-on: vidocq-runner
+    outputs:
+      state: ${{ steps.state.outputs.state }}
+      run-producer: ${{ steps.state.outputs.run-producer }}
+      run-downstream: ${{ steps.state.outputs.run-downstream }}
+    steps:
+      - id: state
+        uses: https://codefloe.com/Vidocq/ci/pr-validate-gate@main
+        with:
+          mode: state
+          token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+
+  governance-checks:
+    runs-on: vidocq-runner
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: https://codefloe.com/Vidocq/ci/governance-checks@main
+        with:
+          pr-author: ${{ github.event.pull_request.user.login }}
+          slack-webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  producer:
+    needs: [governance-checks, pr-state]
+    if: needs.pr-state.outputs.run-producer == 'true'
+    runs-on: vidocq-runner
+    outputs:
+      docs-only: ${{ steps.changes.outputs.docs-only }}
+      test-only: ${{ steps.changes.outputs.test-only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitflow-incremental-builder compares with the merge base of main
+
+      - name: Fetch main for the incremental build
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+
+      - name: Detect a docs-only change set
+        id: changes
+        uses: https://codefloe.com/Vidocq/ci/docs-only-changes@main
+        with:
+          bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+
+      - name: Check documented version numbers stay in sync
+        run: ./vidocq-runtime/check-doc-versions.sh
+
+      - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
+        if: steps.changes.outputs.docs-only != 'true'
+
+      - name: Build and test what the pull request changes
+        if: steps.changes.outputs.docs-only != 'true'
+        # -am: the upstream of a changed module is built from this tree, its tests skipped
+        # (gib.skipTestsForUpstreamModules); every downstream module runs its tests (gib.buildDownstream=always).
+        run: >-
+          mvn -B -ntp -U install -am
+          -Dgib.referenceBranch=refs/remotes/origin/main
+          -Dgib.skipTestsForUpstreamModules=true
+          -Dgib.uncommitted=false -Dgib.untracked=false
+          -Dgib.logImpactedTo=${{ runner.temp }}/gib-impacted.txt
+
+      - name: TCK of the impacted components
+        if: steps.changes.outputs.docs-only != 'true'
+        env:
+          IMPACTED: ${{ runner.temp }}/gib-impacted.txt
+        run: |
+          set -euo pipefail
+          touch "$IMPACTED"
+          echo "Impacted modules: $(wc -l < "$IMPACTED")"
+          python3 - "$IMPACTED" > "$RUNNER_TEMP/tck-plan.txt" <<'PY'
+          import json, os, sys, xml.etree.ElementTree as ET
+          root = os.getcwd()
+          impacted = [os.path.relpath(os.path.abspath(l.strip()), root) for l in open(sys.argv[1]) if l.strip()]
+          for c in json.load(open("components.json"))["components"]:
+              if not any(p == c["path"] or p.startswith(c["path"] + "/") for p in impacted):
+                  continue
+              pom = ET.parse(os.path.join(c["path"], "pom.xml")).getroot()
+              ns = pom.tag[1:].split("}", 1)[0]
+              props = pom.find("{%s}properties" % ns)
+              get = lambda n: ((props.find("{%s}%s" % (ns, n)).text or "").strip()
+                               if props is not None and props.find("{%s}%s" % (ns, n)) is not None else "")
+              for m in filter(None, (x.strip() for x in get("ci.tck.modules").split(","))):
+                  print("\t".join([c["tag"], c["path"], "mvn -B -ntp -pl " + m + " -Ptck test"]))
+              if get("ci.tck.command"):
+                  print("\t".join([c["tag"], c["path"], get("ci.tck.command")]))
+          PY
+          if [ ! -s "$RUNNER_TEMP/tck-plan.txt" ]; then
+            echo "No impacted component declares a TCK; the nightly TCK job replays them all."
+            exit 0
+          fi
+          while IFS=$'\t' read -r tag path command; do
+            echo "::group::TCK $tag: $command"
+            (cd "$path" && bash -c "$command")
+            echo "::endgroup::"
+          done < "$RUNNER_TEMP/tck-plan.txt"
+
+  impacted:
+    needs: [governance-checks, pr-state]
+    if: needs.pr-state.outputs.run-downstream == 'true'
+    runs-on: vidocq-runner
+    outputs:
+      matrix: ${{ steps.none.outputs.matrix }}
+      count: ${{ steps.none.outputs.count }}
+      upstreams: ${{ steps.none.outputs.upstreams }}
+    steps:
+      - id: none
+        run: |
+          echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+          echo 'count=0' >> "$GITHUB_OUTPUT"
+          echo 'upstreams={}' >> "$GITHUB_OUTPUT"
+
+  downstream:
+    needs: [pr-state, producer, impacted]
+    if: needs.impacted.outputs.count != '0' && needs.impacted.outputs.count != ''
+    runs-on: vidocq-runner
+    steps:
+      - run: echo "No downstream repository is built for a monorepo pull request." && exit 1
+
+  pr-validate:
+    needs: [governance-checks, pr-state, producer, impacted, downstream]
+    if: always()
+    runs-on: vidocq-runner
+    steps:
+      - name: Verdict
+        id: gate
+        uses: https://codefloe.com/Vidocq/ci/pr-validate-gate@main
+        with:
+          mode: verdict
+          needs: ${{ toJSON(needs) }}
+          token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+
+      - name: Notify Slack on PR success
+        if: success() && steps.gate.outputs.notify == 'true'
+        uses: https://codefloe.com/Vidocq/ci/notify-slack@main
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: pr-validated
+          repo: ${{ github.repository }}
+          pr-number: ${{ github.event.number }}
+          pr-title: ${{ github.event.pull_request.title }}
+          pr-author: ${{ github.event.pull_request.user.login }}
+          pr-url: ${{ github.event.pull_request.html_url }}

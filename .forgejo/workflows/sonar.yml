@@ -1,0 +1,35 @@
+# SonarQube analysis of the monorepo: one project, key the-vidocq-project (Yann, 2026-11-19), main on every push,
+# pull requests on every update. Blocking: `sonar / sonar` is a required check of main.
+#
+# The whole reactor is built and analysed each time (gib.disable): an analysis of a partial reactor drops the
+# modules it did not build from a branch, and the scanner refuses a reactor without its aggregators
+# (MONOREPO.md §4, GIB spike checks 6a to 6e). A PR analysis of the impacted modules only comes later.
+#
+# Prerequisites: org secret SONAR_TOKEN, org variable SONAR_HOST_URL, org secret VIDOCQ_BOT_TOKEN.
+name: sonar
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sonar:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: vidocq-runner
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # whole history: new-code detection and blame
+      - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
+      - uses: https://codefloe.com/Vidocq/ci/sonar-analysis@main
+        with:
+          project-key: the-vidocq-project
+          sonar-token: ${{ secrets.SONAR_TOKEN }}
+          host-url: ${{ vars.SONAR_HOST_URL }}
+          bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dmaven.test.failure.ignore=true install
+          analysis-args: -B -ntp -Pquality -Dgib.disable=true
+          blocking: 'true'
+          targeted-tests: false
