@@ -1,0 +1,10 @@
+name: dirac
+title: Dirac
+version: '0.2.0'
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: en
+    project-version: 0.2.0
+    release-version: 0.2.0

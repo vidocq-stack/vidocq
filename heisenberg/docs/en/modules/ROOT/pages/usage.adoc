@@ -1,0 +1,228 @@
+= Usage
+:description: Typical policy chains for REST clients, typed FallbackHandler, @Asynchronous, overridable configuration.
+
+[.lead]
+This page gathers the concrete patterns encountered in production: a robust REST client combining retry + timeout + circuit breaker + fallback, the use of `FallbackHandler<T>` for reusable fallbacks, the semantics of `@Asynchronous` with virtual threads, and MP Config overrides without recompiling.
+
+== Robust REST client
+
+The standard combination for calling a remote service through xref:cassini::index.adoc[Cassini] (or any HTTP client): per-attempt timeout, bounded retry, circuit breaker, fallback.
+
+[source,java]
+----
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.faulttolerance.*;
+
+@ApplicationScoped
+public class CatalogClient {
+
+    @Inject
+    private CatalogRemote remote;
+
+    @Timeout(value = 2000) // 2 s per attempt
+    @Retry(maxRetries = 3, delay = 200, jitter = 100,
+           retryOn = { java.io.IOException.class, java.util.concurrent.TimeoutException.class },
+           abortOn = { IllegalArgumentException.class })
+    @CircuitBreaker(requestVolumeThreshold = 20, failureRatio = 0.5,
+                    delay = 5000, successThreshold = 3)
+    @Fallback(fallbackMethod = "catalogFromCache")
+    public Catalog fetch(String tenant) {
+        return remote.fetch(tenant);
+    }
+
+    private Catalog catalogFromCache(String tenant) {
+        return Catalog.emptyFor(tenant);
+    }
+}
+----
+
+Semantics:
+
+* Each attempt is bounded to 2 s by `@Timeout`.
+* `@Retry` retries 3 times, with a base delay of 200 ms and ±100 ms jitter — avoids _thundering herd_.
+* `retryOn` restricts retry to `IOException` and `TimeoutException`. `abortOn` stops any retry on `IllegalArgumentException` (business error, will not come back).
+* `@CircuitBreaker` observes the last 20 results; above 50% failure, it opens for 5 s.
+* `@Fallback(fallbackMethod = "catalogFromCache")` provides the empty catalogue when all attempts failed or the circuit is open.
+
+== Typed and reusable `FallbackHandler<T>`
+
+When the same fallback applies to several methods, a separate `FallbackHandler<T>` is cleaner than a private method per bean.
+
+[source,java]
+----
+import org.eclipse.microprofile.faulttolerance.ExecutionContext;
+import org.eclipse.microprofile.faulttolerance.FallbackHandler;
+
+public class CatalogCacheFallback implements FallbackHandler<Catalog> {
+    @Override
+    public Catalog handle(ExecutionContext ctx) {
+        String tenant = (String) ctx.getParameters()[0];
+        // ctx.getFailure() exposes the exception that triggered the fallback
+        return Catalog.emptyFor(tenant);
+    }
+}
+
+@ApplicationScoped
+public class CatalogClient {
+
+    @Fallback(CatalogCacheFallback.class)
+    @Retry(maxRetries = 3)
+    public Catalog fetch(String tenant) {
+        return remote.fetch(tenant);
+    }
+}
+----
+
+The `FallbackHandler` is instantiated by CDI — it can therefore inject its own dependencies (`@Inject CacheManager cache;`).
+
+== Synchronous bulkhead: limit concurrency
+
+`@Bulkhead(N)` bounds the number of concurrent invocations. Useful to protect an undersized connection pool.
+
+[source,java]
+----
+@ApplicationScoped
+public class DbReader {
+
+    @Bulkhead(10) // at most 10 concurrent reads
+    @Timeout(500)
+    public Row readRow(long id) {
+        return dataSource.query("SELECT * FROM t WHERE id = ?", id);
+    }
+}
+----
+
+Beyond 10 concurrent calls, the next ones receive an immediate `BulkheadException` — no waiting queue in synchronous mode.
+
+== `@Asynchronous` + `@Bulkhead`: bounded queue
+
+Combining both yields a _bounded waiting queue_. `value` bounds concurrency, `waitingTaskQueue` bounds the queue.
+
+[source,java]
+----
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CompletableFuture;
+
+@ApplicationScoped
+public class IndexingService {
+
+    @Asynchronous
+    @Bulkhead(value = 5, waitingTaskQueue = 100)
+    @Retry(maxRetries = 2)
+    public CompletionStage<Indexed> index(Document doc) {
+        Indexed result = expensiveIndexing(doc);
+        return CompletableFuture.completedStage(result);
+    }
+}
+----
+
+The caller receives a `CompletionStage<Indexed>` immediately; the computation runs on a virtual thread created by the interceptor. Beyond 5 concurrent + 100 queued, the returned `CompletionStage` completes exceptionally with `BulkheadException`.
+
+== `@Asynchronous` alone: offload to a virtual thread
+
+For a long operation that should not block the calling thread:
+
+[source,java]
+----
+@ApplicationScoped
+public class EmailService {
+
+    @Asynchronous
+    @Timeout(5000)
+    @Retry(maxRetries = 3, delay = 1000)
+    public CompletionStage<Receipt> send(Email mail) {
+        Receipt r = smtpClient.send(mail);
+        return CompletableFuture.completedStage(r);
+    }
+}
+----
+
+The `@Timeout` bounds the _attempt_, not the sequence. Three attempts × 5 s = up to 15 s total budget (excluding `delay`).
+
+== Parameterised `@CircuitBreaker`
+
+For a costly and uncertain call — for instance an external LLM:
+
+[source,java]
+----
+@ApplicationScoped
+public class LlmClient {
+
+    @CircuitBreaker(
+        requestVolumeThreshold = 4,      // observe the last 4 calls
+        failureRatio = 0.75,             // open at 75% failure (3 of 4)
+        delay = 30_000,                  // wait 30 s in OPEN state
+        successThreshold = 2             // 2 OK probes to re-close
+    )
+    @Timeout(10_000)
+    @Fallback(fallbackMethod = "fallbackCompletion")
+    public Completion complete(Prompt prompt) {
+        return llm.complete(prompt);
+    }
+
+    private Completion fallbackCompletion(Prompt prompt) {
+        return Completion.canned("Service temporarily unavailable.");
+    }
+}
+----
+
+== Combinations to avoid
+
+`@Asynchronous` on a method that returns `void` or a type other than `CompletionStage` / `Future` → `FaultToleranceDefinitionException` at startup.
+
+[source,java]
+----
+// REJECTED by the Vauban BCE
+@Asynchronous
+public void fireAndForget() { /* ... */ } // void is forbidden, see spec §6.1
+----
+
+`@Bulkhead(value=0)` is rejected by the spec (§9.2).
+
+`@Retry(maxRetries = -1)` allows an unbounded number of attempts; **always** combine with `@Retry(maxDuration = ...)` or `@Timeout` above to bound the worst case.
+
+== Maven coordinates
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+  <groupId>io.vidocq.heisenberg</groupId>
+  <artifactId>heisenberg-cdi-vauban</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+Matching Java modules: `io.vidocq.heisenberg.core` and `io.vidocq.heisenberg.cdi.vauban`. The public SPI lives in `io.vidocq.heisenberg.api.*`.
+
+== Configuration overrides without recompiling
+
+Every parameter is overridable through xref:ravel::index.adoc[Ravel] (MicroProfile Config), following the standard MP FT 4.1 §12 precedence: **method** > **class** > **global default**.
+
+[source,properties]
+----
+# Global — every @Retry in the application
+Retry/maxRetries=5
+
+# Per class — all methods of CatalogClient
+io.example.CatalogClient/Retry/maxRetries=2
+
+# Per method — highest precedence
+io.example.CatalogClient/fetch/Retry/maxRetries=1
+io.example.CatalogClient/fetch/CircuitBreaker/delay=60000
+
+# Turn off tolerance except @Fallback (useful in integration)
+MP_Fault_Tolerance_NonFallback_Enabled=false
+----
+
+== Test without a container
+
+The `heisenberg-core` engines (`RetryEngine`, `TimeoutEngine`, `CircuitBreakerEngine`, `BulkheadEngine`) are pure Java with no CDI dependency — that is how Heisenberg unit-tests them internally. They are **not** application API, though: the `io.vidocq.heisenberg.internal` package is exported only to the `io.vidocq.heisenberg.cdi.vauban` module, and its types (`RetryConfig` and the other policy records included) are internal. Application code compiles against the `org.eclipse.microprofile.faulttolerance.*` annotations only — they are the whole public API.
+
+To exercise a policy without deploying the full application, run the annotated bean in embedded Vauban rather than Arquillian — see xref:vauban::index.adoc[Vauban].
+
+== Going further
+
+* xref:concepts.adoc[Concepts] — composition order, CircuitBreaker states, async semantics.
+* xref:reference.adoc[Reference] — full parameter list per annotation, MP Config keys table.
+* xref:internals.adoc[Internals] — virtual threads, shared state registries, metrics.

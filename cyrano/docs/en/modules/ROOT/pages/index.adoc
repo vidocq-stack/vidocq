@@ -1,0 +1,110 @@
+= Cyrano
+:description: MicroProfile Rest Client 4.0 implementation, type-safe REST clients with zero third-party dependencies, compile-time proxies via annotation processing (Class-File API runtime fallback), JDK HttpClient transport, Java 25.
+
+[.text-center]
+image::cyrano-logo.png[Cyrano,300,role=module-logo]
+
+[.lead]
+Cyrano is the MicroProfile Rest Client 4.0 implementation of the Vidocq ecosystem. It turns a plain annotated Java interface (`@Path`, `@GET`, `@RegisterRestClient`) into a typed proxy that speaks HTTP on your behalf: the request, parameters, headers, JSON-B serialization and typed deserialization are all handled from the shadows — without dynamic reflection, without third-party libraries, and on virtual threads native to JDK 25.
+
+== Origin of the name
+
+The character of **Cyrano de Bergerac** — from Edmond Rostand's play (1897), inspired by the French free-thinker Savinien de Cyrano de Bergerac (1619-1655) — lends Christian his eloquence, his verses, his feelings, from the shadow of the balcony. Christian only needs to mouth the words; the voice, the cadence, the metaphor all come from Cyrano. See https://en.wikipedia.org/wiki/Cyrano_de_Bergerac_(play)[the play on Wikipedia].
+
+A type-safe REST client does exactly the same thing: the application calls `users.findById(42)` and Cyrano speaks HTTP in its name — builds the request, serializes the body, attaches headers, parses the response, deserializes the return type. The application only hears the typed voice; the protocol stays in the shadows.
+
+[cols="1,2"]
+|===
+| Cyrano, the eloquent | Cyrano, the Rest Client runtime
+
+| Speech for Christian under the balcony
+| HTTP call on behalf of application code
+
+| Lines spoken in cadence (rhythm, rhyme)
+| HTTP request formed (method, path, headers, body)
+
+| Voice carried but face hidden
+| Typed interface — the remote service is invisible
+
+| Borrowed metaphor, circulating image
+| Build-time-generated proxy injected via DI
+
+| Constraint of language: imposed alexandrine
+| Constraint of the spec: `@Path`, `@GET`, `@RegisterRestClient`
+
+| Roxane's reply, interpreted
+| HTTP response deserialized into a typed value
+|===
+
+== At a glance
+
+[cols="1,3"]
+|===
+| Implemented spec | https://download.eclipse.org/microprofile/microprofile-rest-client-4.0/microprofile-rest-client-spec-4.0.html[MicroProfile Rest Client 4.0]
+| Repo | https://codefloe.com/Vidocq/cyrano[Vidocq/cyrano] (mirrors: GitHub, Forgejo)
+| Java | 25 (LTS)
+| Java modules | `io.vidocq.cyrano.mp.rest.client.api`, `io.vidocq.cyrano.api`, `io.vidocq.cyrano.processor`, `io.vidocq.cyrano.core`, `io.vidocq.cyrano.cdi.vauban`
+| Runtime dependencies | `microprofile-rest-client-api` (repackaged), `jakarta.ws.rs-api`, `jakarta.json.bind-api` (runtime impl: xref:champollion::index.adoc[Champollion])
+| HTTP transport | `java.net.http.HttpClient` (pure JDK, HTTP/1.1 + H/2, virtual threads)
+| Proxy generation | APT-first: `cyrano-processor` generates `<Interface>$$CyranoClient` sources at compile time; Class-File API (JEP 484) kept strictly as runtime fallback — named `Cyrano$<Interface>` classes, no `java.lang.reflect.Proxy`
+| CDI integration | `cyrano-cdi-vauban` — BCE `@Enhancement` on `@RegisterRestClient`, `@Synthesis` produces the `@RestClient`-qualified bean
+| jlink-ready | ✅ (the `cyrano-mp-rest-client-api` repackage neutralises the upstream automatic module)
+| MicroProfile Rest Client 4.0 TCK | **168 / 168 — 100 % PASS** of the retained perimeter (the `ssl/**` and `sse/**` suites are excluded at 0.2.0) — see xref:tck.adoc[TCK status]
+| License | EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+|===
+
+== Three identity traits
+
+. **Zero third-party libraries.** No implementation dependency: no RESTEasy Client, no Jersey, no CXF, no OkHttp, no Jackson, no ASM, no Byte Buddy. Only Jakarta EE and MicroProfile specs are `compile`/`provided`. The transport layer is `java.net.http.HttpClient` from the JDK; the JSON layer is Jakarta JSON-B (the xref:champollion::index.adoc[Champollion] implementation is provided at runtime).
+
+. **JDK transport, virtual-thread native.** `HttpClient` is built with `Executors.newVirtualThreadPerTaskExecutor()`. Every blocking call occupies a virtual thread, not a platform thread. No `synchronized`, no `ThreadLocal` on the hot path — virtual-thread-friendly end to end. Async mode (`CompletionStage<T>`) delegates to `HttpClient.sendAsync`.
+
+. **Compile-time interface proxy, not reflection.** Cyrano does not call `java.lang.reflect.Proxy.newProxyInstance(...)`. The `cyrano-processor` annotation processor generates a real named class `<Interface>$$CyranoClient` **as plain Java source at compile time** (APT-first, workspace codegen rule CG-01), with a literal descriptor and a ServiceLoader-able `Factory`. For interfaces compiled without the processor (e.g. pre-compiled jars), `CyranoProxyGenerator` falls back to emitting a `Cyrano$<SimpleName>` class via the **Class-File API** (JEP 484), loaded with `MethodHandles.Lookup.defineClass` and memoised by `CyranoProxyCache`. Benefits either way: readable stack traces, no `setAccessible(true)`, AOT-friendly (GraalVM `native-image`, Leyden CDS).
+
+== Position in the ecosystem
+
+[mermaid]
+....
+flowchart LR
+  App["Application code<br/>@Inject @RestClient MyService"]
+  Proxy["MyService$$CyranoClient<br/>(APT-generated; Class-File API fallback)"]
+  Handler["CyranoInvocationHandler<br/>resolves params, headers"]
+  HttpC["java.net.http.HttpClient<br/>virtual thread executor"]
+  Remote["Remote HTTP service"]
+  JSONB["Jakarta JSON-B<br/>(Champollion)"]
+
+  App -->|typed call| Proxy
+  Proxy -->|delegate| Handler
+  Handler -->|HttpRequest| HttpC
+  HttpC -->|HTTP/1.1, H/2| Remote
+  Remote -->|HTTP response| HttpC
+  HttpC --> Handler
+  Handler -->|deserialise| JSONB
+  JSONB -->|typed value| App
+
+  Handler -.@Inject.-> Ravel["Ravel<br/>MP Config"]
+  App -.discovery.-> Vauban["Vauban<br/>BCE @RegisterRestClient"]
+
+  classDef rt fill:#fff3e0,stroke:#ef6c00
+  class Proxy,Handler rt
+....
+
+Cyrano plugs in as the **client side** of the same stack as xref:cassini::index.adoc[Cassini] on the server side: xref:vauban::index.adoc[Vauban] discovers `@RegisterRestClient` interfaces and produces synthetic beans, xref:ravel::index.adoc[Ravel] resolves `<configKey>/mp-rest/url` keys, xref:champollion::index.adoc[Champollion] serialises/deserialises JSON bodies. The transport is `java.net.http.HttpClient` (JDK), not xref:chappe::index.adoc[Chappe] — Chappe is a server, not a client.
+
+== Current status
+
+The core implementation (`cyrano-core`), the compile-time client generator (`cyrano-processor`) and the CDI integration (`cyrano-cdi-vauban`) are in place. The MicroProfile Rest Client 4.0 TCK passes at **168 / 168 — 100 % of the retained perimeter** (the `ssl/**` and `sse/**` suites are excluded at 0.2.0). Integration into the Vidocq runtime is provided through the `vidocq-runtime-cyrano-rest-client-extension` wrapper.
+
+== Quick links
+
+* xref:getting-started.adoc[Getting started] — first typed call in under fifty lines.
+* xref:concepts.adoc[Concepts] — MP Rest Client vocabulary (`@RegisterRestClient`, `RestClientBuilder`, `@RestClient` qualifier, providers).
+* xref:usage.adoc[Usage] — parameters, headers, async, exception mappers, programmatic builder.
+* xref:reference.adoc[Reference] — Maven coordinates, Java modules, supported MP Config keys.
+* xref:internals.adoc[Internals] — proxy resolution chain (APT-generated clients first, Class-File API fallback), interface scan, transport, Vauban BCE integration.
+* xref:tck.adoc[TCK] — official score, tested scope, declared challenges.
+* xref:migration.adoc[Migration] — from SmallRye Rest Client / RESTEasy Client.
+
+== License
+
+EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later — see https://codefloe.com/Vidocq/cyrano/src/branch/main/LICENSE[LICENSE].

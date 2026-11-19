@@ -1,0 +1,221 @@
+= Reference
+:description: Maven artefacts, exported Java Modules packages, Maven plugin, JUnit extension, Lite vs Full comparison.
+
+[.lead]
+This page lists every artefact published by Vauban, the Java Modules packages they export, the Maven-plugin goals, and the comparison between the CDI Lite and Full profiles.
+
+== Maven artefacts
+
+[cols="2,1,3"]
+|===
+| Artefact | Recommended scope | Role
+
+| `io.vidocq.vauban:vauban-api:{project-version}`
+| `compile`
+| Version marker (`Vauban.VERSION`) and the generated-code SPI (`VaubanComponentProvider`)
+
+| `io.vidocq.vauban:vauban-core:{project-version}`
+| `runtime`
+| CDI 4.1 Lite container runtime
+
+| `io.vidocq.vauban:vauban-processor:{project-version}`
+| `provided`
+| APT (emits `_Factory`, `_ClientProxy` at `process-classes`)
+
+| `io.vidocq.vauban:vauban-indexer:{project-version}`
+| `provided`
+| Build-time bean indexer (zero dependency)
+
+| `io.vidocq.vauban:vauban-maven-plugin:{project-version}`
+| `build`
+| Maven plugin (goals: `generate`, `dist`, `encrypt`)
+
+| `io.vidocq.vauban:vauban-classloader-spi:{project-version}`
+| `runtime`
+| ClassLoader SPI (`ByteSourcePlugin`, `ArchiveReader`)
+
+| `io.vidocq.vauban:vauban-sjar:{project-version}`
+| `runtime` (optional)
+| `.sjar` (AES-256-GCM encrypted) implementation
+
+| `io.vidocq.vauban:vauban-junit:{project-version}`
+| `test`
+| JUnit 5 extension (`@VaubanTest`)
+
+| `io.vidocq.vauban:vauban-test-suite:{project-version}`
+| `test`
+| Official integration test suite
+|===
+
+== Exported Java modules
+
+[cols="2,3"]
+|===
+| Module | Exported packages
+
+| `io.vidocq.vauban.api`
+| `io.vidocq.vauban.api`
+
+| `io.vidocq.vauban.core`
+| `io.vidocq.vauban.core`, `.container`, `.langmodel`, `.langmodel.declarations`, `.langmodel.types`, `.types`, `.bean.model`, `.bean.discovery`, `.bean.resolution`, `.bean.validation`, `.context`, `.event`, `.interceptor`, `.enrichment`, `.extensions`; qualified: `.proxy` (client-proxy IR + emitter, exported to `io.vidocq.vauban.processor` only)
+
+| `io.vidocq.vauban.indexer`
+| `io.vidocq.vauban.indexer`, `.indexer.codegen`, `.indexer.model`, `.indexer.scanner`
+
+| `io.vidocq.vauban.processor`
+| (internal — requires `java.compiler`)
+
+| `io.vidocq.vauban.classloader.spi`
+| `io.vidocq.vauban.classloader.spi`
+
+| `io.vidocq.vauban.sjar`
+| `io.vidocq.vauban.sjar`, `.sjar.cli`
+
+| `io.vidocq.vauban.junit`
+| `io.vidocq.vauban.junit`
+|===
+
+`io.vidocq.vauban.core` provides `jakarta.enterprise.inject.spi.CDIProvider` (`VaubanCDIProvider`), `jakarta.enterprise.inject.se.SeContainerInitializer` (`VaubanSeContainerInitializer`) and `jakarta.enterprise.inject.build.compatible.spi.BuildServices` (`VaubanBuildServices`) via `provides`. No unjustified `opens`.
+
+== Maven plugin goals
+
+[cols="1,3"]
+|===
+| Goal | Role
+
+| `vauban:generate`
+| Bound to `process-classes`. Scans the dependency JARs and the project classes for CDI beans and writes the `META-INF/vauban-beans.list` bean index into `${project.build.outputDirectory}`.
+
+| `vauban:dist`
+| Bound to `package`. Packages the application as a distribution ZIP (launch scripts, application JAR and all dependencies), attached with classifier `dist`.
+
+| `vauban:encrypt`
+| Bound to `package`. Encrypts the internal classes of a modular JAR in-place with AES-256-GCM (`vauban-sjar` reads it back); classes in `exports`/`opens` packages stay in clear text.
+|===
+
+== Annotation-processor options
+
+`vauban-processor` accepts two APT options (`-A` flags on `javac`, `<compilerArgs>` in Maven):
+
+[cols="1,3"]
+|===
+| Option | Effect
+
+| `-Avauban.validation=false`
+| Skips the static deployment validation (unsatisfied/ambiguous, unproxyable and circular-dependency checks). Useful when beans rely on injections that only a runtime Build Compatible Extension can satisfy (e.g. MicroProfile `@ConfigProperty`, `@Claim`, `@RegisterRestClient`) and the BCE is not on the APT classpath. The runtime container still runs the full validation at start; this option only silences the compile-time check, it does not disable wiring.
+
+| `-Avauban.validation.scope=all`
+| Default `main`: validation only runs on the principal source set and is skipped automatically when the processor detects a `testCompile` invocation (default output pointing at `target/test-classes`). Set to `all` to enforce validation on test sources too.
+|===
+
+[#junit-extension]
+== JUnit extension (`vauban-junit`)
+
+`@VaubanTest` boots a lightweight container for tests:
+
+[source,java]
+----
+@VaubanTest
+@AddBeans(GreetingService.class)
+class GreetingServiceTest {
+    @Inject GreetingService greeting;
+
+    @Test
+    void hello() {
+        assertEquals("Hello, Vauban!", greeting.hello("Vauban"));
+    }
+}
+----
+
+Bean selection:
+
+* `@VaubanTest` — a plain marker (no members). Boots the container via `VaubanContainer.builder()` before all tests, closes it after the last one, and injects the test instance's `@Inject` fields.
+* `@AddBeans({Foo.class, Bar.class})` — a separate annotation that registers the listed classes on the container builder (`addBeanClass(...)`).
+
+[#lite-vs-full]
+== CDI 4.1 Lite vs Full comparison
+
+[cols="2,1,1,3"]
+|===
+| Feature | Lite | Full | Vauban
+
+| Managed beans, standard scopes
+| ✅
+| ✅
+| ✅
+
+| Producers, disposers
+| ✅
+| ✅
+| ✅
+
+| Events (`Event<T>`, `@Observes`, `@ObservesAsync`)
+| ✅
+| ✅
+| ✅
+
+| Interceptors (`@AroundInvoke`, `@AroundConstruct`)
+| ✅
+| ✅
+| ✅
+
+| Build Compatible Extensions (BCE)
+| ✅
+| ✅
+| ✅
+
+| Portable Extensions (runtime `Extension` SPI)
+| ❌
+| ✅
+| ❌
+
+| `@ConversationScoped`
+| ❌
+| ✅
+| ❌
+
+| `@SessionScoped`
+| ❌
+| ✅
+| // TODO@user: confirm
+
+| Passivation, bean serialisation
+| ❌
+| ✅
+| ❌
+
+| `@Specializes`
+| ❌
+| ✅
+| ❌
+
+| EL for managed beans
+| ❌
+| ✅
+| ❌
+
+| Decorators
+| Optional
+| ✅
+| // TODO@user: validate coverage
+|===
+
+== Configuration
+
+Vauban needs no application configuration file. Bean selection happens via:
+
+* the `module-info.java` (Java Modules visibility);
+* the bootstrap strategy (`scanLocal()`, `scanClasspath()`, `addBeanClass()`).
+
+For dynamic application configuration, use MicroProfile Config through xref:vidocq::index.adoc[Vidocq Runtime].
+
+== Bugs
+
+* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+
+== Compatibility
+
+* Java 25 (LTS), Maven 3.9.16.
+* Strict Java Modules, named modules only.
+* CDI 4.1 — Lite profile.
+* Compatible with GraalVM `native-image` and Project Leyden CDS.

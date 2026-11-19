@@ -1,0 +1,229 @@
+= Reference
+:description: Maven artefacts, Java modules, public API, configuration, Servlet 6.1 comparison.
+
+[.lead]
+Consolidated technical reference. Use this page as an anchor for external links (issues, RFCs, other Antora sites).
+
+== Maven artefacts
+
+[cols="1,3",options="header"]
+|===
+| Artefact | Role
+
+| `io.vidocq.foy:foy-api:{project-version}`
+| Public SPI: `SessionStore`, `SecurityProvider`, `AuthenticatedUser`. No dependency outside `jakarta.servlet-api`.
+
+| `io.vidocq.foy:foy-core:{project-version}`
+| Servlet 6.1 engine — dispatcher, filter chain, sessions, error pages, listeners, security, `web.xml` parser, multipart, and the Chappe bridge (`ChappeServletBridge`, package `io.vidocq.foy.internal.bridge`).
+
+| `io.vidocq.foy:foy-chappe:{project-version}`
+| Bootstrap on the xref:chappe::index.adoc[Chappe] transport (`FoyChappeBoot`, which builds the `foy-core` bridge).
+
+| `io.vidocq.foy:foy-cdi-vauban:{project-version}`
+| CDI bridge to xref:vauban::index.adoc[Vauban] (`FoyVaubanBootstrap`).
+
+| `io.vidocq.foy:foy-tck`
+| Arquillian harness for the official TCK — **standalone `modelVersion 4.0.0` POM, out of reactor** (see xref:tck.adoc[TCK status]).
+|===
+
+== Java modules and exports
+
+[source,java]
+----
+module io.vidocq.foy.api {
+    requires transitive jakarta.servlet;
+    requires static jakarta.annotation;
+
+    exports io.vidocq.foy.spi.session;    // SessionStore
+    exports io.vidocq.foy.spi.security;   // SecurityProvider, AuthenticatedUser
+}
+----
+
+[source,java]
+----
+module io.vidocq.foy.core {
+    requires transitive io.vidocq.foy.api;
+    requires transitive jakarta.servlet;
+    requires static jakarta.cdi;
+    requires static jakarta.annotation;
+    requires java.xml;
+    requires static java.net.http;
+    requires io.vidocq.chappe.api;        // M1 coupling — will become an SPI in M2
+
+    exports io.vidocq.foy.internal.async;
+    exports io.vidocq.foy.internal.boot;
+    exports io.vidocq.foy.internal.bridge;
+    exports io.vidocq.foy.internal.container;
+    exports io.vidocq.foy.internal.dispatcher;
+    exports io.vidocq.foy.internal.error;
+    exports io.vidocq.foy.internal.http;
+    exports io.vidocq.foy.internal.listener;
+    exports io.vidocq.foy.internal.security;
+    exports io.vidocq.foy.internal.session;
+    exports io.vidocq.foy.internal.webxml;
+}
+----
+
+[source,java]
+----
+module io.vidocq.foy.chappe {
+    requires transitive io.vidocq.foy.api;
+    requires io.vidocq.foy.core;
+    requires io.vidocq.chappe.api;
+    requires jakarta.servlet;
+    requires jakarta.cdi;
+
+    exports io.vidocq.foy.chappe;         // FoyChappeBoot
+}
+----
+
+[source,java]
+----
+module io.vidocq.foy.cdi.vauban {
+    requires transitive io.vidocq.foy.api;
+    requires jakarta.cdi;
+    requires io.vidocq.vauban.core;
+
+    exports io.vidocq.foy.cdi.vauban;     // FoyVaubanBootstrap
+}
+----
+
+[NOTE]
+====
+The `io.vidocq.foy.internal.*` packages are exported to allow advanced integrations (custom dispatcher, observability). They are **not** semver-stable — see xref:migration.adoc[Migration] for variations between milestones.
+====
+
+== Public API: `FoyChappeBoot`
+
+[cols="1,3",options="header"]
+|===
+| Method | Description
+
+| `FoyChappeBoot.builder()`
+| Returns a fresh `Builder`.
+
+| `Builder.beanManager(BeanManager bm)`
+| **Required.** Vauban `BeanManager` from which `@WebServlet` / `@WebFilter` / `@WebListener` beans will be resolved.
+
+| `Builder.contextPath(String path)`
+| URL prefix served by this container. Default: `"/"`.
+
+| `Builder.sessionTimeoutSeconds(int seconds)`
+| Session timeout in seconds. Default: `1800` (30 min).
+
+| `Builder.build()`
+| Returns `Optional<Mounted>`. Empty if no Servlet/Filter/Listener bean was discovered.
+
+| `Mounted.handler()`
+| The `io.vidocq.chappe.api.Handler` to mount through a Chappe `Router.Builder.mount(mountPrefix, handler)`, or to pass directly to `Server.builder().handler(...)` when the contextPath is `/`.
+
+| `Mounted.mountPrefix()`
+| Mount prefix to use (`""` if `contextPath == "/"`).
+
+| `Mounted.servletContext()`
+| The container's `VidocqServletContext` — useful for observability.
+
+| `Mounted.fireContextInitialized()`
+| Fire `ServletContextListener.contextInitialized` (call after `mount`).
+
+| `Mounted.fireContextDestroyed()`
+| Fire `ServletContextListener.contextDestroyed` (call before `unmount`).
+|===
+
+== Public SPI (`foy-api`)
+
+[cols="1,3",options="header"]
+|===
+| Type | Role
+
+| `io.vidocq.foy.spi.session.SessionStore`
+| Session storage backend. Default: `InMemorySessionStore`. Implement to back Redis, Hazelcast, JDBC, etc.
+
+| `io.vidocq.foy.spi.security.SecurityProvider`
+| Application authentication. Default: `AnonymousSecurityProvider` (dev) or `BasicAuthenticator`. Implement for OIDC, LDAP, JWT.
+
+| `io.vidocq.foy.spi.security.AuthenticatedUser`
+| Immutable authenticated-user representation (login, roles, attributes).
+|===
+
+== `web.xml` configuration
+
+`WebXmlParser` reads exactly this subset of the Servlet 6.1 `WEB-INF/web.xml` (contributed after annotation discovery, never overriding an already-discovered name):
+
+* `<display-name>`
+* `<context-param>` (`param-name`/`param-value`) exposed via `ServletContext.getInitParameter`
+* `<servlet>` (`servlet-name`, `servlet-class`, `init-param`, `async-supported`) / `<servlet-mapping>` (`servlet-name`, `url-pattern`)
+* `<filter>` (`filter-name`, `filter-class`, `init-param`) / `<filter-mapping>` (`filter-name`, `url-pattern`, `servlet-name`, `dispatcher` — defaults to `REQUEST`)
+* `<listener>` (`listener-class`)
+* `<error-page>` (`error-code`, `exception-type`, `location`)
+* `<session-config>` / `<session-timeout>` (timeout only — no cookie config)
+* `<locale-encoding-mapping-list>` / `<locale-encoding-mapping>` (`locale`, `encoding`)
+* the `version` attribute of `<web-app>`
+
+Everything else is **not parsed** — notably `<security-constraint>`, `<login-config>`, `<security-role>`, `<welcome-file-list>`, `<multipart-config>`, `<mime-mapping>`, `<load-on-startup>` and `<jsp-config>`.
+
+[IMPORTANT]
+====
+`META-INF/web-fragment.xml` scanning and the `metadata-complete` attribute are **not implemented yet** — the top known TCK gap (81 % of failures, the whole `pluggability.*` family). See xref:tck.adoc[TCK status].
+====
+
+== Servlet 6.1 API comparison
+
+[cols="1,1,3",options="header"]
+|===
+| Area | Foy status | Notes
+
+| Core (`Servlet`, `HttpServlet`, `Filter`)
+| ✅
+| Near-complete coverage in the official TCK.
+
+| `RequestDispatcher` (forward / include)
+| ✅
+| Cross-context (`getContext`) **implemented** via `CrossContextRegistry` (strict contextPath match on contexts deployed in the same JVM).
+
+| Web fragments (`web-fragment.xml`, `metadata-complete`)
+| ❌
+| **Not implemented yet** — the top TCK gap (81 % of failures). See xref:tck.adoc[TCK].
+
+| Async (`AsyncContext`)
+| ⚠️
+| Standard cases OK; non-blocking I/O listeners and part of the `spec.async` suite still fail (TCK 22/39 in errors).
+
+| Multipart (`@MultipartConfig`)
+| ⚠️
+| **Buffered in memory** — no streaming parse, no temp-file spill; limit/threshold handling partial (8 of 14 `PartTests`/`Part1Tests` still fail).
+
+| Sessions
+| ✅
+| `InMemorySessionStore`; SPI `SessionStore` for distribution.
+
+| Security (Basic)
+| ⚠️
+| `BasicAuthenticator` + `@ServletSecurity` constraints (`SecurityConstraintEnforcer`); `<security-constraint>` in `web.xml` is not parsed. 8 of 14 `secbasic` TCK tests still fail.
+
+| Security (Form, Digest, Jakarta Auth)
+| ❌
+| Not implemented.
+
+| WebSocket (Servlet 6.1 upgrade)
+| ❌
+| Not implemented (planned, no date).
+
+| JSP
+| ❌
+| Not supported, not planned.
+|===
+
+== Compatibility
+
+* Java 25 (LTS)
+* Maven 3.9.16
+* Jakarta Servlet 6.1
+* Strict Java Modules, virtual threads (one VT per request)
+* AOT-friendly (no reflection, no dynamic proxy)
+
+== Bugs and benchmarks
+
+* link:{repo-foy}/src/branch/main/BUG.md[BUG.md] — reproducible bugs, hypotheses, status.
+* link:{repo-foy}/src/branch/main/TCK.md[TCK.md] — full TCK measurement report.
+* Benchmarks: no numbers recorded yet — a `BENCH.md` will be created with the first measured run (workspace convention).

@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 560" width="400" height="560"
+     role="img" aria-label="Grimm — MicroProfile OpenAPI 4.1">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#faf3e3"/>
+      <stop offset="100%" stop-color="#ede0c2"/>
+    </linearGradient>
+    <!-- Left page: lighter at edge, darker near spine -->
+    <linearGradient id="pageLeft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#f5ecce"/>
+      <stop offset="100%" stop-color="#ddd0a5"/>
+    </linearGradient>
+    <!-- Right page: darker near spine, lighter at edge -->
+    <linearGradient id="pageRight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#ddd0a5"/>
+      <stop offset="100%" stop-color="#f5ecce"/>
+    </linearGradient>
+    <linearGradient id="coverGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#2e1508"/>
+      <stop offset="100%" stop-color="#160902"/>
+    </linearGradient>
+    <linearGradient id="spineGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#160902"/>
+      <stop offset="40%"  stop-color="#3a1c0a"/>
+      <stop offset="100%" stop-color="#160902"/>
+    </linearGradient>
+    <linearGradient id="goldLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#a07010"/>
+      <stop offset="50%"  stop-color="#d4a827"/>
+      <stop offset="100%" stop-color="#a07010"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ═══ BACKGROUND ═══ -->
+  <rect width="400" height="560" fill="url(#bgGrad)"/>
+
+  <!-- ═══ DOUBLE BORDER FRAME ═══ -->
+  <rect x="5"  y="5"  width="390" height="550" rx="2" fill="none" stroke="#1c2f5e" stroke-width="2.5"/>
+  <rect x="10" y="10" width="380" height="540" rx="1" fill="none" stroke="#1c2f5e" stroke-width="0.7"/>
+
+  <!-- Gold diamond corner ornaments -->
+  <polygon points="5,17  14,8   23,17  14,26"  fill="#c9a227"/>
+  <polygon points="377,17 386,8  395,17 386,26" fill="#c9a227"/>
+  <polygon points="5,543  14,534 23,543 14,552" fill="#c9a227"/>
+  <polygon points="377,543 386,534 395,543 386,552" fill="#c9a227"/>
+
+  <!-- ═══ TOP LABEL ═══ -->
+  <text x="200" y="34" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="7" letter-spacing="2.5" fill="#1c2f5e" opacity="0.72">MICROPROFILE OPENAPI 4.1</text>
+
+  <!-- ═══ OPEN BOOK — CENTRAL ILLUSTRATION ═══ -->
+
+  <!-- Book drop shadow -->
+  <rect x="71" y="108" width="261" height="328" rx="2" fill="#160902" opacity="0.18"/>
+
+  <!-- Visible book cover edges (thickness) -->
+  <!-- Left cover edge (left side) -->
+  <rect x="65" y="102" width="9" height="330" rx="1" fill="url(#coverGrad)"/>
+  <!-- Right cover edge (right side) -->
+  <rect x="329" y="102" width="9" height="330" rx="1" fill="url(#coverGrad)"/>
+  <!-- Bottom cover strip (spine visible from below) -->
+  <rect x="65" y="428" width="273" height="9" rx="1" fill="url(#coverGrad)"/>
+
+  <!-- Gold corner fittings on cover (decorative) -->
+  <rect x="65" y="102" width="9" height="9"  fill="#a07010" opacity="0.7"/>
+  <rect x="65" y="421" width="9" height="9"  fill="#a07010" opacity="0.7"/>
+  <rect x="329" y="102" width="9" height="9" fill="#a07010" opacity="0.7"/>
+  <rect x="329" y="421" width="9" height="9" fill="#a07010" opacity="0.7"/>
+
+  <!-- Page stack lines — left edge -->
+  <g stroke="#c8a870" stroke-width="0.35" opacity="0.55">
+    <line x1="65" y1="115" x2="74" y2="115"/>
+    <line x1="65" y1="122" x2="74" y2="122"/>
+    <line x1="65" y1="129" x2="74" y2="129"/>
+    <line x1="65" y1="136" x2="74" y2="136"/>
+    <line x1="65" y1="143" x2="74" y2="143"/>
+    <line x1="65" y1="150" x2="74" y2="150"/>
+  </g>
+  <!-- Page stack lines — right edge -->
+  <g stroke="#c8a870" stroke-width="0.35" opacity="0.55">
+    <line x1="329" y1="115" x2="338" y2="115"/>
+    <line x1="329" y1="122" x2="338" y2="122"/>
+    <line x1="329" y1="129" x2="338" y2="129"/>
+    <line x1="329" y1="136" x2="338" y2="136"/>
+    <line x1="329" y1="143" x2="338" y2="143"/>
+    <line x1="329" y1="150" x2="338" y2="150"/>
+  </g>
+
+  <!-- ── Left page ── -->
+  <rect x="74" y="99" width="122" height="332" fill="url(#pageLeft)" stroke="#b09050" stroke-width="0.7"/>
+
+  <!-- ── Right page ── -->
+  <rect x="204" y="99" width="122" height="332" fill="url(#pageRight)" stroke="#b09050" stroke-width="0.7"/>
+
+  <!-- ── Book spine ── -->
+  <rect x="194" y="99" width="12" height="332" fill="url(#spineGrad)"/>
+  <!-- Spine highlight line -->
+  <line x1="200" y1="99" x2="200" y2="431" stroke="#6a3515" stroke-width="0.6" opacity="0.6"/>
+  <!-- Spine gold bands -->
+  <rect x="194" y="130" width="12" height="1.5" fill="#c9a227" opacity="0.5"/>
+  <rect x="194" y="400" width="12" height="1.5" fill="#c9a227" opacity="0.5"/>
+
+  <!-- Slight inner shadow near spine on each page -->
+  <rect x="186" y="99" width="10" height="332" fill="#1c0a02" opacity="0.06"/>
+  <rect x="204" y="99" width="10" height="332" fill="#1c0a02" opacity="0.06"/>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- LEFT PAGE — Fairy Tale Catalogue (Jacob Grimm) -->
+  <!-- ══════════════════════════════════════════ -->
+
+  <!-- Header rule -->
+  <line x1="83" y1="115" x2="187" y2="115" stroke="#8b6030" stroke-width="0.9"/>
+
+  <!-- Illuminated initial "G" -->
+  <rect x="83" y="120" width="34" height="38" fill="#c9a227" opacity="0.60" rx="1.5"/>
+  <rect x="84.5" y="121.5" width="31" height="35" fill="none" stroke="#8b5510" stroke-width="0.7"/>
+  <text x="100" y="149" font-family="Georgia, 'Times New Roman', serif"
+        font-size="27" font-weight="bold" text-anchor="middle" fill="#1c0f05">G</text>
+
+  <!-- Title beside the illuminated letter -->
+  <text x="124" y="132" font-family="Georgia, serif" font-size="6.5" fill="#2c1808" font-style="italic">Kinder- und</text>
+  <text x="124" y="143" font-family="Georgia, serif" font-size="6.5" fill="#2c1808" font-style="italic">Hausmärchen</text>
+  <text x="124" y="154" font-family="Georgia, serif" font-size="5.5" fill="#5a3815">— Brüder Grimm —</text>
+
+  <!-- Thin dotted rule -->
+  <line x1="83" y1="165" x2="187" y2="165" stroke="#8b6030" stroke-width="0.5" stroke-dasharray="2,2.5"/>
+
+  <!-- Table of contents entries -->
+  <text x="83" y="177" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">I.    Rotkäppchen . . . . . .  3</text>
+  <text x="83" y="189" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">II.   Aschenputtel . . . . . . 12</text>
+  <text x="83" y="201" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">III.  Schneewittchen . . . .  24</text>
+  <text x="83" y="213" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">IV.   Dornröschen . . . . . . 36</text>
+  <text x="83" y="225" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">V.    Rumpelstilzchen . . .  47</text>
+  <text x="83" y="237" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">VI.   Hänsel u. Gretel . . .  58</text>
+  <text x="83" y="249" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">VII.  Froschkönig . . . . . . 70</text>
+  <text x="83" y="261" font-family="Georgia, serif" font-size="6.8" fill="#2c1808">VIII. Rapunzel . . . . . . . .  81</text>
+
+  <!-- Decorative rule -->
+  <line x1="83" y1="271" x2="187" y2="271" stroke="#8b6030" stroke-width="0.5" stroke-dasharray="1,3"/>
+
+  <!-- Grimm's Law — Lautverschiebung -->
+  <text x="93" y="284" font-family="Georgia, serif" font-size="6.2" fill="#4a2808" font-style="italic">Lautverschiebung, 1822</text>
+
+  <text x="88" y="296" font-family="'Courier New', Courier, monospace" font-size="6.8" fill="#1c2f5e">p → f   pater → father</text>
+  <text x="88" y="308" font-family="'Courier New', Courier, monospace" font-size="6.8" fill="#1c2f5e">t → θ   trēs  → three</text>
+  <text x="88" y="320" font-family="'Courier New', Courier, monospace" font-size="6.8" fill="#1c2f5e">k → h   canis → hound</text>
+
+  <!-- Thin rule -->
+  <line x1="83" y1="330" x2="187" y2="330" stroke="#8b6030" stroke-width="0.5" stroke-dasharray="2,2.5"/>
+
+  <!-- Central ornament — small six-pointed star made of two triangles -->
+  <polygon points="135,344 137.5,349 132.5,349" fill="#8b6030" opacity="0.7"/>
+  <polygon points="135,350 137.5,345 132.5,345" fill="#8b6030" opacity="0.7"/>
+
+  <!-- Attribution -->
+  <text x="135" y="366" font-family="Georgia, serif" font-size="5.8" text-anchor="middle"
+        fill="#6a4020" font-style="italic">Deutsche Grammatik, 1819</text>
+  <text x="135" y="377" font-family="Georgia, serif" font-size="5.8" text-anchor="middle"
+        fill="#6a4020" font-style="italic">Jacob Grimm, 1785–1863</text>
+
+  <!-- Footer rule -->
+  <line x1="83" y1="418" x2="187" y2="418" stroke="#8b6030" stroke-width="0.9"/>
+  <!-- Page number -->
+  <text x="135" y="428" font-family="Georgia, serif" font-size="7" text-anchor="middle" fill="#8b6030">i</text>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- RIGHT PAGE — OpenAPI Specification         -->
+  <!-- ══════════════════════════════════════════ -->
+
+  <!-- Header rule -->
+  <line x1="213" y1="115" x2="317" y2="115" stroke="#8b6030" stroke-width="0.9"/>
+
+  <!-- openapi version badge -->
+  <rect x="213" y="119" width="100" height="14" fill="#1c2f5e" rx="2"/>
+  <text x="263" y="130" font-family="'Courier New', Courier, monospace" font-size="7.5"
+        text-anchor="middle" fill="#e8f0ff" font-weight="bold">openapi: "3.1.0"</text>
+
+  <!-- YAML content -->
+  <text x="213" y="152" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#1c2f5e">info:</text>
+  <text x="219" y="162" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#3a5080">title: API Catalogue</text>
+  <text x="219" y="172" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#3a5080">description: Grimm</text>
+  <text x="219" y="182" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#3a5080">version: "1.0.0"</text>
+
+  <!-- Thin dotted rule -->
+  <line x1="213" y1="190" x2="317" y2="190" stroke="#5a7aaa" stroke-width="0.4" stroke-dasharray="2,2.5"/>
+
+  <!-- Paths -->
+  <text x="213" y="201" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#1c2f5e">paths:</text>
+  <text x="218" y="212" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#2c4a15">/openapi:</text>
+  <!-- GET /openapi -->
+  <rect x="223" y="216" width="20" height="9" fill="#2a6a20" rx="1.5"/>
+  <text x="233" y="223.5" font-family="'Courier New', Courier, monospace" font-size="6"
+        text-anchor="middle" fill="white" font-weight="bold">GET</text>
+  <text x="246" y="223.5" font-family="'Courier New', Courier, monospace" font-size="6" fill="#3a5080"> 200 OpenAPI</text>
+
+  <text x="218" y="235" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#2c4a15">/tales/{id}:</text>
+  <!-- GET /tales/{id} -->
+  <rect x="223" y="239" width="20" height="9" fill="#2a6a20" rx="1.5"/>
+  <text x="233" y="246.5" font-family="'Courier New', Courier, monospace" font-size="6"
+        text-anchor="middle" fill="white" font-weight="bold">GET</text>
+  <text x="246" y="246.5" font-family="'Courier New', Courier, monospace" font-size="6" fill="#3a5080"> 200 Tale</text>
+  <!-- POST /tales/{id} -->
+  <rect x="223" y="251" width="24" height="9" fill="#c87a10" rx="1.5"/>
+  <text x="235" y="258.5" font-family="'Courier New', Courier, monospace" font-size="6"
+        text-anchor="middle" fill="white" font-weight="bold">POST</text>
+  <text x="250" y="258.5" font-family="'Courier New', Courier, monospace" font-size="6" fill="#3a5080"> 201</text>
+
+  <!-- Thin dotted rule -->
+  <line x1="213" y1="267" x2="317" y2="267" stroke="#5a7aaa" stroke-width="0.4" stroke-dasharray="2,2.5"/>
+
+  <!-- Components / schemas -->
+  <text x="213" y="278" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#1c2f5e">components:</text>
+  <text x="218" y="289" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#3a5080">schemas:</text>
+  <text x="223" y="299" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#4a6aa0">  Tale:</text>
+  <text x="228" y="309" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#4a6aa0">    type: object</text>
+  <text x="228" y="319" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#4a6aa0">    properties:</text>
+  <text x="233" y="329" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#5a7ab0">      id: {string}</text>
+  <text x="233" y="339" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#5a7ab0">      title: {string}</text>
+  <text x="233" y="349" font-family="'Courier New', Courier, monospace" font-size="6.5" fill="#5a7ab0">      author: {string}</text>
+
+  <!-- Thin dotted rule -->
+  <line x1="213" y1="358" x2="317" y2="358" stroke="#5a7aaa" stroke-width="0.4" stroke-dasharray="2,2.5"/>
+
+  <!-- Footer rule -->
+  <line x1="213" y1="418" x2="317" y2="418" stroke="#8b6030" stroke-width="0.9"/>
+  <!-- Page number -->
+  <text x="263" y="428" font-family="Georgia, serif" font-size="7" text-anchor="middle" fill="#8b6030">1</text>
+
+  <!-- ═══ TITLE AREA ═══ -->
+
+  <!-- Main title -->
+  <text x="200" y="477" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="62" font-weight="bold" letter-spacing="10"
+        fill="#1c2f5e">GRIMM</text>
+
+  <!-- Ornamental separator — same pattern as Ravel -->
+  <line x1="22"  y1="491" x2="162" y2="491" stroke="#c9a227" stroke-width="1.5"/>
+  <circle cx="200" cy="491" r="5.5" fill="none" stroke="#c9a227" stroke-width="1.5"/>
+  <circle cx="200" cy="491" r="2.2" fill="#c9a227"/>
+  <line x1="238" y1="491" x2="378" y2="491" stroke="#c9a227" stroke-width="1.5"/>
+
+  <!-- Subtitle -->
+  <text x="200" y="514" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="10" letter-spacing="2.5"
+        fill="#1c2f5e">OPENAPI · VIDOCQ</text>
+
+  <!-- Fine bottom rule -->
+  <line x1="65" y1="527" x2="335" y2="527" stroke="#1c2f5e" stroke-width="0.5" opacity="0.38"/>
+
+  <!-- Three gold diamond ornaments -->
+  <g fill="#c9a227" opacity="0.82">
+    <polygon points="188,537 192,541 188,545 184,541"/>
+    <polygon points="198,536 203,541 198,546 193,541"/>
+    <polygon points="208,537 212,541 208,545 204,541"/>
+  </g>
+</svg>

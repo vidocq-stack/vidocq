@@ -1,0 +1,85 @@
+= Concepts
+:description: JAX-RS vocabulary, Cassini programming model, REST 4.0 vs 3.x differences.
+
+[.lead]
+This page defines the JAX-RS vocabulary as Cassini implements it, and clarifies what Jakarta REST 4.0 brings over JAX-RS 3.x — strict Java Modules, `SeBootstrap`, virtual threads.
+
+== JAX-RS vocabulary
+
+[cols="1,4"]
+|===
+| Resource
+| Class annotated `@Path`. Cassini matches it by URI template (`@Path("/users/\{id\}")`) then dispatches to a **resource method** (`@GET`, `@POST`...) or to a **sub-resource locator** (which returns a new resource for further dispatching).
+
+| Resource method
+| Method annotated with an HTTP verb — `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS`, or a custom `@HttpMethod`.
+
+| Provider
+| `@Provider` component that extends the runtime: `MessageBodyReader/Writer` (serialization), `ContextResolver` (injectable context), `ExceptionMapper` (exception → response mapping), `ParamConverter` (`String` ↔ custom type conversion in `@QueryParam`/`@PathParam`).
+
+| Filter
+| `ContainerRequestFilter` or `ContainerResponseFilter` — intercepts the inbound request or outbound response. `@PreMatching` runs before routing.
+
+| Interceptor
+| `ReaderInterceptor` / `WriterInterceptor` — wraps body (de)serialization.
+
+| Application
+| `jakarta.ws.rs.core.Application` subclass declaring resources and providers. The HTTP root is set by `@ApplicationPath` or by the SE-Bootstrap `Configuration`.
+
+| ParamConverter
+| `ParamConverterProvider` enables custom types in `@PathParam` / `@QueryParam` / `@HeaderParam` etc. — Cassini resolves it at stack startup.
+|===
+
+== Cassini stack and transports
+
+Cassini cleanly separates the **REST** layer (annotation parsing, dispatch, content negotiation) from the **HTTP transport**:
+
+* `cassini-api` — public SPI (`CassiniHttpExchange`, `CassiniHttpAdapter`, `CassiniStack`, `BeanProvider`, `ResourceFactory`). **Zero internal symbol, zero transport dependency.**
+* `cassini-core` — JAX-RS engine (Invoker, ResourceScanner, MessageBodyRegistry). Strict-spec, transport-agnostic.
+* `cassini-chappe` — wires the engine onto xref:chappe::index.adoc[Chappe] (HTTP/1.1, H2, virtual threads). **TCK reference transport.**
+* `cassini-jdk-http` — JDK 25 `com.sun.net.httpserver` fallback (zero external dependency, ideal for smoke tests).
+* `cassini-cdi-vauban` — `BeanProvider` adapter that resolves resources through xref:vauban::index.adoc[Vauban].
+* `cassini-client` — zero-dependency JAX-RS `ClientBuilder` on `java.net.http` + virtual threads (server-independent).
+
+`CassiniStack.builder()` picks the transport via `ServiceLoader` — application code references no transport-specific symbol.
+
+== Two resource instantiation modes
+
+. **Mode A — without CDI**: `new()` via `ResourceFactory.defaultFactory()`. Used by `cassini-jdk-http` standalone and demos. Resources are `@Singleton` or per-request depending on declared scope.
+. **Mode B — DI via `BeanProvider` SPI**: `cassini-cdi-vauban` or any other `ServiceLoader` adapter. No `jakarta.cdi` import in `cassini-api` / `cassini-core` — strict decoupling.
+
+== Routing: Cassini's map
+
+Like geodetic triangulation, JAX-RS routing is hierarchical and deterministic:
+
+. **Literal match** has priority over regex match (`\{id\}` then `\{id:\\d+}`).
+. **Best-match** on the (path, verb, media-type) triple — `Request.selectVariant` server-side, `@Produces`/`@Consumes` annotation-side.
+. **Sub-resource locator**: the method returns an instance, its `@Path` is consumed, dispatch resumes from that instance.
+
+== REST 4.0 vs 3.x differences
+
+[cols="2,3"]
+|===
+| JAX-RS 3.x | Jakarta REST 4.0 (Cassini)
+| Implicit transport (Servlet 4) | Native `SeBootstrap` §5.2, pluggable transport via `RuntimeDelegate` ServiceLoader
+| Platform threads | **Virtual threads by default** (Java 25), no platform pool needed
+| No official module-info support | **Native Java Modules**: complete `module-info.java`, minimal exports
+| Bootstrap limited to container | Standalone `SeBootstrap.start(Application.class, config)`
+| Partial multipart (Forms) | First-class **`EntityPart`** §3.5.4
+| Partial records | Java 17+ records natively supported on the binding side (Champollion)
+|===
+
+== Static codegen
+
+Cassini favours **compile-time generation** over runtime reflection. Per `@Path` class it generates two name-looked-up artefacts:
+
+* `<ResourceClass>$$CassiniAdapter` — direct method invocation + field injection + inline `@*Param` coercion (no `Method.invoke`, no per-request reflection).
+* `<ResourceClass>$$CassiniRoutes` — the route table as literals, converted to routes at startup without an annotation scan.
+
+`AdapterRegistry` resolves them through four tiers, most-preferred first: a **`ServiceLoader`-registered adapter** (module-path `provides io.vidocq.cassini.spi.gen.ResourceAdapter with <Class>$$CassiniAdapter` or classpath `META-INF/services` — the only path that lets a strict Java Modules application keep its resource package *closed*, with no `opens` and no `exports`), then `Class.forName(<Class>$$CassiniAdapter)` finding the class emitted at compile time by **APT** (`cassini-processor`), then the same lookup finding the class pre-generated at build time by the **Maven plugin** (`cassini-maven-plugin`, for dependency JARs), and finally a **runtime Class-File API generator** (JVM-only fallback). The APT and plugin tiers are AOT-compatible (GraalVM, Leyden CDS). `MessageBodyReader/Writer` providers register via `META-INF/services`; filter `@Priority` ordering is resolved at stack build, not per request.
+
+See xref:internals.adoc[internals] for the full pipeline and the documented residual reflection.
+
+== TCK scope: Core Profile / SE-Bootstrap
+
+Cassini targets the **Core Profile / SE-Bootstrap** target: no Servlet on the server side, no JAXB-runtime. The TCK tags `servlet` and `xml_binding` are excluded per TCK Process 1.4.1 §5.2.3. Details in xref:tck.adoc[TCK].
