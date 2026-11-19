@@ -1,0 +1,567 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.champollion.jsonp.internal;
+
+import jakarta.json.JsonArray;
+import jakarta.json.JsonArrayBuilder;
+import jakarta.json.JsonBuilderFactory;
+import jakarta.json.JsonException;
+import jakarta.json.JsonObject;
+import jakarta.json.JsonObjectBuilder;
+import jakarta.json.JsonReader;
+import jakarta.json.JsonReaderFactory;
+import jakarta.json.JsonStructure;
+import jakarta.json.JsonValue;
+import jakarta.json.JsonWriter;
+import jakarta.json.JsonWriterFactory;
+import jakarta.json.spi.JsonProvider;
+import jakarta.json.stream.JsonGenerator;
+import jakarta.json.stream.JsonGeneratorFactory;
+import jakarta.json.stream.JsonParser;
+import jakarta.json.stream.JsonParserFactory;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Map;
+
+/**
+ * Champollion implementation of {@link JsonProvider}. Main Jakarta JSON-P 2.1
+ * entry point: everything goes through {@code Json.create*}, which delegates to
+ * this provider via the ServiceLoader.
+ *
+ * <p>Decoding of {@link InputStream}s: RFC 8259 §8.1 — UTF-8 by default, without
+ * BOM. If present, BOM handling is left to the reader (the scanner will reject it
+ * as an invalid root character, as required by the spec).</p>
+ */
+public final class ChampollionJsonProvider extends JsonProvider {
+
+    /** Configuration factor. M1.4: minimal — pretty printing. To be expanded over time. */
+    public static final String PRETTY_PRINTING = JsonGenerator.PRETTY_PRINTING;
+
+    public ChampollionJsonProvider() {
+        // Stateless provider: the public no-arg constructor is what ServiceLoader needs.
+    }
+
+    private static boolean prettyOf(Map<String, ?> config) {
+        if (config == null) return false;
+        Object v = config.get(PRETTY_PRINTING);
+        return Boolean.TRUE.equals(v) || "true".equals(v);
+    }
+
+    /**
+     * Filters {@code config} to keep only the properties supported by the
+     * provider (Spec §3.x: {@code getConfigInUse()} must list only the actually
+     * recognized properties).
+     */
+    private static Map<String, ?> filterSupported(Map<String, ?> config, java.util.Set<String> supported) {
+        if (config == null || config.isEmpty()) return Collections.emptyMap();
+        var out = new java.util.LinkedHashMap<String, Object>();
+        for (var e : config.entrySet()) {
+            if (supported.contains(e.getKey())) out.put(e.getKey(), e.getValue());
+        }
+        return Map.copyOf(out);
+    }
+
+    /**
+     * Auto-detects the encoding according to RFC 8259 §8.1. Reads the first 4 bytes
+     * (BOM or heuristic) then creates the {@link Reader} with the correct Charset.
+     * The underlying stream is wrapped in a {@link java.io.PushbackInputStream}
+     * that makes non-BOM bytes available for reading.
+     */
+    private static Reader autoDetectingReader(InputStream raw) {
+        var pb = new java.io.PushbackInputStream(raw, 4);
+        try {
+            byte[] head = new byte[4];
+            int read = readHead(pb, head);
+            Reader marked = byteOrderMarkReader(pb, head, read);
+            if (marked != null) return marked;
+            if (read > 0) pb.unread(head, 0, read);
+            return heuristicReader(pb, head, read);
+        } catch (IOException e) {
+            throw new jakarta.json.JsonException("I/O error during encoding detection", e);
+        }
+    }
+
+    /** Reads up to the 4 first bytes of {@code in} into {@code head}; returns how many. */
+    private static int readHead(InputStream in, byte[] head) throws IOException {
+        int read = 0;
+        while (read < head.length) {
+            int n = in.read(head, read, head.length - read);
+            if (n < 0) break;
+            read += n;
+        }
+        return read;
+    }
+
+    /** The reader of the encoding a byte order mark names, the mark skipped; null without one. */
+    private static Reader byteOrderMarkReader(java.io.PushbackInputStream pb, byte[] head, int read) throws IOException {
+        int b0 = head[0] & 0xff;
+        int b1 = head[1] & 0xff;
+        if (read >= 4 && b0 == 0x00 && b1 == 0x00 && (head[2] & 0xff) == 0xFE && (head[3] & 0xff) == 0xFF) {
+            return new InputStreamReader(pb, java.nio.charset.Charset.forName("UTF-32BE"));
+        }
+        if (read >= 4 && b0 == 0xFF && b1 == 0xFE && head[2] == 0x00 && head[3] == 0x00) {
+            return new InputStreamReader(pb, java.nio.charset.Charset.forName("UTF-32LE"));
+        }
+        if (read >= 2 && b0 == 0xFE && b1 == 0xFF) {
+            pb.unread(head, 2, read - 2);
+            return new InputStreamReader(pb, StandardCharsets.UTF_16BE);
+        }
+        if (read >= 2 && b0 == 0xFF && b1 == 0xFE) {
+            pb.unread(head, 2, read - 2);
+            return new InputStreamReader(pb, StandardCharsets.UTF_16LE);
+        }
+        if (read >= 3 && b0 == 0xEF && b1 == 0xBB && (head[2] & 0xff) == 0xBF) {
+            pb.unread(head, 3, read - 3);
+            return utf8Reader(pb);
+        }
+        return null;
+    }
+
+    /**
+     * Without a byte order mark, RFC 8259 §8.1: the first significant character of a JSON text is
+     * ASCII, so the zero bytes among the first four tell the encoding. Two leading zeros mean
+     * UTF-32BE, three trailing zeros UTF-32LE, a leading zero UTF-16BE, a zero second byte
+     * UTF-16LE, and no zero UTF-8.
+     */
+    private static Reader heuristicReader(java.io.PushbackInputStream pb, byte[] head, int read) throws IOException {
+        if (read >= 4 && head[0] == 0 && head[1] == 0) {
+            return new InputStreamReader(pb, java.nio.charset.Charset.forName("UTF-32BE"));
+        }
+        if (read >= 4 && head[1] == 0 && head[2] == 0 && head[3] == 0) {
+            return new InputStreamReader(pb, java.nio.charset.Charset.forName("UTF-32LE"));
+        }
+        if (read >= 2 && head[0] == 0) {
+            return new InputStreamReader(pb, StandardCharsets.UTF_16BE);
+        }
+        if (read >= 2 && head[1] == 0) {
+            return new InputStreamReader(pb, StandardCharsets.UTF_16LE);
+        }
+        // RFC 8259 §8.1: valid JSON cannot start with a 0x00 byte in UTF-8. When the
+        // first byte is zero and the encoding cannot be determined (fewer than two
+        // bytes of context, or an ambiguous pattern), reject the input.
+        if (read >= 1 && head[0] == 0) {
+            throw new jakarta.json.JsonException("Cannot determine JSON encoding");
+        }
+        return utf8Reader(pb);
+    }
+
+    /** The byte buffer an InputStreamReader allocates, whatever the size of the input. */
+    private static final int DEFAULT_DECODER_BUFFER = 8192;
+    /** The smallest decoder buffer, for a stream that holds fewer bytes. */
+    private static final int MIN_DECODER_BUFFER = 1024;
+
+    /**
+     * A UTF-8 reader over {@code in}, decoding as an {@link InputStreamReader} does (malformed and
+     * unmappable input replaced). When the stream says it holds fewer bytes than the 8 KB an
+     * InputStreamReader would buffer, as a request entity already read into memory does, the
+     * decoder buffer takes that size instead.
+     */
+    private static Reader utf8Reader(InputStream in) throws IOException {
+        int available = in.available();
+        if (available <= 0 || available >= DEFAULT_DECODER_BUFFER) {
+            return new InputStreamReader(in, StandardCharsets.UTF_8);
+        }
+        java.nio.charset.CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPLACE)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPLACE);
+        return java.nio.channels.Channels.newReader(new StreamChannel(in), decoder,
+                Math.max(available, MIN_DECODER_BUFFER));
+    }
+
+    /**
+     * An InputStream as the channel a decoder reads from, straight into the decoder's heap buffer:
+     * {@code Channels.newChannel} would add a lock and a copy through a buffer of its own.
+     */
+    private static final class StreamChannel implements java.nio.channels.ReadableByteChannel {
+        private final InputStream in;
+        private boolean open = true;
+
+        StreamChannel(InputStream in) {
+            this.in = in;
+        }
+
+        /** The decoder reads into the heap buffer it allocated, which has an array. */
+        @Override
+        public int read(java.nio.ByteBuffer dst) throws IOException {
+            int n = in.read(dst.array(), dst.arrayOffset() + dst.position(), dst.remaining());
+            if (n > 0) dst.position(dst.position() + n);
+            return n;
+        }
+
+        @Override
+        public boolean isOpen() {
+            return open;
+        }
+
+        @Override
+        public void close() throws IOException {
+            open = false;
+            in.close();
+        }
+    }
+
+    /**
+     * A generator on {@code out} in {@code charset}: UTF-8, the default, is encoded by the
+     * generator itself; any other charset goes through an {@link OutputStreamWriter}.
+     */
+    private static ChampollionJsonGenerator generatorOn(OutputStream out, Charset charset, boolean pretty) {
+        if (StandardCharsets.UTF_8.equals(charset)) {
+            return new ChampollionJsonGenerator(out, pretty);
+        }
+        return new ChampollionJsonGenerator(new OutputStreamWriter(out, charset), pretty);
+    }
+
+    /** As {@link #generatorOn}, for the object model writer. */
+    private static ChampollionJsonWriter writerOn(OutputStream out, Charset charset, boolean pretty) {
+        return new ChampollionJsonWriter(generatorOn(out, charset, pretty));
+    }
+
+    // ===== Parser =====
+
+    @Override public JsonParser createParser(Reader reader) {
+        return new ChampollionJsonParser(reader);
+    }
+
+    @Override public JsonParser createParser(InputStream in) {
+        return new ChampollionJsonParser(autoDetectingReader(in));
+    }
+
+    @Override public JsonParserFactory createParserFactory(Map<String, ?> config) {
+        // No properties supported by JsonParserFactory in JSON-P 2.1.
+        Map<String, ?> snapshot = filterSupported(config, java.util.Set.of());
+        return new JsonParserFactory() {
+            @Override public JsonParser createParser(Reader reader) { return new ChampollionJsonParser(reader); }
+            @Override public JsonParser createParser(InputStream in) { return new ChampollionJsonParser(autoDetectingReader(in)); }
+            @Override public JsonParser createParser(InputStream in, Charset charset) {
+                return new ChampollionJsonParser(new InputStreamReader(in, charset));
+            }
+            @Override public JsonParser createParser(JsonObject obj) {
+                return new JsonValueParser(obj);
+            }
+            @Override public JsonParser createParser(JsonArray arr) {
+                return new JsonValueParser(arr);
+            }
+            @Override public Map<String, ?> getConfigInUse() { return snapshot; }
+        };
+    }
+
+    // ===== Generator =====
+
+    @Override public JsonGenerator createGenerator(Writer writer) {
+        return new ChampollionJsonGenerator(writer, /*pretty*/ false);
+    }
+
+    @Override public JsonGenerator createGenerator(OutputStream out) {
+        return new ChampollionJsonGenerator(out, /*pretty*/ false);
+    }
+
+    @Override public JsonGeneratorFactory createGeneratorFactory(Map<String, ?> config) {
+        boolean pretty = prettyOf(config);
+        Map<String, ?> snapshot = filterSupported(config, java.util.Set.of(JsonGenerator.PRETTY_PRINTING));
+        return new JsonGeneratorFactory() {
+            @Override public JsonGenerator createGenerator(Writer writer) {
+                return new ChampollionJsonGenerator(writer, pretty);
+            }
+            @Override public JsonGenerator createGenerator(OutputStream out) {
+                return new ChampollionJsonGenerator(out, pretty);
+            }
+            @Override public JsonGenerator createGenerator(OutputStream out, Charset charset) {
+                return generatorOn(out, charset, pretty);
+            }
+            @Override public Map<String, ?> getConfigInUse() { return snapshot; }
+        };
+    }
+
+    // ===== Reader / Writer (object model) =====
+
+    @Override public JsonReader createReader(Reader reader) {
+        return new ChampollionJsonReader(reader);
+    }
+
+    @Override public JsonReader createReader(InputStream in) {
+        return new ChampollionJsonReader(autoDetectingReader(in));
+    }
+
+    @Override public JsonReaderFactory createReaderFactory(Map<String, ?> config) {
+        Map<String, ?> snapshot = filterSupported(config, java.util.Set.of(jakarta.json.JsonConfig.KEY_STRATEGY));
+        jakarta.json.JsonConfig.KeyStrategy ks = keyStrategyOf(config);
+        return new JsonReaderFactory() {
+            @Override public JsonReader createReader(Reader reader) {
+                return new ChampollionJsonReader(new ChampollionJsonParser(reader), ks);
+            }
+            @Override public JsonReader createReader(InputStream in) {
+                return new ChampollionJsonReader(new ChampollionJsonParser(autoDetectingReader(in)), ks);
+            }
+            @Override public JsonReader createReader(InputStream in, Charset charset) {
+                return new ChampollionJsonReader(new ChampollionJsonParser(new InputStreamReader(in, charset)), ks);
+            }
+            @Override public Map<String, ?> getConfigInUse() { return snapshot; }
+        };
+    }
+
+    /** Lit la property {@code JsonConfig.KEY_STRATEGY} (JSON-P 2.1 §4.6). */
+    private static jakarta.json.JsonConfig.KeyStrategy keyStrategyOf(Map<String, ?> config) {
+        if (config == null) return jakarta.json.JsonConfig.KeyStrategy.LAST;
+        Object v = config.get(jakarta.json.JsonConfig.KEY_STRATEGY);
+        if (v instanceof jakarta.json.JsonConfig.KeyStrategy ks) return ks;
+        if (v instanceof String s) return jakarta.json.JsonConfig.KeyStrategy.valueOf(s);
+        return jakarta.json.JsonConfig.KeyStrategy.LAST;
+    }
+
+    @Override public JsonWriter createWriter(Writer writer) {
+        return new ChampollionJsonWriter(writer, /*pretty*/ false);
+    }
+
+    @Override public JsonWriter createWriter(OutputStream out) {
+        return new FlushingJsonWriter(writerOn(out, StandardCharsets.UTF_8, /*pretty*/ false), out);
+    }
+
+    @Override public JsonWriterFactory createWriterFactory(Map<String, ?> config) {
+        boolean pretty = prettyOf(config);
+        Map<String, ?> snapshot = filterSupported(config, java.util.Set.of(JsonGenerator.PRETTY_PRINTING));
+        return new JsonWriterFactory() {
+            @Override public JsonWriter createWriter(Writer writer) {
+                return new ChampollionJsonWriter(writer, pretty);
+            }
+            @Override public JsonWriter createWriter(OutputStream out) {
+                return new FlushingJsonWriter(writerOn(out, StandardCharsets.UTF_8, pretty), out);
+            }
+            @Override public JsonWriter createWriter(OutputStream out, Charset charset) {
+                return new FlushingJsonWriter(writerOn(out, charset, pretty), out);
+            }
+            @Override public Map<String, ?> getConfigInUse() { return snapshot; }
+        };
+    }
+
+    // ===== Builders =====
+
+    @Override public JsonObjectBuilder createObjectBuilder() {
+        return new ChampollionJsonObjectBuilder();
+    }
+
+    @Override public JsonObjectBuilder createObjectBuilder(JsonObject object) {
+        var b = new ChampollionJsonObjectBuilder();
+        object.forEach(b::add);
+        return b;
+    }
+
+    @Override public JsonObjectBuilder createObjectBuilder(Map<String, ?> map) {
+        var b = new ChampollionJsonObjectBuilder();
+        if (map == null) return b;
+        for (var e : map.entrySet()) {
+            if (e.getKey() == null) throw new NullPointerException("null key not allowed in JSON object");
+            b.add(e.getKey(), toJsonValue(e.getValue()));
+        }
+        return b;
+    }
+
+    /** Converts an arbitrary value (retrieved from a Map) into a JsonValue. */
+    private static JsonValue toJsonValue(Object v) {
+        return switch (v) {
+            case null -> JsonValue.NULL;
+            case JsonValue jv -> jv;
+            case String s -> new ChampollionJsonString(s);
+            case Boolean b -> b.booleanValue() ? JsonValue.TRUE : JsonValue.FALSE;
+            case Integer i -> ChampollionJsonNumber.of(i);
+            case Long l -> ChampollionJsonNumber.of(l);
+            case java.math.BigDecimal bd -> ChampollionJsonNumber.of(bd);
+            case java.math.BigInteger bi -> ChampollionJsonNumber.of(new java.math.BigDecimal(bi));
+            case Number n -> ChampollionJsonNumber.of(java.math.BigDecimal.valueOf(n.doubleValue()));
+            case Map<?, ?> m -> nestedObject(m);
+            case java.util.Collection<?> c -> nestedArray(c);
+            default -> throw new IllegalArgumentException("Unsupported value type for JSON conversion: " + v.getClass());
+        };
+    }
+
+    private static JsonValue nestedObject(Map<?, ?> m) {
+        var ob = new ChampollionJsonObjectBuilder();
+        for (var e : m.entrySet()) {
+            if (!(e.getKey() instanceof String k)) {
+                throw new IllegalArgumentException("nested Map keys must be String");
+            }
+            ob.add(k, toJsonValue(e.getValue()));
+        }
+        return ob.build();
+    }
+
+    private static JsonValue nestedArray(java.util.Collection<?> c) {
+        var ab = new ChampollionJsonArrayBuilder();
+        for (Object x : c) ab.add(toJsonValue(x));
+        return ab.build();
+    }
+
+    @Override public JsonArrayBuilder createArrayBuilder() {
+        return new ChampollionJsonArrayBuilder();
+    }
+
+    @Override public JsonArrayBuilder createArrayBuilder(JsonArray array) {
+        var b = new ChampollionJsonArrayBuilder();
+        for (JsonValue v : array) b.add(v);
+        return b;
+    }
+
+    @Override public JsonArrayBuilder createArrayBuilder(java.util.Collection<?> collection) {
+        var b = new ChampollionJsonArrayBuilder();
+        if (collection == null) return b;
+        for (Object v : collection) b.add(toJsonValue(v));
+        return b;
+    }
+
+    // ===== Scalar value factories =====
+
+    @Override public jakarta.json.JsonString createValue(String value) {
+        return new ChampollionJsonString(value);
+    }
+
+    @Override public jakarta.json.JsonNumber createValue(int value) {
+        return ChampollionJsonNumber.of(value);
+    }
+
+    @Override public jakarta.json.JsonNumber createValue(long value) {
+        return ChampollionJsonNumber.of(value);
+    }
+
+    @Override public jakarta.json.JsonNumber createValue(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            throw new NumberFormatException("JSON does not allow NaN or Infinity");
+        }
+        return ChampollionJsonNumber.of(java.math.BigDecimal.valueOf(value));
+    }
+
+    @Override public jakarta.json.JsonNumber createValue(java.math.BigDecimal value) {
+        return ChampollionJsonNumber.of(value);
+    }
+
+    @Override public jakarta.json.JsonNumber createValue(java.math.BigInteger value) {
+        return ChampollionJsonNumber.of(new java.math.BigDecimal(value));
+    }
+
+    @Override public jakarta.json.JsonNumber createValue(Number value) {
+        if (value == null) throw new NullPointerException("value is null");
+        if (value instanceof java.math.BigDecimal bd) return ChampollionJsonNumber.of(bd);
+        if (value instanceof java.math.BigInteger bi) return ChampollionJsonNumber.of(new java.math.BigDecimal(bi));
+        if (value instanceof Integer i) return ChampollionJsonNumber.of(i);
+        if (value instanceof Long l) return ChampollionJsonNumber.of(l);
+        if (value instanceof Short || value instanceof Byte) return ChampollionJsonNumber.of(value.intValue());
+        if (value instanceof Double || value instanceof Float) {
+            double d = value.doubleValue();
+            if (Double.isNaN(d) || Double.isInfinite(d)) {
+                throw new NumberFormatException("JSON does not allow NaN or Infinity");
+            }
+            return ChampollionJsonNumber.of(java.math.BigDecimal.valueOf(d));
+        }
+        // Fallback: use toString(), which should produce a numeric literal.
+        return ChampollionJsonNumber.of(new java.math.BigDecimal(value.toString()));
+    }
+
+    // ===== JsonPointer / JsonPatch =====
+
+    @Override public jakarta.json.JsonPointer createPointer(String jsonPointer) {
+        return new ChampollionJsonPointer(jsonPointer);
+    }
+
+    @Override public jakarta.json.JsonPatchBuilder createPatchBuilder() {
+        return new ChampollionJsonPatchBuilder();
+    }
+
+    @Override public jakarta.json.JsonPatchBuilder createPatchBuilder(JsonArray array) {
+        return new ChampollionJsonPatchBuilder(array);
+    }
+
+    @Override public jakarta.json.JsonPatch createPatch(JsonArray array) {
+        return new ChampollionJsonPatch(array);
+    }
+
+    @Override public jakarta.json.JsonPatch createDiff(JsonStructure source, JsonStructure target) {
+        return ChampollionJsonPatchDiff.diff(source, target);
+    }
+
+    @Override public jakarta.json.JsonMergePatch createMergePatch(JsonValue patch) {
+        return new ChampollionJsonMergePatch(patch);
+    }
+
+    @Override public jakarta.json.JsonMergePatch createMergeDiff(JsonValue source, JsonValue target) {
+        return ChampollionJsonMergePatch.diff(source, target);
+    }
+
+    @Override public JsonBuilderFactory createBuilderFactory(Map<String, ?> config) {
+        // No properties supported by JsonBuilderFactory in JSON-P 2.1.
+        Map<String, ?> snapshot = filterSupported(config, java.util.Set.of());
+        ChampollionJsonProvider self = this;
+        return new JsonBuilderFactory() {
+            @Override public JsonObjectBuilder createObjectBuilder() { return new ChampollionJsonObjectBuilder(); }
+            @Override public JsonObjectBuilder createObjectBuilder(JsonObject obj) {
+                return self.createObjectBuilder(obj);
+            }
+            @Override public JsonObjectBuilder createObjectBuilder(Map<String, Object> map) {
+                return self.createObjectBuilder(map);
+            }
+            @Override public JsonArrayBuilder createArrayBuilder() { return new ChampollionJsonArrayBuilder(); }
+            @Override public JsonArrayBuilder createArrayBuilder(JsonArray arr) {
+                return self.createArrayBuilder(arr);
+            }
+            @Override public JsonArrayBuilder createArrayBuilder(java.util.Collection<?> coll) {
+                return self.createArrayBuilder(coll);
+            }
+            @Override public Map<String, ?> getConfigInUse() { return snapshot; }
+        };
+    }
+
+    /**
+     * Wrapper that flushes the underlying OutputStream after writing, because
+     * {@link OutputStreamWriter}s buffer without automatically flushing the byte
+     * stream. Without this, {@code ByteArrayOutputStream} would return an empty
+     * string after close().
+     */
+    private record FlushingJsonWriter(ChampollionJsonWriter delegate, OutputStream out) implements JsonWriter {
+        @Override public void writeArray(JsonArray array) {
+            delegate.writeArray(array);
+            tryFlush();
+        }
+        @Override public void writeObject(JsonObject object) {
+            delegate.writeObject(object);
+            tryFlush();
+        }
+        @Override public void write(jakarta.json.JsonStructure value) {
+            delegate.write(value);
+            tryFlush();
+        }
+        @Override public void write(JsonValue value) {
+            delegate.write(value);
+            tryFlush();
+        }
+        @Override public void close() {
+            delegate.close();
+            tryFlush();
+        }
+        private void tryFlush() {
+            try { out.flush(); } catch (IOException e) { throw new JsonException("I/O error flushing", e); }
+        }
+    }
+}

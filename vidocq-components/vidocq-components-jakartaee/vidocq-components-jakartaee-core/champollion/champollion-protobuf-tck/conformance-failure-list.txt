@@ -1,0 +1,30 @@
+# Champollion protobuf — Conformance Google expected failures (M7 backlog)
+# =========================================================================
+#
+# 4 tests résiduels qui ne sont PAS supportés actuellement. Score conformance
+# actuel : 2693 successes / 0 unexpected failures / 4 expected failures
+# = 99.85% du périmètre proto3+proto2 testable (--maximum_edition PROTO3).
+#
+# Cf. docs/adr/0001-jspb-text-format-out-of-scope.md pour la stratégie globale.
+#
+# ────────────────────────────────────────────────────────────────────────────
+#    Any wrappant un autre Any (Any-in-Any) → récursion fromJsonString
+#    déclenche un timeout JVM. Le path readAny → fromJsonString(Any.class)
+#    re-tokenise via Json.createParser et perd la position du parent.
+#    Fix M7 : refactor readAny pour utiliser un JsonObject DOM pré-parsé
+#    sans recourir à fromJsonString récursif.
+#
+# 2. Proto2.ValidDataOneof.MESSAGE.Merge.JsonOutput
+#    Merge récursif de 3 niveaux (oneof_nested_message.corecursive.unpacked_int32)
+#    perd les sub-sub fields lors du parse. L'accumulation messageBuffers
+#    (M6.3) fonctionne au 1er niveau mais le re-parse récursif ne propage
+#    pas l'accumulation au sub-niveau. Fix M7 : passer un MergeContext qui
+#    porte les messageBuffers à travers la récursion.
+#
+#    JSON input {"optionalNestedEnum": 123} (value 123 inconnue) doit être
+#    re-émis en sortie comme number entier. Notre code stocke null
+#    (forward-compat M6.2) et l'omet en write. Fix M7 : maintenir un
+#    side-channel UnknownEnumValues<fieldNumber, int> ou typer les fields
+#    enum comme un wrapper (KnownEnum | UnknownIntValue).
+# ────────────────────────────────────────────────────────────────────────────
+

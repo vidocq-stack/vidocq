@@ -1,0 +1,123 @@
+= Getting started
+:description: Install Champollion, read and write streaming JSON, serialize a POJO.
+
+[.lead]
+Five minutes to add Champollion to a Maven project, parse a JSON document in streaming mode, then serialize and deserialize a POJO via JSON-B.
+
+== Prerequisites
+
+* Java 25 (Temurin recommended)
+* Maven 3.9.16 (a `.sdkmanrc` is provided at the repo root: `sdk env`)
+* No other dependency — Champollion pulls **nothing** else than the Jakarta specs
+
+== Maven dependencies
+
+For the JSON-P layer alone (streaming + object model + Patch / Pointer):
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.vidocq.champollion</groupId>
+  <artifactId>champollion-jsonp</artifactId>
+  <version>${champollion.version}</version>
+</dependency>
+----
+
+For JSON-B binding (transitively pulls `champollion-jsonp`):
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.vidocq.champollion</groupId>
+  <artifactId>champollion-jsonb</artifactId>
+  <version>${champollion.version}</version>
+</dependency>
+----
+
+To generate static bindings at compile time (recommended in production), add the APT:
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.vidocq.champollion</groupId>
+  <artifactId>champollion-codegen-apt</artifactId>
+  <version>${champollion.version}</version>
+  <scope>provided</scope>
+</dependency>
+----
+
+Or via the `champollion-codegen-maven-plugin` Mojo bound to `generate-sources` (see xref:reference.adoc[Reference]).
+
+== Read JSON in streaming mode (JSON-P, pull parser)
+
+[source,java]
+----
+try (var reader = new StringReader("""
+        {"name":"Champollion","year":1822}
+        """);
+     var parser = Json.createParser(reader)) {
+    while (parser.hasNext()) {
+        var event = parser.next();
+        switch (event) {
+            case KEY_NAME    -> System.out.println("key: " + parser.getString());
+            case VALUE_STRING -> System.out.println("str: " + parser.getString());
+            case VALUE_NUMBER -> System.out.println("num: " + parser.getInt());
+            default -> { /* START/END_OBJECT, etc. */ }
+        }
+    }
+}
+----
+
+== Build an object model (JSON-P, builder)
+
+[source,java]
+----
+JsonObject obj = Json.createObjectBuilder()
+        .add("name", "Champollion")
+        .add("year", 1822)
+        .add("tags", Json.createArrayBuilder().add("egyptology").add("rosetta"))
+        .build();
+
+try (var writer = Json.createWriter(System.out)) {
+    writer.writeObject(obj);
+}
+----
+
+== Serialize a POJO (JSON-B, default runtime mode)
+
+[source,java]
+----
+public record Hieroglyph(String symbol, String meaning, int age) {}
+
+Jsonb jsonb = JsonbBuilder.create();
+
+String json = jsonb.toJson(new Hieroglyph("eye-of-Horus", "eye", 5000));
+// {"age":5000,"meaning":"eye","symbol":"eye-of-Horus"}
+
+Hieroglyph back = jsonb.fromJson(json, Hieroglyph.class);
+----
+
+`JsonbBuilder.create()` returns a thread-safe and virtual-thread-friendly `Jsonb` — create it once for the whole application.
+
+== Enable static bindings (codegen mode, no reflection)
+
+Annotate the record:
+
+[source,java]
+----
+@JsonbStatic
+public record Hieroglyph(String symbol, String meaning, int age) {}
+----
+
+The `champollion-codegen-apt` annotation processor generates `Hieroglyph$$Binding.java` at compile time (a reflection-free `JsonbBinding<Hieroglyph>`) and registers it via `META-INF/services`. The runtime automatically picks up the static binding if present — otherwise it falls back to `MethodHandles` introspection.
+
+== Verify the install
+
+From a clone of the Champollion repo, run the provider-resolution test — it asserts that `ServiceLoader` picks up `ChampollionJsonProvider`:
+
+[source,bash]
+----
+mvn -ntp -pl champollion-jsonp -Dtest=ChampollionJsonProviderTest test
+----
+
+See xref:usage.adoc[Usage] for advanced recipes (Patch / Pointer, adapters, date formats).

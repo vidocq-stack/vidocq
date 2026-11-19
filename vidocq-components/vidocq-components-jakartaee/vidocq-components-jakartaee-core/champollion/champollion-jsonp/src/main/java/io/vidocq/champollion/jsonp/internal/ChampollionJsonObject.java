@@ -1,0 +1,127 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.champollion.jsonp.internal;
+
+import jakarta.json.JsonArray;
+import jakarta.json.JsonNumber;
+import jakarta.json.JsonObject;
+import jakarta.json.JsonString;
+import jakarta.json.JsonValue;
+
+import java.util.AbstractMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Immutable {@link JsonObject} implementation backed by a {@link LinkedHashMap}
+ * to preserve insertion order (Jakarta JSON-P §4.1 — implementations are
+ * recommended to preserve order).
+ */
+public final class ChampollionJsonObject extends AbstractMap<String, JsonValue> implements JsonObject {
+
+    private final Map<String, JsonValue> members;
+
+    private ChampollionJsonObject(Map<String, JsonValue> members) {
+        this.members = members;
+    }
+
+    public static ChampollionJsonObject of(Map<String, ? extends JsonValue> source) {
+        if (source == null) throw new IllegalArgumentException("source is null");
+        LinkedHashMap<String, JsonValue> copy = LinkedHashMap.newLinkedHashMap(source.size());
+        for (var e : source.entrySet()) {
+            if (e.getKey() == null) throw new IllegalArgumentException("null key not allowed");
+            if (e.getValue() == null) throw new IllegalArgumentException("null value not allowed (use JsonValue.NULL)");
+            copy.put(e.getKey(), e.getValue());
+        }
+        return new ChampollionJsonObject(Collections.unmodifiableMap(copy));
+    }
+
+    @Override public ValueType getValueType() { return ValueType.OBJECT; }
+
+    @Override public Set<Entry<String, JsonValue>> entrySet() { return members.entrySet(); }
+
+    // ===== JsonObject helpers =====
+
+    @Override public JsonArray getJsonArray(String name) { return (JsonArray) members.get(name); }
+    @Override public JsonObject getJsonObject(String name) { return (JsonObject) members.get(name); }
+    @Override public JsonNumber getJsonNumber(String name) { return (JsonNumber) members.get(name); }
+    @Override public JsonString getJsonString(String name) { return (JsonString) members.get(name); }
+
+    @Override public String getString(String name) {
+        JsonString v = getJsonString(name);
+        if (v == null) throw new NullPointerException("No mapping for member: " + name);
+        return v.getString();
+    }
+    @Override public String getString(String name, String defaultValue) {
+        try { return getString(name); } catch (Exception _) { return defaultValue; }
+    }
+
+    @Override public int getInt(String name) {
+        JsonNumber v = getJsonNumber(name);
+        if (v == null) throw new NullPointerException("No mapping for member: " + name);
+        return v.intValue();
+    }
+    @Override public int getInt(String name, int defaultValue) {
+        try { return getInt(name); } catch (Exception _) { return defaultValue; }
+    }
+
+    @Override public boolean getBoolean(String name) {
+        JsonValue v = members.get(name);
+        if (v == null) throw new NullPointerException("No mapping for member: " + name);
+        if (v == JsonValue.TRUE) return true;
+        if (v == JsonValue.FALSE) return false;
+        throw new ClassCastException("Member " + name + " is not a boolean");
+    }
+
+    @Override public boolean getBoolean(String name, boolean defaultValue) {
+        try { return getBoolean(name); } catch (Exception _) { return defaultValue; }
+    }
+
+    @Override public boolean isNull(String name) {
+        JsonValue v = members.get(name);
+        if (v == null) throw new NullPointerException("No mapping for member: " + name);
+        return v == JsonValue.NULL;
+    }
+
+    /**
+     * {@link Map#equals} contract (JSON-P §4.1: a {@code JsonObject} equals any map holding the same
+     * members); compares the backing maps directly when both sides are ours.
+     */
+    @Override public boolean equals(Object o) {
+        if (o instanceof ChampollionJsonObject other) return members.equals(other.members);
+        return super.equals(o);
+    }
+
+    /** {@link Map#hashCode} contract, computed by the backing map. */
+    @Override public int hashCode() { return members.hashCode(); }
+
+    @Override public String toString() {
+        var sb = new StringBuilder().append('{');
+        boolean first = true;
+        for (var e : members.entrySet()) {
+            if (!first) sb.append(',');
+            first = false;
+            sb.append(JsonStringEscaper.quote(e.getKey())).append(':').append(e.getValue());
+        }
+        return sb.append('}').toString();
+    }
+}

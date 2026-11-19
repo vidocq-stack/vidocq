@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.champollion</groupId>
+        <artifactId>champollion-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>champollion-codegen-apt</artifactId>
+    <name>Champollion :: Codegen APT</name>
+    <description>Annotation Processor : génère un BindingFactory par type annoté @JsonbStatic — Java Modules, zéro réflexion runtime</description>
+
+    <dependencies>
+        <!--
+            Dépendance build-time vers champollion-jsonb : l'APT a besoin
+            d'importer JsonbBinding et @JsonbStatic. La SPI jsonb ne dépend pas
+            de codegen — pas de circularité.
+        -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

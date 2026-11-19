@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    champollion-tck — official Jakarta JSON-P 2.1 and JSON-B 3.0 TCK runner.
+
+    In-reactor module gated by the `tck` Maven profile of champollion-parent
+    (TCK harmonisation — same pattern as the vidocq-runtime-tck-* runners and
+    the dirac pilot): a plain `mvn install` neither downloads nor runs
+    anything TCK-related.
+
+    History: this module used to be a STANDALONE out-of-reactor POM to work
+    around ShrinkWrap Maven Resolver 3.3 (could not parse Model 4.1.0 POMs).
+    That constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration.
+
+    Invocation: ./run-official-tck-jsonp-2.1.sh or ./run-official-tck-jsonb-3.0.sh
+    (thin wrappers), or directly:
+        ./mvnw -Ptck,jsonp-tck -pl champollion-tck test
+        ./mvnw -Ptck,jsonb-tck -pl champollion-tck test
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.champollion</groupId>
+        <artifactId>champollion-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>champollion-tck</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Champollion :: TCK Runner</name>
+    <description>Official Jakarta JSON-P 2.1 and JSON-B 3.0 TCK runner — in-reactor, tck Maven profile</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+
+        <jakarta.json.version>2.1.3</jakarta.json.version>
+        <jakarta.json.bind.version>3.0.1</jakarta.json.bind.version>
+
+        <!--
+            The Vauban of this release line, as champollion-jsonb-cdi pins it: the container of the
+            two CDI tests of the JSON-B TCK (jsonb-tck profile).
+        -->
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+
+        <!--
+            Versions des TCK officiels Eclipse Foundation. Non publiées sur
+            Maven Central public — voir TCK.md pour l'installation manuelle.
+        -->
+        <jakarta.json.tck.version>2.1.1</jakarta.json.tck.version>
+        <jakarta.json.bind.tck.version>3.0.0</jakarta.json.bind.tck.version>
+    </properties>
+
+    <dependencies>
+        <!--
+            Champollion, the implementation under test: the reactor's own modules, at the version
+            champollion-parent manages (`${project.version}`), like every other module of the
+            reactor. No version is written here: a pinned `0.3.0-SNAPSHOT` made every run from
+            2026-08-30 to 2026-11-17 test the last 0.3.0 snapshot, not the code of the pull request
+            (BUG-20261117-03).
+        -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+        </dependency>
+
+        <!-- API specs -->
+        <dependency>
+            <groupId>jakarta.json</groupId>
+            <artifactId>jakarta.json-api</artifactId>
+            <version>${jakarta.json.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+            <version>${jakarta.json.bind.version}</version>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <!--
+            Profil JSON-P 2.1 TCK. Activé par run-official-tck-jsonp-2.1.sh.
+            Le TCK officiel doit être installé en M2 local (cf. TCK.md).
+        -->
+        <!--
+            Profil API : tests api/* avec Champollion comme JsonProvider.
+            Le jar -tck-tests-pluggability est volontairement exclu (il fournit
+            un MyJsonProvider concurrent via META-INF/services qui pollue
+            JsonProvider.provider() au runtime et casse les tests api).
+        -->
+        <profile>
+            <id>jsonp-tck</id>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.json</groupId>
+                    <artifactId>jakarta.json-tck-tests</artifactId>
+                    <version>${jakarta.json.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.json</groupId>
+                    <artifactId>jakarta.json-tck-common</artifactId>
+                    <version>${jakarta.json.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.tck</groupId>
+                    <artifactId>sigtest-maven-plugin</artifactId>
+                    <version>2.5</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>junit-jupiter</artifactId>
+                    <version>5.11.4</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.5.5</version>
+                        <configuration>
+                            <dependenciesToScan>
+                                <dependency>jakarta.json:jakarta.json-tck-tests</dependency>
+                            </dependenciesToScan>
+                            <reportsDirectory>${project.build.directory}/tck-reports/jsonp</reportsDirectory>
+                            <systemPropertyVariables>
+                                <jimage.dir>${project.build.directory}/jimage</jimage.dir>
+                                <signature.sigTestClasspath>${user.home}/.m2/repository/jakarta/json/jakarta.json-api/${jakarta.json.version}/jakarta.json-api-${jakarta.json.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
+                                <sigTestClasspath>${user.home}/.m2/repository/jakarta/json/jakarta.json-api/${jakarta.json.version}/jakarta.json-api-${jakarta.json.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
+                            </systemPropertyVariables>
+                            <!--
+                                Le TCK contient JsonProviderTest.systemProperty() qui
+                                set System.setProperty("jakarta.json.provider", DummyJsonProvider)
+                                sans cleanup. Fork par classe pour isoler chaque test
+                                dans une JVM neuve, sinon DummyJsonProvider pollue tous
+                                les tests suivants.
+                            -->
+                            <forkCount>1</forkCount>
+                            <reuseForks>false</reuseForks>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+            Profil pluggability : exécuté séparément, classpath pluggability + tck-common
+            uniquement (Champollion non chargé). MyJsonProvider du jar pluggability
+            sert d'oracle pour les tests qui vérifient le comportement par défaut de
+            JsonProvider.provider() face à des providers tiers.
+        -->
+        <profile>
+            <id>jsonp-tck-pluggability</id>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.json</groupId>
+                    <artifactId>jakarta.json-tck-tests-pluggability</artifactId>
+                    <version>${jakarta.json.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.json</groupId>
+                    <artifactId>jakarta.json-tck-common</artifactId>
+                    <version>${jakarta.json.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>junit-jupiter</artifactId>
+                    <version>5.11.4</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.5.5</version>
+                        <configuration>
+                            <dependenciesToScan>
+                                <dependency>jakarta.json:jakarta.json-tck-tests-pluggability</dependency>
+                            </dependenciesToScan>
+                            <reportsDirectory>${project.build.directory}/tck-reports/jsonp-pluggability</reportsDirectory>
+                            <!--
+                                Pluggability profile: MyJsonProvider (from the TCK pluggability
+                                jar) must win JsonProvider.provider() / ServiceLoader. Champollion
+                                is declared at the project root for the api profile, so we have to
+                                explicitly remove it from this profile's surefire classpath, otherwise
+                                the ServiceLoader picks ChampollionJsonProvider first and the 17
+                                jsonProviderTest* tests fail with "Current provider is not my provider".
+                            -->
+                            <classpathDependencyExcludes>
+                                <classpathDependencyExclude>io.vidocq.champollion:champollion-jsonp</classpathDependencyExclude>
+                                <classpathDependencyExclude>io.vidocq.champollion:champollion-jsonb</classpathDependencyExclude>
+                            </classpathDependencyExcludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+            Profil JSON-B 3.0 TCK. Activé par run-official-tck-jsonb-3.0.sh.
+            Utilise TestNG + Arquillian (selon le format officiel Eclipse).
+        -->
+        <profile>
+            <id>jsonb-tck</id>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.json.bind</groupId>
+                    <artifactId>jakarta.json.bind-tck</artifactId>
+                    <version>${jakarta.json.bind.tck.version}</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.testng</groupId>
+                    <artifactId>testng</artifactId>
+                    <version>7.10.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <!--
+                    Vauban — CDI 4.1 maison Vidocq (politique "zéro dépendance
+                    externe Vidocq stack" : pas de Weld). Fournit
+                    SeContainerInitializer + CDIProvider. Démarre le container
+                    pour les 2 tests Adapters/SerializersCustomizationCDITest
+                    qui résolvent leurs adapters/serializers comme CDI beans
+                    (cf. spec JSON-B §5).
+                -->
+                <dependency>
+                    <groupId>io.vidocq.vauban</groupId>
+                    <artifactId>vauban-core</artifactId>
+                    <version>${vauban.version}</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.5.5</version>
+                        <configuration>
+                            <dependenciesToScan>
+                                <dependency>jakarta.json.bind:jakarta.json.bind-tck</dependency>
+                            </dependenciesToScan>
+                            <reportsDirectory>${project.build.directory}/tck-reports/jsonb</reportsDirectory>
+                            <systemPropertyVariables>
+                                <jimage.dir>${project.build.directory}/jimage</jimage.dir>
+                                <signature.sigTestClasspath>${user.home}/.m2/repository/jakarta/json/bind/jakarta.json.bind-api/${jakarta.json.bind.version}/jakarta.json.bind-api-${jakarta.json.bind.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
+                                <sigTestClasspath>${user.home}/.m2/repository/jakarta/json/bind/jakarta.json.bind-api/${jakarta.json.bind.version}/jakarta.json.bind-api-${jakarta.json.bind.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

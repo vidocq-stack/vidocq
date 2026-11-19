@@ -1,0 +1,444 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.champollion.protobuf.codegen;
+
+import io.vidocq.champollion.protobuf.FieldType;
+import io.vidocq.champollion.protobuf.ProtoEnumValue;
+import io.vidocq.champollion.protobuf.ProtobufField;
+import io.vidocq.champollion.protobuf.ProtobufMessage;
+import io.vidocq.champollion.protobuf.ProtobufStatic;
+
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedSourceVersion;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.RecordComponentElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.tools.Diagnostic;
+import javax.tools.FileObject;
+import javax.tools.JavaFileObject;
+import javax.tools.StandardLocation;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Annotation processor for {@link ProtobufStatic}.
+ *
+ * <p>For each annotated record, generates two sources:</p>
+ * <ul>
+ *   <li>{@code <FQN>$$Parser.java} — implements {@code Parser<T>} via a
+ *       switch on the {@code field_number} without reflection, MethodHandles,
+ *       or ClassLoader lookup. AOT-compatible (GraalVM, Leyden CDS).</li>
+ *   <li>{@code <FQN>$$ParserProvider.java} — implements
+ *       {@code ParserProvider}, returns the parser above if the requested
+ *       type matches, otherwise {@code null}.</li>
+ * </ul>
+ *
+ * <p>At the end of processing, writes the service file
+ * {@code META-INF/services/io.vidocq.champollion.protobuf.ParserProvider}
+ * with one line per generated provider; the runtime
+ * {@link io.vidocq.champollion.protobuf.Protobuf#parser(Class)} prefers
+ * these providers over the reflective runtime.</p>
+ *
+ * <p>M3.1 — covers scalars (int32/int64/uint32/uint64/sint32/sint64,
+ * fixed32/64, sfixed32/64, float, double, bool, string, bytes), enums
+ * (via {@code values()[ordinal]}) and repeated scalars (packed read via
+ * {@code pushLimit}, expanded tolerated). Nested messages are delegated to
+ * {@code Protobuf.parser(NestedClass.class)} for recursion — this lets the
+ * runtime resolve via ServiceLoader if the nested type is also
+ * {@code @ProtobufStatic}.</p>
+ */
+@SupportedAnnotationTypes("io.vidocq.champollion.protobuf.ProtobufStatic")
+@SupportedSourceVersion(SourceVersion.RELEASE_25)
+public final class ProtobufStaticProcessor extends AbstractProcessor {
+
+    private static final String SERVICE_FILE = "META-INF/services/io.vidocq.champollion.protobuf.ParserProvider";
+    // Fragments of the generated source.
+    private static final String END_METHOD = "    }";
+    private static final String LIST_ADD = ".add(";
+    private final Set<String> providers = new LinkedHashSet<>();
+
+    private void emitStaticParser(TypeElement type, Filer filer, Messager messager) {
+        try {
+            emitParser(type, filer);
+            String providerFqn = emitParserProvider(type, filer);
+            providers.add(providerFqn);
+        } catch (IOException ex) {
+            messager.printMessage(Diagnostic.Kind.ERROR,
+                    "Failed to emit static parser for " + type + ": " + ex, type);
+        }
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        Filer filer = processingEnv.getFiler();
+        Messager messager = processingEnv.getMessager();
+        for (Element e : roundEnv.getElementsAnnotatedWith(ProtobufStatic.class)) {
+            if (e.getKind() != ElementKind.RECORD) {
+                messager.printMessage(Diagnostic.Kind.ERROR,
+                        "@ProtobufStatic only supports records.", e);
+            } else if (e.getAnnotation(ProtobufMessage.class) == null) {
+                messager.printMessage(Diagnostic.Kind.ERROR,
+                        "@ProtobufStatic record must also be @ProtobufMessage.", e);
+            } else {
+                emitStaticParser((TypeElement) e, filer, messager);
+            }
+        }
+        if (roundEnv.processingOver() && !providers.isEmpty()) {
+            try {
+                writeServiceFile(filer);
+            } catch (IOException ex) {
+                messager.printMessage(Diagnostic.Kind.ERROR,
+                        "Failed to write service file: " + ex);
+            }
+        }
+        return true;
+    }
+
+    // ============================================================ Parser emission
+
+    private void emitParser(TypeElement type, Filer filer) throws IOException {
+        String pkg = packageOf(type);
+        String simple = type.getSimpleName().toString();
+        String parserSimple = simple + "$$Parser";
+        String parserFqn = pkg.isEmpty() ? parserSimple : pkg + "." + parserSimple;
+
+        List<? extends RecordComponentElement> comps = type.getRecordComponents();
+
+        JavaFileObject src = filer.createSourceFile(parserFqn, type);
+        try (Writer w = src.openWriter(); PrintWriter pw = new PrintWriter(w)) {
+            if (!pkg.isEmpty()) pw.println("package " + pkg + ";");
+            pw.println();
+            pw.println("import io.vidocq.champollion.protobuf.CodedInputStream;");
+            pw.println("import io.vidocq.champollion.protobuf.Parser;");
+            pw.println("import io.vidocq.champollion.protobuf.Protobuf;");
+            pw.println("import io.vidocq.champollion.protobuf.WireFormat;");
+            pw.println("import java.io.IOException;");
+            pw.println("import java.util.ArrayList;");
+            pw.println("import java.util.List;");
+            pw.println();
+            pw.println("/** Generated by ProtobufStaticProcessor — do not edit. */");
+            pw.println("public final class " + parserSimple
+                    + " implements Parser<" + simple + "> {");
+            pw.println();
+            pw.println("    @Override");
+            pw.println("    public " + simple + " parseFrom(CodedInputStream in) throws IOException {");
+            // Variables locales (une par champ, dans l'ordre du record).
+            for (RecordComponentElement rc : comps) {
+                ProtobufField pf = rc.getAnnotation(ProtobufField.class);
+                if (pf == null) {
+                    pw.println("        // skip " + rc.getSimpleName() + " (no @ProtobufField)");
+                    continue;
+                }
+                pw.println("        " + localDecl(rc, pf));
+            }
+            pw.println("        while (true) {");
+            pw.println("            int tag = in.readTag();");
+            pw.println("            if (tag == 0) break;");
+            pw.println("            int fn = WireFormat.getTagFieldNumber(tag);");
+            pw.println("            int wt = WireFormat.getTagWireType(tag);");
+            pw.println("            switch (fn) {");
+            for (RecordComponentElement rc : comps) {
+                ProtobufField pf = rc.getAnnotation(ProtobufField.class);
+                if (pf == null) continue;
+                pw.println("                case " + pf.number() + ": {");
+                emitFieldRead(pw, rc, pf);
+                pw.println("                    break;");
+                pw.println("                }");
+            }
+            pw.println("                default: in.skipField(tag);");
+            pw.println("            }");
+            pw.println("        }");
+            // Record construction
+            pw.print("        return new " + simple + "(");
+            boolean first = true;
+            for (RecordComponentElement rc : comps) {
+                if (!first) pw.print(", ");
+                first = false;
+                pw.print(rc.getSimpleName());
+            }
+            pw.println(");");
+            pw.println(END_METHOD);
+            pw.println();
+            // Helper for nested messages: limit + recursion guard.
+            pw.println("    private static <X> X readNested(Class<X> cls, CodedInputStream in) throws IOException {");
+            pw.println("        int sz = in.readRawVarint32();");
+            pw.println("        int ol = in.pushLimit(sz);");
+            pw.println("        in.incrementRecursionDepth();");
+            pw.println("        X result = Protobuf.parser(cls).parseFrom(in);");
+            pw.println("        in.decrementRecursionDepth();");
+            pw.println("        in.popLimit(ol);");
+            pw.println("        return result;");
+            pw.println(END_METHOD);
+            pw.println();
+            emitEnumDecoders(pw, comps);
+            pw.println("}");
+        }
+    }
+
+    private String emitParserProvider(TypeElement type, Filer filer) throws IOException {
+        String pkg = packageOf(type);
+        String simple = type.getSimpleName().toString();
+        String providerSimple = simple + "$$ParserProvider";
+        String providerFqn = pkg.isEmpty() ? providerSimple : pkg + "." + providerSimple;
+
+        JavaFileObject src = filer.createSourceFile(providerFqn, type);
+        try (Writer w = src.openWriter(); PrintWriter pw = new PrintWriter(w)) {
+            if (!pkg.isEmpty()) pw.println("package " + pkg + ";");
+            pw.println();
+            pw.println("import io.vidocq.champollion.protobuf.Parser;");
+            pw.println("import io.vidocq.champollion.protobuf.ParserProvider;");
+            pw.println();
+            pw.println("/** Generated by ProtobufStaticProcessor — do not edit. */");
+            pw.println("public final class " + providerSimple + " implements ParserProvider {");
+            pw.println();
+            pw.println("    @Override");
+            pw.println("    @SuppressWarnings(\"unchecked\")");
+            pw.println("    public <T> Parser<T> parserFor(Class<T> type) {");
+            pw.println("        return type == " + simple + ".class ? (Parser<T>) new "
+                    + simple + "$$Parser() : null;");
+            pw.println(END_METHOD);
+            pw.println("}");
+        }
+        return providerFqn;
+    }
+
+    private void writeServiceFile(Filer filer) throws IOException {
+        // Read the existing one if there is one (incremental compile).
+        Set<String> all = new LinkedHashSet<>(providers);
+        try {
+            FileObject existing = filer.getResource(StandardLocation.CLASS_OUTPUT, "", SERVICE_FILE);
+            try (BufferedReader r = new BufferedReader(
+                    new InputStreamReader(existing.openInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    line = line.trim();
+                    if (!line.isEmpty() && !line.startsWith("#")) all.add(line);
+                }
+            }
+        } catch (IOException _) {
+            // No existing service file — create one.
+        }
+        FileObject out = filer.createResource(StandardLocation.CLASS_OUTPUT, "", SERVICE_FILE);
+        try (Writer w = out.openWriter()) {
+            for (String p : all) {
+                w.write(p);
+                w.write('\n');
+            }
+        }
+    }
+
+    // ============================================================ Helpers
+
+    private static String packageOf(TypeElement type) {
+        String fqn = type.getQualifiedName().toString();
+        int dot = fqn.lastIndexOf('.');
+        return dot < 0 ? "" : fqn.substring(0, dot);
+    }
+
+    private String localDecl(RecordComponentElement rc, ProtobufField pf) {
+        String name = rc.getSimpleName().toString();
+        TypeMirror tm = rc.asType();
+        if (isListType(tm)) {
+            String elem = listElementJavaType(tm);
+            return "java.util.List<" + boxIfPrimitive(elem) + "> " + name
+                    + " = new java.util.ArrayList<>();";
+        }
+        // If the record component is a boxed wrapper type (Integer, Long, etc.)
+        // OR if @ProtobufField(explicitPresence=true), initialize to null —
+        // proto2 / Edition 2023 'EXPLICIT' / oneof semantics.
+        boolean boxedOrExplicit = pf.explicitPresence()
+                || (tm.getKind().name().equals("DECLARED") && isWrapperType(tm));
+        if (boxedOrExplicit) {
+            return javaTypeName(tm) + " " + name + " = null;";
+        }
+        return switch (pf.type()) {
+            case INT32, UINT32, SINT32, FIXED32, SFIXED32 -> "int " + name + " = 0;";
+            case INT64, UINT64, SINT64, FIXED64, SFIXED64 -> "long " + name + " = 0L;";
+            case FLOAT -> "float " + name + " = 0.0f;";
+            case DOUBLE -> "double " + name + " = 0.0;";
+            case BOOL -> "boolean " + name + " = false;";
+            case STRING -> "String " + name + " = \"\";";
+            case BYTES -> "byte[] " + name + " = new byte[0];";
+            case ENUM -> javaTypeName(tm) + " " + name + " = " + javaTypeName(tm)
+                    + ".values()[0];";
+            case MESSAGE -> javaTypeName(tm) + " " + name + " = null;";
+            case MAP -> "java.util.Map<Object,Object> " + name + " = new java.util.LinkedHashMap<>();";
+        };
+    }
+
+    private static boolean isWrapperType(TypeMirror tm) {
+        String n = tm.toString();
+        return n.equals("java.lang.Integer") || n.equals("java.lang.Long")
+                || n.equals("java.lang.Boolean") || n.equals("java.lang.Float")
+                || n.equals("java.lang.Double") || n.equals("java.lang.Short")
+                || n.equals("java.lang.Byte") || n.equals("java.lang.Character");
+    }
+
+    private void emitFieldRead(PrintWriter pw, RecordComponentElement rc, ProtobufField pf) {
+        String name = rc.getSimpleName().toString();
+        TypeMirror tm = rc.asType();
+        boolean repeated = isListType(tm);
+        if (repeated) {
+            String elem = listElementJavaType(tm);
+            if (pf.type().packable()) {
+                // Packed payload: a single LEN tag, payload = concatenation; tolerates
+                // the expanded form as well (one tag per value).
+                pw.println("                    if (wt == WireFormat.WIRETYPE_LENGTH_DELIMITED) {");
+                pw.println("                        int sz = in.readRawVarint32();");
+                pw.println("                        int ol = in.pushLimit(sz);");
+                pw.println("                        while (!in.isAtEnd()) {");
+                pw.println("                            " + name + LIST_ADD + scalarRead(pf.type(), elem) + ");");
+                pw.println("                        }");
+                pw.println("                        in.popLimit(ol);");
+                pw.println("                    } else {");
+                pw.println("                        " + name + LIST_ADD + scalarRead(pf.type(), elem) + ");");
+                pw.println("                    }");
+            } else {
+                // STRING/BYTES/MESSAGE non packable : un tag par valeur.
+                pw.println("                    " + name + LIST_ADD + scalarRead(pf.type(), elem) + ");");
+            }
+            return;
+        }
+        pw.println("                    " + name + " = " + scalarRead(pf.type(), javaTypeName(tm)) + ";");
+    }
+
+    private static String scalarRead(FieldType type, String javaElemType) {
+        return switch (type) {
+            case INT32 -> "in.readInt32()";
+            case INT64 -> "in.readInt64()";
+            case UINT32 -> "in.readUInt32()";
+            case UINT64 -> "in.readUInt64()";
+            case SINT32 -> "in.readSInt32()";
+            case SINT64 -> "in.readSInt64()";
+            case FIXED32 -> "in.readFixed32()";
+            case SFIXED32 -> "in.readSFixed32()";
+            case FLOAT -> "in.readFloat()";
+            case FIXED64 -> "in.readFixed64()";
+            case SFIXED64 -> "in.readSFixed64()";
+            case DOUBLE -> "in.readDouble()";
+            case BOOL -> "in.readBool()";
+            case STRING -> "in.readStringRequireUtf8()";
+            case BYTES -> "in.readBytes()";
+            case ENUM -> enumDecoderName(javaElemType) + "(in.readEnum())";
+            case MESSAGE -> "readNested(" + javaElemType + ".class, in)";
+            // MAP is not supported in static codegen — the reflective runtime handles these fields.
+            case MAP -> "/* MAP handled by runtime */null";
+        };
+    }
+
+    /**
+     * One decoder per enum type the record reads: a switch from the wire number to the constant, built at compile
+     * time from the {@link ProtoEnumValue} numbers (the ordinal when a constant declares none), the first constant
+     * winning for an aliased number. An unknown number decodes to {@code null} (proto3 forward compatibility).
+     */
+    private static void emitEnumDecoders(PrintWriter pw, List<? extends RecordComponentElement> comps) {
+        Set<String> emitted = new LinkedHashSet<>();
+        for (RecordComponentElement rc : comps) {
+            TypeElement enumElement = enumElementOf(rc);
+            if (enumElement != null && emitted.add(enumElement.getQualifiedName().toString())) {
+                emitEnumDecoder(pw, enumElement);
+            }
+        }
+    }
+
+    /** The enum type an {@code ENUM} component reads (the element type of a list), or null for another field type. */
+    private static TypeElement enumElementOf(RecordComponentElement rc) {
+        ProtobufField pf = rc.getAnnotation(ProtobufField.class);
+        if (pf == null || pf.type() != FieldType.ENUM) return null;
+        TypeMirror tm = rc.asType();
+        TypeMirror enumType = isListType(tm) ? ((DeclaredType) tm).getTypeArguments().get(0) : tm;
+        return (TypeElement) ((DeclaredType) enumType).asElement();
+    }
+
+    /** The decoder of one enum type: a switch from the wire number to the constant. */
+    private static void emitEnumDecoder(PrintWriter pw, TypeElement enumElement) {
+        String fqn = enumElement.getQualifiedName().toString();
+        pw.println();
+        pw.println("    private static " + fqn + " " + enumDecoderName(fqn) + "(int number) {");
+        pw.println("        return switch (number) {");
+        Set<Integer> numbers = new LinkedHashSet<>();
+        int ordinal = 0;
+        for (Element constant : enumElement.getEnclosedElements()) {
+            if (constant.getKind() == ElementKind.ENUM_CONSTANT) {
+                ProtoEnumValue declared = constant.getAnnotation(ProtoEnumValue.class);
+                int number = declared != null ? declared.value() : ordinal;
+                ordinal++;
+                if (numbers.add(number)) {
+                    pw.println("            case " + number + " -> " + fqn + "." + constant.getSimpleName() + ";");
+                }
+            }
+        }
+        pw.println("            default -> null;");
+        pw.println("        };");
+        pw.println(END_METHOD);
+    }
+
+    private static String enumDecoderName(String enumFqn) {
+        return "decode_" + enumFqn.replace('.', '_');
+    }
+
+    static boolean isListType(TypeMirror tm) {
+        if (tm.getKind() != TypeKind.DECLARED) return false;
+        DeclaredType dt = (DeclaredType) tm;
+        String qname = ((TypeElement) dt.asElement()).getQualifiedName().toString();
+        return qname.equals("java.util.List");
+    }
+
+    private static String listElementJavaType(TypeMirror tm) {
+        DeclaredType dt = (DeclaredType) tm;
+        if (dt.getTypeArguments().isEmpty()) return "Object";
+        return dt.getTypeArguments().get(0).toString();
+    }
+
+    private static String javaTypeName(TypeMirror tm) {
+        if (tm.getKind().isPrimitive()) return tm.toString();
+        if (tm.getKind() == TypeKind.DECLARED) {
+            return ((TypeElement) ((DeclaredType) tm).asElement()).getQualifiedName().toString();
+        }
+        return tm.toString();
+    }
+
+    private static String boxIfPrimitive(String t) {
+        return switch (t) {
+            case "int" -> "Integer";
+            case "long" -> "Long";
+            case "float" -> "Float";
+            case "double" -> "Double";
+            case "boolean" -> "Boolean";
+            default -> t;
+        };
+    }
+}

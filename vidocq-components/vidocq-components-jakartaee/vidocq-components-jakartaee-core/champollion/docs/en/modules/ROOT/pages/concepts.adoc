@@ -1,0 +1,134 @@
+= Concepts
+:description: JSON-P (parser, generator, value, patch) and JSON-B (jsonb, binding, adapter) vocabulary.
+
+[.lead]
+Champollion exposes two distinct Jakarta APIs: **JSON-P** (Processing) which manipulates raw JSON as an event stream or value tree, and **JSON-B** (Binding) which automatically maps between JSON and POJOs. This page lays out the vocabulary of each.
+
+== JSON-P 2.1 — JSON Processing
+
+Low-level API, JSON-structure oriented. Covers spec {spec-jsonp-2-1}.
+
+=== Parser and Generator (streaming)
+
+[cols="1,4"]
+|===
+| `JsonParser`
+| **Pull** event-based reader: `hasNext()` / `next()` return a `JsonParser.Event` (`START_OBJECT`, `KEY_NAME`, `VALUE_STRING`, `END_ARRAY`...). No tree allocation, ideal for large documents or skipping.
+
+| `JsonGenerator`
+| **Push** fluent writer: `writeStartObject().write("k", v).writeEnd()`. Pushes to a `Writer` or `OutputStream` (UTF-8). Optional pretty-printing.
+
+| `JsonParserFactory` / `JsonGeneratorFactory`
+| Pre-configured factories (configuration map, pretty-printing). Reusable, thread-safe.
+|===
+
+=== Object model (DOM)
+
+[cols="1,4"]
+|===
+| `JsonValue`
+| Root interface of the hierarchy (the Jakarta API type — a plain interface, **not** sealed). Subtypes: `JsonString`, `JsonNumber`, `JsonObject`, `JsonArray`, plus the constants `JsonValue.TRUE`, `FALSE`, `NULL`.
+
+| `JsonObject`
+| Immutable `Map<String, JsonValue>`, insertion order preserved.
+
+| `JsonArray`
+| Immutable `List<JsonValue>`.
+
+| `JsonObjectBuilder` / `JsonArrayBuilder`
+| Mutable builders; `build()` returns an immutable value.
+
+| `JsonReader` / `JsonWriter`
+| **Whole-document** read / write of a `JsonValue` (vs the event-based streaming).
+|===
+
+=== Patch / Pointer / Merge Patch
+
+[cols="1,4"]
+|===
+| `JsonPointer` (RFC 6901)
+| Addresses a value inside a document: `/users/0/name`. `getValue`, `add`, `replace`, `remove`.
+
+| `JsonPatch` (RFC 6902)
+| Sequence of atomic operations (`add`, `remove`, `replace`, `move`, `copy`, `test`). `apply()` returns the modified document.
+
+| `JsonMergePatch` (RFC 7396)
+| Tree-merge differential patch. `null` means deletion.
+|===
+
+== JSON-B 3.0 — JSON Binding
+
+High-level API, Java-object oriented. Covers spec {spec-jsonb-3-0}.
+
+[cols="1,4"]
+|===
+| `Jsonb`
+| Main entry point. `toJson(obj)` / `fromJson(s, Class<T>)`. Thread-safe, created once per application.
+
+| `JsonbBuilder`
+| Fluent. `JsonbBuilder.newBuilder().withConfig(...).build()`.
+
+| `JsonbConfig`
+| Standard property bag: `formatting`, `null-values`, `locale`, `date-format`, `property-naming-strategy`, `binary-data-strategy`, etc.
+
+| `JsonbAdapter<Original, Adapted>`
+| Bidirectional conversion between a Java type and a native JSON type (typically `String` or `JsonObject`). Simplest customization case.
+
+| `JsonbSerializer<T>` / `JsonbDeserializer<T>`
+| Low-level customization: you drive `JsonGenerator` / `JsonParser` directly. Required for conditional polymorphism or dynamic-key structures.
+
+| `BindingWriter` / `BindingReader` (Champollion-internal)
+| Write / read strategy resolved once per class by `RuntimeBindingRegistry` / `RuntimeReadRegistry`. Lock-free `ClassValue` cache, plus a concurrent map for parameterized types.
+
+| `JsonbBinding<T>` (Champollion public SPI, `io.vidocq.champollion.jsonb.spi`)
+| Contract of an APT-generated static binding. Implemented by `<Type>$$Binding`. Discovered via ServiceLoader.
+|===
+
+== Essential difference: JSON-P vs JSON-B
+
+[cols="1,2,2"]
+|===
+| Criterion | JSON-P | JSON-B
+
+| Level
+| Low — handles events or a JSON DOM
+| High — handles Java objects
+
+| Typical use
+| Streaming, large documents, patch / merge
+| REST DTOs, configuration, CRUD payloads
+
+| Allocation
+| Minimal in streaming (zero DOM)
+| A full object graph per call
+
+| Customization
+| None — pure structure
+| Annotations (`@JsonbProperty`...), adapters, serializers
+
+| Performance target
+| Parsson / Jackson streaming
+| Yasson / Jackson databind
+|===
+
+JSON-B builds on JSON-P: `Jsonb.toJson(obj)` ultimately pushes into a `JsonGenerator`. The binding layer composes on top of the processing layer — never the other way round.
+
+== Champollion-specific vocabulary
+
+[cols="1,4"]
+|===
+| **Runtime mode**
+| JSON-B binding by `MethodHandles` introspection on first encounter, `ClassValue` cache. Cost amortized after warmup. Uses `MethodHandles.publicLookup()` on public record accessors and bean getters/setters — no `setAccessible`, no `opens` required from the consumer.
+
+| **Static mode** (or "codegen")
+| JSON-B binding generated at compile time by `champollion-codegen-apt`. `<Type>$$Binding`: zero reflection, no `MethodHandles` at all. AOT-friendly (GraalVM, Leyden). A generated binding implements the default mapping: a `Jsonb` whose `JsonbConfig` changes the mapping (null values, naming, order or visibility strategy, date format, locale, binary strategy, adapters, serializers, deserializers, strict I-JSON, required creator parameters, `jsonb.fail-on-unknown-properties`) does not use it and maps every type at run time. Formatting and encoding keep it.
+
+| **Differential testing**
+| Automated suite: for each tested type, verify `runtime.toJson(o).equals(static.toJson(o))` and the symmetric for reads. Guardrail against codegen regressions.
+
+| **`@JsonbStatic`**
+| Champollion-specific annotation (`io.vidocq.champollion.jsonb.spi`) marking a **record** for binding generation. It is the APT's only trigger — types carrying just standard annotations (`@JsonbProperty`, etc.) are handled by the runtime mode, not by codegen.
+
+| **`JsonbBinding` SPI**
+| `io.vidocq.champollion.jsonb.spi.JsonbBinding` — the ServiceLoader SPI exposing a generated static binding (registered under `META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding`). The runtime queries this SPI first, then falls back to introspection if absent.
+|===

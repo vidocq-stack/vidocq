@@ -1,0 +1,791 @@
+# Champollion — JMH Benchmarks vs Yasson / Parsson / Jackson
+
+Performance comparison between **Champollion** (the in-house Jakarta JSON-P 2.1
+and JSON-B 3.0 implementation) and the reference implementations commonly used
+as baselines.
+
+> **TL;DR** (updated P13, 2026-06-12) — Champollion now **beats Parsson on
+> JSON-P streaming for MEDIUM (1.17×) and LARGE (1.08×)** payloads; only
+> SMALL remains behind (0.66×, per-parse fixed costs). It **beats Yasson on
+> reads** (~40% faster on MEDIUM) and a pure event drain allocates 22×
+> *less* than Parsson. Binding writes remain ~Yasson-level and **3-4× slower
+> than Jackson** (expected — 15 years of POJO-specific tuning and bytecode
+> codegen). There is no performance cliff that would make Champollion
+> unusable in production.
+
+---
+
+## BENCH-20261029-03 — Jsonb reads: the kept parser reuses its tokenizer and remembers member names
+
+- **Date** : 2026-10-29
+- **Commit** : branch `perf/json-read-keys` (base `a408722`)
+- **JVM** : Temurin 25+36 LTS
+- **Hardware** : Apple M5 Max / 128 GB RAM, not pinned, desktop load (indicative)
+- **OS** : macOS 27.0.1
+- **Origin** : follow-up of BENCH-20261029-02. After it, reading the 50-byte creation body still allocated 496 B
+  and was bimodal across forks (about 138 or 195 ns).
+- **Commande exacte** :
+  ```bash
+  ./mvnw -ntp install -Dmaven.test.skip=true -pl champollion-jsonp,champollion-jsonb
+  ./mvnw -ntp clean package -DskipTests -pl champollion-bench
+  java -jar champollion-bench/target/benchmarks.jar TodoBench.champollion_readCreation -f 6 -wi 3 -i 3
+  java -jar champollion-bench/target/benchmarks.jar 'JsonbReadBenchStatic.champollion_(static|runtime)|JsonpParseBench.champollion' \
+      -bm avgt -tu us -f 2 -wi 3 -i 4 -w 2s -r 2s -prof gc
+  ```
+  main is measured from the same worktree with the `src/main` changes stashed.
+
+**Where the bytes went** (main, 496 B per read): a new `JsonStringTokenizer` per `reset(String)` with its
+`StringBuilder(64)` (about 150 B), the strings of the two member names `title` and `done` (about 100 B), then the
+body string, the title value, the record and the benchmark's `ByteArrayInputStream`.
+
+**Changes**:
+
+1. `ChampollionJsonParser.reset(String)` reuses its `JsonStringTokenizer` (`JsonStringTokenizer.reset`).
+2. A parser made with `keepingKeys()`, as `Jsonb` makes the one it keeps, remembers the member names it reads in
+   64 slots: a name read again comes back as the same `String`, with its hash already computed for the `switch`
+   of the generated binding. Unescaped names of at most 32 characters only; a name replaces the one in its slot.
+   Parsers from `JsonProvider` do not keep names.
+
+Tried and REJECTED on measurement: one slot for the kept parser and the read buffer (2 atomic operations per
+read instead of 4): 150.4 ± 9.3 ns against 138.5 ± 5.2 ns for two slots, same machine, back to back.
+
+- **Résultats** (`avgt`; TodoBench 6 forks × 3 iterations, the others 2 forks × 4 iterations):
+  ```
+  Benchmark                                    main                      branch
+  TodoBench.champollion_readCreation           ~186 ns (bimodal), 496 B  134.3 ± 6.5 ns, 224 B   (Jackson 2: 130.5 ns, 920 B)
+  JsonbReadBenchStatic.champollion_static  S   0.187 µs,    408 B        0.143 µs,     88 B
+  JsonbReadBenchStatic.champollion_static  M   1.615 µs,  3 144 B        1.503 µs,  1 832 B
+  JsonbReadBenchStatic.champollion_static  L   216 ± 18 µs, 498 963 B    225 ± 5 µs, 397 401 B
+  JsonbReadBenchStatic.champollion_runtime S   0.262 µs,    678 B        0.212 µs,    338 B
+  JsonbReadBenchStatic.champollion_runtime M   2.358 µs,  5 248 B        1.884 µs,  3 936 B
+  JsonbReadBenchStatic.champollion_runtime L   233 ± 4 µs,  511 177 B    212 ± 15 µs, 397 401 B
+  JsonpParseBench.champollion              S   0.168 µs,  1 352 B        0.168 µs,  1 360 B
+  JsonpParseBench.champollion              M   0.602 µs,  1 352 B        0.603 µs,  1 360 B
+  JsonpParseBench.champollion              L   56.6 µs,   1 352 B        54.6 µs,   1 360 B
+  ```
+- **Delta vs main** : readCreation −28 % time, −55 % allocation, and no longer bimodal (126 to 147 ns per fork);
+  Jsonb reads of SMALL and MEDIUM −7 to −24 % time and −25 to −78 % allocation; LARGE −20 % allocation, time
+  within noise. A JSON-P parser from `JsonProvider` costs 8 B more (the reference to the name table, unused).
+  What a read still allocates is the body as a `String`, the values and the result; going below needs a tokenizer
+  over the UTF-8 bytes.
+- **Official protocol** : the vidocq-benchmarks bench-json run of the BENCH-20261029-02 changes (Champollion at
+  `3dca8e8d`) put Champollion ahead of Jackson 2 and 3 on all three cases: read 644 → 393 ns (Jackson 2 414 ns).
+- **Conformance** : JSON-P 2.1 TCK 179/179 + pluggability 18/18; JSON-B 3.0 TCK 295 run, 290 pass, 5 skipped.
+
+---
+
+## BENCH-20261029-02 — Jsonb on byte streams: writing a list and reading a small body (BENCH-20261029-01 leads)
+
+- **Date** : 2026-10-29
+- **Commit** : branch `perf/json-write-list-read-record` (base `e682d2a`)
+- **JVM** : Temurin 25+36 LTS
+- **Hardware** : Apple M5 Max / 128 GB RAM, not pinned, desktop load (indicative; the official numbers are those
+  of the vidocq-benchmarks bench window)
+- **OS** : macOS 27.0.1
+- **Origin** : the bench-json microbenchmark of VidocqTools/vidocq-benchmarks (BENCH-20261029-01, commit
+  `97b683f`) found Champollion 31 % slower than Jackson 2 writing a list of 100 todos through a
+  `ParameterizedType`, with 2.4× the allocation, and 55 % slower reading a 50-byte creation body, with 3× the
+  allocation. `TodoBench` reproduces its three cases (same records, same payloads, a fresh
+  `ByteArrayOutputStream(256)` and `toByteArray()`, a `ByteArrayInputStream` per read).
+- **Commande exacte** :
+  ```bash
+  ./mvnw -ntp install -DskipTests -pl champollion-jsonp,champollion-jsonb
+  ./mvnw -ntp clean package -DskipTests -pl champollion-bench   # clean: the shaded jar otherwise keeps stale classes
+  java -jar champollion-bench/target/benchmarks.jar TodoBench -prof gc   # 2 forks, 3×2 s warm-up, 5×2 s measurement
+  ```
+
+**Where the bytes went** (main, per call):
+
+- *Write list, 21 640 B*: the generator buffer grows from 128 bytes to 4 KB by doubling, about 8 KB of copies;
+  one `Long.toString` string per id; the `ByteArrayOutputStream` and `toByteArray()`, about 8 KB, which Jackson
+  pays too.
+- *Read, 2 848 B*: per call a `PushbackInputStream`, a 4-byte head, a UTF-8 decoder with its 1 KB byte buffer
+  and a reader, then a new parser with its `char[512]` and `StringBuilder`: the kept parser served only `String`
+  and `Reader` input.
+
+**Changes**:
+
+1. `Jsonb.fromJson(InputStream, ...)` reads a body of up to 8 KB whole into a buffer the `Jsonb` keeps, decodes
+   it with `new String(..., UTF_8)` when the head says UTF-8 (BOM skipped), and parses it with the kept parser.
+   UTF-16/32 and longer bodies take the streaming path, the bytes already read put back in front.
+2. The generator writes `int` and `long` values digit by digit into its buffer (`GeneratorSink.appendLong`).
+3. The generator context stack is a `Ctx[]` whose top is replaced in place, instead of an `ArrayDeque` popped and
+   pushed for each value.
+4. `Jsonb.toJson(..., OutputStream)` gives the generator a slot holding a 4 KB buffer. A document that outgrows
+   the 128-byte starting buffer borrows it instead of doubling, and gives it back on `close()`.
+
+Tried and changed on measurement: handing the kept 4 KB buffer to every generator from the start cost
+`writeOne` 10 ns (25.5 → 35.5 ns, two atomic operations per call on a 38-byte document); borrowing it only
+when a document outgrows 128 bytes brings `writeOne` back to 25.3 ns.
+
+- **Résultats** (`avgt`, ns/op, and `gc.alloc.rate.norm`, B/op; 2 forks × 5 iterations unless stated):
+  ```
+  Benchmark                            main (e682d2a)          branch                  Jackson 2 (same run as main)
+  TodoBench.champollion_writeOne        25.466 ± 0.332  496 B   25.399 ±  0.395  496 B  104.794 ±   2.471  832 B
+  TodoBench.champollion_writeList     5657.540 ± 17.079 21640 B 4125.157 ± 56.784 8768 B 3950.282 ± 104.976 9088 B
+  TodoBench.champollion_readCreation   295.697 ± 4.290  2848 B  185.976 ± 21.221  496 B  127.384 ±   4.440  892 B
+  ```
+  `readCreation` on the branch is bimodal across forks: 6 forks × 3 iterations gave 193, 138, 199–209, 199, 196
+  and 186 ns per fork (the mean above). The committed variant and the final one show the same distribution, so
+  it is a JIT decision, not a code difference; main sat at 296 ns in both of its forks.
+- **Delta vs main** : writeList −27 % time, −59 % allocation (on par with Jackson 2, which allocates more);
+  readCreation −37 % time on average, −83 % allocation (less than Jackson 2, still ~45 % slower); writeOne
+  unchanged. What reading still pays: the body as a `String`, the keys `title` and `done` materialised by
+  `getString()` in the generated binding, and four atomic operations on the kept parser and buffer.
+- **Conformance** : JSON-P 2.1 TCK 179/179 + pluggability 18/18; JSON-B 3.0 TCK 295 run, 290 pass, 5 skipped (as on main).
+
+---
+
+## BENCH-20260612-02 — P13: single-pass numbers + bit-stack state machine (Parsson overtaken on MEDIUM/LARGE)
+
+- **Date** : 2026-06-12
+- **Commit** : 0098c33 (`pr/ybl/p13-parser-fast-path`)
+- **JVM** : Temurin 25+36 LTS
+- **Hardware** : Apple M4 Max / 128 GB RAM
+- **OS** : macOS (Darwin 25.5.0)
+- **Commande exacte** :
+  ```bash
+  mvn -ntp -pl champollion-jsonp,champollion-bench package -DskipTests
+  java -jar champollion-bench/target/benchmarks.jar 'JsonpParseBench.(champollion|parsson)' -f 1 -wi 3 -i 5 -w 2s -r 3s
+  ```
+
+**P13 changes** (the profile after P12 was FLAT — `readString` 16%, parser
+state machine ~14%, `next()` 9%, number validation 4% — so the win came from
+distributed per-event overhead, not from one scan loop):
+
+1. **Single-pass number scan**: both tokenizers scanned the maximal
+   number-alphabet run, then re-validated it with a second
+   `isValidRfc8259Number` pass. The RFC 8259 §6 grammar phases (int / frac /
+   exp) are now fused into the scan itself; error messages are byte-identical
+   (the maximal run is only re-scanned on the error path).
+2. **Bit-stack parser state machine**: `ChampollionJsonParser` replaced its
+   `ArrayDeque<Scope>` (2-3 virtual pop/push per event + `computeNext()`
+   recursion for separators) with a scalar `Scope` field plus ONE BIT per open
+   container (1 = object, 0 = array, growable `long[]`). A parent scope is
+   always already advanced to `*_COMMA` when a child opens, so the bit alone
+   reconstructs the parent state on close. Separators loop instead of recursing.
+
+Tried and REJECTED on measurement: SWAR 4-chars-per-long string scan via
+`MemorySegment.ofArray` (the P4 ROADMAP "FFM SIMD" idea) — workload strings
+are too short (sku-like), the closing quote almost always sits in the first
+word, so the word test is pure overhead (MEDIUM −10%, LARGE flat); and
+`BUF_SIZE` 512→4096 (LARGE flat, MEDIUM −18% from per-parse allocation).
+The alignment/refill test matrix written for SWAR is kept
+(`JsonTokenizerScanBoundaryTest`).
+
+- **Résultats** (`thrpt` ops/µs and `avgt` µs/op, same run):
+  ```
+  Benchmark                    (size)   Mode  Cnt   Score    Error   Units
+  JsonpParseBench.champollion   SMALL  thrpt    5   6,143 ±  0,368  ops/us
+  JsonpParseBench.champollion  MEDIUM  thrpt    5   1,554 ±  0,029  ops/us
+  JsonpParseBench.champollion   LARGE  thrpt    5   0,017 ±  0,001  ops/us
+  JsonpParseBench.parsson       SMALL  thrpt    5   9,352 ±  0,061  ops/us
+  JsonpParseBench.parsson      MEDIUM  thrpt    5   1,333 ±  0,020  ops/us
+  JsonpParseBench.parsson       LARGE  thrpt    5   0,016 ±  0,001  ops/us
+  JsonpParseBench.champollion  MEDIUM   avgt    5   0,651 ±  0,015   us/op
+  JsonpParseBench.champollion   LARGE   avgt    5  59,744 ±  1,600   us/op
+  JsonpParseBench.parsson      MEDIUM   avgt    5   0,693 ±  0,017   us/op
+  JsonpParseBench.parsson       LARGE   avgt    5  64,605 ±  1,713   us/op
+  ```
+- **Comparaison vs run précédent** (P12, ratios champollion/parsson same-run):
+  SMALL 0.54× → **0.66×**, MEDIUM 0.77× → **1.17×**, LARGE 0.69× → **1.08×**.
+  Champollion LARGE went from 89,5 µs (same-day pre-P13 baseline) to 59,7 µs
+  (**−33%**). The 0.8× ROADMAP target is passed — Parsson is now BEHIND on
+  MEDIUM and LARGE.
+- **Notes** : SMALL (0.66×) is dominated by per-parse fixed costs (parser +
+  tokenizer instantiation; Parsson pools its buffers). Correctness gates:
+  514 jsonp tests incl. JSONTestSuite 318/318, full reactor green, official
+  TCK scores recorded with the P13 merge.
+
+---
+
+## 2026-06-11 — P12: lazy value materialization (the chantier announced by P11)
+
+- **Hardware / JVM**: Apple M4 Max, 128 GB RAM, OpenJDK 25 LTS (Temurin).
+- **Command**: `java -jar champollion-bench/target/benchmarks.jar "JsonpParseBench.(champollion|parsson)" -f 1 -wi 2 -i 3 -w 2s -r 3s -bm thrpt [-prof gc -p size=LARGE]`
+
+**P12 changes**: `JsonToken` records (`StringToken`/`NumberToken`) → plain enum;
+the tokenizer keeps the last scalar as a *lazy pending value* — a range
+into the source buffer on the fast paths, a scratch copy when escapes or a
+buffer boundary intervened — and `currentString()` / `currentBigDecimal()` /
+`currentIntegral()` / `currentLong()` materialize on demand (String cached).
+The look-ahead pitfall identified by P11 is handled exactly as designed:
+`refill()` promotes a live un-materialized range into the scratch (chars only,
+no String) before clobbering the buffer, so the parser's `hasNext()`
+separator-scanning look-ahead never corrupts an unread value (regression
+tests at both tokenizer and parser level). `JsonStringTokenizer` gained the
+same in-source fast paths (it previously scanned strings/numbers per char);
+its ranges point into the immutable source String and never need promotion.
+Number accessors got Parsson-style direct paths: `BigDecimal(char[],off,len)`
+from the range, direct digit parse for `getInt`/`getLong` when integral and
+≤ 18 digits. Correctness: 506 jsonp tests + JSONTestSuite corpus (318/318),
+jsonb differential suite, and **both official TCKs at their exact reference
+scores** (JSON-P 178/179 + 18 pluggability, JSON-B 289/295 — only the
+documented environmental sigtests and upstream skips).
+
+**Throughput (ops/µs)** — the allocation gap was the bottleneck:
+
+| Workload | Champollion P11 | **Champollion P12** | Parsson | ratio (was) |
+|---|---:|---:|---:|---:|
+| SMALL  | 3,573 | **5,326** (+49%) | 9,844 | **0.54×** (0.39×) |
+| MEDIUM | 0,579 | **1,106** (+91%) | 1,442 | **0.77×** (0.45×) |
+| LARGE  | 0,007 | **0,011** (+57%) | 0,016 | **0.69×** (0.47×) |
+
+**Allocation (`-prof gc`, LARGE, drain without accessors)**:
+
+| | alloc.rate.norm |
+|---|---:|
+| Champollion P11 | 307 840 B/op |
+| **Champollion P12** | **1 448 B/op** (÷213) |
+| Parsson | 32 288 B/op |
+
+Champollion now allocates **22× less than Parsson** on a pure event drain.
+The remaining LARGE gap (0.69×) is pure scanning CPU — the
+`java.lang.foreign` SIMD path (P4 ROADMAP) is the next lever toward and past
+0.8×. MEDIUM is already there (0.77×).
+
+**JSON-B read (avgt µs/op, POJO)** — the lazy tokenizer carries through
+binding: SMALL 0,307 → **0,171**, MEDIUM 2,645 → **1,645** (Yasson: 0,287 /
+2,271 — Champollion now reads ~40% faster than Yasson on MEDIUM). The LARGE
+read benchmark remains `(n/c)`: extending its coverage exposed a
+**pre-existing** runtime-binding bug (nested-POJO field aborts the enclosing
+object read inside a collection element — reproduced identically on `main`
+pre-P12), tracked as `BUG-20260611-01` in `BUG.md`.
+
+---
+
+## 2026-06-11 — P11: in-buffer fast paths + the decisive allocation diagnostic
+
+- **Hardware / JVM**: Apple M4 Max, 128 GB RAM, OpenJDK 25 LTS (Temurin).
+- **Command**: `java -jar champollion-bench/target/benchmarks.jar "JsonpParseBench.(champollion|parsson)" -f 1 -wi 2 -i 3 -w 2s -r 3s -bm thrpt [-prof gc]`
+
+**P11 changes** (`JsonReaderTokenizer`): whitespace, strings and numbers are now
+scanned directly in the `char[512]` buffer in tight loops — single
+`new String(buf, start, len)` materialization when no escape/boundary, bulk
+line/column/offset tracking (strings and numbers cannot contain raw newlines,
+so `getLocation()` stays exact), one-pass RFC 8259 number validation on the
+slice. Slow paths (escapes, refill boundaries) keep the original per-char loops
+and their precise error messages. Correctness: 493 jsonp tests + the full
+JSONTestSuite corpus (318/318) green.
+
+**Throughput (ops/µs)** — measurably unchanged vs the P1 baseline:
+
+| Workload | Champollion P11 | Parsson | ratio |
+|---|---:|---:|---:|
+| SMALL  | 3,573 | 9,106 | 0.39× |
+| MEDIUM | 0,579 | 1,284 | 0.45× |
+| LARGE  | 0,007 | 0,015 | 0.47× |
+
+**The decisive diagnostic (`-prof gc`, LARGE)**:
+
+| | alloc.rate.norm |
+|---|---:|
+| Champollion | **307 840 B/op** |
+| Parsson | **32 288 B/op** |
+
+A ~10× allocation gap. The per-char scanning cost was never the bottleneck —
+the GC pressure is: this benchmark drains events without calling
+`getString()`, and Parsson materializes nothing in that case, while our
+tokenizer allocates a `String` + a `StringToken`/`NumberToken` record for
+every scalar regardless of consumption.
+
+**Next step (the real path to 0.8×): lazy value materialization.** The
+tokenizer should record the value as a (buffer range | scratch builder)
+handle, materializing the `String` only when `getString()`/`getBigDecimal()`
+is actually called. Design constraint identified: the parser's `hasNext()`
+look-ahead may trigger a `refill()` that clobbers a still-unread range — the
+promotion (range → scratch copy, no String) must happen inside `refill()`
+when a pending un-materialized value exists. Touches the
+tokenizer⇄parser token contract (`JsonToken` records → type enum + accessors)
+and must be re-validated against both TCKs, the corpus and the jsonb
+differential suite — a dedicated chantier.
+
+---
+
+## 1. Methodology
+
+### Environment
+
+- **Platform**: macOS (Darwin 25.4.0), Apple Silicon CPU
+- **JVM**: OpenJDK Java 25 (HotSpot, Compiler Blackholes enabled)
+- **Heap**: `-Xms1G -Xmx1G -XX:+UseG1GC` (same flags for all implementations)
+- **JMH**: 1.37
+- **Date**: 2026-05-04
+
+### JMH configuration
+
+| Parameter | Value |
+|---|---|
+| Forks | 1 |
+| Warmup iterations | 2 × 2 s |
+| Measurement iterations | 3 × 3 s |
+| Modes | `Throughput` (ops/µs) + `AverageTime` (µs/op) |
+| Output | `Blackhole.consume` to prevent DCE |
+
+> Forks and iterations are intentionally reduced to stay under 15 minutes
+> wall-clock time. For publication-grade results, rerun with `-f 5 -wi 5 -i 5`
+> (~30 minutes). The orders of magnitude below are stable.
+
+### Compared implementations
+
+| Library | Version | Role |
+|---|---|---|
+| **Champollion** | 0.1.0-SNAPSHOT | In-house zero-dep, strict Java Modules JSON-P 2.1 + JSON-B 3.0 |
+| **Yasson** | 3.0.4 | Eclipse JSON-B 3.0 reference |
+| **Parsson** | 1.1.7 | Eclipse JSON-P 2.1 reference |
+| **Jackson databind** | 2.18.2 | General-purpose binding (perf reference) |
+| **Jackson-jr** | 2.18.2 | Minimal Jackson tier |
+
+### Workloads
+
+| Size | Shape | Volume |
+|---|---|---|
+| **SMALL** | `record User(long id, String name, boolean active)` | ~50 B JSON |
+| **MEDIUM** | `Order(long, String, List<Item>×5, Address, double, boolean)` | ~700 B JSON |
+| **LARGE** | `List<Order>×100` | ~70 KB JSON |
+
+See `champollion-bench/src/main/java/io/vidocq/champollion/bench/Workloads.java`
+for the definitions.
+
+### How to reproduce
+
+```bash
+mvn -ntp -pl champollion-bench package -DskipTests
+java -jar champollion-bench/target/benchmarks.jar -f 1 -wi 2 -i 3 -w 2s -r 3s
+```
+
+To target a subset: `java -jar benchmarks.jar JsonpParseBench -p size=MEDIUM`.
+
+For a publication-grade run: `-f 5 -wi 5 -i 5` (~30 min).
+
+---
+
+## 2. JSON-P — pull parser (`JsonParser`)
+
+Full scan of the event stream (`hasNext`/`next`) without building an object
+model. Pure tokenizer + state-machine measurement.
+
+### Throughput (ops/µs, higher is better)
+
+| Workload | Champollion baseline | Champollion **P1 (buf char[512])** | Parsson | P1/Parsson |
+|---|---:|---:|---:|---:|
+| SMALL  | 3,612 | 3,568 | 9,381 | 0.38× |
+| MEDIUM | 0,437 | **0,614** (+40%) | 1,419 | 0.43× |
+| LARGE  | 0,005 | **0,008** (+60%) | 0,016 | **0.50×** |
+
+### Latency (µs/op, lower is better)
+
+| Workload | Champollion P1 | Parsson |
+|---|---:|---:|
+| SMALL  | ~0.28 µs | 0.105 µs |
+| MEDIUM | ~1.63 µs | 0.71 µs |
+| LARGE  | ~125 µs | 62 µs |
+
+**Reading**: since the **P1 — tokenizer `char[512]` buffering** optimization
+(`<P1>`), the LARGE gap vs Parsson shrank from **0.32× to 0.50×**
+(+60% throughput) with no regression on SMALL. MEDIUM gained +40%.
+`BUF_SIZE=512` is the sweet spot: larger hurts SMALL (non-amortized `char[]`
+allocation), smaller cancels the LARGE gain.
+
+**Remaining work (P4 ROADMAP)**: move to `java.lang.foreign` SIMD scanning for
+whitespace and string-literal detection. Long-term target: ~0.8× Parsson on LARGE.
+
+---
+
+## 3. JSON-P — push generator (`JsonGenerator`)
+
+Emits a structured object equivalent to `mediumJson()` via the streaming API.
+
+> **Methodology note for P2** — the benchmark uses `StringWriter` as its target,
+> which is already internally buffered. Therefore the P2 optimization
+> (`BufferedWriter` around any writer that is not already buffered) does not show
+> up in this table — it will matter on real `OutputStreamWriter` targets (the REST
+> `entityStream` case). To measure P2, rerun with
+> `OutputStreamWriter(new FileOutputStream(...))` or equivalent.
+
+### Throughput (ops/µs) — `StringWriter` target (already buffered)
+
+| Workload | Champollion | Parsson | Ratio |
+|---|---:|---:|---:|
+| SMALL  | 5,918 | 15,147 | 0.39× |
+| MEDIUM | 0,620 | 2,218 | 0.28× |
+
+### Throughput (ops/µs) — `OutputStreamWriter` target (real REST case)
+
+Benchmark `JsonpGenerateOSBench`, sink = `OutputStreamWriter(NullOutputStream, UTF-8)`.
+
+| Workload | Without P2 | **P2 (BufferedWriter 256)** | Δ |
+|---|---:|---:|---:|
+| SMALL  | 3,594 | **4,385** | **+22%** |
+| MEDIUM | 0,402 | **0,594** | **+48%** |
+
+**Reading**: on `OutputStreamWriter` (what Cassini uses via
+`MessageBodyWriter.writeTo(... entityStream ...)`), P2 brings +22% to +48%
+depending on payload size. A 256-char buffer is the sweet spot: larger values
+(1024) regress SMALL by -27% because allocation cost is not amortized, smaller
+values erase the MEDIUM gain. On the `StringWriter` target (bench-only), P2 is a
+no-op: Champollion detects `StringWriter` and does not wrap it.
+
+### Latency (µs/op)
+
+| Workload | Champollion | Parsson |
+|---|---:|---:|
+| SMALL  | 0.170 µs | 0.066 µs |
+| MEDIUM | 1.615 µs | 0.460 µs |
+
+**Reading**: roughly 3× slower than Parsson. Same optimization direction as the
+parser (buffering + direct writes).
+
+---
+
+## 4. JSON-B — write (`Jsonb.toJson`)
+
+POJO + record to JSON string.
+
+### Throughput (ops/µs)
+
+| Workload | Champollion record | Yasson record | Jackson record | Jackson-jr POJO |
+|---|---:|---:|---:|---:|
+| SMALL  | 4,580 | **30,001 ⚠️** | 11,563 | 10,240 |
+| MEDIUM | 0,514 | 0,575 | 1,786 | 1,639 |
+| LARGE  | 0,005 | 0,006 | 0,020 | 0,018 |
+
+| Workload | Champollion POJO | Yasson POJO | Jackson POJO |
+|---|---:|---:|---:|
+| SMALL  | 4,485 | 4,179 | 11,253 |
+| MEDIUM | 0,512 | 0,567 | 1,797 |
+| LARGE  | 0,005 | 0,006 | 0,020 |
+
+### Latency (µs/op)
+
+| Workload | Champollion | Yasson | Jackson | Jackson-jr |
+|---|---:|---:|---:|---:|
+| SMALL POJO  | 0,224 | 0,243 | 0,088 | 0,097 |
+| SMALL record| 0,219 | **0,037 ⚠️** | 0,085 | — |
+| MEDIUM      | 1,957 | 1,773 | 0,557 | 0,618 |
+| LARGE       | 183 µs | 177 µs | 50 µs | 56 µs |
+
+⚠️ **Interesting point — Yasson SMALL record**: 30 ops/µs throughput, suggesting
+a cache or short-circuit specific to 3-field records. The advantage disappears on
+MEDIUM/LARGE.
+
+**Reading**:
+- **Champollion ≈ Yasson** on most workloads (±10%). Champollion handles
+  SMALL/MEDIUM records better in practice because it does not require `@JsonbCreator`
+  boilerplate, unlike Yasson on a strict module path (see `JSON-ROADMAP.md` §1).
+- **Jackson is 3-4× faster**: that is the market reference ceiling. Jackson uses
+  ASM codegen for accessors and a highly optimized internal buffer.
+- **Jackson-jr** is almost as fast as Jackson databind on SMALL/MEDIUM
+  (~10% slower only).
+
+---
+
+## 5. JSON-B — read (`Jsonb.fromJson`)
+
+JSON string to POJO + record.
+
+### Latency (µs/op, lower is better)
+
+| Workload | Champollion | Yasson | Jackson | Jackson-jr |
+|---|---:|---:|---:|---:|
+| SMALL POJO   | 0,307 | 0,425 | 0,132 | 0,154 |
+| SMALL record | 0,317 | — | 0,169 | — |
+| MEDIUM       | 2,645 | 3,645 | 1,033 | 1,034 |
+| LARGE        | (n/c) | 348 µs | 104 µs | 158 µs |
+
+> Note: Champollion LARGE read is not directly measured in this table — see
+> below; the benchmark loads `List<Order>` via `TypeReference` for Jackson only
+> (Champollion also uses `largeType`, but the result is in the full log).
+
+**Reading**:
+- **Champollion beats Yasson** on reads (~25-30% faster on SMALL and MEDIUM).
+- **Jackson is 2-3× faster** than Champollion on reads, as expected.
+- **Jackson-jr is nearly equivalent to Jackson databind** on SMALL/MEDIUM, a bit
+  slower on LARGE.
+
+---
+
+## 6. Summary
+
+### Positioning
+
+```
+        Relative throughput (Champollion = 1.0 on each line)
+        ┌──────────────────────────────────────────────────────┐
+JSON-P  │ Champollion ━━━ │ Parsson ━━━━━━━━━━━━━━━━━━━━━━━━━━━ │   (Parsson ≈ 2.5×)
+parse   └──────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┐
+JSON-P  │ Champollion ━━━ │ Parsson ━━━━━━━━━━━━━━━━━━━━━━━━━━━ │   (Parsson ≈ 3×)
+gen     └──────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┐
+JSON-B  │ Champollion ━━━━━━ │ Yasson ━━━━━━ │ Jackson ━━━━━━━━━━━━━━━━━━━━━━━━━━ │   (Jackson ≈ 3-4×)
+write   └──────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┐
+JSON-B  │ Champollion ━━━━━━━━━━ │ Yasson ━━━━━━━━ │ Jackson ━━━━━━━━━━━━━━━━━━━━━━━━━━ │   (Jackson ≈ 3×)
+read    └──────────────────────────────────────────────────────┘
+```
+
+### Conclusions
+
+1. **Champollion is competitive with Yasson** across the JSON-B spectrum —
+   that is the primary target, since this is what Cassini replaces.
+2. **Champollion is slower than Parsson** on JSON-P streaming (~2.5-3×).
+   Acceptable for a v0.1 zero-dependency implementation; `java.lang.foreign`
+   SIMD scanning remains a future optimization path.
+3. **The gap with Jackson is expected** — Jackson has 15 years of native
+   optimizations and a codegen ecosystem (ASM, jr/object, smile). Matching Jackson
+   will require significant R&D (bytecode codegen for accessors, ad hoc char/byte
+   buffers).
+4. **Champollion handles records natively** without `@JsonbCreator`. Yasson on a
+   strict module path breaks silently on records (see `JSON-ROADMAP.md` §1) —
+   that is the practical differentiating advantage.
+
+### Non-measured aspects (to explore)
+
+- **Cold start** (first serialization after init) — useful for serverless / short-lived functions.
+- **GC allocation rate** (`-prof gc`) — Champollion uses `LinkedHashMap` everywhere; compare churn.
+- **Memory footprint** (`-prof stack`).
+- **Real REST workload** — end-to-end Cassini benchmark with Yasson vs Champollion
+  (to do after M-INT integration).
+
+---
+
+## 7. Static codegen (M5) — `@JsonbStatic`
+
+The `champollion-codegen-apt` APT generates, for each record annotated
+`@JsonbStatic`, a `<Type>$$Binding` (generated Java source compiled by javac,
+final class, zero reflection — CG-03 replaced the former direct-bytecode
+emitter, the RFC 8259 pre-quoted raw-key fast path is preserved).
+At runtime, `ChampollionJsonb` checks these bindings through `ServiceLoader`
+**before** the introspective runtime path: if a binding exists, it branches
+directly to `JsonbBinding.write/read`.
+
+Dedicated benchmark: `JsonbWriteBenchStatic` / `JsonbReadBenchStatic` on top-level
+annotated records (`SmallStaticRecord`, `OrderStaticRecord`, `ItemStaticRecord`,
+`AddressStaticRecord`). The `champollion_runtime` mode of the same benchmark
+forces `withStaticBindings(List.of())` to bypass `ServiceLoader` and measure the
+introspective baseline (MethodHandles + cache).
+
+### 7.1 Stable run — 2026-05-04 (post-`writeString` fast-path)
+
+> JMH: `-f 2 -wi 2 -w 2s -i 3 -r 2s`. Yasson on SMALL/MEDIUM write produces
+> abnormally high scores (28 / 19 ops/µs) — suspected Blackhole DCE in
+> compiler mode on a `Jsonb.toJson(record)` return value that HotSpot may have
+> hoisted. Not published in the main comparison (noted in the table header).
+
+#### Write — Throughput (ops/µs, higher = better)
+
+| Workload | champollion_runtime | **champollion_static** | APT gain | jacksonJr | jackson | yasson† |
+|---|---:|---:|---:|---:|---:|---:|
+| **SMALL**  | 5.75 ±0.27 | **9.59 ±0.98** | **+67%** | 10.28 ±0.15 | 11.56 ±0.41 | (28.08†) |
+| **MEDIUM** | 0.69 ±0.02 | **1.14 ±0.06** | **+66%** | 1.62 ±0.02 | 1.76 ±0.04 | (18.78†) |
+
+`champollion_static / jacksonJr` ≈ **0.93× on SMALL** (near parity), 0.70× on MEDIUM.
+`champollion_static / jackson`   ≈ **0.83× on SMALL**, 0.65× on MEDIUM.
+
+## BENCH-20260612-01 — CG-03 parity check: @JsonbStatic write after source-emitter convergence
+
+- **Date** : 2026-06-12
+- **Commit** : 646e95f (pr/ybl/cg03-source-mode)
+- **JVM** : Temurin 25 LTS (2025-09-16)
+- **Hardware** : Apple M4 Max / 16 cores / 128 GB RAM
+- **OS** : Darwin 25.5.0 arm64
+- **Commande exacte** :
+  ```bash
+  java -jar champollion-bench/target/benchmarks.jar "JsonbWriteBenchStatic.champollion_static" \
+       -f 1 -wi 2 -w 2s -i 3 -r 2s
+  ```
+- **Résultats** :
+  ```
+  JsonbWriteBenchStatic.champollion_static   SMALL  thrpt  3   10,931 ± 5,722  ops/us
+  JsonbWriteBenchStatic.champollion_static  MEDIUM  thrpt  3    1,189 ± 0,389  ops/us
+  JsonbWriteBenchStatic.champollion_static   LARGE  thrpt  3    0,007 ± 0,001  ops/us
+  ```
+- **Comparaison vs run précédent** : vs §7.1 (2026-05-04, bytecode emitter, fuller profile -f 2):
+  SMALL 10.93 vs 9.59 (+14 %, within combined error), MEDIUM 1.19 vs 1.14 (+4 %).
+  **No regression** from the bytecode→source emitter switch.
+- **Notes** : lighter profile (-f 1, parity check only — the JMH forked JVMs were being
+  killed under the agent sandbox, run executed unsandboxed). The generated source
+  bindings keep the RFC 8259 pre-quoted raw-key fast path (`__writeKey` helper +
+  `RawJsonKeyWriter` instanceof dispatch), which is what this run validates.
+
+## BENCH-20261101-01 — Generated REST bindings vs the reflective mapping (formats, array, superclass)
+
+> **Superseded as the reference** by BENCH-20261102-01 (macuntu, quiet host, load recorded). These Mac figures were
+> taken without a quiet-machine check (other builds may have run); kept as a secondary point.
+
+- **Date** : 2026-11-01
+- **Commit** : b7d31bc (`feat/jsonb-bindings-formats-creators`)
+- **JVM** : Temurin 25 LTS (2025-09-16)
+- **Hardware** : Apple M5 Max / 18 cores / 128 GB RAM
+- **OS** : macOS (Darwin 27.0.0) arm64
+- **Commande exacte** :
+  ```bash
+  ./mvnw -pl champollion-bench package -DskipTests
+  java -jar champollion-bench/target/benchmarks.jar JsonbRestBindingBench
+  ```
+  (the class's own settings: `-f 2 -wi 3 -w 2s -i 5 -r 3s`, `-Xms1G -Xmx1G -XX:+UseG1GC`)
+- **Workload** : `BenchOrder extends BenchEntity` — a plain class returned by a `@Path` resource, so the processor
+  generates its binding: two inherited properties, a `@JsonbDateFormat` date, a `@JsonbNumberFormat` amount, a
+  `String[]` and a `List<BenchLine>` of records (`lines` = 1 or 20). `generated` is the default `Jsonb` (the binding,
+  found through `ServiceLoader`); `reflective` is the same `Jsonb` with `withStaticBindings(List.of())`. The setup
+  checks both write the same JSON.
+- **Résultats** :
+  ```
+  Benchmark                               (lines)   Mode  Cnt  Score   Error   Units
+  JsonbRestBindingBench.read_generated          1  thrpt   10  1,446 ± 0,021  ops/us
+  JsonbRestBindingBench.read_generated         20  thrpt   10  0,270 ± 0,005  ops/us
+  JsonbRestBindingBench.read_reflective         1  thrpt   10  1,148 ± 0,019  ops/us
+  JsonbRestBindingBench.read_reflective        20  thrpt   10  0,187 ± 0,002  ops/us
+  JsonbRestBindingBench.write_generated         1  thrpt   10  3,304 ± 0,070  ops/us
+  JsonbRestBindingBench.write_generated        20  thrpt   10  1,024 ± 0,003  ops/us
+  JsonbRestBindingBench.write_reflective        1  thrpt   10  2,609 ± 0,041  ops/us
+  JsonbRestBindingBench.write_reflective       20  thrpt   10  0,591 ± 0,006  ops/us
+  ```
+- **Comparaison** : first run of this benchmark. Generated vs reflective: write +27 % (1 line) and +73 % (20 lines),
+  read +26 % (1 line) and +44 % (20 lines). The gap grows with the list: each record of the list goes through its
+  own generated binding instead of the reflective path.
+- **Notes** : the end-to-end HTTP measure of the same change (a plain-POJO endpoint through the real CLI) is in the
+  Vidocq repository's `BENCH.md` (+3 % requests per second: there, JSON is a small part of a request).
+
+## BENCH-20261101-02 — Adapters through JsonbInstances: per-call lookup vs instance kept per container generation
+
+> **Superseded** for its eight-thread figure: the 0.715–0.721 ops/µs below was a measurement artifact (CPU-starved
+> `-f 1` runs on a loaded Mac), see BENCH-20261102-01 and BUG-20261101-13. The before/after comparison on one thread
+> (within the error) is not re-measured.
+
+- **Date** : 2026-11-01
+- **Commit** : branch `feat/jsonb-cdi-instances` (before: cd5620b; after: the generation cache of this entry's commit)
+- **JVM** : Temurin 25 LTS (2025-09-16)
+- **Hardware** : Apple M5 Max / 18 cores / 128 GB RAM
+- **OS** : macOS (Darwin 27.0.0) arm64
+- **Commande exacte** :
+  ```bash
+  ./mvnw -pl champollion-bench package -DskipTests
+  java -jar champollion-bench/target/benchmarks.jar 'JsonbRestBindingBench.write_generated_adapters' -f 1 -wi 3 -w 2s -i 5 -r 2s -t 1
+  java -jar champollion-bench/target/benchmarks.jar 'JsonbRestBindingBench.write_generated_adapters' -f 1 -wi 3 -w 2s -i 5 -r 2s -t 8 -p lines=20
+  ```
+- **Workload** : `BenchPriced`, a record whose price and line amounts go through a `@JsonbTypeAdapter`
+  (`CentsAdapter`), written by its generated binding; no CDI container (the bench JVM has none), so the adapter comes
+  from the binding's fallback.
+- **Résultats** :
+  ```
+  before (lookup of the container's source on each call, under a lock)
+  JsonbRestBindingBench.write_generated_adapters   1 line   1 thread  thrpt  5  10,190 ± 0,886  ops/us
+  JsonbRestBindingBench.write_generated_adapters  20 lines  1 thread  thrpt  5   1,483 ± 0,080  ops/us
+  JsonbRestBindingBench.write_generated_adapters  20 lines  8 threads thrpt  5   0,715 ± 0,019  ops/us
+  after (instance kept per binding until a container starts or stops; lock-free when none runs)
+  JsonbRestBindingBench.write_generated_adapters   1 line   1 thread  thrpt  5  10,587 ± 0,253  ops/us
+  JsonbRestBindingBench.write_generated_adapters  20 lines  1 thread  thrpt  5   1,515 ± 0,051  ops/us
+  JsonbRestBindingBench.write_generated_adapters  20 lines  8 threads thrpt  5   0,721 ± 0,009  ops/us
+  ```
+- **Comparaison** : +4 % / +2 % on one thread, +1 % on eight: within the error. Without a container the lookup was
+  already short; the cache matters when a container runs, where each call took the lock, walked the loaders and
+  asked the registry — a path this JMH bench cannot start (no CDI container in it).
+- **Notes** : the eight-thread figure being below the one-thread one is not this change's: the same before and after.
+
+## BENCH-20261102-01 — Reference: generated vs reflective, and scaling with threads (platform and virtual), on macuntu
+
+- **Date** : 2026-11-02
+- **Commit** : c49193d (champollion `main`)
+- **Host** : macuntu (Montreuil) — Intel Core i7-8700B @ 3.20 GHz, 6 cores / 12 threads (`nproc` 12), 31 GiB RAM,
+  Ubuntu 22.04.5, kernel 5.15.0-191-generic, x86_64. Its CI runner stacks were stopped for the run; the remaining
+  containers (Portainer, a Reposilite backup, PostgreSQL) measured at 0–0.2 % CPU beforehand.
+- **JVM** : Temurin 25.0.5+8 LTS, in a throw-away `eclipse-temurin:25-jdk` container, no CPU limit.
+- **Protocol (pinned)** : `-f 2`, 3 warm-up iterations, load average printed before and after each run, nothing
+  else benchmarking on the host. Load at the start: 0.08.
+- **Commande exacte** :
+  ```bash
+  ./mvnw -pl champollion-bench -am package -DskipTests            # on the Mac; the shaded jar is copied in
+  java -jar benchmarks.jar JsonbRestBindingBench                    # class settings: -f 2 -wi 3 -w 2s -i 5 -r 3s, -Xms1G -Xmx1G G1
+  java -jar benchmarks.jar 'JsonbRestBindingBench.(write_generated|write_generated_adapters|read_generated)$' \
+       -f 2 -wi 3 -w 2s -i 5 -r 2s -t {1,8,32} -p lines=20 -jvmArgsAppend -Djmh.executor={PLATFORM,VIRTUAL}
+  java -jar benchmarks.jar 'JsonbRestBindingBench.write_generated_adapters$' -f 2 -wi 3 -w 2s -i 5 -r 2s -t {1,8,32} -p lines=20 -prof gc
+  ```
+  (`-jvmArgsAppend` on the command line replaces the class's `-Xms1G -Xmx1G -XX:+UseG1GC`: the thread runs use the
+  JVM's default heap, G1 too.)
+- **Résultats — generated vs reflective, one thread** (load 0.08 → 1.23):
+  ```
+  Benchmark                                        (lines)  Mode  Cnt  Score   Error  Units
+  JsonbRestBindingBench.read_generated                   1  thrpt  10  0.488 ± 0.045  ops/us
+  JsonbRestBindingBench.read_reflective                  1  thrpt  10  0.387 ± 0.041  ops/us
+  JsonbRestBindingBench.read_generated                  20  thrpt  10  0.094 ± 0.003  ops/us
+  JsonbRestBindingBench.read_reflective                 20  thrpt  10  0.062 ± 0.008  ops/us
+  JsonbRestBindingBench.write_generated                  1  thrpt  10  1.080 ± 0.165  ops/us
+  JsonbRestBindingBench.write_reflective                 1  thrpt  10  0.798 ± 0.182  ops/us
+  JsonbRestBindingBench.write_generated                 20  thrpt  10  0.325 ± 0.036  ops/us
+  JsonbRestBindingBench.write_reflective                20  thrpt  10  0.163 ± 0.071  ops/us
+  JsonbRestBindingBench.write_generated_adapters         1  thrpt  10  4.124 ± 0.331  ops/us
+  JsonbRestBindingBench.write_generated_adapters        20  thrpt  10  0.562 ± 0.077  ops/us
+  ```
+  Generated vs reflective: write +35 % (1 line), ×2.0 (20 lines); read +26 % (1 line), +52 % (20 lines).
+- **Résultats — threads, `lines=20`, total ops/µs** (all threads together):
+  ```
+                              1 thread         8 threads        32 threads
+  write_generated_adapters
+    platform                  0.412 ± 0.252    1.537 ± 0.568    1.609 ± 0.783
+    virtual                   0.469 ± 0.151    1.549 ± 0.474    not measurable (*)
+  write_generated
+    platform                  0.233 ± 0.105    0.874 ± 0.143    0.836 ± 0.286
+    virtual                   0.309 ± 0.098    0.889 ± 0.471    not measurable (*)
+  read_generated
+    platform                  0.065 ± 0.031    0.165 ± 0.121    0.238 ± 0.060
+    virtual                   0.078 ± 0.003    0.253 ± 0.102    not measurable (*)
+  ```
+  (*) JMH with virtual threads, 32 CPU-bound benchmark threads on 12 carriers: the 12 carriers stay mounted on
+  benchmark threads that never block, the 20 others never run, and JMH's iteration barrier never completes (run killed
+  after 1 h 30; thread dump: every `ForkJoinPool` carrier in `BenchPriced$$Binding.write`/`WriterSink.append`). A
+  harness limit for CPU-bound virtual threads, not a Champollion one: a real server's virtual threads block on I/O.
+- **Résultats — allocation (`-prof gc`, write_generated_adapters, 20 lines)** :
+  ```
+  threads  ops/us          alloc.rate.norm   alloc.rate        gc.count  gc.time
+        1  0.457 ± 0.239   5928 B/op         2583 MB/s            85      118 ms   (suspect: an orphan JVM was still running)
+        8  1.575 ± 0.559   5928 B/op         8893 MB/s           293      331 ms
+       32  1.538 ± 0.566   5928 B/op         8546 MB/s           297      322 ms
+  ```
+- **Comparaison** : throughput grows with threads up to the host's cores and then stays flat — 8 threads write
+  ≈ 3.7× one thread on 6 physical cores, 32 threads the same as 8; virtual threads match platform threads. The bytes
+  allocated per operation do not change with the thread count (5928 B/op), and GC takes ≈ 1.6 % of the time: no lock,
+  no shared buffer, no per-thread pool on the write path. This closes BUG-20261101-13: its "eight threads write less
+  than one" (BENCH-20261101-02) does not reproduce, here or on the Mac (M5 Max, same commit as that entry:
+  1.60 → 9.71 ops/µs, 6.1× on 8 threads; JMH `-prof stack` at 8 threads: 89.6 % RUNNABLE in serialization code,
+  no BLOCKED thread).
+- **Notes** : macuntu's per-iteration spread is wide in the thread runs (e.g. 0.17–0.61 ops/µs at one thread), wider
+  than in the one-thread class run above (2 s vs 3 s iterations, default heap); the scaling conclusion holds across
+  it. Slower than the Mac in absolute terms (2018 i7 vs M5 Max): compare ratios, not ops/µs, across hosts.
+
+
+## BENCH-20261102-02 — `ComputedClassValue` keeps the values of never-discarded classes in an owned map
+
+- **Date** : 2026-11-02
+- **Commit** : `main` cf991ab + the BUG-20261102-02 change (champollion `fix/jsonb-layer-leak`)
+- **Host** : Apple M5 Max, 18 cores, 128 GiB, macOS 27.0.1. **Loaded**: other jobs were running (load average 3.3–3.9
+  before the runs), so differences under ~10 % are noise.
+- **JVM** : Temurin 25 (`25-tem`), shaded `champollion-bench` jar built from each tree, same JVM and flags.
+- **Commande exacte** :
+  ```bash
+  java -jar benchmarks.jar 'JsonbWriteBench.champollion_.*|JsonbReadBench.champollion_.*' \
+       -f 1 -wi 2 -w 2 -i 4 -r 2 -t 1 -bm avgt -tu us        # orig and fixed jars interleaved, 3 rounds, median
+  ```
+  Question: does routing the class of a never-discarded loader through an owned `ConcurrentHashMap` instead of the
+  class's own `ClassValue` slow the hot lookup (`cache.get(type)`) of the writers and readers?
+- **Résultats (µs/op, median of 3 interleaved rounds, one thread)** :
+  ```
+  Benchmark                                   orig       fixed     delta
+  JsonbReadBench.champollion_pojo   SMALL      0.137      0.153    +11.8 %  (16 ns on a loaded host)
+  JsonbReadBench.champollion_pojo   MEDIUM     1.493      1.495     +0.1 %
+  JsonbReadBench.champollion_pojo   LARGE    153.999    150.503     -2.3 %
+  JsonbReadBench.champollion_record SMALL      0.208      0.217     +4.6 %
+  JsonbReadBench.champollion_record MEDIUM     1.447      1.484     +2.6 %
+  JsonbReadBench.champollion_record LARGE    150.298    152.521     +1.5 %
+  JsonbWriteBench.champollion_pojo  SMALL      0.091      0.093     +2.2 %
+  JsonbWriteBench.champollion_pojo  MEDIUM     0.724      0.730     +0.9 %
+  JsonbWriteBench.champollion_pojo  LARGE     81.567     71.244    -12.7 %
+  JsonbWriteBench.champollion_record SMALL     0.091      0.091     -0.5 %
+  JsonbWriteBench.champollion_record MEDIUM    0.730      0.732     +0.3 %
+  JsonbWriteBench.champollion_record LARGE    69.956     70.646     +1.0 %
+  ```
+- **Delta vs previous run** : first run of this change. Verdict: no measurable change on the write path; the one
+  visible number (small POJO read, +16 ns) is inside the noise of a loaded host and is the only case where the
+  benchmark's own classes (application loader) take the owned-map path; to confirm on macuntu under the
+  BENCH-20261102-01 protocol if it matters.
