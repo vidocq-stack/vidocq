@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      The root of the Vidocq monorepo: an aggregator, never a parent of a published module. Every brick inherits
+      vidocq-parent (below), the grouping POMs inherit this one. It publishes nothing.
+
+      Maturity levels (MONOREPO.md §3): vidocq-components/ is stable, preview/ is usable and released but not
+      certified, incubator/ is built and tested but never released. The release runs with -P '!incubator'.
+    -->
+    <groupId>io.vidocq</groupId>
+    <artifactId>vidocq-build</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Vidocq</name>
+    <url>https://codefloe.com/Vidocq/vidocq</url>
+
+    <properties>
+        <!-- The root and the grouping POMs aggregate only: nothing to publish. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+
+        <!-- Incremental builds (gitflow-incremental-builder, .mvn/extensions.xml, MONOREPO.md §4). -->
+        <gib.referenceBranch>refs/remotes/origin/main</gib.referenceBranch>
+        <gib.compareToMergeBase>true</gib.compareToMergeBase>
+        <gib.buildDownstream>always</gib.buildDownstream>
+        <gib.buildUpstream>derived</gib.buildUpstream>
+        <gib.excludePathsMatching>(.*\.md|.*\.adoc|.*/docs/.*|\.forgejo/.*)</gib.excludePathsMatching>
+        <gib.disableIfBranchMatches>main</gib.disableIfBranchMatches>
+    </properties>
+
+    <modules>
+        <module>vidocq-parent</module>
+        <module>vidocq-components</module>
+        <module>preview</module>
+        <module>vidocq-runtime</module>
+    </modules>
+
+    <profiles>
+        <profile>
+            <!-- On by default (development and CI); the release turns it off with -P '!incubator'. -->
+            <id>incubator</id>
+            <activation>
+                <property>
+                    <name>!vidocq.release</name>
+                </property>
+            </activation>
+            <modules>
+                <module>incubator</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

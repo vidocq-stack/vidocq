@@ -9,7 +9,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.runtime</groupId>
@@ -106,29 +106,29 @@
         <opentelemetry.version>1.67.0</opentelemetry.version>
         <opentelemetry.instrumentation.version>2.31.1</opentelemetry.instrumentation.version>
         <opentelemetry.semconv.version>1.44.0</opentelemetry.semconv.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
-        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
-        <peano.version>0.4.0-SNAPSHOT</peano.version>
-        <ibarra.version>0.4.0-SNAPSHOT</ibarra.version>
-        <bodoni.version>0.4.0-SNAPSHOT</bodoni.version>
-        <foy.version>0.4.0-SNAPSHOT</foy.version>
-        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
-        <mansart.version>0.4.0-SNAPSHOT</mansart.version>
-        <noether.version>0.4.0-SNAPSHOT</noether.version>
-        <kerckhoffs.version>0.4.0-SNAPSHOT</kerckhoffs.version>
-        <knock.version>0.4.0-SNAPSHOT</knock.version>
-        <dirac.version>0.4.0-SNAPSHOT</dirac.version>
+        <vauban.version>${project.version}</vauban.version>
+        <chappe.version>${project.version}</chappe.version>
+        <cassini.version>${project.version}</cassini.version>
+        <peano.version>${project.version}</peano.version>
+        <ibarra.version>${project.version}</ibarra.version>
+        <bodoni.version>${project.version}</bodoni.version>
+        <foy.version>${project.version}</foy.version>
+        <ravel.version>${project.version}</ravel.version>
+        <mansart.version>${project.version}</mansart.version>
+        <noether.version>${project.version}</noether.version>
+        <kerckhoffs.version>${project.version}</kerckhoffs.version>
+        <knock.version>${project.version}</knock.version>
+        <dirac.version>${project.version}</dirac.version>
         <!-- Heisenberg (MicroProfile Fault Tolerance 4.1) — aligned on the 0.4.0-SNAPSHOT global
              dev version (built locally). heisenberg-cdi-vauban hard-depends only on its own
              core/api; its Dirac §9 metrics / Humboldt §10 telemetry recorders sit behind optional
              `requires static` edges, so the FT wrapper stays version-independent of those. -->
-        <heisenberg.version>0.4.0-SNAPSHOT</heisenberg.version>
-        <cyrano.version>0.4.0-SNAPSHOT</cyrano.version>
-        <cervantes.version>0.4.0-SNAPSHOT</cervantes.version>
-        <humboldt.version>0.4.0-SNAPSHOT</humboldt.version>
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
-        <grimm.version>0.4.0-SNAPSHOT</grimm.version>
+        <heisenberg.version>${project.version}</heisenberg.version>
+        <cyrano.version>${project.version}</cyrano.version>
+        <cervantes.version>${project.version}</cervantes.version>
+        <humboldt.version>${project.version}</humboldt.version>
+        <champollion.version>${project.version}</champollion.version>
+        <grimm.version>${project.version}</grimm.version>
         <!-- langchain4j-cdi's MCP server, hosted by vidocq-runtime-langchain4j-cdi-mcp-extension (Vidocq/vidocq#94).
              A SNAPSHOT until langchain4j-cdi releases the MCP 2026-07-28 work: that extension stays out of the
              release meanwhile (maven.deploy.skip in its pom, excluded-modules in release.yml). -->

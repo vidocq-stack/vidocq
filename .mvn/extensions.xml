@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Incremental builds of the monorepo: settings in the root pom.xml (gib.*), design in MONOREPO.md §4. -->
+<extensions>
+    <extension>
+        <groupId>io.github.gitflow-incremental-builder</groupId>
+        <artifactId>gitflow-incremental-builder</artifactId>
+        <version>4.6.0</version>
+    </extension>
+</extensions>

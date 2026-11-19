@@ -9,7 +9,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../../../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.bodoni</groupId>
@@ -75,7 +75,7 @@
         <jakarta.el.version>6.0.1</jakarta.el.version>
 
         <!-- Peano: only the bodoni-peano engine adapter (and the it-ibarra profile) depend on it. -->
-        <peano.version>0.4.0-SNAPSHOT</peano.version>
+        <peano.version>${project.version}</peano.version>
 
         <!-- H2 — test scope only: the sql: unit tests and ITs run against a real JDBC
              driver in memory. Same version as Mansart and Noether. -->
@@ -84,7 +84,7 @@
         <!-- Ibarra — the it-ibarra and tck profiles only (ibarra-maven-plugin and
              ibarra-api in bodoni-it-ibarra, the ibarra-arquillian TCK adapter in
              bodoni-tck). One value for both, so they never drift apart. -->
-        <ibarra.version>0.4.0-SNAPSHOT</ibarra.version>
+        <ibarra.version>${project.version}</ibarra.version>
     </properties>
 
     <!--
@@ -194,8 +194,8 @@
         <profile>
             <id>it-ibarra</id>
             <properties>
-                <foy.version>0.4.0-SNAPSHOT</foy.version>
-                <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+                <foy.version>${project.version}</foy.version>
+                <chappe.version>${project.version}</chappe.version>
             </properties>
             <modules>
                 <module>bodoni-it-ibarra</module>

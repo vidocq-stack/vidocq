@@ -9,7 +9,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.heisenberg</groupId>
@@ -72,9 +72,9 @@
         <microprofile.config.version>3.1.1</microprofile.config.version>
 
         <!-- Implémentations Vidocq upstream -->
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
-        <dirac.version>0.4.0-SNAPSHOT</dirac.version>
+        <vauban.version>${project.version}</vauban.version>
+        <ravel.version>${project.version}</ravel.version>
+        <dirac.version>${project.version}</dirac.version>
 
         <!-- JMH pour heisenberg-bench -->
         <jmh.version>1.37</jmh.version>

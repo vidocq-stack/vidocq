@@ -9,7 +9,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.knock</groupId>
@@ -72,9 +72,9 @@
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
         <!-- Vidocq upstreams (referenced via properties to allow cross-repo PR overrides) -->
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
-        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        <vauban.version>${project.version}</vauban.version>
+        <champollion.version>${project.version}</champollion.version>
+        <cassini.version>${project.version}</cassini.version>
 
         <!--
             The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by

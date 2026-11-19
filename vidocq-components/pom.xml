@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- A grouping POM (MONOREPO.md §4): it aggregates, publishes nothing, and is the parent of no brick. -->
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-build</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <groupId>io.vidocq.build</groupId>
+    <artifactId>vidocq-components</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq Components</name>
+
+    <modules>
+        <module>vidocq-components-transport</module>
+        <module>vidocq-components-jakartaee</module>
+        <module>vidocq-components-microprofile</module>
+    </modules>
+</project>

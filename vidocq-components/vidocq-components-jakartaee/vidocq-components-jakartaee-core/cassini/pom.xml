@@ -6,7 +6,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath />
+        <relativePath>../../../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.cassini</groupId>
@@ -68,11 +68,11 @@
         <jakarta.json.bind.version>3.0.1</jakarta.json.bind.version>
         <jakarta.xml.bind.version>4.0.2</jakarta.xml.bind.version>
         <jakarta.activation.version>2.1.3</jakarta.activation.version>
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
+        <champollion.version>${project.version}</champollion.version>
 
-        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
+        <chappe.version>${project.version}</chappe.version>
+        <vauban.version>${project.version}</vauban.version>
+        <ravel.version>${project.version}</ravel.version>
 
         <microprofile.config.version>3.1.1</microprofile.config.version>
 

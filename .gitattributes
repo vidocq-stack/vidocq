@@ -1,0 +1,2 @@
+# The startup banner art is printed byte for byte: a CRLF checkout would add a carriage return to each line.
+*.txt text eol=lf

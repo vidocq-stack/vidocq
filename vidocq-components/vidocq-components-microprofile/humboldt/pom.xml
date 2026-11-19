@@ -9,7 +9,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.humboldt</groupId>
@@ -70,12 +70,12 @@
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
         <!-- Vidocq ecosystem -->
-        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <chappe.version>${project.version}</chappe.version>
+        <vauban.version>${project.version}</vauban.version>
         <!-- humboldt-rest runs cassini-processor: the Cassini adapters of its filters (BUG-20261030-02). -->
-        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
-        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
+        <cassini.version>${project.version}</cassini.version>
+        <champollion.version>${project.version}</champollion.version>
+        <ravel.version>${project.version}</ravel.version>
 
         <!--
             The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by

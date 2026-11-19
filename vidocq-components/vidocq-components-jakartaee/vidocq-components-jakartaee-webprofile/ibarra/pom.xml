@@ -9,7 +9,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../../../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.ibarra</groupId>
@@ -70,9 +70,9 @@
         <!-- Vidocq upstreams (referenced via properties to allow cross-repo PR
              overrides). Peano is the default EL provider in generation tests;
              the Foy API hosts the optional JSP-engine binding. -->
-        <peano.version>0.4.0-SNAPSHOT</peano.version>
-        <foy.version>0.4.0-SNAPSHOT</foy.version>
-        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+        <peano.version>${project.version}</peano.version>
+        <foy.version>${project.version}</foy.version>
+        <chappe.version>${project.version}</chappe.version>
 
         <!-- Test tooling of ibarra-arquillian (never shipped in an application). -->
         <arquillian.version>1.8.0.Final</arquillian.version>

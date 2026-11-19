@@ -8,7 +8,7 @@
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
         <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../../../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.kerckhoffs</groupId>
@@ -73,14 +73,14 @@
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <foy.version>0.4.0-SNAPSHOT</foy.version>
+        <vauban.version>${project.version}</vauban.version>
+        <foy.version>${project.version}</foy.version>
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
         <jakarta.el.version>6.0.1</jakarta.el.version>
         <!-- Test scope only: the Expression Language engine the tests of the *Expression attributes run on. -->
-        <peano.version>0.4.0-SNAPSHOT</peano.version>
+        <peano.version>${project.version}</peano.version>
         <!-- Test scope only: the JSON-P provider the tests of the OpenID Connect token validation run on. -->
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
+        <champollion.version>${project.version}</champollion.version>
 
         <!-- The official TCK the pull requests are gated on: the smoke set of the runner (the applications
              that are green, see kerckhoffs-tck/BASELINE.md). A measurement, never a certification. -->
