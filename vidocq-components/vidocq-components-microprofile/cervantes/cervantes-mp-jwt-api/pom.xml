@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cervantes-mp-jwt-api</artifactId>
+    <name>Cervantes :: MicroProfile JWT API (modularised)</name>
+    <description>
+        Repackage of org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2 with an
+        explicit module-info.class (name: org.eclipse.microprofile.jwt). The official API
+        provides neither a module-info nor an Automatic-Module-Name, which prevents its use with jlink.
+        This artifact is the single source of the MP JWT 2.2 spec consumed by the
+        Cervantes modules; the official TCK runner keeps using the original API.
+    </description>
+
+    <dependencies>
+        <!--
+            The official spec is fetched as 'provided' only to allow unpacking its .class files
+            into target/classes; it is not exposed transitively to consumers, which receive
+            the repackaged jar with its explicit module-info instead.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.jwt</groupId>
+            <artifactId>microprofile-jwt-auth-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!--
+            The repackaged API classes reference types from these modules in their OWN bytecode, so the
+            explicit module-info must `requires` them (the read edge is mandatory at runtime on the module
+            path). Provided: only needed to resolve those module names when compiling module-info; the
+            consumers and the Vidocq runtime already supply these modules at runtime.
+              - jakarta.json   : Claims / JsonWebToken expose jakarta.json types (via champollion-api).
+              - jakarta.cdi    : @Claim is @Nonbinding, ClaimLiteral extends AnnotationLiteral.
+              - jakarta.inject : @Claim is @Qualifier.
+        -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 1) Unpack the .class files of microprofile-jwt-auth-api into target/classes -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>unpack-microprofile-jwt-api</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.eclipse.microprofile.jwt</groupId>
+                                    <artifactId>microprofile-jwt-auth-api</artifactId>
+                                    <version>${microprofile.jwt.version}</version>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                    <!--
+                                        The original manifest and metadata are excluded;
+                                        maven-jar-plugin writes a clean manifest for our
+                                        artifact (Automatic-Module-Name is now superfluous:
+                                        the module is explicit).
+
+                                        META-INF/LICENSE and META-INF/NOTICE are deliberately
+                                        NOT excluded: the unpacked .class files remain under Apache-2.0,
+                                        whose sections 4(a) and 4(d) require shipping the upstream license
+                                        and NOTICE with any redistribution.
+                                    -->
+                                    <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/versions/**</excludes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                2) Compile only src/main/java/module-info.java, patching it into the module
+                   'org.eclipse.microprofile.jwt' (the .class files unpacked above provide the
+                   exported packages that javac validates). The module-info declares exports only
+                   (no requires): consumers declare their own requires
+                   (jakarta.json, jakarta.cdi) — same approach as heisenberg-mp-ft-api.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs combine.children="append">
+                        <arg>--patch-module</arg>
+                        <arg>org.eclipse.microprofile.jwt=${project.build.outputDirectory}</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cervantes-cdi-vauban</artifactId>
+    <name>Cervantes :: CDI (Vauban)</name>
+    <description>CDI integration: @RequestScoped JsonWebToken producer, request context, and JwtValidator production driven by MicroProfile Config (Ravel), with typed @Claim injection.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-core</artifactId>
+        </dependency>
+        <!-- MicroProfile Config API (module org.eclipse.microprofile.config) via Ravel — lit mp.jwt.* -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (JsonWebTokenContext, JsonWebTokenProducer). Without this jar Weld cannot load their classes and skips the beans
+             silently (WELD-000119), then fails the deployment on unsatisfied injection points.
+             API types only, no code runs outside Vauban (vidocq-workspace#15, cervantes-it-weld).
+             The Jakarta CDI APIs it declares are excluded: like every Jakarta API here they come
+             from the container (`provided`), and a CDI 4.0 server (Open Liberty, MicroProfile 7)
+             must not find CDI 4.1 API jars in the application. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Vauban CDI container for the integration tests -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- MicroProfile Config implementation for the tests (Ravel) -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JSON-P implementation for the tests (token forging via TestJwts) -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Vauban codegen now runs as an ANNOTATION PROCESSOR on this module's own beans
+                        (the Maven plugin is reserved for freezing external, non-APT-processed jars).
+                        The main compile generates _ClientProxy/_Factory, META-INF/vauban-beans.list
+                        (runtime discovery for the Vidocq scanClasspath) and one in-module
+                        _VaubanComponents per package (instantiation, field injection and producer
+                        invocation of the @Claim BCE-backed beans, the JsonWebToken context and the
+                        JsonWebToken/JwtValidator producers — no `opens … to io.vidocq.vauban.core`).
+                        Build-time only: no compile/runtime dependency on Vauban, inert under Weld.
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans (the embedded-Vauban CDI tests
+                         resolve their nested fixtures reflectively). Running the APT over them would
+                         emit a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+                Test-only: the tests run on the module path and build a VaubanContainer (vauban-core,
+                a test-scope module this module does not read) directly over test beans that have no
+                generated _VaubanComponents, so Vauban reaches them reflectively. Production needs
+                neither edge: the shipped beans are wired in-module by the generated providers.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>
+                        @{argLine}
+                        --add-reads io.vidocq.cervantes.cdi.vauban=io.vidocq.vauban.core
+                        --add-opens io.vidocq.cervantes.cdi.vauban/io.vidocq.cervantes.cdi=io.vidocq.vauban.core
+                        --add-opens io.vidocq.cervantes.cdi.vauban/io.vidocq.cervantes.cdi.internal=io.vidocq.vauban.core
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

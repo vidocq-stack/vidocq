@@ -1,0 +1,210 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+> Miguel de Cervantes wrote *Don Quixote*, a hidalgo who *proclaims* himself a knight and demands
+> the world accept his titles as true. The Cervantes project implements **MicroProfile JWT 2.2**:
+> it receives identity claims asserted by a token bearer and, unlike the windmills of La Mancha,
+> actually verifies them — signature, issuer, audience, expiration — before granting any role.
+
+## Prerequisites
+
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- The official TCK `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2` is published on
+  Maven Central and downloaded automatically; run it with `./run-official-tck-mp-jwt-2.2.sh all`
+
+## Essential Commands
+
+```bash
+# SDK environment
+sdk env
+
+# Build reactor (without TCK)
+./mvnw -ntp install -DskipTests
+
+# Unit tests
+./mvnw test
+
+# TCK — smoke test / full suite / targeted test
+./run-official-tck-mp-jwt-2.2.sh
+./run-official-tck-mp-jwt-2.2.sh all
+./run-official-tck-mp-jwt-2.2.sh -Dtest=TestName
+```
+
+> `cervantes-tck` is **in-reactor behind the `tck` Maven profile** (TCK harmonisation,
+> vidocq-runtime-tck-* pattern): a plain `mvn install` never builds nor downloads it.
+> Activate it via the wrapper script or `./mvnw -P"tck,smoke" -pl cervantes-tck test`
+> (`tck-official` instead of `smoke` for the full suite). The former out-of-reactor
+> constraint (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) no longer applies since the
+> workspace moved to Maven 3.9.16 / Model 4.0.0.
+
+## Architecture
+
+Cervantes is a **MicroProfile JWT 2.2** implementation with zero implementation dependencies:
+crypto via `java.security`, JSON via Champollion (JSON-P), config via Ravel (MP Config), CDI via
+Vauban, JAX-RS security via Cassini.
+
+```
+cervantes-mp-jwt-api   ← MP JWT 2.2 spec repackaged as named module (org.eclipse.microprofile.jwt)
+cervantes-api          ← stable public SPI (JwtValidator, KeyResolver, TokenHolder, JwtConfig)
+cervantes-core         ← pure engine: JWT parsing, signature verification (RS/ES 256/384/512),
+                         claim validation (iss/aud/exp/nbf/iat + clock-skew), key loading (PEM, JWKS).
+                         NO cassini, NO CDI — testable without HTTP.
+cervantes-cdi-vauban   ← @RequestScoped JsonWebToken producer, @Claim injection (BCE Vauban)
+cervantes-jaxrs        ← JAX-RS security: JwtAuthenticationFilter, RolesAllowedDynamicFeature
+                         (@RolesAllowed/@PermitAll/@DenyAll), SecurityContext backed by JsonWebToken
+cervantes-bench        ← JMH benchmarks (vs SmallRye JWT)
+cervantes-examples     ← examples (@RolesAllowed resource + @Inject @Claim)
+cervantes-tck          ← Arquillian official TCK runner (in-reactor, `tck` Maven profile only)
+```
+
+**Fundamental separation:** `cervantes-core` knows neither HTTP nor CDI (pure validation,
+unit-testable with generated key pairs). `cervantes-jaxrs` wires in JAX-RS security;
+`cervantes-cdi-vauban` wires in CDI injection. A per-request `TokenHolder` (in `cervantes-api`)
+connects the auth filter (jaxrs) to the CDI producer (cdi-vauban) without direct coupling.
+
+## Architecture Constraints Not to Violate
+
+1. **Zero third-party crypto/JWT library** (no Bouncy Castle, jose4j, Nimbus, SmallRye). Everything
+   goes through `java.security` (`Signature`, `KeyFactory`, `X509EncodedKeySpec`), `javax.crypto`
+   (JWE), `java.util.Base64.getUrlDecoder()`, and `jakarta.json` via Champollion.
+2. **`cervantes-core` depends on NEITHER cassini NOR CDI.**
+3. **Virtual-thread-friendly**: no `synchronized` around I/O (JWKS fetch), JDK `HttpClient`.
+   Prefer replacing the JAX-RS `SecurityContext` (`setSecurityContext`) rather than a `ThreadLocal`
+   (pinning risk).
+4. **No runtime reflection / no dynamic proxy**: `@Claim` injection and `@RolesAllowed` enforcement
+   via BCE Vauban + `MethodHandle`, no `setAccessible(true)` in production.
+5. **`cervantes-tck` stays in the reactor only behind the `tck` Maven profile** (root `pom.xml`), so a plain `mvn install` never builds nor downloads the official TCK.
+6. **TCK 100% PASS is a hard contract** — **208/208 PASS (2026-10-04)**. Any structural change must preserve this score.
+
+## Conventions
+
+- **Explicit Java modules**: `src/main/java/module-info.java`, compiled with the code so javac
+  checks every read edge; unit tests run on the module path. Any extra edge a test needs
+  (`--add-reads`/`--add-exports`/`--add-opens`) stays test-only in the module's `pom.xml`, with a
+  comment (see `cervantes-jaxrs`, `cervantes-cdi-vauban`). The former `src/main/module-info/`
+  late-compile workaround is gone: it hid a missing `requires jakarta.json` (CERV-006).
+- **Packages**: `io.vidocq.cervantes.api.*` = stable public SPI;
+  `io.vidocq.cervantes.internal.*` = internal code; `io.vidocq.cervantes.cdi.*` = CDI integration;
+  `io.vidocq.cervantes.jaxrs.*` = JAX-RS integration.
+- **Maven groupId**: `io.vidocq.cervantes`. Version: `0.4.0-SNAPSHOT` — the global dev version (parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`).
+- **Immutable records** for configs (JwtConfig, claims), **sealed interfaces** for validation results.
+- **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
+
+## TDD Methodology
+
+- **Red → Green → Refactor** — no production line without prior test.
+- Cite the MicroProfile JWT 2.2 spec section (and RFC 7515/7519/7517) in test Javadoc.
+- No Mockito — manual doubles, key pairs generated on the fly (`KeyPairGenerator`).
+- CDI integration tests via embedded Vauban (without Arquillian) in `cervantes-cdi-vauban`.
+
+## Available Agents
+
+- `java-modules-guardian` — after any `module-info.java` modification or package addition
+- `virtual-threads-reviewer` — for JWKS fetch (HttpClient + cache) and auth filter
+- `dependency-gatekeeper` — before any dependency addition (zero-dep philosophy)
+- `tck-runner` — to diagnose MP JWT 2.2 TCK failures
+- `classfile-codegen` — if `@Claim` injection requires static generation
+
+## Allowed Spec Dependencies
+
+```
+org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2   (repackaged via cervantes-mp-jwt-api)
+jakarta.json (via io.vidocq.champollion:champollion-api)
+jakarta.enterprise:jakarta.enterprise.cdi-api:4.1            (provided, cdi-vauban)
+jakarta.ws.rs (via io.vidocq.cassini:cassini-api)            (provided, jaxrs)
+io.vidocq.ravel:ravel-mp-config-api                          (config)
+org.junit:junit-bom                                          (test)
+```
+
+Any new `compile`/`runtime` dependency must pass `dependency-gatekeeper` and be
+justified in the PR.
+
+## Status
+
+See `ROADMAP.md` (source of truth for milestones M0–M8 and TCK score).
+
+## Documentation (Antora) conventions
+
+The project documentation lives in `docs/en` as an Antora component and is
+aggregated by the **vidocq-docs** site, which provides a **shared UI bundle** (banner,
+logo, fonts, colours, footer). **Never customise the documentation UI per project** —
+all visual harmonisation is centralised in `vidocq-docs/ui-bundle`.
+
+### Gold reference
+**Vauban** is the reference implementation for documentation structure. Mirror its
+`docs/en` layout when creating or updating docs. **Chappe** (HTTP server)
+and **Vidocq** (runtime orchestrator) are *special cases*, not references: they are not
+Jakarta EE / MicroProfile spec implementations.
+
+### Repository layout
+- `docs/en/antora.yml` → `name: <project>`, `title:`, versioned per branch (`dev` prerelease on `main`, `'<version>'` on `docs/<version>`), `project-version` attribute, `nav:`, `lang: en`.
+- Pages in `modules/ROOT/pages/`, navigation in `modules/ROOT/nav.adoc`, images in
+  `modules/ROOT/images/`.
+- **English-only** (ADR 0004 in vidocq-docs): no French mirror — do not reintroduce one.
+
+### Canonical navigation (section order)
+`index` → `getting-started` → `usage` → `concepts` → `internals` → `tck` →
+`performance` → `reference` → `migration`
+
+Multi-module projects (e.g. Vidocq, Mansart) may append `modules/*` / `sub-modules/*`
+sub-pages after `migration`.
+
+### TCK / Performance rule (not mutually exclusive)
+- Every **spec implementation** — i.e. **all projects except Chappe and Vidocq** — MUST
+  have a **`tck`** section documenting TCK coverage/status.
+- Projects with a performance story (e.g. **Chappe**) keep their **`performance`** section.
+- When **both** sections exist, order them **TCK first, then Performance**.
+- **Chappe** and **Vidocq** do not require a `tck` section (not spec implementations).
+
+### `index.adoc` structure
+Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a centred logo
+(`image::<project>-logo.png[...,role=module-logo]`), a `[.lead]` paragraph, then
+`== Origin of the name`, an `== At a glance` table, and ecosystem / quick-links sections.
+
+### Logo
+Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
+
+> When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.
+
+## Architecture rules
+
+- The architecture rules (module dependencies, layers, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal`) are ArchUnit tests in `cervantes-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path is documented in `internals.adoc` and added to the rule's fallback list with its reason, never silently.
+
+## Build compatible extensions work at build only
+
+A CDI build compatible extension works at build, and only there. `vidocq:generate` runs the extensions of an
+application once and records what they did; the packaged application loads that record instead of running them
+(Vidocq/vauban#288). An extension that breaks these rules loses work or checks in a packaged application:
+
+- compute from the deployment's classes only: no configuration value, environment variable, outside file or network
+  resource in a phase;
+- check the start environment in an observer of `jakarta.enterprise.event.Startup` that throws a
+  `DeploymentException`, fed with what the build collected (`withParam`); models: Ravel's `ConfigStartCheck`,
+  Cervantes' `JwtConfigurationCheck`;
+- add annotations, never remove them; carry data in parameters, never in fields of the extension;
+- ask `ExtensionPhase.isBuildTime()` only as a last resort, in a class of its own: an extension that asks runs again
+  at each start (Heisenberg's `InterceptorPriorityExtension`);
+- the brick's Vidocq runtime extension adds its own beans with `VaubanContainerBuilder.addHostBean`, never
+  `addBeanClass`, and its `-codegen` bundle brings the brick's CDI jar to the processor path;
+- list in `@io.vidocq.vauban.api.ClientProxies` every interface the extension registers as a synthetic bean of a
+  normal scope (`@ApplicationScoped`, `@TransactionScoped`, ...). Vauban generates client proxies at build from the
+  classes it compiles, and a synthetic bean has none: the freeze records its descriptor, not a proxy, and a deployment
+  that runs its extensions at start has no build step. Without the list, the container builds a
+  `java.lang.reflect.Proxy` at every start: every call goes through reflection, the boot is slower, nothing runs ahead
+  of time, and every application prints the `RUNTIME CODE GENERATION FALLBACK` warning (Vauban BUG-20261113-19:
+  Noether's `EntityManager` and `EntityManagerFactory`). Put it on a class of a module compiled with
+  `vauban-processor` that provides its `_VaubanComponents`: the `*-cdi-vauban` extension, or, for a
+  container-neutral brick, its Vidocq runtime extension (Vidocq's `NoetherPersistenceExtension`). Public interfaces
+  only, no class, no `@Dependent` bean;
+- test both ways: the extensions run at start (TCK, another container) and frozen (the startup report says
+  `cdi extensions  N extensions frozen at build`, and an invalid environment still stops the start).
+
+Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspace`, and Vauban's concepts page,
+"Writing an extension the build can freeze" (`docs/en/modules/ROOT/pages/concepts.adoc#writing-a-frozen-extension`).

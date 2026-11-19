@@ -1,0 +1,125 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cervantes.examples;
+
+import jakarta.annotation.security.DenyAll;
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.jwt.Claim;
+import org.eclipse.microprofile.jwt.ClaimValue;
+import org.eclipse.microprofile.jwt.Claims;
+
+import java.util.Set;
+
+/**
+ * Example MicroProfile JWT 2.2 resource secured by Cervantes.
+ *
+ * <p>Demonstrates the two halves of MP JWT in a JAX-RS resource:</p>
+ * <ul>
+ *   <li><b>Authorization</b> — {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} are enforced
+ *       by Cervantes' {@code RolesAllowedDynamicFeature} (cervantes-jaxrs): the verified token's
+ *       {@code groups} claim becomes the caller's roles, checked before the method runs.</li>
+ *   <li><b>Identity</b> — {@code @Inject @Claim} pulls typed claims of the current request's token
+ *       into the (request-scoped) resource, resolved by Cervantes' CDI integration
+ *       (cervantes-cdi-vauban).</li>
+ * </ul>
+ *
+ * <p>Wiring (a Chappe deployment): see {@code README.md}. The accompanying test exercises the
+ * {@code @Claim} injection under an embedded Vauban container, without an HTTP server.</p>
+ */
+@Path("/api")
+@RequestScoped
+public class ProtectedResource {
+
+    /** The {@code upn} (user principal name) standard claim of the current token. */
+    private String upn;
+
+    /** The {@code groups} claim — the caller's roles. */
+    private Set<String> groups;
+
+    /** Lazy, request-bound view of the {@code upn} claim (resolves at access time). */
+    private ClaimValue<String> upnValue;
+
+    /**
+     * No-args constructor required by CDI to proxy a normal-scoped ({@code @RequestScoped}) bean;
+     * the container creates each request's instance through the injection constructor.
+     */
+    protected ProtectedResource() {
+        // client proxy only: the claims are set by the injection constructor
+    }
+
+    /**
+     * Injection constructor: the claims of the current request's token.
+     *
+     * @param upn      the {@code upn} standard claim
+     * @param groups   the {@code groups} claim
+     * @param upnValue lazy view of the {@code upn} claim
+     */
+    @Inject
+    public ProtectedResource(@Claim(standard = Claims.upn) String upn,
+                             @Claim("groups") Set<String> groups,
+                             @Claim("upn") ClaimValue<String> upnValue) {
+        this.upn = upn;
+        this.groups = groups;
+        this.upnValue = upnValue;
+    }
+
+    /** Open to anyone, even without a token. */
+    @GET
+    @Path("/public")
+    @PermitAll
+    @Produces(MediaType.TEXT_PLAIN)
+    public String publicInfo() {
+        return "public — no token required";
+    }
+
+    /** Any authenticated caller in role {@code user} or {@code admin}. */
+    @GET
+    @Path("/me")
+    @RolesAllowed({"user", "admin"})
+    @Produces(MediaType.TEXT_PLAIN)
+    public String whoAmI() {
+        return "Authenticated as " + upn + " with roles " + groups;
+    }
+
+    /** Restricted to callers whose token carries the {@code admin} group. */
+    @GET
+    @Path("/admin")
+    @RolesAllowed("admin")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String adminOnly() {
+        return "Welcome, administrator " + upnValue.getValue();
+    }
+
+    /** Never reachable — demonstrates {@code @DenyAll}. */
+    @GET
+    @Path("/forbidden")
+    @DenyAll
+    @Produces(MediaType.TEXT_PLAIN)
+    public String forbidden() {
+        return "unreachable";
+    }
+}

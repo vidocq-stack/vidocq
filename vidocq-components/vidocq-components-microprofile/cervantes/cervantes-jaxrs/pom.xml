@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cervantes</groupId>
+        <artifactId>cervantes-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cervantes-jaxrs</artifactId>
+    <name>Cervantes :: JAX-RS (security)</name>
+    <description>MicroProfile JWT 2.2 JAX-RS security: JwtAuthenticationFilter (bearer auth + SecurityContext), RolesAllowedDynamicFeature (@RolesAllowed/@PermitAll/@DenyAll). Standard JAX-RS API — validated against Cassini but implementation-agnostic.</description>
+
+    <dependencies>
+        <!-- Compile-only: the classes cassini-processor generates implement cassini-api types. Only Cassini loads
+             them; on another JAX-RS runtime they stay unused. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Validator + principal (cervantes-api) and CDI request context (cervantes-cdi-vauban) -->
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-cdi-vauban</artifactId>
+        </dependency>
+
+        <!-- MicroProfile Config API: reading mp.jwt.token.header / mp.jwt.token.cookie -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- API JAX-RS standard : filtres, DynamicFeature, SecurityContext -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (JwtAuthenticationFilter, RolesAllowedDynamicFeature). Without this jar Weld cannot load their classes and skips the beans
+             silently (WELD-000119), then fails the deployment on unsatisfied injection points.
+             API types only, no code runs outside Vauban (vidocq-workspace#15, cervantes-it-weld).
+             The Jakarta CDI APIs it declares are excluded: like every Jakarta API here they come
+             from the container (`provided`), and a CDI 4.0 server (Open Liberty, MicroProfile 7)
+             must not find CDI 4.1 API jars in the application. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JSON-P implementation to forge test tokens -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Provides a jakarta.ws.rs.ext.RuntimeDelegate to build Responses in the tests -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Vauban codegen now runs as an ANNOTATION PROCESSOR on this module's own
+                        @Provider beans (the Maven plugin is reserved for freezing external jars).
+                        The main compile generates META-INF/vauban-beans.list (Vidocq scanClasspath
+                        discovery) and an in-module _VaubanComponents that instantiates the no-arg
+                        @Provider beans and field-injects their cross-module dependencies (JwtValidator,
+                        JsonWebTokenContext, both produced in cervantes-cdi-vauban) — no
+                        `opens … to io.vidocq.vauban.core`. Build-time only, inert under Weld.
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <!-- The descriptors of the @Provider classes, which Cassini reads at startup instead of
+                             their annotations (cassini CASSINI-040); declared as `provides` in module-info.java. -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <!-- The @Provider beans inject JwtValidator / JsonWebTokenContext, which are
+                             produced in cervantes-cdi-vauban (another module). The APT cannot see beans
+                             from dependency modules, so its compile-time bean-resolution check would
+                             fail here; full validation happens at runtime assembly (Vidocq). -->
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans. Running the APT over them would
+                         emit a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                            <!-- Test-only: the test doubles build a DefaultJsonWebToken, an internal
+                                 type that cervantes-core exports only to cervantes-cdi-vauban. -->
+                            <compilerArgs combine.children="append">
+                                <arg>--add-exports</arg>
+                                <arg>io.vidocq.cervantes.core/io.vidocq.cervantes.internal=io.vidocq.cervantes.jaxrs</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+                Test-only: the tests run on the module path and their doubles build a DefaultJsonWebToken
+                (internal to cervantes-core) from JSON-P values, which this module does not read itself.
+                Production needs neither edge.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>
+                        @{argLine}
+                        --add-exports io.vidocq.cervantes.core/io.vidocq.cervantes.internal=io.vidocq.cervantes.jaxrs
+                        --add-reads io.vidocq.cervantes.jaxrs=jakarta.json
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
