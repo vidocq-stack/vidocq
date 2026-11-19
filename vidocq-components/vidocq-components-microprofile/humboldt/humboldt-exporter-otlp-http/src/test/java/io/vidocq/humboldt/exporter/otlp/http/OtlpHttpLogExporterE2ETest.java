@@ -1,0 +1,123 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.exporter.otlp.http;
+
+import com.sun.net.httpserver.HttpServer;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.logs.Severity;
+import io.vidocq.humboldt.sdk.common.Resource;
+import io.vidocq.humboldt.sdk.log.SdkLoggerProvider;
+import io.vidocq.humboldt.sdk.log.SimpleLogRecordProcessor;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class OtlpHttpLogExporterE2ETest {
+
+    private HttpServer server;
+    private final List<String> receivedBodies = new CopyOnWriteArrayList<>();
+    /** One permit per body received, so that tests wait for arrivals instead of polling. */
+    private final Semaphore bodyArrivals = new Semaphore(0);
+    private final AtomicInteger callCount = new AtomicInteger();
+
+    @BeforeEach
+    void startServer() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/logs", ex -> {
+            callCount.incrementAndGet();
+            String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            receivedBodies.add(body);
+            bodyArrivals.release();
+            byte[] resp = "OK".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, resp.length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(resp);
+            }
+        });
+        server.start();
+    }
+
+    @AfterEach
+    void stopServer() {
+        server.stop(0);
+    }
+
+    private String endpoint() {
+        return "http://127.0.0.1:" + server.getAddress().getPort() + "/v1/logs";
+    }
+
+    @Test
+    void e2e_log_record_post_to_collector() {
+        OtlpHttpLogExporter exporter = OtlpHttpLogExporter.builder()
+                .setEndpoint(endpoint())
+                .setRequestTimeout(Duration.ofSeconds(5))
+                .build();
+
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .setResource(Resource.create(Attributes.of(
+                        AttributeKey.stringKey("service.name"), "humboldt-log-e2e")))
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("io.vidocq.test").logRecordBuilder()
+                    .setSeverity(Severity.INFO)
+                    .setSeverityText("INFO")
+                    .setBody("hello over OTLP")
+                    .setAttribute(AttributeKey.stringKey("http.status"), "200")
+                    .emit();
+            waitForReceivedBodies(1);
+        }
+
+        assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
+        String body = receivedBodies.getFirst();
+        assertTrue(body.startsWith("{\"resourceLogs\":["), "format OTLP/JSON logs : " + body);
+        assertTrue(body.contains("\"severityNumber\":9"), "INFO = 9 : " + body);
+        assertTrue(body.contains("\"severityText\":\"INFO\""));
+        assertTrue(body.contains("\"body\":{\"stringValue\":\"hello over OTLP\"}"));
+        assertTrue(body.contains("\"service.name\""));
+        assertTrue(body.contains("\"http.status\""));
+        assertTrue(body.contains("\"observedTimeUnixNano\""));
+    }
+
+    private void waitForReceivedBodies(int expected) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        try {
+            boolean arrived = true;
+            while (arrived && receivedBodies.size() < expected) {
+                arrived = bodyArrivals.tryAcquire(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
+            }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

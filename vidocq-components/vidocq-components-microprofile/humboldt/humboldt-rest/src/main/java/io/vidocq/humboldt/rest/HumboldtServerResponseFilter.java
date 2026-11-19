@@ -1,0 +1,138 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.rest;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.AttributesBuilder;
+import io.opentelemetry.api.metrics.DoubleHistogram;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Scope;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerResponseContext;
+import jakarta.ws.rs.container.ContainerResponseFilter;
+import jakarta.ws.rs.ext.Provider;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * {@link ContainerResponseFilter} symmetric to {@link HumboldtServerRequestFilter} —
+ * retrieves the span started on the request side, adds {@code http.response.status_code},
+ * sets ERROR status if code ≥ 500, closes the {@link Scope} and ends the span. Also
+ * records a Histogram {@code http.server.request.duration} (OTel SemConv 1.27+)
+ * with attrs {@code http.request.method / http.response.status_code / http.route /
+ * url.scheme} — conformant with MP Telemetry 2.2 §"Required Metrics" (HTTP Server).
+ */
+@Provider
+@jakarta.enterprise.context.Dependent
+public class HumboldtServerResponseFilter implements ContainerResponseFilter {
+
+    static final AttributeKey<Long> HTTP_RESPONSE_STATUS_CODE = AttributeKey.longKey("http.response.status_code");
+    static final AttributeKey<String> HTTP_REQUEST_METHOD = AttributeKey.stringKey("http.request.method");
+    static final AttributeKey<String> HTTP_ROUTE = AttributeKey.stringKey("http.route");
+    static final AttributeKey<String> URL_SCHEME = AttributeKey.stringKey("url.scheme");
+
+    private static final AttributeKey<String> ERROR_TYPE = AttributeKey.stringKey("error.type");
+    private static final System.Logger LOG = System.getLogger(HumboldtServerResponseFilter.class.getName());
+
+    /** The histogram and the {@code OpenTelemetry} it was built from. */
+    private record Duration(OpenTelemetry openTelemetry, DoubleHistogram histogram) {}
+
+    /**
+     * The histogram of the last {@code OpenTelemetry} seen: Arquillian harnesses re-deploy and re-set
+     * {@code GlobalOpenTelemetry} between tests, so it is built again whenever the installed instance changes.
+     */
+    private final AtomicReference<Duration> duration = new AtomicReference<>();
+    private final AtomicBoolean failureLogged = new AtomicBoolean();
+
+    @Override
+    public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) {
+        Object spanObj = requestContext.getProperty(HumboldtServerRequestFilter.SPAN_PROPERTY);
+        Object scopeObj = requestContext.getProperty(HumboldtServerRequestFilter.SCOPE_PROPERTY);
+        Object startObj = requestContext.getProperty(HumboldtServerRequestFilter.START_NANOS_PROPERTY);
+        if (!(spanObj instanceof Span span)) return;
+
+        int status = responseContext.getStatus();
+        span.setAttribute(HTTP_RESPONSE_STATUS_CODE, (long) status);
+        if (status >= 500) {
+            span.setStatus(StatusCode.ERROR, "HTTP " + status);
+        }
+
+        // OTel SemConv 1.27+ : http.server.request.duration — Histogram unit=s,
+        // attrs http.request.method, http.response.status_code, http.route, url.scheme.
+        if (startObj instanceof Long startNanos) {
+            try {
+                DoubleHistogram h = histogram();
+                AttributesBuilder b = Attributes.builder()
+                        .put(HTTP_REQUEST_METHOD, requestContext.getMethod())
+                        .put(HTTP_RESPONSE_STATUS_CODE, (long) status);
+                // OTel SemConv 1.27+ §HTTP: if status >= 400, add error.type
+                // (status code string or exception name). MP Telemetry conformance.
+                if (status >= 400) {
+                    b.put(ERROR_TYPE, String.valueOf(status));
+                }
+                Object route = requestContext.getProperty(HumboldtServerRequestFilter.HTTP_ROUTE_PROPERTY);
+                if (route instanceof String r) b.put(HTTP_ROUTE, r);
+                Object scheme = requestContext.getProperty(HumboldtServerRequestFilter.URL_SCHEME_PROPERTY);
+                if (scheme instanceof String s) b.put(URL_SCHEME, s);
+                double durationSec = (System.nanoTime() - startNanos) / 1_000_000_000.0;
+                h.record(durationSec, b.build());
+            } catch (RuntimeException e) {
+                // The MeterProvider is not ready, or failed: the response goes on without its measure, and the
+                // failure is reported once rather than on every request.
+                if (failureLogged.compareAndSet(false, true)) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "http.server.request.duration could not be recorded; later failures are not logged", e);
+                }
+            }
+        }
+
+        try {
+            if (scopeObj instanceof Scope scope) {
+                scope.close();
+            }
+        } finally {
+            span.end();
+        }
+        requestContext.removeProperty(HumboldtServerRequestFilter.SPAN_PROPERTY);
+        requestContext.removeProperty(HumboldtServerRequestFilter.SCOPE_PROPERTY);
+        requestContext.removeProperty(HumboldtServerRequestFilter.START_NANOS_PROPERTY);
+        requestContext.removeProperty(HumboldtServerRequestFilter.HTTP_ROUTE_PROPERTY);
+        requestContext.removeProperty(HumboldtServerRequestFilter.URL_SCHEME_PROPERTY);
+    }
+
+    private DoubleHistogram histogram() {
+        OpenTelemetry otel = GlobalOpenTelemetry.get();
+        Duration current = duration.get();
+        if (current != null && current.openTelemetry() == otel) return current.histogram();
+        DoubleHistogram histogram = otel
+                .getMeter("io.vidocq.humboldt.rest")
+                .histogramBuilder("http.server.request.duration")
+                .setDescription("Duration of HTTP server requests.")
+                .setUnit("s")
+                .build();
+        duration.set(new Duration(otel, histogram));
+        return histogram;
+    }
+}

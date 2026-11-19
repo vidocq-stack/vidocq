@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>humboldt-otel-context</artifactId>
+    <name>Humboldt :: OTel Context (Java Modules)</name>
+    <description>Repackages io.opentelemetry:opentelemetry-context (+ opentelemetry-common) with an explicit io.opentelemetry.context module-info, for jlink.</description>
+
+    <properties>
+        <!-- This module ships its own empty javadoc jar (below), as a repackaging of upstream code. Its
+             src/main/java holds Humboldt's internals only (no API to document), so the javadoc tool of the
+             snapshot/release profiles is skipped: it would attach a second javadoc jar (or, on a source tree
+             of package-private classes only, fail with "No public or protected classes found"). -->
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-context</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- Already shaded in (a dependency of opentelemetry-context), declared because
+             src/main/java compiles against its ComponentLoader. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-common</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Bound here, not only in the snapshot/release profiles: the shade plugin's createSourcesJar merges the
+                 module's own -sources.jar, which must exist (with Humboldt's sources) before the shade runs. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${maven.source.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>shade-otel-context</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>true</createDependencyReducedPom>
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
+                            <createSourcesJar>true</createSourcesJar>
+                            <artifactSet>
+                                <includes>
+                                    <include>io.opentelemetry:opentelemetry-context</include>
+                                    <include>io.opentelemetry:opentelemetry-common</include>
+                                </includes>
+                            </artifactSet>
+                            <!--
+                                The module's own jar contributes Humboldt's classes only (not its build-info):
+                                io.opentelemetry.common.ServiceLoaderComponentLoader, which replaces the
+                                upstream class of the same name (the default ComponentLoader, which must add
+                                the `uses` of a service before loading it on the module path —
+                                BUG-20261004-04), and io.vidocq.humboldt.otel.context.layer, which extends the
+                                qualified exports to a child module layer (BUG-20261004-03). The .java
+                                patterns cover the shaded sources jar.
+                            -->
+                            <filters>
+                                <filter>
+                                    <artifact>io.vidocq.humboldt:humboldt-otel-context</artifact>
+                                    <includes>
+                                        <include>io/opentelemetry/common/ServiceLoaderComponentLoader.class</include>
+                                        <include>io/opentelemetry/common/ServiceLoaderComponentLoader.java</include>
+                                        <include>io/vidocq/humboldt/otel/context/layer/**</include>
+                                    </includes>
+                                </filter>
+                                <filter>
+                                    <artifact>io.opentelemetry:opentelemetry-common</artifact>
+                                    <excludes>
+                                        <exclude>io/opentelemetry/common/ServiceLoaderComponentLoader.class</exclude>
+                                        <exclude>io/opentelemetry/common/ServiceLoaderComponentLoader.java</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Automatic-Module-Name>io.opentelemetry.context</Automatic-Module-Name>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Empty javadoc jar: Maven Central requires -javadoc.jar even for shade-only modules. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>empty-javadoc-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>javadoc</classifier>
+                            <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+                            <!-- target/classes now holds ServiceLoaderComponentLoader: keep it out. -->
+                            <excludes>
+                                <exclude>io/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.moditect</groupId>
+                <artifactId>moditect-maven-plugin</artifactId>
+                <version>1.2.2.Final</version>
+                <executions>
+                    <execution>
+                        <id>add-explicit-module-descriptor</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>add-module-info</goal>
+                        </goals>
+                        <configuration>
+                            <overwriteExistingFiles>true</overwriteExistingFiles>
+                            <module>
+                                <moduleInfoFile>${project.basedir}/src/main/moditect/module-info.java</moduleInfoFile>
+                            </module>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+

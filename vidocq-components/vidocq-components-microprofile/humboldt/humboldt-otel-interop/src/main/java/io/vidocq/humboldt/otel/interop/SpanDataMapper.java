@@ -1,0 +1,79 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.otel.interop;
+
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.sdk.common.InstrumentationScopeInfo;
+import io.opentelemetry.sdk.resources.Resource;
+import io.opentelemetry.sdk.trace.data.EventData;
+import io.opentelemetry.sdk.trace.data.LinkData;
+import io.opentelemetry.sdk.trace.data.SpanData;
+import io.opentelemetry.sdk.trace.data.StatusData;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
+
+import java.util.List;
+
+/**
+ * Converts a {@link io.vidocq.humboldt.sdk.trace.data.SpanData Humboldt SpanData}
+ * to the {@link SpanData OTel SDK SpanData} format expected by exporters
+ * created through the OTel SDK autoconfigure SPI (for example those provided
+ * by the MicroProfile Telemetry 2.2 TCK).
+ *
+ * <p>This is the adaptation layer that lets Humboldt interoperate with
+ * OTel-SDK-based exporters without embedding the OTel SDK in its application
+ * runtime — the OTel SDK artifacts stay provided-scope.</p>
+ *
+ * <p>The public OTel API (Attributes, SpanContext, SpanKind, StatusCode) is
+ * shared between the two SDKs: only the <code>io.opentelemetry.sdk.*</code> types
+ * (Resource, EventData, LinkData, StatusData, InstrumentationScopeInfo) need
+ * to be translated.</p>
+ */
+public final class SpanDataMapper {
+
+    private SpanDataMapper() {}
+
+    public static SpanData toOtel(io.vidocq.humboldt.sdk.trace.data.SpanData src) {
+        SpanContext parent = src.parentSpanContext() != null
+                ? src.parentSpanContext()
+                : SpanContext.getInvalid();
+
+        List<EventData> events = src.events().stream()
+                .map(e -> EventData.create(e.epochNanos(), e.name(), e.attributes()))
+                .toList();
+
+        List<LinkData> links = src.links().stream()
+                .map(l -> LinkData.create(l.spanContext(), l.attributes()))
+                .toList();
+
+        StatusData status = StatusData.create(src.status().code(), src.status().description());
+
+        Resource resource = Resource.create(src.resource().attributes());
+
+        InstrumentationScope scope = src.instrumentationScope();
+        InstrumentationScopeInfo scopeInfo = scope.version() != null
+                ? InstrumentationScopeInfo.builder(scope.name())
+                        .setVersion(scope.version()).setSchemaUrl(scope.schemaUrl()).build()
+                : InstrumentationScopeInfo.create(scope.name());
+
+        return new OtelSpanData(src.name(), src.kind(), src.spanContext(), parent, status,
+                src.startEpochNanos(), src.endEpochNanos(), src.hasEnded(), src.attributes(), events, links,
+                resource, scopeInfo);
+    }
+}

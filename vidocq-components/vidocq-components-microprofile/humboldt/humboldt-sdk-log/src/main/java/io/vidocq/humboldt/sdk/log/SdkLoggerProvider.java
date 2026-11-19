@@ -1,0 +1,123 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.sdk.log;
+
+import io.opentelemetry.api.logs.Logger;
+import io.opentelemetry.api.logs.LoggerBuilder;
+import io.opentelemetry.api.logs.LoggerProvider;
+import io.vidocq.humboldt.sdk.common.Clock;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
+import io.vidocq.humboldt.sdk.common.Resource;
+import io.vidocq.humboldt.sdk.log.export.LogRecordProcessor;
+import io.vidocq.humboldt.sdk.log.internal.SdkLogger;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Humboldt implementation of {@link LoggerProvider} — entry point for the Log SDK.
+ *
+ * <p>Built via {@link #builder()}. Immutable from a configuration standpoint. Cache of
+ * {@code Logger} per scope name.</p>
+ */
+public final class SdkLoggerProvider implements LoggerProvider, AutoCloseable {
+
+    private final Resource resource;
+    private final Clock clock;
+    private final List<LogRecordProcessor> processors;
+    private final Map<String, SdkLogger> loggers = new ConcurrentHashMap<>();
+
+    private SdkLoggerProvider(Builder b) {
+        this.resource = b.resource;
+        this.clock = b.clock;
+        this.processors = Collections.unmodifiableList(new ArrayList<>(b.processors));
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    @Override
+    public Logger get(String instrumentationScopeName) {
+        String name = instrumentationScopeName == null ? "" : instrumentationScopeName;
+        return loggers.computeIfAbsent(name,
+                n -> new SdkLogger(InstrumentationScope.of(n), resource, clock, processors));
+    }
+
+    @Override
+    public LoggerBuilder loggerBuilder(String instrumentationScopeName) {
+        // M5 MVP: version/schemaUrl/attributes ignored (one SdkLogger per name).
+        return new LoggerBuilder() {
+            @Override public LoggerBuilder setSchemaUrl(String url) { return this; }
+            @Override public LoggerBuilder setInstrumentationVersion(String v) { return this; }
+            @Override public Logger build() { return get(instrumentationScopeName); }
+        };
+    }
+
+    public Resource getResource() {
+        return resource;
+    }
+
+    public CompletableResultCode flush() {
+        List<CompletableResultCode> codes = new ArrayList<>(processors.size());
+        for (LogRecordProcessor p : processors) codes.add(p.flush());
+        return CompletableResultCode.ofAll(codes);
+    }
+
+    public CompletableResultCode shutdown() {
+        List<CompletableResultCode> codes = new ArrayList<>(processors.size());
+        for (LogRecordProcessor p : processors) codes.add(p.shutdown());
+        return CompletableResultCode.ofAll(codes);
+    }
+
+    @Override
+    public void close() {
+        shutdown().join(10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    public static final class Builder {
+        private Resource resource = Resource.empty();
+        private Clock clock = Clock.system();
+        private final List<LogRecordProcessor> processors = new ArrayList<>();
+
+        public Builder setResource(Resource resource) {
+            this.resource = resource != null ? resource : Resource.empty();
+            return this;
+        }
+
+        public Builder setClock(Clock clock) {
+            if (clock != null) this.clock = clock;
+            return this;
+        }
+
+        public Builder addLogRecordProcessor(LogRecordProcessor processor) {
+            if (processor != null) processors.add(processor);
+            return this;
+        }
+
+        public SdkLoggerProvider build() {
+            return new SdkLoggerProvider(this);
+        }
+    }
+}

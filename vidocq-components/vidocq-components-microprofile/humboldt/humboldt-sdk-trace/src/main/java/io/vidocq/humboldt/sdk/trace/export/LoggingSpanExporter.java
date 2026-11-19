@@ -1,0 +1,74 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.sdk.trace.export;
+
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+
+import io.vidocq.humboldt.sdk.trace.data.SpanData;
+
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * Exporter that logs each span via {@link System#getLogger(String)} — intended
+ * for development and local debugging. Human-readable format, no structured logging.
+ */
+public final class LoggingSpanExporter implements SpanExporter {
+
+    private static final Logger LOG = System.getLogger(LoggingSpanExporter.class.getName());
+    private final AtomicBoolean isStopped = new AtomicBoolean(false);
+
+    public static LoggingSpanExporter create() {
+        return new LoggingSpanExporter();
+    }
+
+    @Override
+    public CompletableResultCode export(Collection<SpanData> spans) {
+        if (isStopped.get()) return CompletableResultCode.ofFailure();
+        for (SpanData s : spans) {
+            long durationNs = s.endEpochNanos() - s.startEpochNanos();
+            LOG.log(Level.INFO,
+                    "Span name={0} kind={1} traceId={2} spanId={3} parentSpanId={4} duration={5} status={6} attrs={7}",
+                    s.name(),
+                    s.kind(),
+                    s.spanContext().getTraceId(),
+                    s.spanContext().getSpanId(),
+                    s.parentSpanContext() != null ? s.parentSpanContext().getSpanId() : "(root)",
+                    Duration.ofNanos(durationNs),
+                    s.status().code(),
+                    s.attributes());
+        }
+        return CompletableResultCode.ofSuccess();
+    }
+
+    @Override
+    public CompletableResultCode flush() {
+        return CompletableResultCode.ofSuccess();
+    }
+
+    @Override
+    public CompletableResultCode shutdown() {
+        isStopped.set(true);
+        return CompletableResultCode.ofSuccess();
+    }
+}

@@ -1,0 +1,255 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.exporter.otlp.http.internal;
+
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.Releasable;
+
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Shared HTTP/JSON sender for the 3 OTLP exporters (traces / metrics / logs).
+ *
+ * <p>Encapsulates {@link HttpClient} + endpoint + headers + timeouts + bounded
+ * exponential retry. The signal-specific exporters (span/metric/log) delegate here
+ * to send an already-encoded JSON payload.</p>
+ *
+ * <p>Async: each {@link #send(String)} launches a virtual thread that executes
+ * the HTTP request + retry. Returns a {@link CompletableResultCode} that completes
+ * at the end (success / definitive failure after {@code maxRetries}).</p>
+ *
+ * <p>{@link Releasable}: the client keeps its connections to the collector in a pool, which a CRaC checkpoint
+ * refuses; {@link #release()} closes the client once what was sent is answered, {@link #reopen()} builds another.</p>
+ */
+public final class OtlpHttpJsonSender implements Releasable {
+
+    private static final Logger LOG = System.getLogger(OtlpHttpJsonSender.class.getName());
+
+    private final URI endpoint;
+    private final Map<String, String> headers;
+    private final Duration requestTimeout;
+    private final Duration connectTimeout;
+    private final int maxRetries;
+    /** Empty while released: an export then fails at once. */
+    private final AtomicReference<HttpClient> client = new AtomicReference<>();
+    private final String signalLabel;
+    /** The results of the requests sent and not answered yet. */
+    private final Set<CompletableResultCode> inFlight = ConcurrentHashMap.newKeySet();
+
+    private OtlpHttpJsonSender(Builder b) {
+        this.endpoint = b.endpoint;
+        this.headers = Map.copyOf(b.headers);
+        this.requestTimeout = b.requestTimeout;
+        this.connectTimeout = b.connectTimeout;
+        this.maxRetries = b.maxRetries;
+        this.signalLabel = b.signalLabel;
+        this.client.set(newClient());
+    }
+
+    private HttpClient newClient() {
+        return HttpClient.newBuilder()
+                .connectTimeout(connectTimeout)
+                .executor(Executors.newVirtualThreadPerTaskExecutor())
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+    }
+
+    /**
+     * Waits for the requests in flight (each within its request timeout and retries), then closes the client: its
+     * pooled connections and its selector go with it. A request still running after that wait is cut.
+     */
+    @Override
+    public synchronized void release() {
+        HttpClient current = client.get();
+        if (current == null) {
+            return;
+        }
+        long waitMillis = requestTimeout.toMillis() * (maxRetries + 1L) + 5_000L;
+        flush().join(waitMillis, TimeUnit.MILLISECONDS);
+        client.set(null);
+        current.shutdown();
+        try {
+            if (!current.awaitTermination(Duration.ofSeconds(5))) {
+                current.shutdownNow();
+            }
+        } catch (InterruptedException _) {
+            current.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Override
+    public synchronized void reopen() {
+        if (client.get() == null) {
+            client.set(newClient());
+        }
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * @param jsonBody already-encoded OTLP/JSON payload
+     * @return an asynchronous result — success if status 2xx (possibly after retry).
+     */
+    public CompletableResultCode send(String jsonBody) {
+        HttpRequest.Builder reqB = HttpRequest.newBuilder(endpoint)
+                .timeout(requestTimeout)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+        headers.forEach(reqB::header);
+        HttpRequest req = reqB.build();
+
+        CompletableResultCode result = new CompletableResultCode();
+        inFlight.add(result);
+        result.whenComplete(() -> inFlight.remove(result));
+        Thread.ofVirtual().start(() -> sendWithRetry(req, result, 0));
+        return result;
+    }
+
+    /**
+     * Completes once every request sent so far is answered (or has failed for good): the exporters' {@code flush} and
+     * {@code shutdown} return it, so that their success means the data reached the collector (BUG-20261029-04).
+     */
+    public CompletableResultCode flush() {
+        return CompletableResultCode.ofAll(List.copyOf(inFlight));
+    }
+
+    private void sendWithRetry(HttpRequest req, CompletableResultCode result, int attempt) {
+        HttpClient current = client.get();
+        if (current == null) {
+            LOG.log(Level.WARNING, "OTLP {0} exporter released for a checkpoint: the batch is dropped", signalLabel);
+            result.fail();
+            return;
+        }
+        try {
+            HttpResponse<String> resp = current.send(req, HttpResponse.BodyHandlers.ofString());
+            int sc = resp.statusCode();
+            if (sc >= 200 && sc < 300) { result.succeed(); return; }
+            if (sc >= 500 && attempt < maxRetries) {
+                long backoffMs = computeBackoffMillis(attempt);
+                LOG.log(Level.WARNING,
+                        "OTLP {0} HTTP {1} (attempt {2}/{3}) - retry in {4}ms",
+                        signalLabel, sc, attempt + 1, maxRetries, backoffMs);
+                Thread.sleep(backoffMs);
+                sendWithRetry(req, result, attempt + 1);
+                return;
+            }
+            LOG.log(Level.WARNING, "OTLP {0} HTTP permanent rejection: {1} — {2}",
+                    signalLabel, sc, resp.body());
+            result.fail();
+        } catch (Exception e) {
+            if (attempt < maxRetries) {
+                long backoffMs = computeBackoffMillis(attempt);
+                LOG.log(Level.WARNING,
+                        "OTLP {0} send failed (attempt {1}/{2}): {3} — retrying in {4}ms",
+                        signalLabel, attempt + 1, maxRetries, e.getMessage(), backoffMs);
+                try {
+                    Thread.sleep(backoffMs);
+                    sendWithRetry(req, result, attempt + 1);
+                } catch (InterruptedException _) {
+                    Thread.currentThread().interrupt();
+                    result.fail();
+                }
+                return;
+            }
+            LOG.log(Level.ERROR, "OTLP " + signalLabel + " send permanently failed", e);
+            result.fail();
+        }
+    }
+
+    /**
+     * Bounded exponential backoff: 100ms × 2^attempt, capped at 5s.
+     * Public so tests can perform sanity checks.
+     */
+    public static long computeBackoffMillis(int attempt) {
+        return Math.min(100L << attempt, 5_000L);
+    }
+
+    public static final class Builder {
+        private URI endpoint;
+        private final Map<String, String> headers = new LinkedHashMap<>();
+        private Duration requestTimeout = Duration.ofSeconds(10);
+        private Duration connectTimeout = Duration.ofSeconds(10);
+        private int maxRetries = 3;
+        private String signalLabel = "?";
+
+        public Builder setEndpoint(URI endpoint) {
+            this.endpoint = endpoint;
+            return this;
+        }
+
+        public Builder addHeader(String name, String value) {
+            if (name != null && value != null) headers.put(name, value);
+            return this;
+        }
+
+        public Builder addAllHeaders(Map<String, String> all) {
+            if (all != null) headers.putAll(all);
+            return this;
+        }
+
+        public Builder setRequestTimeout(Duration timeout) {
+            if (timeout != null && !timeout.isNegative() && !timeout.isZero()) {
+                this.requestTimeout = timeout;
+            }
+            return this;
+        }
+
+        public Builder setConnectTimeout(Duration timeout) {
+            if (timeout != null && !timeout.isNegative() && !timeout.isZero()) {
+                this.connectTimeout = timeout;
+            }
+            return this;
+        }
+
+        public Builder setMaxRetries(int n) {
+            if (n >= 0) this.maxRetries = n;
+            return this;
+        }
+
+        /** Label used for retry log messages (e.g. {@code "traces"}, {@code "metrics"}, {@code "logs"}). */
+        public Builder setSignalLabel(String label) {
+            if (label != null) this.signalLabel = label;
+            return this;
+        }
+
+        public OtlpHttpJsonSender build() {
+            if (endpoint == null) throw new IllegalStateException("endpoint manquant");
+            return new OtlpHttpJsonSender(this);
+        }
+    }
+}

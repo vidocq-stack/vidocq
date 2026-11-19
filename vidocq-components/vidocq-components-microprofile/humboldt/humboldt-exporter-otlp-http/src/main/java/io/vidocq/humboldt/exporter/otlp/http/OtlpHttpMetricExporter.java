@@ -1,0 +1,90 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.exporter.otlp.http;
+
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonMetricEncoder;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.metric.data.MetricData;
+import io.vidocq.humboldt.sdk.metric.export.MetricExporter;
+
+import java.util.Collection;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * OTLP/HTTP-JSON exporter for metrics — delegates transport to
+ * {@link OtlpHttpJsonSender}.
+ *
+ * <p>Default endpoint: {@code http://localhost:4318/v1/metrics}.</p>
+ */
+public final class OtlpHttpMetricExporter extends OtlpHttpExporter implements MetricExporter {
+
+    private static final System.Logger LOG = System.getLogger(OtlpHttpMetricExporter.class.getName());
+
+    private final AtomicBoolean unencodableBatchLogged = new AtomicBoolean(false);
+
+    private OtlpHttpMetricExporter(OtlpHttpJsonSender sender) {
+        super(sender);
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * Encodes and sends {@code metrics}. A batch that cannot be encoded — a metric whose data points do not match
+     * its kind, which {@link OtlpJsonMetricEncoder} rejects — is not sent: the export fails, as an exporter
+     * reports it (a failed result, never an exception), and the first such batch of this exporter is logged at
+     * {@code WARNING}.
+     */
+    @Override
+    public CompletableResultCode export(Collection<MetricData> metrics) {
+        if (stopped()) return CompletableResultCode.ofFailure();
+        if (metrics.isEmpty()) return CompletableResultCode.ofSuccess();
+        String body;
+        try {
+            body = OtlpJsonMetricEncoder.encode(metrics);
+        } catch (IllegalArgumentException e) {
+            if (unencodableBatchLogged.compareAndSet(false, true)) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "OTLP metric batch not exported, it cannot be encoded: {0} (logged once per exporter)",
+                        e.getMessage());
+            }
+            return CompletableResultCode.ofFailure();
+        }
+        return sender.send(body);
+    }
+
+    /** Builder of {@link OtlpHttpMetricExporter}; default endpoint {@code http://localhost:4318/v1/metrics}. */
+    public static final class Builder extends OtlpHttpExporterBuilder<Builder> {
+        private Builder() {
+            super("http://localhost:4318/v1/metrics", "metrics");
+        }
+
+        @Override
+        Builder self() {
+            return this;
+        }
+
+        public OtlpHttpMetricExporter build() {
+            return new OtlpHttpMetricExporter(newSender());
+        }
+    }
+}

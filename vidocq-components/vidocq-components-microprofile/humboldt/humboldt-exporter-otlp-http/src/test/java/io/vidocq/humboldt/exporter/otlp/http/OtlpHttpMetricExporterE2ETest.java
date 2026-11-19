@@ -1,0 +1,222 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.exporter.otlp.http;
+
+import com.sun.net.httpserver.HttpServer;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.LongCounter;
+import io.opentelemetry.api.metrics.DoubleHistogram;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
+import io.vidocq.humboldt.sdk.common.Resource;
+import io.vidocq.humboldt.sdk.metric.PeriodicMetricReader;
+import io.vidocq.humboldt.sdk.metric.SdkMeterProvider;
+import io.vidocq.humboldt.sdk.metric.data.AggregationTemporality;
+import io.vidocq.humboldt.sdk.metric.data.HistogramPointData;
+import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
+import io.vidocq.humboldt.sdk.metric.data.MetricData;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.text.MessageFormat;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class OtlpHttpMetricExporterE2ETest {
+
+    private HttpServer server;
+    private final List<String> receivedBodies = new CopyOnWriteArrayList<>();
+    /** One permit per body received, so that tests wait for arrivals instead of polling. */
+    private final Semaphore bodyArrivals = new Semaphore(0);
+    private final AtomicInteger callCount = new AtomicInteger();
+
+    @BeforeEach
+    void startServer() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/metrics", ex -> {
+            callCount.incrementAndGet();
+            String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            receivedBodies.add(body);
+            bodyArrivals.release();
+            byte[] resp = "OK".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, resp.length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(resp);
+            }
+        });
+        server.start();
+    }
+
+    @AfterEach
+    void stopServer() {
+        server.stop(0);
+    }
+
+    private String endpoint() {
+        return "http://127.0.0.1:" + server.getAddress().getPort() + "/v1/metrics";
+    }
+
+    @Test
+    void e2e_counter_and_histogram_post_to_collector() {
+        OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
+                .setEndpoint(endpoint())
+                .setRequestTimeout(Duration.ofSeconds(5))
+                .build();
+
+        try (SdkMeterProvider p = SdkMeterProvider.builder()
+                .setResource(Resource.create(Attributes.of(
+                        AttributeKey.stringKey("service.name"), "humboldt-metric-e2e")))
+                .registerMetricReader(PeriodicMetricReader.builder(exporter)
+                        .setInterval(Duration.ofSeconds(60)).build())
+                .build()) {
+            LongCounter c = p.get("io.vidocq.test").counterBuilder("requests").build();
+            c.add(7L, Attributes.of(AttributeKey.stringKey("status"), "ok"));
+
+            DoubleHistogram h = p.get("io.vidocq.test").histogramBuilder("latency")
+                    .setUnit("ms").build();
+            h.record(42.0);
+
+            // flush triggers an immediate collect+export cycle
+            p.flush().join(3, TimeUnit.SECONDS);
+            waitForReceivedBodies(1);
+        }
+
+        assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
+        String body = receivedBodies.getFirst();
+        assertTrue(body.startsWith("{\"resourceMetrics\":["), "format OTLP/JSON metrics : " + body);
+        assertTrue(body.contains("\"name\":\"requests\""));
+        assertTrue(body.contains("\"name\":\"latency\""));
+        assertTrue(body.contains("\"asInt\":\"7\""), "Counter value asInt string : " + body);
+        assertTrue(body.contains("\"sum\":42.0"), "Histogram sum : " + body);
+        assertTrue(body.contains("\"explicitBounds\""));
+        assertTrue(body.contains("\"isMonotonic\":true"), "Counter must be monotonic");
+        assertTrue(body.contains("\"aggregationTemporality\":2"), "CUMULATIVE = 2");
+        assertTrue(body.contains("\"service.name\""));
+    }
+
+    @Test
+    void e2e_double_counter_and_synchronous_gauges_export_their_data_points() {
+        // BUG-20261004-02: double points were dropped and synchronous gauges had no data field.
+        OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
+                .setEndpoint(endpoint())
+                .setRequestTimeout(Duration.ofSeconds(5))
+                .build();
+
+        try (SdkMeterProvider p = SdkMeterProvider.builder()
+                .registerMetricReader(PeriodicMetricReader.builder(exporter)
+                        .setInterval(Duration.ofSeconds(60)).build())
+                .build()) {
+            var meter = p.get("io.vidocq.test");
+            meter.counterBuilder("bytes").ofDoubles().build().add(1.5);
+            meter.gaugeBuilder("temperature").build().set(21.5);
+            meter.gaugeBuilder("queue.size").ofLongs().build().set(3L);
+
+            p.flush().join(3, TimeUnit.SECONDS);
+            waitForReceivedBodies(1);
+        }
+
+        assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
+        String body = receivedBodies.getFirst();
+        assertTrue(body.contains("{\"name\":\"bytes\",\"sum\":{\"dataPoints\":[{"), body);
+        assertTrue(body.contains("\"asDouble\":1.5}],\"aggregationTemporality\":2,\"isMonotonic\":true}"), body);
+        assertTrue(body.contains("{\"name\":\"temperature\",\"gauge\":{\"dataPoints\":[{"), body);
+        assertTrue(body.contains("\"asDouble\":21.5}]}}"), body);
+        assertTrue(body.contains("{\"name\":\"queue.size\",\"gauge\":{\"dataPoints\":[{"), body);
+        assertTrue(body.contains("\"asInt\":\"3\"}]}}"), body);
+    }
+
+    @Test
+    void a_metric_whose_points_do_not_match_its_kind_fails_the_export_without_throwing_and_is_logged_once() {
+        OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
+                .setEndpoint(endpoint())
+                .setRequestTimeout(Duration.ofSeconds(5))
+                .build();
+        MetricData counterWithAHistogramPoint = new MetricData(
+                Resource.empty(), InstrumentationScope.of("io.vidocq.test"), "requests", "", "",
+                InstrumentType.COUNTER, AggregationTemporality.CUMULATIVE, true,
+                List.of(new HistogramPointData(1L, 2L, Attributes.empty(), 3.0, 1L, 3.0, 3.0,
+                        List.of(10.0), List.of(1L, 0L))));
+        Logger logger = Logger.getLogger(OtlpHttpMetricExporter.class.getName());
+        List<LogRecord> logged = new CopyOnWriteArrayList<>();
+        Handler capture = new Handler() {
+            @Override
+            public void publish(LogRecord logRecord) {
+                logged.add(logRecord);
+            }
+
+            @Override
+            public void flush() {
+                // nothing buffered
+            }
+
+            @Override
+            public void close() {
+                // nothing to release
+            }
+        };
+        boolean parentHandlers = logger.getUseParentHandlers();
+        logger.addHandler(capture);
+        logger.setUseParentHandlers(false);
+        try {
+            CompletableResultCode first = exporter.export(List.of(counterWithAHistogramPoint));
+            CompletableResultCode second = exporter.export(List.of(counterWithAHistogramPoint));
+
+            assertTrue(first.isDone() && !first.isSuccess(), "a failed export, not an exception");
+            assertTrue(second.isDone() && !second.isSuccess());
+        } finally {
+            logger.removeHandler(capture);
+            logger.setUseParentHandlers(parentHandlers);
+        }
+        assertEquals(0, callCount.get(), "nothing is sent");
+        assertEquals(1, logged.size(), "logged once: " + logged);
+        assertEquals(Level.WARNING, logged.getFirst().getLevel());
+        String message = MessageFormat.format(logged.getFirst().getMessage(), logged.getFirst().getParameters());
+        assertTrue(message.contains("metric 'requests' (COUNTER) carries a HistogramPointData"), message);
+    }
+
+    private void waitForReceivedBodies(int expected) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        try {
+            boolean arrived = true;
+            while (arrived && receivedBodies.size() < expected) {
+                arrived = bodyArrivals.tryAcquire(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
+            }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

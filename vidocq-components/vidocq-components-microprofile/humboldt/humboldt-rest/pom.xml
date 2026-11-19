@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>humboldt-rest</artifactId>
+    <name>Humboldt :: REST</name>
+    <description>Filters JAX-RS pour instrumentation HTTP serveur : extract W3C TraceContext, span SERVER, conventions OTel HTTP semantic.</description>
+
+    <dependencies>
+        <!-- Compile-only: the generated $$CassiniAdapter classes of the server filters implement a cassini-api type.
+             Only Cassini loads them; on another JAX-RS runtime they stay unused (BUG-20261030-02). -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <version>${cassini.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-propagator-w3c</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-context</artifactId>
+        </dependency>
+        <!-- Jakarta platform APIs are `provided`: the container brings them (the Vidocq runtime,
+             or an application server), so a WAR never ships a second copy (vidocq-workspace#17). -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- CDI scope annotations on the server filters (provided: the runtime brings CDI). -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>4.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- MicroProfile Rest Client API, through the module Vidocq ships (cyrano's repackaged fork,
+             module io.vidocq.cyrano.mp.rest.client.api). Provided: HumboldtMpRestClientListener only runs
+             when a Rest Client is present at run time (cyrano-core brings it); module-info reads it with
+             `requires static`. -->
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-mp-rest-client-api</artifactId>
+            <version>0.4.0-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- jakarta.annotation for @Priority on HumboldtSpanFinalizer.
+             Small standard API dependency, required by the JAX-RS semantics for
+             ExceptionMapper priorities. -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+            Vauban SPI (provided): the Vauban APT below generates the
+            _VaubanComponents provider so the @Provider filters self-register as
+            CDI beans in a Vauban-based runtime (same pattern as knock-jaxrs) —
+            without it the assembled Vidocq runtime never discovers the JAX-RS
+            tracing filters.
+        -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Test only: a Jakarta REST RuntimeDelegate, so a unit test can read the Response that
+             HumboldtSpanFinalizer builds. Never shipped. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-jdk-http</artifactId>
+            <version>${cassini.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <!-- Library module: cross-module beans are validated at the
+                             Vidocq runtime assembly, not here (pattern knock-jaxrs). -->
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                    <!-- Vauban indexer APT: generates META-INF/vauban-beans.list and the
+                         _VaubanComponents provider so the @Provider tracing filters
+                         self-register as CDI beans in a Vauban-based runtime. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <!-- The Cassini adapters of the filters that take @Context fields, built with the module:
+                             at run time Cassini could not generate them in this module, and the filter lost its
+                             ResourceInfo, so http.route was the concrete path (BUG-20261030-02). -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

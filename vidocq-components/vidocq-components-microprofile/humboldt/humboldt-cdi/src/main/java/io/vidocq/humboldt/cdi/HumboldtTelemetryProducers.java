@@ -1,0 +1,120 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.humboldt.cdi;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.baggage.Baggage;
+import io.opentelemetry.api.logs.Logger;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import jakarta.enterprise.inject.spi.InjectionPoint;
+
+/**
+ * CDI producers for the standard OpenTelemetry types required by the
+ * MicroProfile Telemetry 2.2 spec §"Access to the OpenTelemetry Tracing API".
+ *
+ * <ul>
+ *   <li>{@link OpenTelemetry} — resolved via {@link GlobalOpenTelemetry#get()}</li>
+ *   <li>{@link Tracer} — resolved via the scope name derived from the injection point</li>
+ *   <li>{@link Span} — {@link Span#current()} at resolution time</li>
+ *   <li>{@link Baggage} — {@link Baggage#current()} at resolution time</li>
+ * </ul>
+ *
+ * <p>Lets applications simply write {@code @Inject Tracer tracer}
+ * or {@code @Inject Span current} without declaring their own producers.</p>
+ */
+@ApplicationScoped
+public class HumboldtTelemetryProducers {
+
+    /** Instrumentation scope used when the injection point does not name a declaring class. */
+    private static final String DEFAULT_SCOPE = "io.vidocq.humboldt.cdi";
+
+    /**
+     * Producer for {@link OpenTelemetry} — the global instance configured by
+     * {@link io.vidocq.humboldt.runtime.HumboldtAutoConfigure} (or
+     * {@link GlobalOpenTelemetry#set(OpenTelemetry)} if the app does not use
+     * autoconfig).
+     */
+    @Produces
+    public OpenTelemetry produceOpenTelemetry() {
+        return GlobalOpenTelemetry.get();
+    }
+
+    /**
+     * Producer for {@link Tracer} — the tracer name is derived from the injection point:
+     * declaring class by default. OTel convention: {@code getTracer(scope)}.
+     */
+    @Produces
+    public Tracer produceTracer(InjectionPoint ip) {
+        return GlobalOpenTelemetry.get().getTracer(scopeName(ip));
+    }
+
+    /**
+     * Producer for {@link Span} — returns a {@link CurrentSpan}, which delegates each method
+     * call to {@link Span#current()} at invocation time (not at injection time).
+     * MP Telemetry 2.2 spec §"Access to the OpenTelemetry Tracing API": {@code SpanBeanTest.spanBeanChange}
+     * mutates the Context after injection and expects subsequent accesses to
+     * {@code injectedSpan} to reflect the new current span.
+     */
+    @Produces
+    public Span produceCurrentSpan() {
+        return new CurrentSpan();
+    }
+
+    /**
+     * Producer for {@link Baggage} — a {@link CurrentBaggage}, which delegates to
+     * {@link Baggage#current()} on each call. For
+     * {@code BaggageBeanTest.baggageBeanChange} which mutates the Context after
+     * injection (see {@link #produceCurrentSpan()} for the same approach).
+     */
+    @Produces
+    public Baggage produceCurrentBaggage() {
+        return new CurrentBaggage();
+    }
+
+    /**
+     * Producer for {@link Meter} — the meter name is derived from the injection point:
+     * declaring class by default. OTel convention: {@code getMeter(scope)}.
+     */
+    @Produces
+    public Meter produceMeter(InjectionPoint ip) {
+        return GlobalOpenTelemetry.get().getMeter(scopeName(ip));
+    }
+
+    /**
+     * Producer for {@link Logger} (OTel logs) — the logger name is derived from
+     * the injection point.
+     */
+    @Produces
+    public Logger produceLogger(InjectionPoint ip) {
+        return GlobalOpenTelemetry.get().getLogsBridge().get(scopeName(ip));
+    }
+
+    /** The declaring class of the injection point's member, or {@link #DEFAULT_SCOPE} when there is none. */
+    private static String scopeName(InjectionPoint ip) {
+        return ip != null && ip.getMember() != null
+                ? ip.getMember().getDeclaringClass().getName()
+                : DEFAULT_SCOPE;
+    }
+}

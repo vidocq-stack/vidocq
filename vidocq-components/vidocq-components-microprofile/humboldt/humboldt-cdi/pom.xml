@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>humboldt-cdi</artifactId>
+    <name>Humboldt :: CDI</name>
+    <description>Interceptor CDI Lite : auto-applique l'interception sur @WithSpan OpenTelemetry via BuildCompatibleExtension. Compatible Vauban CDI 4.1 Lite. Pas de dep Weld.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-context</artifactId>
+        </dependency>
+        <!--
+            Standard public OTel @WithSpan annotation: the annotation expected by
+            MicroProfile Telemetry 2.2 and its TCK. API/SPI only, no runtime
+            implementation (marker annotations only).
+        -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-instrumentation-annotations</artifactId>
+        </dependency>
+        <!-- Jakarta platform APIs are `provided`: the container brings them (the Vidocq runtime,
+             or an application server), so a WAR never ships a second copy (vidocq-workspace#17).
+             The CDI API brings jakarta.interceptor-api transitively. -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped
+             HumboldtTelemetryProducers. Without this jar Weld cannot load the class and skips the
+             producers silently (WELD-000119), then fails the deployment on the first injected
+             Tracer or Span. API types only, no code runs outside Vauban (vidocq-workspace#15,
+             humboldt-it-weld). Its Jakarta CDI dependencies are excluded: the CDI API is declared
+             above. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT-processed dependency jars). During
+                the main compile it generates _ClientProxy/_Factory, META-INF/vauban-beans.list
+                (runtime discovery, both class path and module path), and one _VaubanComponents per
+                package (in-module instantiation / field-injection / producer invocation, no
+                `opens … to io.vidocq.vauban.core`). Build-time only: adds no compile/runtime
+                dependency on Vauban, and the output stays inert for a standard CDI container (Weld).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Vauban APT processes this module's own beans at compile time. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans (the unit test exercises the
+                         interceptor directly, no container). Running the APT over them would emit
+                         a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,439 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    In-reactor TCK runner, gated by the `tck` Maven profile of humboldt-parent
+    (TCK harmonisation — same pattern as the vidocq-runtime-tck-* runners and
+    the dirac pilot): a plain `mvn install` neither downloads nor runs anything
+    TCK-related.
+
+    History: this module used to be a STANDALONE out-of-reactor POM to work
+    around ShrinkWrap Maven Resolver 3.3 (could not parse Model 4.1.0 POMs).
+    That constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration.
+
+    Execution goes through the script (thin wrapper over the reactor):
+        ./run-official-tck-telemetry-2.2.sh              # smoke
+        ./run-official-tck-telemetry-2.2.sh all          # full suite
+        ./run-official-tck-telemetry-2.2.sh -Dtest=...   # targeted class
+
+    Or directly:
+        ./mvnw -Ptck,tck-smoke -pl humboldt-tck test     # smoke
+        ./mvnw -Ptck,tck-official -pl humboldt-tck test  # full suite
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>humboldt-tck</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Humboldt :: TCK Runner</name>
+    <description>MicroProfile Telemetry 2.2 conformance harness — official Eclipse TCK (Tracing + Metrics + Logs).</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+
+        <humboldt.version>${project.version}</humboldt.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+
+        <microprofile.telemetry.version>2.2-RC3</microprofile.telemetry.version>
+        <microprofile.config.version>3.1.1</microprofile.config.version>
+        <microprofile.rest.client.version>4.0</microprofile.rest.client.version>
+        <opentelemetry.version>1.67.0</opentelemetry.version>
+        <opentelemetry.instrumentation.version>2.31.1</opentelemetry.instrumentation.version>
+        <opentelemetry.semconv.version>1.44.0</opentelemetry.semconv.version>
+
+        <arquillian.version>1.8.0.Final</arquillian.version>
+        <shrinkwrap.resolver.version>3.3.0</shrinkwrap.resolver.version>
+        <testng.version>7.10.2</testng.version>
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
+        <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
+
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.surefire.version>3.5.5</maven.surefire.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.shrinkwrap.resolver</groupId>
+                <artifactId>shrinkwrap-resolver-bom</artifactId>
+                <version>${shrinkwrap.resolver.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- ============================================================ -->
+        <!--  TCK officiels (publics sur Maven Central)                   -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.telemetry</groupId>
+            <artifactId>microprofile-telemetry-tracing-tck</artifactId>
+            <version>${microprofile.telemetry.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.telemetry</groupId>
+            <artifactId>microprofile-telemetry-metrics-tck</artifactId>
+            <version>${microprofile.telemetry.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.telemetry</groupId>
+            <artifactId>microprofile-telemetry-logs-tck</artifactId>
+            <version>${microprofile.telemetry.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Humboldt runtime + SDK (the code under test)                -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-runtime</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-cdi</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-rest</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+        <!-- OTel autoconfigure SPI discovery (OtelSpiAutoConfiguration) and the OTel SDK <-> Humboldt
+             bridges it uses: the Arquillian container plugs the exporters, samplers, propagators,
+             resources and customizers each TCK archive declares through it. -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-interop</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Vauban CDI Lite — container used by the Humboldt Arquillian -->
+        <!--  container to boot the beans of the ShrinkWrap war           -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  M7c.2: Chappe HTTP + Cassini JAX-RS — assembled in-process  -->
+        <!--  by the Arquillian container for the REST TCK tests.         -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-http</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-core</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi-vauban</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <!-- ============================================================ -->
+        <!--  M7c.6 — Cassini JAX-RS Client (jakarta.ws.rs.client.*)      -->
+        <!--  Unblocks BaggageTest, RestClientSpan*Test, etc., which call -->
+        <!--  ClientBuilder.newClient().target(...).request().get().      -->
+        <!--  Also provides a RuntimeDelegate provider (standalone).      -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-client</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  OFFICIAL @WithSpan annotation expected by the TCK           -->
+        <!--  (different from our humboldt-cdi WithSpan — see TCK.md)     -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
+            <version>${opentelemetry.instrumentation.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Specs Jakarta + MicroProfile requises par le TCK            -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>${jakarta.cdi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>${jakarta.ws.rs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>${jakarta.annotation.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+            <version>${microprofile.config.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.microprofile.rest.client</groupId>
+            <artifactId>microprofile-rest-client-api</artifactId>
+            <version>${microprofile.rest.client.version}</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Cyrano — MicroProfile Rest Client 4.0 implementation, so    -->
+        <!--  that RestClientBuilder.newBuilder() returns a concrete impl -->
+        <!--  (MP Telemetry TCK RestClientSpan*Test, W3*Test).            -->
+        <!--  Cyrano provides RestClientBuilderResolver via ServiceLoader.-->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-api</artifactId>
+            <version>0.4.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-core</artifactId>
+            <version>0.4.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Official OTel SDK — used by the TCK for its fixtures.       -->
+        <!--  Not part of Humboldt production: does not pollute the app   -->
+        <!--  runtime.                                                    -->
+        <!-- ============================================================ -->
+        <!-- Test scope: the runner has no main code any more — the OTel SDK <-> Humboldt bridges
+             (SpanDataMapper, OtelSpanExporterBridge, ...) come from humboldt-otel-interop, whose OTel SDK
+             dependencies are provided scope, so the SDK artifacts below supply them to the TCK tests. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- B3 (single and multi header) and Jaeger propagators, used by B3PropagationTest,
+             B3MultiPropagationTest and JaegerPropagationTest: humboldt-otel-interop wires them as
+             builtins (OtelSpiAutoConfiguration) and requires them statically, so the runner supplies
+             them. Test scope: the runner has no main code. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-extension-trace-propagators</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- TestSpanData.builder() — the concrete io.opentelemetry.sdk.trace.data.SpanData that the
+             humboldt-otel-interop SpanDataMapper builds to hand Humboldt spans to the exporters the TCK
+             provides (InMemorySpanExporter, etc.). -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry.semconv</groupId>
+            <artifactId>opentelemetry-semconv</artifactId>
+            <version>${opentelemetry.semconv.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  Test infrastructure : TestNG + Arquillian + ShrinkWrap      -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ============================================================ -->
+        <!--  M7c.4: force commons-io 2.16 — version 2.11, pulled in by    -->
+        <!--  awaitility 4.3 (transitive from the metrics TCK), lacks      -->
+        <!--  the Tailer.builder() used by JvmMemoryTest/JvmThreadTest/    -->
+        <!--  JvmCpuTest. The bump unblocks 24 tests.                      -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.16.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap.resolver</groupId>
+            <artifactId>shrinkwrap-resolver-impl-maven</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap.resolver</groupId>
+            <artifactId>shrinkwrap-resolver-api-maven</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.version}</version>
+                <configuration>
+                    <!-- The TCK uses TestNG, not JUnit. Picked up through the testng runtime -->
+                    <useSystemClassLoader>false</useSystemClassLoader>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Default profile: all local humboldt-tck tests
+             (HumboldtTckSmokeTest, bridge tests, Arquillian boot smoke, etc.)
+             without running the real official TCK suites (reserved for the
+             tck-official profile). -->
+        <profile>
+            <id>tck-smoke</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+        </profile>
+
+        <!-- Targeted profile: runs ONLY OpenTelemetryBeanTest of the tracing TCK.
+             Used in M7b.5 to validate that the Arquillian → HumboldtContainer
+             → Vauban CDI → @Inject OpenTelemetry chain works on an official TCK test,
+             without yet aiming at the full suite. -->
+        <profile>
+            <id>tck-cdi-bean</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <dependenciesToScan>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-tracing-tck</dependency>
+                            </dependenciesToScan>
+                            <test>OpenTelemetryBeanTest</test>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Full profile: runs the whole official TCK suite. -->
+        <profile>
+            <id>tck-official</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <suiteXmlFiles>
+                                <suiteXmlFile>src/test/resources/tck-suite.xml</suiteXmlFile>
+                            </suiteXmlFiles>
+                            <dependenciesToScan>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-tracing-tck</dependency>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-metrics-tck</dependency>
+                                <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck</dependency>
+                            </dependenciesToScan>
+                            <systemPropertyVariables>
+                                <!-- "Porting" SPI of the MP Telemetry 2.2 TCK —
+                                     JaxRsServerAsyncTestEndpoint calls
+                                     `ConfigurationAccessor.get().getExecutor()` in
+                                     its constructor. Without this property,
+                                     instantiation fails with "Cannot find any
+                                     implementations of Executor, check that
+                                     telemetry.tck.executor is specified". -->
+                                <telemetry.tck.executor>io.vidocq.humboldt.tck.HumboldtTckExecutor</telemetry.tck.executor>
+                                <!-- The MP Telemetry Logs TCK (JulTest) reads this property in its
+                                     static{} block to open the log file to check. The Humboldt
+                                     LoggingLogRecordExporter writes every LogRecord there
+                                     when OTEL_LOGS_EXPORTER=logging. -->
+                                <mptelemetry.tck.log.file.path>${project.build.directory}/humboldt-tck-logs.txt</mptelemetry.tck.log.file.path>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
