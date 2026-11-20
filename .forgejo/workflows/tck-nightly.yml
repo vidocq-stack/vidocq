@@ -49,6 +49,21 @@ jobs:
           SLOW_RUNTIME = ["vidocq-runtime-integration-tests/vidocq-runtime-tck-cyrano-restclient",
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-heisenberg-faulttolerance",
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry"]
+          def reactor(path):
+              """The module at path and every module below it: <modules>, and those of its tck profile."""
+              pom = ET.parse(os.path.join(path, "pom.xml")).getroot()
+              ns = pom.tag[1:].split("}", 1)[0]
+              found = [path]
+              lists = [pom.find("{%s}modules" % ns)]
+              for p in pom.findall("{%s}profiles/{%s}profile" % (ns, ns)):
+                  if (p.findtext("{%s}id" % ns) or "").strip() == "tck":
+                      lists.append(p.find("{%s}modules" % ns))
+              for ms in filter(lambda x: x is not None, lists):
+                  for m in ms.findall("{%s}module" % ns):
+                      sub = os.path.normpath(os.path.join(path, (m.text or "").strip()))
+                      if os.path.isfile(os.path.join(sub, "pom.xml")) and sub not in found:
+                          found += reactor(sub)
+              return found
           include = []
           for c in json.load(open("components.json"))["components"]:
               if wanted and c["tag"] not in wanted:
@@ -66,7 +81,8 @@ jobs:
               if get("ci.tck.command"):
                   commands.append(get("ci.tck.command"))
               if commands:
-                  include.append({"tag": c["tag"], "path": c["path"], "commands": " && ".join(commands)})
+                  include.append({"tag": c["tag"], "path": c["path"], "commands": " && ".join(commands),
+                                  "modules": ",".join(dict.fromkeys(reactor(c["path"])))})
           print("matrix=" + json.dumps({"include": include}))
           PY
 
@@ -81,8 +97,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
-      - name: Build & install the reactor
-        run: mvn -B -ntp -U install -DskipTests -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist
+      # The component's modules (its tck profile's too) and what they depend on, not the whole reactor: each job
+      # used to compile every module of the monorepo before running one component's TCK.
+      - name: Build & install the component and its upstream
+        run: mvn -B -ntp -U install -DskipTests -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist -Ptck -am -pl "$MODULES"
+        env:
+          MODULES: ${{ matrix.modules }}
       - name: TCK ${{ matrix.tag }}
         working-directory: ${{ matrix.path }}
         run: bash -c "$TCK_COMMANDS"

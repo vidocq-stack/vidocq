@@ -6,8 +6,11 @@
 #                      `pr-validate / governance-checks (pull_request)`.
 #   producer           gitflow-incremental-builder (.mvn/extensions.xml, gib.* in the root pom): the modules the
 #                      pull request changes, their upstream without tests and every downstream module with its
-#                      tests. No TCK: they run once a day, on demand and for a release (tck-nightly.yml);
-#                      a pull request that needs one dispatches `TCK nightly` on its branch with its component.
+#                      tests, with JaCoCo (-Pquality). Then the SonarQube analysis of the modules holding a
+#                      changed file, from that same build (blocking; it replaces the separate sonar.yml, which
+#                      built and tested the whole reactor a second time). No TCK: they run once a day, on
+#                      demand and for a release (tck-nightly.yml); a pull request that needs one dispatches
+#                      `TCK nightly` on its branch with its component.
 #   impacted           no repository outside depends on a pull request any more: a shared API change fixes every
 #                      caller in the same pull request (MONOREPO.md §6). erasmus, tassis, verne and VCU build
 #                      against the SNAPSHOTs of main. The job stays because the verdict reads it: no consumer.
@@ -129,12 +132,55 @@ jobs:
         if: steps.changes.outputs.docs-only != 'true'
         # -am: the upstream of a changed module is built from this tree, its tests skipped
         # (gib.skipTestsForUpstreamModules); every downstream module runs its tests (gib.buildDownstream=always).
+        # -Pquality: the JaCoCo reports the SonarQube analysis below reads; the build is not run a second time.
         run: >-
-          mvn -B -ntp -U install -am -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist
+          mvn -B -ntp -U install -am -Pquality -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist
           -Dgib.referenceBranch=refs/remotes/origin/main
           -Dgib.skipTestsForUpstreamModules=true
           -Dgib.uncommitted=false -Dgib.untracked=false
           -Dgib.logImpactedTo=${{ runner.temp }}/gib-impacted.txt
+
+      # The SonarQube analysis of the pull request reads what the build above left in target/: the modules holding a
+      # changed file, and every aggregator above them up to the root (the scanner refuses a reactor without them;
+      # MONOREPO.md §4, GIB spike). A pull request analysis reports new code only, which lives in those modules.
+      - name: Modules to analyse
+        id: sonar-scope
+        if: steps.changes.outputs.docs-only != 'true'
+        env:
+          IMPACTED: ${{ runner.temp }}/gib-impacted.txt
+        run: |
+          set -euo pipefail
+          touch "$IMPACTED"
+          git diff --name-only "$(git merge-base refs/remotes/origin/main HEAD)" HEAD > "$RUNNER_TEMP/changed.txt"
+          python3 - "$IMPACTED" "$RUNNER_TEMP/changed.txt" >> "$GITHUB_OUTPUT" <<'PY'
+          import os, sys
+          root = os.getcwd()
+          built = {os.path.relpath(os.path.abspath(l.strip()), root) for l in open(sys.argv[1]) if l.strip()}
+          changed = [l.strip() for l in open(sys.argv[2]) if l.strip()]
+          chosen = {m for m in built if m != "." and any(f.startswith(m + "/") for f in changed)}
+          for m in list(chosen):
+              parent = os.path.dirname(m)
+              while parent:
+                  if os.path.isfile(os.path.join(parent, "pom.xml")):
+                      chosen.add(parent)
+                  parent = os.path.dirname(parent)
+          print("pl=" + (",".join(["."] + sorted(chosen)) if chosen else ""))
+          print("Modules analysed: %d" % len(chosen), file=sys.stderr)
+          PY
+
+      - name: SonarQube analysis
+        if: steps.changes.outputs.docs-only != 'true' && steps.sonar-scope.outputs.pl != ''
+        uses: https://codefloe.com/Vidocq/ci/sonar-analysis@main
+        with:
+          project-key: the-vidocq-project
+          sonar-token: ${{ secrets.SONAR_TOKEN }}
+          host-url: ${{ vars.SONAR_HOST_URL }}
+          bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          # No build here: validate only, for the SBOM the dependency scan reads, over the modules analysed.
+          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -pl ${{ steps.sonar-scope.outputs.pl }} validate
+          analysis-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -pl ${{ steps.sonar-scope.outputs.pl }}
+          blocking: 'true'
+          targeted-tests: false
 
   impacted:
     needs: [governance-checks, pr-state]
