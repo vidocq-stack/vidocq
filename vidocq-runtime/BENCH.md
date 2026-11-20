@@ -337,3 +337,95 @@ hash + write). Later passes in the same JVM: 64–70 ms → 13–19 ms. The rema
 ### Delta vs previous run
 
 First measurement — no previous data.
+
+## 2026-10-16 — GraalVM native-image experiment: the Foy Servlet example, JVM vs native cold start and RSS
+
+First end-to-end native build of an application on the assembled runtime
+(`vidocq-runtime-foy-servlet-example`: Chappe + Foy + Vauban, servlets, a filter, a
+listener, `@SessionScoped` basket, FORM login). No Vidocq, Vauban or Foy code was
+changed: the `Vidocq.ensureLayer` fallback ("No Vauban application layer could be
+created … booting directly") is the path a native image takes, and it works. Three
+things the Vauban application layer does at run time had to be done at build time by
+hand; they are the backlog of the `vidocq-runtime-native-extension` item in
+`ROADMAP.md`.
+
+### Setup
+
+| Field     | Value |
+|-----------|-------|
+| Hardware  | Apple M5 Max, 18 cores, 128 GB; macOS 27.0.1 (Darwin 27.0.0) |
+| Container | Docker 29.8.1, `--platform linux/arm64`, `ghcr.io/graalvm/native-image-community:25-ol9` (GraalVM CE 25.0.2+10.1, Oracle Linux 9); JVM and native both run in this container |
+| JVM       | GraalVM's JDK `25.0.2+10-jvmci-b01` (HotSpot), default flags, no AOT cache |
+| Native    | `native-image` 25.0.2, Serial GC, `-march` default (armv8.1-a), no PGO, `-H:+StaticExecutableWithDynamicLibC` |
+| Commit    | `5d3f4982` (main), example built with `-Dvidocq.package.layer=false` |
+
+### Exact commands
+
+```bash
+# 1. legacy distribution (everything in lib/, launcher = --module app/BistroApp)
+./mvnw -ntp -pl vidocq-runtime-examples/vidocq-runtime-foy-servlet-example package vidocq:package -DskipTests -Dvidocq.package.layer=false
+# 2. freeze into module-info what the application layer does at run time (promoteServices + exportToRuntime):
+#    exports/opens io.vidocq.runtime.examples.servlet; provides io.vidocq.foy.spi.gen.WebComponent with the 7 *$$FoyComponent;
+#    provides io.vidocq.vauban.api.VaubanComponentProvider with _VaubanComponents
+javac --module-path lib --patch-module io.vidocq.runtime.examples.servlet=lib/<app>.jar -d mi module-info.java && jar --update --file lib/<app>.jar -C mi module-info.class
+# 3. reachability metadata: tracing agent on the JVM while replaying src/test/http/bistro.http (menu, basket, login, kitchen, logout)
+java -agentlib:native-image-agent=config-output-dir=meta-agent --module-path lib -m io.vidocq.runtime.examples.servlet/io.vidocq.runtime.examples.servlet.BistroApp
+#    plus meta/reflect-config.json (BistroApp constructors) and meta/resource-config.json:
+#    patterns ".*\.properties$", ".*\.list$", ".*\.xml$", "META-INF/.*", "io/vidocq/.*\.class$" (Vauban's index reads class bytes at boot)
+# 4. native image (in the GraalVM container, /work = the lib/ + meta dirs)
+native-image --module-path /work/lib -m io.vidocq.runtime.examples.servlet/io.vidocq.runtime.examples.servlet.BistroApp -o /work/servlet-native \
+  --no-fallback --add-exports io.vidocq.runtime.examples.servlet/io.vidocq.runtime.examples.servlet=<runtime,foy,vauban modules> \
+  -H:+UnlockExperimentalVMOptions -H:+StaticExecutableWithDynamicLibC -H:ConfigurationFileDirectories=/work/meta,/work/meta-agent
+# 5. five cold launches each; per run: launch -> first "GET /" answer (10 ms polling), "Started in", VmRSS after 1.5 s idle
+```
+
+Build: 20–24 s wall, peak RSS 2.8 GB, 8,546 reachable types; binary 45.3 MB.
+
+### Results (5 cold launches each, same container)
+
+```
+run, launch->HTTP 200 (ms), Started in (ms), VmRSS (kB), threads
+native  1,  18,  8.6, 45540,  9      jvm  1, 310, 193.8, 258268, 40
+native  2,  34, 21.4, 45364, 10      jvm  2, 306, 178.2, 266996, 43
+native  3,  37, 18.6, 45352, 10      jvm  3, 298, 175.7, 228736, 40
+native  4,  38, 19.5, 45440,  9      jvm  4, 300, 176.1, 262732, 38
+native  5,  39, 20.6, 45524, 10      jvm  5, 300, 175.7, 267140, 41
+```
+
+| Median                         | JVM      | Native   | Native vs JVM |
+|--------------------------------|---------:|---------:|--------------:|
+| Launch → first HTTP 200        | 300 ms   | 37 ms    | ×8.1 faster   |
+| `Started in` (runtime)         | 176 ms   | 19 ms    | ×9.3 faster   |
+| RSS idle                       | 255 MiB  | 44 MiB   | −83 %         |
+| Threads                        | 40       | 10       |               |
+| Deliverable                    | 2.8 MB of jars + a JDK | 45.3 MB binary | |
+
+The full `bistro.http` scenario (menu 200, basket add/order through the session, kitchen
+login form, `j_security_check` 302, kitchen as chef, logout 303) passes identically on
+the native binary.
+
+### Delta vs previous run
+
+First run of this measurement. The only earlier native figure is Chappe alone
+(`chappe/BENCHMARKS.md`, 2026-05-18, Linux x86_64): 37.1 MB image, 3.0 MiB RSS — a
+different scope (HTTP server without the runtime, Vauban or Foy).
+
+### Notes
+
+- Failures met on the way, in order: (1) `Class.forName` of the bean classes listed in
+  `vauban-beans.list` and of `jakarta.enterprise.context.SessionScoped` — reachability
+  metadata; (2) `IllegalStateException: module … does not export … to io.vidocq.runtime.core`
+  — `exportToRuntime` is done by the layer controller on the JVM; (3) Foy's
+  `WebComponentRegistry` did not see the `$$FoyComponent` companions (tier 1 is the
+  `ServiceLoader` view, which needs `provides` in a named module; tier 2 needs the package
+  exported for `publicLookup`) and fell back to tier 3, `HiddenFactoryEmitter` →
+  `defineHiddenClassWithClassData`, which Native Image refuses. The enriched descriptor
+  fixes (2) and (3) at once.
+- `io/vidocq/.*\.class$` as resources is a workaround: `ContainerScanner` indexes the
+  listed beans from their class bytes at boot. Serialising the index at build time would
+  remove it (and shrink the binary: with every `.class` of the module path embedded the
+  image was 237 MB; restricted to `io/vidocq/**` it is 45 MB).
+- The 18 ms first native run is the warm-page-cache outlier; the median is quoted.
+- JVM baseline is the plain launcher: no CDS/AOT cache, default heap sizing in a
+  container that reports 16.8 GB — hence the 255 MiB idle RSS.
+- Numbers are Docker on Apple Silicon (arm64); not comparable with the x86_64 shootout.
