@@ -79,7 +79,7 @@ jobs:
           host-url: ${{ vars.SONAR_HOST_URL }}
           bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
           # No build here: validate only, for the SBOM the dependency scan reads.
-          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none validate
+          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dcyclonedx.skipNotDeployed=false validate
           analysis-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none
           blocking: 'true'
           targeted-tests: false
