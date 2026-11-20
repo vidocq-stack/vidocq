@@ -24,7 +24,7 @@ import org.eclipse.microprofile.metrics.Counter;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Internal implementation of a monotonic {@link Counter}.
+ * Internal implementation of a monotonic {@link Counter}, backed by a {@link LongAdder}.
  */
 final class CounterImpl implements Counter {
     private final LongAdder value = new LongAdder();
