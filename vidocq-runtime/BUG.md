@@ -5,6 +5,30 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261120-02 — The first edit after `package` swaps the layer under `vidocq:dev`: the bean index header moved
+
+- **Date**: 2026-11-20
+- **Status**: FIXED on `fix/dev-index-header-swap`: the dev snapshot digests a Vauban list by the lines its readers
+  keep, and the classifier leaves out the stamp of `vidocq:generate`.
+- **Module**: `vidocq-runtime-maven-plugin` (`ClassesSnapshot`, `HotSwapClassifier`)
+- **Symptom**: found replaying the Vaadin guide. After `./mvnw clean package`, `./mvnw vidocq:dev`, the first change of
+  a string in a constructor logs `Hot reload signalled after 3005 ms (layer swap: META-INF/vauban-beans.list
+  changed)` instead of a redefinition. The second edit is redefined.
+- **Repro**: any application, `clean package`, `vidocq:dev`, one body change. The only difference in
+  `target/classes/META-INF/vauban-beans.list` is its first line: `# Vauban discovered beans — generated at build time`
+  (Vauban's `VaubanGenerator`) after `package`, `# Vauban discovered beans — APT + vidocq-runtime-maven-plugin`
+  (`VidocqGenerateMojo`'s merge) after the dev recompile. `HotSwapClassifierTest.aBeanIndexWhoseHeaderAloneChangedIsNothing`
+  and `aBodyChangeIsRedefinedWhenTheBeanIndexHeaderChanged`.
+- **Cause**: three writers put their own comment on top of the bean list (the build-time generator, the annotation
+  processor, `vidocq:generate`), and which one wrote last depends on the build that ran. The classifier compared the
+  file's bytes, so a comment change was "a resource changed" (rule 3), a swap. `META-INF/vidocq/generate.stamp`
+  records the CRC-32 of those bytes and changed with them.
+- **Fix**: the snapshot's SHA-256 of a `META-INF/vauban-*.list` covers its lines stripped, blank lines and `#`
+  comments left out, as Vauban's readers do; a bean added to or removed from the list still swaps
+  (`aBeanIndexWithAnotherBeanStillSwaps`). The stamp is derived from the index, so the classifier leaves it out like
+  build-info: a real change of the index decides by itself. `GenerateStamp` is unchanged; the boot still compares the
+  stamp with the bytes of the index.
+
 ## BUG-20261120-01 — `CreateThenBuildIT` cannot resolve bcutil on some CI runners
 
 - **Date**: 2026-11-20

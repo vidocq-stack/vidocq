@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.core.GenerateStamp;
 import io.vidocq.runtime.core.ReloadRequest;
 
 import java.nio.file.Files;
@@ -199,9 +200,12 @@ final class HotSwapClassifier {
         return files;
     }
 
-    /** Build-info, or a file or directory a jar declares in {@code build-files} (rule 3's exception). */
+    /**
+     * Build-info, the stamp of {@code vidocq:generate} (it records the bytes of the bean index, whose own change
+     * decides), or a file or directory a jar declares in {@code build-files} (rule 3's exception).
+     */
     private boolean buildFile(String path) {
-        return path.startsWith(BUILD_INFO) || declarations.buildFiles().stream()
+        return path.startsWith(BUILD_INFO) || path.equals(GenerateStamp.PATH) || declarations.buildFiles().stream()
                 .anyMatch(file -> file.endsWith("/") ? path.startsWith(file) : path.equals(file));
     }
 

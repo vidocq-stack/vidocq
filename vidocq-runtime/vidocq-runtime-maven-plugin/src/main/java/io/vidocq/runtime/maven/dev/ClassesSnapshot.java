@@ -21,6 +21,7 @@ package io.vidocq.runtime.maven.dev;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -43,7 +44,8 @@ import java.util.stream.Stream;
 /**
  * The compiled output of the application at one moment, for the hot swap classifier (design §2): for each class
  * root, every file by its relative path, with its size, modification time, SHA-256 and, for a class file, its
- * fingerprint. A file whose size and modification time did not move since the previous snapshot is taken from it,
+ * fingerprint. The SHA-256 of a list Vauban generates covers the lines its readers keep, not its comments. A file
+ * whose size and modification time did not move since the previous snapshot is taken from it,
  * not read again, when that time is at least {@link #SETTLED} before the previous snapshot was taken: a clock that
  * ticks once a second, or two compiles within one tick, give a rewrite of the same size the time the file had (git's
  * "racy" entries). A file read again whose bytes did not move keeps its fingerprint.
@@ -56,6 +58,8 @@ record ClassesSnapshot(Map<Path, SequencedMap<String, Entry>> byRoot, FileTime t
 
     /** How long before the previous snapshot a file's time must be for that snapshot's entry to be reused. */
     static final Duration SETTLED = Duration.ofSeconds(2);
+
+    private static final String VAUBAN_LIST_PREFIX = "META-INF/vauban-";
 
     /**
      * One file.
@@ -97,7 +101,7 @@ record ClassesSnapshot(Map<Path, SequencedMap<String, Entry>> byRoot, FileTime t
     private static Entry read(Path file, String relative, BasicFileAttributes attributes, Entry old,
             Function<byte[], ClassFingerprint> fingerprint) throws IOException {
         byte[] bytes = Files.readAllBytes(file);
-        String sha256 = sha256(bytes);
+        String sha256 = sha256(vaubanList(relative) ? entries(bytes) : bytes);
         Optional<ClassFingerprint> parsed;
         if (old != null && old.sha256().equals(sha256)) {
             parsed = old.fingerprint();
@@ -135,6 +139,25 @@ record ClassesSnapshot(Map<Path, SequencedMap<String, Entry>> byRoot, FileTime t
             throw new UncheckedIOException("Cannot read the compiled output under " + root, e);
         }
         return new LinkedHashMap<>(files);
+    }
+
+    /**
+     * A list Vauban generates, as {@code META-INF/vauban-beans.list}: its readers skip blank lines and {@code #}
+     * comments, and each of its writers (the build-time generator, the annotation processor, {@code vidocq:generate})
+     * puts its own comment on top, so a recompile can rewrite the header alone (BUG-20261120-02).
+     */
+    private static boolean vaubanList(String relative) {
+        return relative.startsWith(VAUBAN_LIST_PREFIX) && relative.endsWith(".list")
+                && relative.indexOf('/', VAUBAN_LIST_PREFIX.length()) < 0;
+    }
+
+    /** The lines a reader of a Vauban list keeps, stripped, one per line. */
+    private static byte[] entries(byte[] bytes) {
+        var kept = new StringBuilder();
+        new String(bytes, StandardCharsets.UTF_8).lines().map(String::strip)
+                .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                .forEach(line -> kept.append(line).append('\n'));
+        return kept.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     private static Optional<ClassFingerprint> parse(byte[] bytes, Function<byte[], ClassFingerprint> fingerprint) {

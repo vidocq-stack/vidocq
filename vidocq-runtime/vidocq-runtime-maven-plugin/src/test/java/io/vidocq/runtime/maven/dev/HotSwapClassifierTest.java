@@ -164,6 +164,59 @@ class HotSwapClassifierTest {
         assertSwap(stats + " changed", classify(BUILD_FILES, v1, v2));
     }
 
+    // A bean index rewritten by another writer: the build-time generator, the annotation processor and
+    // vidocq:generate each write their own header comment, and vidocq:generate writes its stamp from those bytes
+    // (BUG-20261120-02).
+
+    private static final String INDEX = "META-INF/vauban-beans.list";
+    private static final String STAMP = "META-INF/vidocq/generate.stamp";
+
+    @Test
+    void aBeanIndexWhoseHeaderAloneChangedIsNothing() {
+        var v1 = build().source("app/A.java", "package app; class A {}")
+                .resource(INDEX, "# Vauban discovered beans — generated at build time\napp.A\n")
+                .resource(STAMP, "vidocq:generate\nindex=crc32:1\n");
+        var v2 = build().source("app/A.java", "package app; class A {}")
+                .resource(INDEX, "# Vauban discovered beans — APT + vidocq-runtime-maven-plugin\napp.A\n")
+                .resource(STAMP, "vidocq:generate\nindex=crc32:2\n");
+
+        assertEquals(Optional.empty(), classify(CDI, v1, v2));
+    }
+
+    @Test
+    void aBodyChangeIsRedefinedWhenTheBeanIndexHeaderChanged() {
+        var v1 = build().source("app/A.java", "package app; class A { int a() { return 1; } }")
+                .resource(INDEX, "# Vauban discovered beans — generated at build time\napp.A\n")
+                .resource("META-INF/vauban-contexts.list", "# Contexts, build time\n")
+                .resource(STAMP, "vidocq:generate\nindex=crc32:1\n");
+        var v2 = build().source("app/A.java", "package app; class A { int a() { return 2; } }")
+                .resource(INDEX, "# Vauban discovered beans — APT + vidocq-runtime-maven-plugin\n\napp.A\n")
+                .resource("META-INF/vauban-contexts.list", "# Contexts, APT\n")
+                .resource(STAMP, "vidocq:generate\nindex=crc32:2\n");
+
+        assertRedefine(classify(CDI, v1, v2), "app.A", "a");
+    }
+
+    @Test
+    void aBeanIndexWithAnotherBeanStillSwaps() {
+        var v1 = build().source("app/A.java", "package app; class A {}")
+                .resource(INDEX, "# Vauban discovered beans — generated at build time\napp.A\n")
+                .resource(STAMP, "vidocq:generate\nindex=crc32:1\n");
+        var v2 = build().source("app/A.java", "package app; class A {}")
+                .resource(INDEX, "# Vauban discovered beans — generated at build time\napp.A\napp.B\n")
+                .resource(STAMP, "vidocq:generate\nindex=crc32:2\n");
+
+        assertSwap(INDEX + " changed", classify(CDI, v1, v2));
+    }
+
+    @Test
+    void aCommentOfAnotherResourceStillSwaps() {
+        var v1 = build().source("app/A.java", "package app; class A {}").resource("application.properties", "# 1\na=1");
+        var v2 = build().source("app/A.java", "package app; class A {}").resource("application.properties", "# 2\na=1");
+
+        assertSwap("application.properties changed", classify(CDI, v1, v2));
+    }
+
     // Rule 2: a file added or removed
 
     @Test
