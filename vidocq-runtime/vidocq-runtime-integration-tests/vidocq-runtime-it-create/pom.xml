@@ -135,9 +135,13 @@
                     <!-- The created project's artifacts are test-scope dependencies here. -->
                     <scope>test</scope>
                     <!-- What the created project needs beyond the plugins this module runs, as it never reaches
-                         Central: the JUnit Platform provider of Surefire. -->
+                         Central: the JUnit Platform provider of Surefire, and bcutil. git-commit-id-plugin-core 6.2.0
+                         takes bcpkix-jdk18on 1.81, which asks for bcutil-jdk18on [1.81,1.82): a version range needs
+                         a maven-metadata.xml, and the outer local repository, the fixture's only remote, has none.
+                         Installed here, it resolves from this repository's own metadata. -->
                     <extraArtifacts>
                         <extraArtifact>org.apache.maven.surefire:surefire-junit-platform:${maven.surefire.plugin.version}:jar</extraArtifact>
+                        <extraArtifact>org.bouncycastle:bcutil-jdk18on:1.81:jar</extraArtifact>
                     </extraArtifacts>
                 </configuration>
                 <executions>

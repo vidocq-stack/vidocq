@@ -5,6 +5,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261120-01 — `CreateThenBuildIT` cannot resolve bcutil on some CI runners
+
+- **Date**: 2026-11-20
+- **Status**: FIXED — the invoker staging installs `org.bouncycastle:bcutil-jdk18on:1.81` into the fixture's
+  repository (`extraArtifacts` of `vidocq-runtime-it-create`).
+- **Module**: `vidocq-runtime-it-create` (`CreateThenBuildIT`)
+- **Symptom**: four tests that build a created application with its build identity fail with
+  `Failed to execute goal io.github.git-commit-id:git-commit-id-maven-plugin:9.2.0:revision (vidocq-build-info) on
+  project demo-app … No versions available for org.bouncycastle:bcutil-jdk18on:jar:[1.81,1.82) within specified range`.
+- **Repro**: the `producer` job of vidocq#682, twice, on two runners (runs 5461 and 5507); the same test passed on
+  vidocq#695 on a third runner (run 5488).
+- **Cause**: git-commit-id-plugin-core 6.2.0 takes `bcpkix-jdk18on` 1.81, whose pom asks for `bcutil-jdk18on`
+  `[1.81,1.82)`. The fixture's builds read every artifact from the outer local repository, through a `file:` mirror.
+  A version range needs that repository's `maven-metadata.xml`, and a local repository holds only
+  `maven-metadata-<repository id>.xml`. The range resolves only where the fixture's own repository already has the
+  artifact.
+
 ## BUG-20261119-80 — Every stop in the tests of `vidocq-runtime-core` fails to call `ShutdownObserver`
 
 - **Date**: 2026-11-19
