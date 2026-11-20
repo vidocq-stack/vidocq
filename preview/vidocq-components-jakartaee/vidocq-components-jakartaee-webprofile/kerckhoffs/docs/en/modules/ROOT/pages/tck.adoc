@@ -48,7 +48,7 @@ runtime (`vidocq-runtime-tck-kerckhoffs-security`, in `Vidocq/vidocq`). A dash m
 | `app-jaxrs` | -- | 8 of 8 | The REST endpoints are served as a servlet of Foy (`cassini-servlet`), so the authentication and the roles apply to them (KERCK-20261116-02, fixed). The Kerckhoffs container has no Jakarta REST and does not run it.
 |===
 
-The first twelve are the smoke set the `ci.tck.command` gate of the pull requests runs; `app-jaxrs` runs on the Vidocq runtime only.
+The first twelve are the smoke set `ci.tck.command` names, which the monorepo's TCK workflow runs every night, on demand and for a release; `app-jaxrs` runs on the Vidocq runtime only.
 
 === Partly green
 

@@ -1,8 +1,12 @@
-# Every TCK of the monorepo, nightly: one job per component, named `tck / <TAG>` (MONOREPO.md §9).
+# The TCKs of the monorepo: one job per component, named `tck / <TAG>` (MONOREPO.md §9). A pull request runs none,
+# they take too long; they run here once a day, on demand and for a release:
+#   - schedule           every component, on main;
+#   - workflow_dispatch  on the chosen branch, the components named in `components` (PR title tags, e.g.
+#                        `CASSINI,FOY`), every component when it is empty;
+#   - workflow_call      the release workflow, same input.
 #
 # A component's TCK is what its root pom declares (ci.tck.modules, each run with -Ptck; ci.tck.command, run in
-# its folder), the same declaration the pull request reads for the impacted components. The runtime adds the
-# three runners too slow for a pull request (humboldt-telemetry ~256 s, heisenberg-faulttolerance and
+# its folder). The runtime adds three slow runners (humboldt-telemetry ~256 s, heisenberg-faulttolerance and
 # cyrano-restclient ~183 s each). Left out, as before the monorepo: vidocq-runtime-tck-annotations (its TCK is not
 # on Maven Central) and vidocq-runtime-tck-coreprofile (red on JDK 25 in the TCK's own code, GestionProjet#9).
 name: TCK nightly
@@ -12,6 +16,18 @@ on:
     # 03:00 UTC, when the shared runners are idle.
     - cron: '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      components:
+        description: 'Component tags, comma separated (e.g. CASSINI,FOY); empty runs every TCK'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      components:
+        required: false
+        default: ''
+        type: string
 
 jobs:
   plan:
@@ -21,15 +37,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: plan
+        env:
+          COMPONENTS: ${{ inputs.components }}
         run: |
           python3 - >> "$GITHUB_OUTPUT" <<'PY'
-          import json, os, xml.etree.ElementTree as ET
+          import json, os, sys, xml.etree.ElementTree as ET
+          wanted = {t.strip().strip("[]").upper() for t in os.environ.get("COMPONENTS", "").split(",") if t.strip()}
+          known = {c["tag"] for c in json.load(open("components.json"))["components"]}
+          if wanted - known:
+              sys.exit("Unknown component tag(s): " + ", ".join(sorted(wanted - known)))
           SLOW_RUNTIME = ["vidocq-runtime-integration-tests/vidocq-runtime-tck-cyrano-restclient",
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-heisenberg-faulttolerance",
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry"]
           include = []
           for c in json.load(open("components.json"))["components"]:
-              pom = ET.parse(os.path.join(c["path"], "pom.xml")).getroot()
+              if wanted and c["tag"] not in wanted:
+                  continue
+              pom =ET.parse(os.path.join(c["path"], "pom.xml")).getroot()
               ns = pom.tag[1:].split("}", 1)[0]
               props = pom.find("{%s}properties" % ns)
               def get(n):

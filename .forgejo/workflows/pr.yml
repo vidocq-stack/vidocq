@@ -6,8 +6,8 @@
 #                      `pr-validate / governance-checks (pull_request)`.
 #   producer           gitflow-incremental-builder (.mvn/extensions.xml, gib.* in the root pom): the modules the
 #                      pull request changes, their upstream without tests and every downstream module with its
-#                      tests. Then the TCK each impacted component declares in its root pom (ci.tck.modules,
-#                      ci.tck.command), as each repository's own pull request did before the monorepo.
+#                      tests. No TCK: they run once a day, on demand and for a release (tck-nightly.yml);
+#                      a pull request that needs one dispatches `TCK nightly` on its branch with its component.
 #   impacted           no repository outside depends on a pull request any more: a shared API change fixes every
 #                      caller in the same pull request (MONOREPO.md §6). erasmus, tassis, verne and VCU build
 #                      against the SNAPSHOTs of main. The job stays because the verdict reads it: no consumer.
@@ -17,8 +17,7 @@
 #
 #   title-check        MONOREPO.md §7, a warning only for now: the verdict does not read it.
 #
-# Not yet here: one `tck / <component>` job per impacted spec on a pull request (the nightly has them), the reuse
-# of a validated tree.
+# Not yet here: the reuse of a validated tree.
 name: pr-validate
 on:
   pull_request:
@@ -136,41 +135,6 @@ jobs:
           -Dgib.skipTestsForUpstreamModules=true
           -Dgib.uncommitted=false -Dgib.untracked=false
           -Dgib.logImpactedTo=${{ runner.temp }}/gib-impacted.txt
-
-      - name: TCK of the impacted components
-        if: steps.changes.outputs.docs-only != 'true'
-        env:
-          IMPACTED: ${{ runner.temp }}/gib-impacted.txt
-        run: |
-          set -euo pipefail
-          touch "$IMPACTED"
-          echo "Impacted modules: $(wc -l < "$IMPACTED")"
-          python3 - "$IMPACTED" > "$RUNNER_TEMP/tck-plan.txt" <<'PY'
-          import json, os, sys, xml.etree.ElementTree as ET
-          root = os.getcwd()
-          impacted = [os.path.relpath(os.path.abspath(l.strip()), root) for l in open(sys.argv[1]) if l.strip()]
-          for c in json.load(open("components.json"))["components"]:
-              if not any(p == c["path"] or p.startswith(c["path"] + "/") for p in impacted):
-                  continue
-              pom = ET.parse(os.path.join(c["path"], "pom.xml")).getroot()
-              ns = pom.tag[1:].split("}", 1)[0]
-              props = pom.find("{%s}properties" % ns)
-              get = lambda n: ((props.find("{%s}%s" % (ns, n)).text or "").strip()
-                               if props is not None and props.find("{%s}%s" % (ns, n)) is not None else "")
-              for m in filter(None, (x.strip() for x in get("ci.tck.modules").split(","))):
-                  print("\t".join([c["tag"], c["path"], "mvn -B -ntp -pl " + m + " -Ptck test"]))
-              if get("ci.tck.command"):
-                  print("\t".join([c["tag"], c["path"], get("ci.tck.command")]))
-          PY
-          if [ ! -s "$RUNNER_TEMP/tck-plan.txt" ]; then
-            echo "No impacted component declares a TCK; the nightly TCK job replays them all."
-            exit 0
-          fi
-          while IFS=$'\t' read -r tag path command; do
-            echo "::group::TCK $tag: $command"
-            (cd "$path" && bash -c "$command")
-            echo "::endgroup::"
-          done < "$RUNNER_TEMP/tck-plan.txt"
 
   impacted:
     needs: [governance-checks, pr-state]

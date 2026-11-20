@@ -18,8 +18,9 @@ every component with its PR title tag, folder and maturity level.
   `-Dgib.disable=true` builds everything; `-pl <path> -am` builds one module and what it needs.
 - One version for the whole repository, in the root POM. A brick depends on another at `${project.version}`.
 - The release builds with `-P '!incubator'`. A component's official TCK runs behind its `tck` profile, or its
-  `run-official-tck-*.sh` script; `ci.tck.modules` / `ci.tck.command` in a component's root POM name what the pull
-  request and the nightly TCK run.
+  `run-official-tck-*.sh` script; `ci.tck.modules` / `ci.tck.command` in a component's root POM name what the TCK
+  workflow runs: once a day, on demand (`TCK nightly`, dispatched on a branch with the component tags) and for a
+  release. A pull request runs no TCK.
 - Never install into `~/.m2` from a branch build: `-Dmaven.repo.local=<scratch>/m2
   -Dmaven.repo.local.tail=$HOME/.m2/repository`.
 
