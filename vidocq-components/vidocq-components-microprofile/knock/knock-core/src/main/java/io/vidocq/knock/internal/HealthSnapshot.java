@@ -31,7 +31,7 @@ import java.util.List;
  * to produce the spec §3.1 JSON response.</p>
  *
  * @param type   the aggregated probe type
- * @param status the global status (DOWN if at least 1 check is DOWN)
+ * @param status the global status (DOWN when at least one check is DOWN)
  * @param checks the immutable list of individual responses
  */
 public record HealthSnapshot(
