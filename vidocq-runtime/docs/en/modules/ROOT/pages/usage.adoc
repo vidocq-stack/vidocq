@@ -180,7 +180,7 @@ application layer: pin it.
 the `Vidocq-Parent-Layer` attribute of its manifest. A pinned module drags what it requires into the parent layer.
 The other way round, a Vidocq jar whose manifest says `Vidocq-Application-Layer: true` is not kept by
 the name rule: a module that integrates an application framework, such as
-xref:modules/vidocq-runtime-extensions.adoc#vaadin[the Vaadin extension], goes to the application layer with it.
+the Vaadin extension (xref:modules/vidocq-runtime-extensions.adoc#vaadin[in its own repository]), goes to the application layer with it.
 A pinned module that reads a module of the application fails the build, with both names.
 
 *The startup report.* The `layer` headline counts the libraries, for instance

@@ -47,7 +47,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Jakarta Standard Tag Library 3.0 through Bodoni: the `c:`, `fmt:`, `fn:`, `x:` and `sql:` tags in the pages Ibarra compiles, with Ibarra, the Servlet extension and Peano (and `bodoni-peano`, for `peano.reflection=deny`), and the `jstl` startup report. See xref:modules/vidocq-runtime-extensions.adoc#bodoni-jstl[Jakarta Standard Tag Library (Bodoni)].
 
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-foy-websocket-extension:{project-version}`
-| Jakarta WebSocket 2.2 through Foy, programmatic server API, and the allowed origins of `vidocq.websocket.allowed-origins`. `vidocq extension add foy-websocket` adds it; `vidocq-runtime-vaadin-extension` brings it to a Vaadin application. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
+| Jakarta WebSocket 2.2 through Foy, programmatic server API, and the allowed origins of `vidocq.websocket.allowed-origins`. `vidocq extension add foy-websocket` adds it; the Vaadin extension, in https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[its own repository], brings it to a Vaadin application. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
 
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}`
 | JNDI `java:` names answered by the running container through Vauban Naming, each declared by a `vidocq.naming.<name without java:>` key: a bean (`javax.sql.DataSource @Named("orders")`) or a link to another name. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].

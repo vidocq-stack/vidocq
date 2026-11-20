@@ -200,7 +200,7 @@ What the plugin cannot give, and the pom keeps:
 * **The snapshot repositories**, when the Vidocq version is a SNAPSHOT: `vidocq create` writes them.
 * **The Vidocq version itself**, `vidocq.version`: an upgrade changes that line.
 
-What was checked, on the Vaadin application of xref:vaadin.adoc[the Vaadin guide] without its parent, and on a
+What was checked, on a Vaadin application without its parent, and on a
 REST application created by the CLI: Maven 3.9.9, 3.9.16 and 4.0.0-rc-5 against `clean verify`, `vidocq:checkpom`,
 `vidocq:run`, `vidocq:dev` and `-Pjlink package vidocq:jlink`; a company parent above the pom, the Vidocq parent (no
 change), redeclared executions (no duplicate), a multi-module build (only the application module is completed); and
@@ -1495,8 +1495,8 @@ ships in a binary whenever an extension that keeps the all-in-one `DevConsolePan
   companion's own transitive dependencies, and a jar the project already resolves at runtime scope — the legacy
   declaration, kept working — is left where it is, not duplicated;
 . puts a companion whose manifest says `Vidocq-Application-Layer: true` on the application path when the application
-  runs in the application layer [.tag-new]#NEW#, next to the framework it reads, such as Vaadin's
-  `vidocq-runtime-vaadin-extension-dev`; every other dev tool stays on the module path;
+  runs in the application layer [.tag-new]#NEW#, next to the framework it reads, such as the dev companion
+  of the Vaadin extension (https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[its own repository]); every other dev tool stays on the module path;
 . logs one INFO line naming what it added:
 +
 [source,text]

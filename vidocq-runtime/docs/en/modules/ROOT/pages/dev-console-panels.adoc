@@ -238,10 +238,10 @@ old code drew, provides an `io.vidocq.runtime.spi.devconsole.RedefinitionListene
 
 [source,java]
 ----
-module io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev {
+module com.acme.framework.dev {
     requires io.vidocq.runtime.spi.devconsole;
     provides io.vidocq.runtime.spi.devconsole.RedefinitionListener
-            with io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev.VaadinRedefinitionListener;
+            with com.acme.framework.dev.FrameworkRedefinitionListener;
     // ...
 }
 ----
@@ -270,8 +270,8 @@ event runs without any refresh.
   before it destroys the servlets. The stopping thread waits for the listeners, so `stopping()` returns quickly; an
   exception is logged with `failed before the stop`.
 
-`vidocq-runtime-vaadin-extension-dev` is the shipped example: it reloads the open pages that show a redefined
-component (xref:vaadin.adoc#dev-reload-session[Vaadin]).
+The Vaadin extension's dev companion is an example: it reloads the open pages that show a redefined component. It
+lives in its own repository, https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin].
 
 [#where-it-lives]
 == Where the panel lives

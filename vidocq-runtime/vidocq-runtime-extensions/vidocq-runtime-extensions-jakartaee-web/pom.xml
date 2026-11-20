@@ -39,8 +39,6 @@
         <module>vidocq-runtime-ibarra-pages-extension</module>
         <module>vidocq-runtime-bodoni-jstl-extension</module>
         <module>vidocq-runtime-naming-extension</module>
-        <module>vidocq-runtime-vaadin-extension</module>
-        <module>vidocq-runtime-vaadin-extension-dev</module>
     </modules>
 
     <build>

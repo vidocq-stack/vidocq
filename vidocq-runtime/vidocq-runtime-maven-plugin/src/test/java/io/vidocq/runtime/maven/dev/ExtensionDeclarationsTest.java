@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,8 +40,6 @@ class ExtensionDeclarationsTest {
             "vidocq-runtime-foy-servlet-extension");
     static final Path CASSINI = resources("vidocq-runtime-extensions", "vidocq-runtime-extensions-jakartaee-core",
             "vidocq-runtime-cassini-rest-extension");
-    static final Path VAADIN = resources("vidocq-runtime-extensions", "vidocq-runtime-extensions-jakartaee-web",
-            "vidocq-runtime-vaadin-extension");
 
     private final List<String> warnings = new ArrayList<>();
 
@@ -93,24 +90,6 @@ class ExtensionDeclarationsTest {
                 callback("jakarta.ws.rs.container.DynamicFeature#configure"
                         + "(Ljakarta/ws/rs/container/ResourceInfo;Ljakarta/ws/rs/core/FeatureContext;)V"))),
                 read::toString);
-    }
-
-    @Test
-    void vaadinDeclaresTheTokenItsBuildDeletesOnExit() {
-        assertEquals(Set.of("META-INF/VAADIN/config/flow-build-info.json"), read(VAADIN).buildFiles());
-    }
-
-    @Test
-    void vaadinDeclaresItsScopes() {
-        var read = read(VAADIN);
-
-        assertTrue(read.longLivedAnnotations().containsAll(List.of("com.vaadin.cdi.annotation.UIScoped",
-                "com.vaadin.cdi.annotation.NormalUIScoped", "com.vaadin.cdi.annotation.VaadinSessionScoped",
-                "com.vaadin.cdi.annotation.RouteScoped", "com.vaadin.cdi.annotation.NormalRouteScoped",
-                "com.vaadin.cdi.annotation.VaadinServiceScoped", "com.vaadin.flow.router.PreserveOnRefresh")),
-                read::toString);
-        assertTrue(read.startCallbacks().contains(callback("com.vaadin.flow.server.VaadinServiceInitListener"
-                + "#serviceInit(Lcom/vaadin/flow/server/ServiceInitEvent;)V")), read::toString);
     }
 
     @Test

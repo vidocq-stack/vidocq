@@ -57,7 +57,7 @@
 
 | `vidocq-runtime-foy-websocket-extension`
 | `jakartaee-web`
-| Jakarta WebSocket 2.2 through xref:foy::index.adoc[Foy], programmatic server API. A Vaadin application gets it with `vidocq-runtime-vaadin-extension`. See <<foy-websocket>>.
+| Jakarta WebSocket 2.2 through xref:foy::index.adoc[Foy], programmatic server API. A Vaadin application gets it with the Vaadin extension (<<vaadin>>). See <<foy-websocket>>.
 
 | `vidocq-runtime-ibarra-pages-extension`
 | `jakartaee-web`
@@ -70,10 +70,6 @@
 | `vidocq-runtime-naming-extension`
 | `jakartaee-web`
 | Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. See <<naming>>.
-
-| `vidocq-runtime-vaadin-extension`
-| `jakartaee-web`
-| What a Vaadin Flow application needs from Vidocq: Jakarta WebSocket for push, under every goal, and a Vaadin lookup that loads services from a module of its own, so an `AppShellConfigurator` works in a jlink image. See <<vaadin>>.
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
@@ -318,7 +314,7 @@ Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section
 [[foy-websocket]]
 == Jakarta WebSocket (Foy) [.tag-new]#NEW#
 
-`vidocq-runtime-foy-websocket-extension` (Java module `io.vidocq.runtime.extensions.jakartaee.web.websocket`) brings Foy's `foy-websocket` module into the application: Jakarta WebSocket 2.2, programmatic server API. Foy puts the `ServerContainer` in the `jakarta.websocket.server.ServerContainer` servlet context attribute; an application adds its endpoints to it, from a `ServletContextListener` (`@WebListener`) for instance, with `ServerContainer.addEndpoint(ServerEndpointConfig)`. `vidocq-runtime-vaadin-extension` depends on this extension, so a Vaadin application needs no dependency of its own (xref:vaadin.adoc#push[Push]). `vidocq extension add foy-websocket` adds it to any other application, or declare it:
+`vidocq-runtime-foy-websocket-extension` (Java module `io.vidocq.runtime.extensions.jakartaee.web.websocket`) brings Foy's `foy-websocket` module into the application: Jakarta WebSocket 2.2, programmatic server API. Foy puts the `ServerContainer` in the `jakarta.websocket.server.ServerContainer` servlet context attribute; an application adds its endpoints to it, from a `ServletContextListener` (`@WebListener`) for instance, with `ServerContainer.addEndpoint(ServerEndpointConfig)`. The Vaadin extension depends on this extension, so a Vaadin application needs no dependency of its own (<<vaadin>>). `vidocq extension add foy-websocket` adds it to any other application, or declare it:
 
 [source,xml]
 ----
@@ -503,29 +499,7 @@ Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-
 [[vaadin]]
 == Vaadin
 
-A Vaadin Flow application runs on the Servlet extension (xref:vaadin.adoc[the Vaadin guide]). `vidocq-runtime-vaadin-extension` is the part Vaadin needs from Vidocq itself: Jakarta WebSocket for push, under every goal (it depends on <<foy-websocket>>), and a Vaadin lookup that lets an `AppShellConfigurator` work in a jlink image (BUG-20261023-06).
-
-[source,xml]
-----
-<dependency>
-    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
-    <artifactId>vidocq-runtime-vaadin-extension</artifactId>
-</dependency>
-----
-
-The application's module requires `io.vidocq.runtime.extensions.jakartaee.web.vaadin`, which resolves the extension in its layer; `vidocq extension add vaadin` adds the dependency and that directive. No codegen bundle.
-
-*What it does.* Vaadin creates the app shell, among others, with `Lookup.lookup(type)`, and its own lookup calls `ServiceLoader.load(type)` from `flow.server` for a type it registered no service for, the application's `AppShellConfigurator` included. `ServiceLoader` accepts only the types the calling module declares with `uses`, and the descriptor `vauban:modularize` writes for `flow.server` in a jlink image cannot name an application class without a dependency cycle. The extension's `ModuleLookupInitializer` replaces Vaadin's lookup: the services Vaadin registered come first, and any other type is loaded by `ServiceLoader` from the extension's module, which first declares the use with `Module.addUses` (a module may add a use to itself). On an automatic `flow.server`, under `vidocq:dev`, `vidocq:run` and `vidocq:package`, the lookup changes nothing; the WebSocket push does not depend on it.
-
-*How Vaadin finds it.* Vaadin uses the one `AbstractLookupInitializer` its `@HandlesTypes` finds besides its own. The extension is compiled with Foy's processor, so its jar ships `META-INF/foy/class-index.list`, and Foy hands the class to Vaadin as it does the application's classes. An application that ships a `LookupInitializer` of its own cannot add the extension: Vaadin refuses two. It declares `vidocq-runtime-foy-websocket-extension` directly instead, to keep WebSocket push.
-
-*Its layer.* Vaadin must be in the application layer, which is the default (`vidocq.app.layer=all` since 0.4.0, nothing to set; see xref:vaadin.adoc#app-layer[the guide]). A module named `io.vidocq.…` stays in the runtime's layer, with what it requires, so the extension's jar carries the `Vidocq-Application-Layer: true` manifest attribute: it goes to the application layer with Vaadin instead of keeping `flow.server` out of it (xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]).
-
-*Dependencies.* The extension depends on Vaadin's `flow-server` at `provided` scope: the application brings Vaadin, at the version its Vaadin BOM chooses, and the extension is compiled against Flow 25.3.4 without imposing it. This is the one third-party API it names, as the workspace rule on what ships requires.
-
-*Its dev companion* [.tag-new]#NEW#. Under `vidocq:dev`, `vidocq-runtime-vaadin-extension-dev` (Java module `io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev`) refreshes the open pages that show a component of a class the JVM redefined in place (xref:vaadin.adoc#dev-reload-session[the guide]). It is a `RedefinitionListener` (xref:dev-console-panels.adoc#redefinition-listener[Reacting to a redefinition]); a `VaadinServiceInitListener` keeps the open UIs and adds a small script to each page, and a `ServletContainerInitializer` registers the event stream that script reads, `/.vidocq/dev/redefined`, so a page without push asks for its reload. Its jar is marked `Vidocq-Dev-Only` and `Vidocq-Application-Layer`: only `vidocq:dev` adds it, in the application layer next to Vaadin, and no binary contains it. Like the extension, it takes `flow-server`, jsoup through it, and the Servlet API at `provided` scope.
-
-*Both names of `flow-server`.* Up to Vaadin 25.3, `flow-server` is the automatic module `flow.server`, named after its file. Vaadin is giving it the `Automatic-Module-Name` `com.vaadin.flow.server` (vaadin/flow#26731). The extension's descriptor requires both names `static`, so the extension reads the one the application resolves, whatever the Vaadin version. `javac` and `javadoc` need a module for every name a `requires` gives, a static one included, so the build compiles an empty `com.vaadin.flow.server` from `src/module-stubs` first and passes it to both with `--upgrade-module-path`; it is never packaged. Once Vaadin ships its own module descriptors, whose `Lookup` declares its uses itself, the extension is no longer needed in a jlink image.
+A Vaadin Flow application runs on the Servlet extension. The Vaadin extension, `vidocq-runtime-vaadin-extension`, its `-dev` companion and the Vaadin guide now live in their own repository, https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin].
 
 == Typical lifecycle — Chappe example
 
@@ -1632,11 +1606,11 @@ initializers; `Servlet#init(ServletConfig)`, `GenericServlet#init()`, `Filter#in
 `ServletContextListener#contextInitialized`, `ServletContainerInitializer#onStartup`.
 | `vidocq-runtime-cassini-rest-extension` | JAX-RS: `@Provider` classes and `Application` subclasses;
 `Application#getClasses`, `getSingletons` and `getProperties`, `Feature#configure`, `DynamicFeature#configure`.
-| `vidocq-runtime-vaadin-extension` | Vaadin: the Vaadin CDI scopes and `@PreserveOnRefresh` classes;
-`VaadinServiceInitListener#serviceInit`. Its build file `flow-build-info.json`, which Vaadin's `build-frontend`
-deletes when its Maven run ends: the first build of `vidocq:dev` runs in the JVM that stays, so the file is there at
-start and gone after the first recompile.
 |===
+
+The Vaadin extension, in https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[its own repository],
+declares Vaadin's: the Vaadin CDI scopes, `@PreserveOnRefresh` classes, `VaadinServiceInitListener#serviceInit` and the
+build file `flow-build-info.json`.
 
 The constructors of other objects, such as a Vaadin view, a `@Dependent` or `@RequestScoped` bean or a plain object,
 are not start-time: the next instance runs the new constructor. A declared type that no dependency has is never

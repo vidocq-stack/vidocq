@@ -35,7 +35,7 @@ public enum ExtensionFamily {
     MICROPROFILE("microprofile", "MicroProfile"),
     /** Databases: Jakarta Data, the connection pool, transactions, schema migrations. */
     DATA("data", "Data"),
-    /** Serving HTTP and pages: the web server, Servlet, Pages, Vaadin. */
+    /** Serving HTTP and pages: the web server, Servlet, Pages, WebSocket. */
     WEB("web", "Web");
 
     private final String id;

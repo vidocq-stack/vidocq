@@ -79,14 +79,7 @@ class HotSwapClassifierTest {
                     package jakarta.ws.rs.core;
                     public class Application { public java.util.Set<Class<?>> getClasses() { return java.util.Set.of(); } }
                     """),
-            Map.entry("jakarta/ws/rs/ext/Provider.java", runtime("jakarta.ws.rs.ext", "Provider")),
-            Map.entry("com/vaadin/cdi/annotation/UIScoped.java", runtime("com.vaadin.cdi.annotation", "UIScoped")),
-            Map.entry("com/vaadin/flow/server/ServiceInitEvent.java",
-                    "package com.vaadin.flow.server; public class ServiceInitEvent {}"),
-            Map.entry("com/vaadin/flow/server/VaadinServiceInitListener.java", """
-                    package com.vaadin.flow.server;
-                    public interface VaadinServiceInitListener { void serviceInit(ServiceInitEvent event); }
-                    """));
+            Map.entry("jakarta/ws/rs/ext/Provider.java", runtime("jakarta.ws.rs.ext", "Provider")));
 
     private static final StartTimeDeclarations CDI = new StartTimeDeclarations(
             Set.of("jakarta.enterprise.context.ApplicationScoped"), Set.of(),
@@ -114,7 +107,7 @@ class HotSwapClassifierTest {
         apis = HotSwapFixtures.jar(shared, "apis", APIS, List.of());
         var read = new ArrayList<String>();
         shipped = StartTimeDeclarations.read(List.of(ExtensionDeclarationsTest.CORE, ExtensionDeclarationsTest.FOY,
-                ExtensionDeclarationsTest.CASSINI, ExtensionDeclarationsTest.VAADIN), read::add);
+                ExtensionDeclarationsTest.CASSINI), read::add);
         assertEquals(List.of(), read);
     }
 
@@ -169,14 +162,6 @@ class HotSwapClassifierTest {
         var v2 = build().source("app/A.java", "package app; class A {}").resource(stats, "2");
 
         assertSwap(stats + " changed", classify(BUILD_FILES, v1, v2));
-    }
-
-    @Test
-    void theShippedVaadinDeclarationsLeaveItsBuildTokenOut() {
-        var with = build().source("app/A.java", "package app; class A {}").resource(TOKEN, "{}");
-        var without = build().source("app/A.java", "package app; class A {}");
-
-        assertEquals(Optional.empty(), classify(shipped, with, without));
     }
 
     // Rule 2: a file added or removed
@@ -539,16 +524,6 @@ class HotSwapClassifierTest {
         assertShippedSwap("Filter's constructor ran at start", "app/Filter.java", """
                 package app;
                 @jakarta.ws.rs.ext.Provider public class Filter { public Filter() { System.out.println("%s"); } }
-                """);
-        assertShippedSwap("Cart's constructor ran at start", "app/Cart.java", """
-                package app;
-                @com.vaadin.cdi.annotation.UIScoped public class Cart { public Cart() { System.out.println("%s"); } }
-                """);
-        assertShippedSwap("Init.serviceInit() ran at start", "app/Init.java", """
-                package app;
-                public class Init implements com.vaadin.flow.server.VaadinServiceInitListener {
-                    public void serviceInit(com.vaadin.flow.server.ServiceInitEvent e) { System.out.println("%s"); }
-                }
                 """);
     }
 
