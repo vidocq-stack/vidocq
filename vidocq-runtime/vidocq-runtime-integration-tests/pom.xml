@@ -77,7 +77,6 @@
         <module>vidocq-runtime-it-noether-persistence</module>
         <module>vidocq-runtime-it-noether-mansart-data</module>
         <module>vidocq-runtime-it-ravel-config</module>
-        <module>vidocq-runtime-it-langchain4j-cdi-mcp</module>
     </modules>
 
     <profiles>

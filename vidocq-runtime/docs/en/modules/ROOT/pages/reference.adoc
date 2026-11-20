@@ -35,7 +35,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev consoleis `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
 
 | `io.vidocq.runtime.extensions.essentials:vidocq-runtime-langchain4j-cdi-mcp-extension:{project-version}`
-| langchain4j-cdi MCP server extension. Built in the reactor, not published while langchain4j-cdi is a SNAPSHOT: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
+| langchain4j-cdi MCP server extension, in its own repository since 2026-11-19: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
 
 | `io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-peano-el-extension:{project-version}`
 | Jakarta Expression Language 6.0 through Peano; standard provider discovery and the `el` startup report. Companion POM bundle `vidocq-runtime-peano-el-extension-codegen` generates application accessor tables. See xref:modules/vidocq-runtime-extensions.adoc#peano-el[Expression Language (Peano)].
@@ -242,10 +242,6 @@ the one backend
 | `vidocq.devconsole.host`
 | `127.0.0.1`
 | Address of the dev console. Not a loopback address: `VIDOCQ-DEVC-002`. Anything but ASCII letters, digits and `.-_:%[]`: `VIDOCQ-DEVC-003`, and `127.0.0.1`.
-
-| `vidocq.mcp.serverName` / `vidocq.mcp.serverVersion`
-| `langchain4j-cdi` / `unknown`
-| Name and version the langchain4j-cdi MCP server advertises. Read by `vidocq-runtime-langchain4j-cdi-mcp-extension`, with seven other `vidocq.mcp.*` keys: `allowedOrigins`, `mrtrMode`, `requestStateSecret`, `requestStateTtl`, `continuationTimeout`, `cacheTtl`, `cacheScope`. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-configuration[its configuration].
 |===
 
 TLS is not implemented yet: `vidocq.https.port`, `vidocq.tls.cert` and `vidocq.tls.key` are
@@ -511,20 +507,6 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | xref:modules/vidocq-runtime-extensions.adoc#mansart-data-001[`MANSART-DATA-001`]
 | Mansart could not build the model of a repository's entity; the catalogue shows the entity without its columns.
 
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-001[`VIDOCQ-MCP-001`]
-| The langchain4j-cdi MCP server module does not provide `McpServerSPI`, or is not open.
-
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-002[`VIDOCQ-MCP-002`]
-| The langchain4j-cdi MCP extension is present but no `McpEndpoint` bean exists.
-
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-003[`VIDOCQ-MCP-003`]
-| langchain4j-cdi's MCP server is loaded twice, in the boot layer and in the application layer.
-
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-004[`VIDOCQ-MCP-004`]
-| `vidocq.mcp.*` keys are set and the application also produces `@Named("mcp-server")`; the keys win.
-
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-005[`VIDOCQ-MCP-005`]
-| An MCP tool, prompt or resource template argument has no name.
 |===
 
 == Architecture rules

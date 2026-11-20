@@ -270,7 +270,7 @@ The panels shipped today:
 | What `vidocq:dev`, `vidocq:run` or the test launcher started: image and addresses of each service, the keys it injected, secrets as `configured`. Boot facts only. See xref:dev-services.adoc[Dev services].
 
 | *MCP server*
-| The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`: what it serves and how it is configured, then live — the sessions it holds, the SSE streams and the `subscriptions/listen` streams open, the requests it is waiting an answer of from a client, and whether its methods are invoked through the CDI 4.1 invoker or by reflection. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel].
+| The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`, which lives in its own repository (xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]): what it serves and how it is configured, then live — the sessions it holds, the streams open, the requests it is waiting an answer of from a client.
 
 | *Configuration*
 | The console's own: the keys the application sets, the source each value comes from, the value in a dev launch only and never a secret, and the keys nothing reads. See <<config-panel>>.

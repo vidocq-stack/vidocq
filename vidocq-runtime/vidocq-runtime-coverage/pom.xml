@@ -32,7 +32,7 @@
         vidocq-runtime-it-cassini-rest, -it-humboldt-cassini, -it-cervantes-jwt and
         -it-grimm-openapi only hold tests of the other modules, and -it-cyrano-jpms,
         -it-foy-servlet, -it-ibarra-pages, -it-bodoni-jstl, -it-naming, -it-noether-persistence,
-        -it-noether-mansart-data, -it-ravel-config and -it-langchain4j-cdi-mcp
+        -it-noether-mansart-data and -it-ravel-config
         only add the small application their tests run (SonarQube skips it): without this report, these
         tests would not count for the code they exercise (Vidocq/vidocq#284).
 
@@ -97,16 +97,6 @@
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-liquibase-migration-extension</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
-            <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
-            <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension-dev</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -374,12 +364,6 @@
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-it-ravel-config</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-it-langchain4j-cdi-mcp</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

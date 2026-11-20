@@ -153,8 +153,6 @@ jobs:
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
-            vidocq-runtime-langchain4j-cdi-mcp-extension
-            vidocq-runtime-langchain4j-cdi-mcp-extension-dev
             vidocq-runtime-integration-tests
             vidocq-runtime-it-cyrano-jpms
             vidocq-runtime-it-foy-servlet

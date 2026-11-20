@@ -167,9 +167,6 @@ final class ArchitectureRules {
                     "dev console only: tells which repository methods write"),
             Map.entry("io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.CatalogueLivePanel",
                     "dev console only: carries java.lang.reflect.Method to run a repository action"),
-            Map.entry("io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.McpChecks", "reads the parameter names"
-                    + " and annotations of the methods langchain4j-cdi registers as tools, prompts and resources, to"
-                    + " raise VIDOCQ-MCP-001 and VIDOCQ-MCP-005 at boot; it calls nothing"),
             Map.entry("io.vidocq.runtime.extensions.jakartaee.core.cassini.ApplicationPaths", "reads @ApplicationPath"
                     + " off an Application bean, the source for classes compiled without cassini-processor"
                     + " (Vidocq/vidocq#219)"),

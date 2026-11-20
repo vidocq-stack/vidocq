@@ -23,9 +23,6 @@
         <module>vidocq-runtime-migration-extension-dev</module>
         <module>vidocq-runtime-flyway-migration-extension</module>
         <module>vidocq-runtime-liquibase-migration-extension</module>
-        <module>vidocq-runtime-langchain4j-cdi-mcp-extension</module>
-        <module>vidocq-runtime-langchain4j-cdi-mcp-extension-codegen</module>
-        <module>vidocq-runtime-langchain4j-cdi-mcp-extension-dev</module>
     </modules>
 
     <profiles>
