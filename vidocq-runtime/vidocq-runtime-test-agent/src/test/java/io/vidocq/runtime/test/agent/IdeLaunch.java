@@ -273,9 +273,43 @@ final class IdeLaunch {
     private static List<String> command(String[] jvmOptions, String... rest) {
         List<String> command = new ArrayList<>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.addAll(coverageAgent());
         command.addAll(List.of(jvmOptions));
         command.addAll(List.of(rest));
         return command;
+    }
+
+    /**
+     * The coverage agent of this test JVM, when the build runs one: the agent under test runs in the launched JVM
+     * only, and that run is the module's coverage. Surefire may put the options in an {@code @} argument file. The
+     * coverage agent instruments this package only, so the launched modules stay as they are compiled.
+     */
+    static List<String> coverageAgent() {
+        String[] arguments = ProcessHandle.current().info().arguments().orElse(new String[0]);
+        return Stream.of(arguments).flatMap(IdeLaunch::expanded)
+                .filter(argument -> argument.startsWith("-javaagent:") && argument.contains("jacoco"))
+                .map(argument -> argument + (argument.contains("=") ? "," : "=")
+                        + "includes=" + PatchedModuleAgent.class.getPackageName() + ".*")
+                .toList();
+    }
+
+    private static Stream<String> expanded(String argument) {
+        if (!argument.startsWith("@")) {
+            return Stream.of(argument);
+        }
+        try {
+            return Files.readAllLines(Path.of(argument.substring(1))).stream()
+                    .flatMap(line -> Stream.of(line.trim().split("\\s+")))
+                    .map(IdeLaunch::unquoted)
+                    .filter(token -> !token.isEmpty());
+        } catch (IOException _) {
+            return Stream.empty();
+        }
+    }
+
+    private static String unquoted(String token) {
+        return token.length() > 1 && token.startsWith("\"") && token.endsWith("\"")
+                ? token.substring(1, token.length() - 1) : token;
     }
 
     private static List<Path> write(Path directory, Map<String, String> sources) throws IOException {
