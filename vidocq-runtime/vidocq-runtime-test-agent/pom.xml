@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-build</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-test-agent</artifactId>
+    <name>Vidocq :: Test agent</name>
+    <description>The java.lang.instrument agent that lets the tests of a module that has a module-info.java start when
+        an IDE puts JUnit on the module path (JetBrains' IDEA-391927): it completes the module access of the launch,
+        as Maven's launch has it. vidocq:idea names it in IntelliJ's JUnit template; the Vidocq IntelliJ plugin adds
+        it to a launch. A test tool: no binary ever contains it.</description>
+
+    <properties>
+        <!-- Loaded into the JVM of the tests of any project, whatever its Java version: any JVM that has modules. -->
+        <maven.compiler.release>9</maven.compiler.release>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- No bean: turn off the inherited Vauban indexer APT (vidocq-runtime-core-codegen). The tests start
+                 real JVMs with text blocks for their fixture: they compile on Java 25. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                    <testRelease>25</testRelease>
+                </configuration>
+            </plugin>
+            <!-- The tests compile their fixture with javax.tools and start JVMs: on the class path, as the agent
+                 itself is loaded. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <!-- PatchedModuleAgentTest packs its jar with the same entry. -->
+                            <Premain-Class>io.vidocq.runtime.test.agent.PatchedModuleAgent</Premain-Class>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
