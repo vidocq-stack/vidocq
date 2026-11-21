@@ -6,6 +6,25 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 
 ---
 
+## BUG-20261121-02 — Codegen: an incremental build reorders the bindings files, and `vidocq dev` restarts the application at a save that changed nothing
+
+- **Date** : 2026-11-21
+- **Statut** : FIXED on `fix/champollion-sorted-bindings`
+- **Module touché** : `champollion-codegen-apt` — `JsonbStaticProcessor.writeServicesFile` / `readExistingServices`
+- **Symptôme** : in `vidocq dev` on the tutorial's step 11, saving a comment in `BookResource.java` logs
+  `layer swap: META-INF/champollion/rest-bindings changed` and restarts the application layer, instead of
+  "nothing reloaded". Three incremental builds of the same tree: the first writes
+  `DuplicateIsbnMapper$Problem` before `LoanRefusedMapper$Problem`, the next two the other way round.
+- **Reproduction minimale** : `JsonbStaticProcessorDiagnosticsTest.an_incremental_build_lists_the_bindings_by_name`:
+  compile `Beta` and a resource returning `BetaView`, then, in the same output, `Alpha` and a resource returning
+  `AlphaView`. Both `META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding` and
+  `META-INF/champollion/rest-bindings` list `Beta…` first.
+- **Cause** : both files were written in insertion order: the entries kept from the previous build first, then those
+  of this compilation. Their order followed the history of the compilations, not the sources.
+- **Correction** : both are written sorted by name (`TreeSet`, `TreeMap`); a full and an incremental build of the
+  same sources write the same bytes. Found with BUG-20261121-01 (Vauban), which made the frozen synthetic beans
+  change the same way.
+
 ## BUG-20260611-01 — JSON-B runtime: nested-POJO field aborts the enclosing object read inside a collection element
 
 - **Date** : 2026-06-11

@@ -151,4 +151,63 @@ class JsonbStaticProcessorDiagnosticsTest {
                 .filter(l -> !l.isBlank() && !l.startsWith("#")).sorted().toList();
         assertEquals(List.of("demo.Added$$Binding", "demo.Kept$$Binding"), entries);
     }
+
+    /**
+     * The services file and {@code META-INF/champollion/rest-bindings} list their entries by name: an incremental
+     * build that adds {@code Alpha} after {@code Beta} writes what a full build of both writes. Their order followed
+     * the history of the compilations, so {@code vidocq:dev} saw them change at a save that changed nothing, and
+     * restarted the application layer (BUG-20261121-02).
+     */
+    @Test
+    void an_incremental_build_lists_the_bindings_by_name(@TempDir Path tmp) throws IOException {
+        Path out = tmp.resolve("out");
+        assertTrue(compile(out, withJaxRs("demo.Beta", """
+                package demo;
+                @io.vidocq.champollion.jsonb.spi.JsonbStatic
+                public record Beta(int x) {}
+                """, "demo.BetaResource", """
+                package demo;
+                @jakarta.ws.rs.Path("beta")
+                public class BetaResource {
+                    @jakarta.ws.rs.GET public BetaView get() { return null; }
+                }
+                """, "demo.BetaView", """
+                package demo;
+                public record BetaView(Beta beta) {}
+                """)).success());
+        assertTrue(compile(out, withJaxRs("demo.Alpha", """
+                package demo;
+                @io.vidocq.champollion.jsonb.spi.JsonbStatic
+                public record Alpha(int x) {}
+                """, "demo.AlphaResource", """
+                package demo;
+                @jakarta.ws.rs.Path("alpha")
+                public class AlphaResource {
+                    @jakarta.ws.rs.GET public AlphaView get() { return null; }
+                }
+                """, "demo.AlphaView", """
+                package demo;
+                public record AlphaView(int x) {}
+                """)).success());
+
+        assertListedByName(out.resolve(SERVICES), 2);
+        assertListedByName(out.resolve("META-INF/champollion/rest-bindings"), 2);
+    }
+
+    private static void assertListedByName(Path file, int atLeast) throws IOException {
+        List<String> entries = Files.readAllLines(file).stream().filter(l -> !l.isBlank()).toList();
+        assertTrue(entries.size() >= atLeast, file + ": " + entries);
+        assertEquals(entries.stream().sorted().toList(), entries, file.getFileName() + " is not listed by name");
+    }
+
+    /** {@code fqnAndSources}, after the JAX-RS annotations the processor looks for. */
+    private static String[] withJaxRs(String... fqnAndSources) {
+        List<String> all = new ArrayList<>();
+        new java.util.TreeMap<>(GeneratedBindings.JAXRS).forEach((fqn, source) -> {
+            all.add(fqn);
+            all.add(source);
+        });
+        all.addAll(List.of(fqnAndSources));
+        return all.toArray(String[]::new);
+    }
 }

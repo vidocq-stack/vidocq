@@ -912,7 +912,9 @@ public final class JsonbStaticProcessor extends AbstractProcessor {
 
     /** Services already written by a previous round or an incremental build, to append to. */
     private static Set<String> readExistingServices(Filer filer) {
-        Set<String> all = new LinkedHashSet<>();
+        // Sorted, as the rest bindings below: written in the order of the compilations, the file changed at an
+        // incremental build that changed nothing, and vidocq:dev restarted the application layer (BUG-20261121-02).
+        Set<String> all = new java.util.TreeSet<>();
         try {
             FileObject existing = filer.getResource(StandardLocation.CLASS_OUTPUT, "", SERVICE_FILE);
             try (var reader = new BufferedReader(
@@ -973,7 +975,7 @@ public final class JsonbStaticProcessor extends AbstractProcessor {
             // longer @JsonbStatic: its binding class would be stale, or missing at run time.
             all.removeIf(binding -> !stillStatic(binding, previousRest));
             all.addAll(generatedBindings);
-            java.util.Map<String, String> rest = new java.util.LinkedHashMap<>();
+            java.util.Map<String, String> rest = new java.util.TreeMap<>();
             for (var e : previousRest.entrySet()) {
                 if (all.contains(e.getKey())) rest.put(e.getKey(), e.getValue());
             }
