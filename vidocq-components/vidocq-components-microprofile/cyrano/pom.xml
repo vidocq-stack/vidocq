@@ -124,7 +124,6 @@
         in-reactor (same verification as vidocq-runtime-tck-cyrano-restclient).
     -->
     <modules>
-        <module>cyrano-mp-rest-client-api</module>
         <module>cyrano-api</module>
         <module>cyrano-processor</module>
         <module>cyrano-core</module>
@@ -253,6 +252,25 @@
     -->
 
     <profiles>
+        <!--
+          cyrano-mp-rest-client-api has no source of its own beyond its module descriptor: Maven unpacks its classes from the
+          MicroProfile Rest Client jar, which ships no module descriptor.
+          IntelliJ would import it as an empty module and turn every module that depends on it red, so the
+          IntelliJ import leaves it out of the reactor and resolves its jar like any other dependency.
+          Only that import sets idea.maven.embedder.version: a Maven build, from a terminal or started from
+          the IDE, is unchanged.
+        -->
+        <profile>
+            <id>repackaged-api</id>
+            <activation>
+                <property>
+                    <name>!idea.maven.embedder.version</name>
+                </property>
+            </activation>
+            <modules>
+                <module>cyrano-mp-rest-client-api</module>
+            </modules>
+        </profile>
         <!--
             TCK harmonisation (workspace-wide effort, recipe validated on dirac):
             the official MicroProfile Rest Client 4.0 TCK runner joins the reactor

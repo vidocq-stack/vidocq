@@ -113,7 +113,6 @@
         (or through run-official-tck-mp-health-4.0.sh).
     -->
     <modules>
-        <module>knock-mp-health-api</module>
         <module>knock-api</module>
         <module>knock-core</module>
         <module>knock-cdi-vauban</module>
@@ -211,6 +210,25 @@
 
 
     <profiles>
+        <!--
+          knock-mp-health-api has no source of its own beyond its module descriptor: Maven unpacks its classes from the
+          MicroProfile Health jar, which ships no module descriptor.
+          IntelliJ would import it as an empty module and turn every module that depends on it red, so the
+          IntelliJ import leaves it out of the reactor and resolves its jar like any other dependency.
+          Only that import sets idea.maven.embedder.version: a Maven build, from a terminal or started from
+          the IDE, is unchanged.
+        -->
+        <profile>
+            <id>repackaged-api</id>
+            <activation>
+                <property>
+                    <name>!idea.maven.embedder.version</name>
+                </property>
+            </activation>
+            <modules>
+                <module>knock-mp-health-api</module>
+            </modules>
+        </profile>
         <!--
             TCK profile: pulls the knock-tck runner into the reactor.
             Kept behind a profile so a regular build never downloads nor runs

@@ -99,7 +99,6 @@
         Maven 3.9.16 / Model 4.0.0 migration.
     -->
     <modules>
-        <module>ravel-mp-config-api</module>
         <module>ravel-api</module>
         <module>ravel-core</module>
         <module>ravel-cdi-vauban</module>
@@ -183,6 +182,25 @@
         </dependencies>
     </dependencyManagement>
     <profiles>
+        <!--
+          ravel-mp-config-api has no source of its own beyond its module descriptor: Maven unpacks its classes from the
+          MicroProfile Config jar, which ships no module descriptor.
+          IntelliJ would import it as an empty module and turn every module that depends on it red, so the
+          IntelliJ import leaves it out of the reactor and resolves its jar like any other dependency.
+          Only that import sets idea.maven.embedder.version: a Maven build, from a terminal or started from
+          the IDE, is unchanged.
+        -->
+        <profile>
+            <id>repackaged-api</id>
+            <activation>
+                <property>
+                    <name>!idea.maven.embedder.version</name>
+                </property>
+            </activation>
+            <modules>
+                <module>ravel-mp-config-api</module>
+            </modules>
+        </profile>
         <!--
             TCK harmonisation: the official MicroProfile Config 3.1 TCK runner
             joins the reactor only when this profile is active.

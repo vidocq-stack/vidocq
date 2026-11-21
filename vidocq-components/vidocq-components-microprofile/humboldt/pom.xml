@@ -113,9 +113,6 @@
     -->
     <modules>
         <module>humboldt-api</module>
-        <module>humboldt-otel-context</module>
-        <module>humboldt-otel-api</module>
-        <module>humboldt-otel-instrumentation-annotations</module>
         <module>humboldt-sdk-common</module>
         <module>humboldt-context</module>
         <module>humboldt-sdk-trace</module>
@@ -254,6 +251,27 @@
     </dependencyManagement>
 
     <profiles>
+        <!--
+          The humboldt-otel-* modules take nearly all their classes from the OpenTelemetry jars, which ship no
+          module descriptor: Maven shades them in.
+          IntelliJ would import them as an empty module and turn every module that depends on them red, so the
+          IntelliJ import leaves them out of the reactor and resolves their jars like any other dependency.
+          Only that import sets idea.maven.embedder.version: a Maven build, from a terminal or started from
+          the IDE, is unchanged.
+        -->
+        <profile>
+            <id>repackaged-api</id>
+            <activation>
+                <property>
+                    <name>!idea.maven.embedder.version</name>
+                </property>
+            </activation>
+            <modules>
+                <module>humboldt-otel-context</module>
+                <module>humboldt-otel-api</module>
+                <module>humboldt-otel-instrumentation-annotations</module>
+            </modules>
+        </profile>
         <!--
             TCK harmonisation: the official MicroProfile Telemetry TCK runner
             joins the reactor only when this profile is active.

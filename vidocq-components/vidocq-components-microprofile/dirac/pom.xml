@@ -112,7 +112,6 @@
         runs safely in-reactor (same verification as vidocq-runtime-tck-dirac-metrics).
     -->
     <modules>
-        <module>dirac-mp-metrics-api</module>
         <module>dirac-api</module>
         <module>dirac-processor</module>
         <module>dirac-core</module>
@@ -225,6 +224,25 @@
 
 
     <profiles>
+        <!--
+          dirac-mp-metrics-api has no source of its own beyond its module descriptor: Maven unpacks its classes from the
+          MicroProfile Metrics jar, which ships no module descriptor.
+          IntelliJ would import it as an empty module and turn every module that depends on it red, so the
+          IntelliJ import leaves it out of the reactor and resolves its jar like any other dependency.
+          Only that import sets idea.maven.embedder.version: a Maven build, from a terminal or started from
+          the IDE, is unchanged.
+        -->
+        <profile>
+            <id>repackaged-api</id>
+            <activation>
+                <property>
+                    <name>!idea.maven.embedder.version</name>
+                </property>
+            </activation>
+            <modules>
+                <module>dirac-mp-metrics-api</module>
+            </modules>
+        </profile>
         <!--
             TCK harmonisation (workspace-wide effort, dirac = pilot brick): the
             official MicroProfile Metrics 5.1.1 TCK runner joins the reactor only
