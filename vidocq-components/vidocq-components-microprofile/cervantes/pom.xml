@@ -119,7 +119,6 @@
         run-official-tck-mp-jwt-2.2.sh.
     -->
     <modules>
-        <module>cervantes-mp-jwt-api</module>
         <module>cervantes-api</module>
         <module>cervantes-core</module>
         <module>cervantes-cdi-vauban</module>
@@ -131,6 +130,25 @@
     </modules>
 
     <profiles>
+        <!--
+          cervantes-mp-jwt-api has no source of its own beyond its module descriptor: Maven unpacks its classes from the
+          MicroProfile JWT jar, which ships no module descriptor.
+          IntelliJ would import it as an empty module and turn every module that depends on it red, so the
+          IntelliJ import leaves it out of the reactor and resolves its jar like any other dependency.
+          Only that import sets idea.maven.embedder.version: a Maven build, from a terminal or started from
+          the IDE, is unchanged.
+        -->
+        <profile>
+            <id>repackaged-api</id>
+            <activation>
+                <property>
+                    <name>!idea.maven.embedder.version</name>
+                </property>
+            </activation>
+            <modules>
+                <module>cervantes-mp-jwt-api</module>
+            </modules>
+        </profile>
         <!--
             `tck` profile: pulls the official MP JWT 2.2 TCK runner into the reactor.
             Not active by default so a plain build never downloads nor runs the TCK.

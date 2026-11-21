@@ -122,7 +122,6 @@
         runs safely in-reactor (same verification as vidocq-runtime-tck-heisenberg-faulttolerance).
     -->
     <modules>
-        <module>heisenberg-mp-ft-api</module>
         <module>heisenberg-api</module>
         <module>heisenberg-core</module>
         <module>heisenberg-processor</module>
@@ -248,6 +247,25 @@
 
 
     <profiles>
+        <!--
+          heisenberg-mp-ft-api has no source of its own beyond its module descriptor: Maven unpacks its classes from the
+          MicroProfile Fault Tolerance jar, which ships no module descriptor.
+          IntelliJ would import it as an empty module and turn every module that depends on it red, so the
+          IntelliJ import leaves it out of the reactor and resolves its jar like any other dependency.
+          Only that import sets idea.maven.embedder.version: a Maven build, from a terminal or started from
+          the IDE, is unchanged.
+        -->
+        <profile>
+            <id>repackaged-api</id>
+            <activation>
+                <property>
+                    <name>!idea.maven.embedder.version</name>
+                </property>
+            </activation>
+            <modules>
+                <module>heisenberg-mp-ft-api</module>
+            </modules>
+        </profile>
         <!--
             TCK harmonisation (workspace-wide effort, dirac = pilot brick): the
             official MicroProfile Fault Tolerance 4.1 TCK runner joins the reactor

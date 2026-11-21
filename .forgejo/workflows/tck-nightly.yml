@@ -50,13 +50,14 @@ jobs:
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-heisenberg-faulttolerance",
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry"]
           def reactor(path):
-              """The module at path and every module below it: <modules>, and those of its tck profile."""
+              """The module at path and every module below it: <modules>, and those of its tck profile and of its
+              repackaged-api profile, which holds modules of every Maven build that the IntelliJ import leaves out."""
               pom = ET.parse(os.path.join(path, "pom.xml")).getroot()
               ns = pom.tag[1:].split("}", 1)[0]
               found = [path]
               lists = [pom.find("{%s}modules" % ns)]
               for p in pom.findall("{%s}profiles/{%s}profile" % (ns, ns)):
-                  if (p.findtext("{%s}id" % ns) or "").strip() == "tck":
+                  if (p.findtext("{%s}id" % ns) or "").strip() in ("tck", "repackaged-api"):
                       lists.append(p.find("{%s}modules" % ns))
               for ms in filter(lambda x: x is not None, lists):
                   for m in ms.findall("{%s}module" % ns):
