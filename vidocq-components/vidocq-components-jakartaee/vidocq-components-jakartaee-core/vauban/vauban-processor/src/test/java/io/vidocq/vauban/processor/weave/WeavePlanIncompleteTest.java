@@ -19,6 +19,7 @@
  */
 package io.vidocq.vauban.processor.weave;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -46,6 +47,32 @@ class WeavePlanIncompleteTest {
 
             assertTrue(Files.isRegularFile(plan), "the plan is not complete, so it is not deleted");
             assertEquals(output.toString(), System.getProperty(property), "and it stays registered");
+        } finally {
+            System.clearProperty(property);
+        }
+    }
+
+    /**
+     * In a parallel build, the javac task of one module ends while another still writes its class files, and runs
+     * that module's plan too (BUG-20261121-05): a class file being written is not ready, it does not fail the task.
+     */
+    @Test
+    void aClassFileStillBeingWrittenIsNotReadyYet() throws IOException {
+        var plan = output.resolve(WeavePlan.PLAN_RESOURCE);
+        Files.createDirectories(plan.getParent());
+        Files.writeString(plan, "bean app.Half NO_ARG\n");
+        var classFile = output.resolve("app/Half.class");
+        Files.createDirectories(classFile.getParent());
+        byte[] firstBytes = {(byte) 0xCA, (byte) 0xFE};
+        Files.write(classFile, firstBytes);
+        var property = "vauban.weave.plan." + output;
+        System.setProperty(property, output.toString());
+        try {
+            WeavePlan.executeRegisteredPlans();
+
+            assertTrue(Files.isRegularFile(plan), "the plan waits for the class file");
+            assertEquals(output.toString(), System.getProperty(property), "and it stays registered");
+            assertArrayEquals(firstBytes, Files.readAllBytes(classFile), "the class file is left as it is");
         } finally {
             System.clearProperty(property);
         }

@@ -57,6 +57,9 @@ public final class WeavePlan {
     public static final String PLAN_RESOURCE = "META-INF/vauban/weave-plan";
 
     private static final String PROP_PREFIX = "vauban.weave.plan.";
+
+    /** The registry of the plans, and the lock of their execution: one object for every class loader of the JVM. */
+    private static final Object REGISTRY = System.getProperties();
     private static final System.Logger LOG = System.getLogger(WeavePlan.class.getName());
 
     private WeavePlan() {}
@@ -117,11 +120,18 @@ public final class WeavePlan {
      * Executes every registered plan whose class files are present, then unregisters it.
      * Invoked by {@link VaubanWeavingPlugin} at the end of each javac task; safe to call
      * from several tasks of the same JVM (idempotent weaving, incomplete plans are kept).
+     *
+     * <p>In a parallel build ({@code mvn -T}) a task also runs the plans of the tasks still
+     * compiling (BUG-20261121-05): the plans run one at a time, under a lock shared by the
+     * class loaders of every task (the system properties, the registry itself), and a class
+     * file still being written counts as absent.
      */
     public static void executeRegisteredPlans() {
-        for (var property : System.getProperties().stringPropertyNames()) {
-            if (property.startsWith(PROP_PREFIX)) {
-                executeRegisteredPlan(property);
+        synchronized (REGISTRY) {
+            for (var property : System.getProperties().stringPropertyNames()) {
+                if (property.startsWith(PROP_PREFIX)) {
+                    executeRegisteredPlan(property);
+                }
             }
         }
     }
@@ -156,17 +166,25 @@ public final class WeavePlan {
         return complete;
     }
 
-    /** Weaves the class file of one line; returns {@code false} when that class file is absent. */
+    /**
+     * Weaves the class file of one line; returns {@code false} when that class file is absent, or not a whole class
+     * file yet: another javac task of the JVM is still writing it.
+     */
     private static boolean executeLine(Path outputDir, Line line) throws IOException {
         Path classFile = outputDir.resolve(line.fqn().replace('.', '/') + ".class");
         if (!Files.isRegularFile(classFile)) {
             return false;
         }
         byte[] bytes = Files.readAllBytes(classFile);
-        byte[] result = switch (line.kind()) {
-            case BEAN -> ProxyLinkWeaver.addMarkerConstructor(bytes, line.chain());
-            case PROXY -> ProxyLinkWeaver.retargetProxyConstructor(bytes);
-        };
+        byte[] result;
+        try {
+            result = switch (line.kind()) {
+                case BEAN -> ProxyLinkWeaver.addMarkerConstructor(bytes, line.chain());
+                case PROXY -> ProxyLinkWeaver.retargetProxyConstructor(bytes);
+            };
+        } catch (IllegalArgumentException _) {
+            return false;
+        }
         if (result != null) {
             Files.write(classFile, result);
         }

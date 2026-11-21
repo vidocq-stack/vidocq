@@ -9423,3 +9423,21 @@ the interceptor's `@PostConstruct` and `@AroundInvoke`, plus a checked exception
 tutorial's `IllegalAccessException` before the fix; `ComponentCollectorMemberSelectionTest.packagePrivateInterceptorMethodsAreCollected`;
 `CodegenCoverageTest.interceptorAroundInvokeDeclaredIsCovered`. Vidocq's `vidocq:check-module-info` still asks for the
 `opens` (Vidocq BUG-20261031-04) until it can tell a Vauban release with this fix on the module path.
+
+## BUG-20261121-05 — A parallel build fails in the weaving of another module's classes
+
+- **Date**: 2026-11-21
+- **Status**: FIXED on `fix/vauban-weave-plan-per-compilation`
+- **Module**: `vauban-processor` (`WeavePlan`)
+- **Symptom**: `./mvnw clean install -Dmaven.test.skip -T 1C` at the root of the monorepo fails about one run in
+  five, in a module compiled with `vauban-processor` that changes from run to run: `Fatal error compiling:
+  java.lang.IllegalArgumentException: Bad magic number` (`mansart-data-vauban-it`), or `Code too big to handle`
+  (`cervantes-cdi-vauban`). The trace goes through `VaubanWeavingPlugin` → `WeavePlan.executeRegisteredPlans` →
+  `ProxyLinkWeaver.addMarkerConstructor`.
+- **Repro**: `WeavePlanIncompleteTest#aClassFileStillBeingWrittenIsNotReadyYet`: a registered plan whose class file
+  holds two bytes; `executeRegisteredPlans()` threw `Bad magic number`.
+- **Cause**: the plans are registered JVM-wide (system properties, since javac loads the processor and the plugin in
+  distinct class loaders), and each javac task runs every registered plan at its end. In a parallel build the task of
+  one module runs the plan of another that is still writing its class files, and two tasks can run one plan at once.
+- **Fix**: the plans run one at a time, under a lock on the system properties (one object for every class loader),
+  and a class file the weaver cannot read counts as absent: the plan is kept for the task that owns it.
