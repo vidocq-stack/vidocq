@@ -137,12 +137,10 @@
     </build>
 
     <profiles>
-        <!-- Final packaging (jlink + jpackage + docker) — active by default. -->
+        <!-- Final packaging (jlink + jpackage + docker), on demand: `-Pdist`, or
+             vidocq-runtime-examples/build-images.sh for every example. -->
         <profile>
             <id>dist</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
             <build>
                 <plugins>
                     <plugin>

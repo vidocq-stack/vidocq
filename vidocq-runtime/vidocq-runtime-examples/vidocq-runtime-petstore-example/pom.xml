@@ -179,13 +179,10 @@
     </build>
 
     <profiles>
-        <!-- Native packaging (jlink + jpackage + docker) — active by default.
-             Short-circuit with -P!dist or -Dvidocq.jlink.skip=true for a fast compile+test cycle. -->
+        <!-- Native packaging (jlink + jpackage + docker), on demand: `-Pdist`, or
+             vidocq-runtime-examples/build-images.sh for every example. -->
         <profile>
             <id>dist</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
             <build>
                 <plugins>
                     <plugin>

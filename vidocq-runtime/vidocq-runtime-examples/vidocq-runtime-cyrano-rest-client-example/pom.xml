@@ -73,15 +73,6 @@
                             <goal>generate</goal>
                         </goals>
                     </execution>
-                    <execution>
-                        <id>jlink</id>
-                        <goals>
-                            <goal>jlink</goal>
-                        </goals>
-                        <configuration>
-                            <launcher>rest-client-app</launcher>
-                        </configuration>
-                    </execution>
                 </executions>
             </plugin>
             <plugin>
@@ -93,4 +84,31 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- The jlink image, on demand: `-Pdist`, or vidocq-runtime-examples/build-images.sh for every example. -->
+        <profile>
+            <id>dist</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                        <version>${project.version}</version>
+                        <executions>
+                            <execution>
+                                <id>jlink</id>
+                                <goals>
+                                    <goal>jlink</goal>
+                                </goals>
+                                <configuration>
+                                    <launcher>rest-client-app</launcher>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

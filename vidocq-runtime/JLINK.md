@@ -19,11 +19,13 @@ distroless container.
 ## 1. Quick start on `vidocq-runtime-cassini-rest-example`
 
 The `vidocq-runtime-cassini-rest-example` example is already wired to generate all three
-artefacts in a single command.
+artefacts in a single command, behind its `dist` profile: a build of the reactor makes no image.
 
 ```sh
-cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
-mvn package -DskipTests
+# from the root of the monorepo
+./mvnw -Pdist package -DskipTests -am -pl vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
+# or the images of every example
+vidocq-runtime/vidocq-runtime-examples/build-images.sh -DskipTests
 ```
 
 Produces:

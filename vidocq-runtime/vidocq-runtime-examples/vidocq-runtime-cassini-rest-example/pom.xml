@@ -113,18 +113,14 @@
     </build>
 
     <profiles>
-        <!-- Final packaging (jlink + jpackage + docker) — active by default.
+        <!-- Final packaging (jlink + jpackage + docker), on demand: `-Pdist`, or
+             vidocq-runtime-examples/build-images.sh for every example.
              All jars of the example (and their transitive dependencies) are
              named Java modules: `ravel-mp-config-api` provides
              `org.eclipse.microprofile.config` as a named module, lifting the
-             last historical jlink limitation.
-             To bypass these goals (fast CI, compile + tests only),
-             use `-P!dist` or `-Dvidocq.jlink.skip=true`. -->
+             last historical jlink limitation. -->
         <profile>
             <id>dist</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
             <build>
                 <plugins>
                     <plugin>
