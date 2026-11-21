@@ -44,6 +44,25 @@
                     <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
+            <!-- This pom is installed and deploys its SNAPSHOT, and only this pom (not inherited): it is the parent
+                 vidocq-runtime-external-rest-lib names, and Maven refuses a dependency whose parent it cannot read.
+                 Without it the library is found, in the local repository or on maven.vidocq.dev, and still rejected
+                 by a build that does not hold this pom: an example started from its own folder, a pull request build
+                 that rebuilds vidocq-runtime-cassini-rest-example without the library (BUG-20261121-03). The two
+                 properties above stay true: the example applications are neither installed nor deployed, and
+                 release.sh leaves this pom out of a release. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <inherited>false</inherited>
+                <configuration><skip>false</skip></configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <inherited>false</inherited>
+                <configuration><skip>false</skip></configuration>
+            </plugin>
             <!-- Inherits the checkpom execution from vidocq-runtime-build/pluginManagement. test-path, bound as
                  vidocq-runtime-parent binds it: @VidocqTest starts the example on the jars a real application runs,
                  the copies vidocq:generate enriched included, not the originals Surefire resolved. -->

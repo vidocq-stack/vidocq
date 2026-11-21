@@ -51,6 +51,14 @@
                 <artifactId>maven-deploy-plugin</artifactId>
                 <configuration><skip>false</skip></configuration>
             </plugin>
+            <!-- Installed too, against the examples' maven.install.skip=true: an example started from its own folder
+                 (mvn vidocq:dev in vidocq-runtime-cassini-rest-example, an IDE launch on its pom) reads this library
+                 from the local repository (BUG-20261121-03). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <configuration><skip>false</skip></configuration>
+            </plugin>
             <!-- Disable annotation processing explicitly -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
