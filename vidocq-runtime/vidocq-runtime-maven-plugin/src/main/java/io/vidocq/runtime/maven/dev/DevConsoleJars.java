@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.maven.depgen.AetherArtifactResolver;
 import org.apache.maven.artifact.Artifact;
 import org.eclipse.aether.repository.RemoteRepository;
 
@@ -26,7 +27,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -76,15 +76,7 @@ final class DevConsoleJars {
      * repository may be declared only as a plugin repository — each repository (by id) once (#148).
      */
     static List<RemoteRepository> repositories(List<RemoteRepository> project, List<RemoteRepository> plugin) {
-        Map<String, RemoteRepository> byId = new LinkedHashMap<>();
-        for (List<RemoteRepository> list : java.util.Arrays.asList(project, plugin)) {
-            if (list != null) {
-                for (RemoteRepository repository : list) {
-                    byId.putIfAbsent(repository.getId(), repository);
-                }
-            }
-        }
-        return List.copyOf(byId.values());
+        return AetherArtifactResolver.repositories(project, plugin);
     }
 
     /** Whether {@code projectArtifacts} already has the Chappe HTTP server extension (Vidocq/vidocq#143). */

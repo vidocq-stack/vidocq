@@ -102,7 +102,8 @@ class PluginDescriptorIdeaTest {
         Map<String, String> parameters = parameters();
 
         assertEquals(List.of("session", "reactorProjects", "mojoExecution", "projectDirectory", "check", "kind",
-                "generateBeforeLaunch", "jre", "skip"), new ArrayList<>(parameters.keySet()));
+                "generateBeforeLaunch", "jre", "skip", "junitTemplate", "repoSession", "remoteRepos", "pluginRepos",
+                "pluginVersion"), new ArrayList<>(parameters.keySet()));
         for (Map.Entry<String, String> parameter : parameters.entrySet()) {
             Field field = VidocqIdeaMojo.class.getDeclaredField(parameter.getKey());
             Class<?> declared = switch (parameter.getValue()) {
@@ -137,6 +138,22 @@ class PluginDescriptorIdeaTest {
         assertProperty(entries.get("generateBeforeLaunch"), "${vidocq.idea.generateBeforeLaunch}", "true");
         assertProperty(entries.get("jre"), "${vidocq.idea.jre}", "");
         assertProperty(entries.get("skip"), "${vidocq.idea.skip}", "false");
+        assertProperty(entries.get("junitTemplate"), "${vidocq.idea.junitTemplate}", "true");
+        assertEquals("${repositorySystemSession}", entries.get("repoSession").getAttribute("default-value"));
+        assertEquals("${project.remoteProjectRepositories}", entries.get("remoteRepos").getAttribute("default-value"));
+        assertEquals("${project.remotePluginRepositories}", entries.get("pluginRepos").getAttribute("default-value"));
+        assertEquals("${plugin.version}", entries.get("pluginVersion").getAttribute("default-value"));
+    }
+
+    /** The goal resolves the test agent the JUnit template names, through the repository system Maven injects. */
+    @Test
+    void theRepositorySystemIsInjected() throws Exception {
+        Element requirement = child(child(idea, "requirements"), "requirement");
+
+        assertNotNull(requirement, "no <requirement> in the idea mojo");
+        assertEquals("org.eclipse.aether.RepositorySystem", text(requirement, "role"));
+        assertEquals(org.eclipse.aether.RepositorySystem.class,
+                VidocqIdeaMojo.class.getDeclaredField(text(requirement, "field-name")).getType());
     }
 
     /**

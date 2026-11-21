@@ -64,7 +64,7 @@
 | Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, the commit read from `.git` without running `git`; without a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by `vidocq-runtime-parent`, and by the plugin in an application without the parent. See <<build-info,the `vidocq:build-info` goal>>.
 
 | `vidocq:idea`
-| Experimental — writes one IntelliJ IDEA shared run configuration per application of the reactor into `.run/`, or checks them in CI. See <<idea,the `vidocq:idea` goal>>.
+| Experimental — writes IntelliJ IDEA shared run configurations for each application of the reactor into `.run/`, and a JUnit template that starts tests with the Vidocq test agent (<<idea-junit-template,IDEA-391927>>), or checks them in CI. See <<idea,the `vidocq:idea` goal>>.
 
 | `vidocq:vscode`
 | Writes the `.vscode/` settings, tasks and debug configuration of the project for VS Code's Java extension, or checks them in CI. See <<vscode,the `vidocq:vscode` goal>>.
@@ -1606,7 +1606,9 @@ of the reactor, from what the poms already declare. By default that is three fil
 reload, continuous testing), one of <<run,`vidocq:run`>> suffixed ` (run)` — that one still compiles the module,
 completes the bean index and starts the application, the three through Maven — and a Remote JVM Debug one
 suffixed ` (debug)` that attaches to `vidocq:dev`'s own debug agent(Vidocq/vidocq#143); see
-<<dev-tools,Dev tools and binaries>>.
+<<dev-tools,Dev tools and binaries>>. Next to them it writes one shared JUnit template,
+`.run/Template JUnit.run.xml`, that starts every test with the Vidocq test agent: see
+<<idea-junit-template,The JUnit template>>.
 
 [source,bash]
 ----
@@ -1614,6 +1616,7 @@ mvn vidocq:idea                                          # write or update .run/
 mvn vidocq:idea -Dvidocq.idea.check=true                 # CI: fail when .run/ does not match the poms
 mvn vidocq:idea -Dvidocq.idea.check=strict               # CI: also fail on files you wrote or edited
 mvn vidocq:idea -Dvidocq.idea.kind=application           # an Application run of the main class instead
+mvn vidocq:idea -Dvidocq.idea.junitTemplate=false        # no JUnit template
 ----
 
 [IMPORTANT]
@@ -1899,6 +1902,12 @@ on how Maven was invoked.
 | `vidocq.idea.skip`
 | `false`
 | Skip the goal.
+
+| `vidocq.idea.junitTemplate`
+| `true`
+| Also write the shared JUnit template `.run/Template JUnit.run.xml`, which starts every test with the test agent
+  `io.vidocq.runtime:vidocq-runtime-test-agent` of the plugin's version, and resolve that agent. `false` leaves the
+  template out. See <<idea-junit-template,The JUnit template>>.
 |===
 
 Maven evaluates them against the top-level project of the build — the first selected project when `-pl` leaves
@@ -1933,6 +1942,56 @@ purpose does not break CI; its summary is then a warning that names each file it
 every file in `.run/` must follow the poms. Line endings and a trailing newline are not edits. To get a generated
 file back, delete yours and run the goal again. A marked file that no application maps to any more is reported and
 never deleted.
+
+[#idea-junit-template]
+=== The JUnit template
+
+IntelliJ IDEA 2026.3 fails to start the tests of a module that has a `module-info.java`
+(https://youtrack.jetbrains.com/issue/IDEA-391927[IDEA-391927]): it puts JUnit on the module path, and the module
+neither reads JUnit nor opens its test packages to it. The test agent, `io.vidocq.runtime:vidocq-runtime-test-agent`,
+fixes that from inside the test JVM: it gives the test libraries the access the class path would have given them,
+and changes nothing in a launch that already has it, such as Maven's.
+
+So, next to the configurations of the applications, the goal writes `.run/Template JUnit.run.xml`, the shared
+template of every JUnit run configuration IntelliJ creates in the project:
+
+[source,xml,subs="attributes+"]
+----
+<component name="ProjectRunConfigurationManager">
+  <configuration default="true" type="JUnit" factoryName="JUnit">
+    <option name="MAIN_CLASS_NAME" value="" />
+    <option name="METHOD_NAME" value="" />
+    <option name="TEST_OBJECT" value="class" />
+    <option name="VM_PARAMETERS" value="-ea &quot;-javaagent:$MAVEN_REPOSITORY$/io/vidocq/runtime/vidocq-runtime-test-agent/{project-version}/vidocq-runtime-test-agent-{project-version}.jar&quot;" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
+----
+
+The agent's version is the plugin's own, which is the runtime's. Tests keep the module path: the template does not
+set *Do not use --module-path* (`useClassPathOnly`), the former workaround, which hides encapsulation errors and
+loses the services a `module-info.java` declares by `provides`. A write resolves the agent from the project's and
+the plugin repositories, so that its jar is in the local repository when IntelliJ starts a test; when it cannot
+(offline, or a version not published), the template is written all the same and the goal warns, naming the
+coordinates. A check resolves nothing.
+
+The template follows the rules of every file of the goal: the marker, a template of yours left untouched with a
+warning, `vidocq.idea.check`. It is written only when the build has an application, and it pins no JDK, whatever
+`vidocq.idea.jre` says. `-Dvidocq.idea.junitTemplate=false` leaves it out; a template the goal wrote earlier is then
+reported, never deleted. A run configuration created from the template earlier keeps the options it was created
+with: the template applies to new ones.
+
+[WARNING]
+.Not verified yet
+====
+* That IntelliJ expands `$MAVEN_REPOSITORY$` in the VM options of a run configuration has not been tried in the IDE
+  yet; nor that it loads a template stored in `.run/`. `$MAVEN_REPOSITORY$` is the local repository set in
+  IntelliJ's Maven settings, which must be the one Maven resolves into.
+* The Vidocq IntelliJ plugin also adds the agent to such a launch, so a test can get it twice. Read in its code, a
+  second run of the agent finds the access already given and changes nothing; no test runs it twice yet.
+====
 
 === Multi-module builds
 

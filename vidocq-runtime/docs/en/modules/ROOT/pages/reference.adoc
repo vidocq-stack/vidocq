@@ -326,7 +326,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, from `.git` without running `git`; outside a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by the plugin as a build extension where `git-commit-id-maven-plugin` does not run (`vidocq-runtime-parent` keeps that plugin). xref:modules/vidocq-runtime-maven-plugin.adoc#build-info[Details].
 
 | `vidocq:idea`
-| Experimental — IntelliJ IDEA shared run configurations (`.run/*.run.xml`) for the reactor's applications, or a CI check of them. xref:modules/vidocq-runtime-maven-plugin.adoc#idea[Details].
+| Experimental — IntelliJ IDEA shared run configurations (`.run/*.run.xml`) for the reactor's applications, and a shared JUnit template that starts tests with the Vidocq test agent (`-Dvidocq.idea.junitTemplate=false` leaves it out), or a CI check of them. xref:modules/vidocq-runtime-maven-plugin.adoc#idea[Details], xref:modules/vidocq-runtime-maven-plugin.adoc#idea-junit-template[the JUnit template].
 |===
 
 See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the exhaustive parameter list.

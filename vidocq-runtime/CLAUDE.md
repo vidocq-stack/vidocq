@@ -113,7 +113,10 @@ module path only, never packaged: Vidocq/vidocq#143), `run` (one forked run, aft
 on every change, keys `r`/`f`/`q`), `idea` (experimental, command line only: IntelliJ run configurations in
 `.run/`, never `.idea/`; by default, per application, a Maven run of `vidocq:dev` suffixed ` (dev)`, one of `vidocq:run`
 suffixed ` (run)`, and a Remote debug one suffixed ` (debug)`; `-Dvidocq.idea.kind=application` writes a single
-Application run of the main class instead, with no console), `vscode` (command line only: `.vscode/` settings
+Application run of the main class instead, with no console; it also writes the shared `.run/Template JUnit.run.xml`
+whose VM options name `vidocq-runtime-test-agent` of the plugin's version under `$MAVEN_REPOSITORY$`, resolving that
+jar, so IntelliJ starts tests on the module path despite IDEA-391927 — `-Dvidocq.idea.junitTemplate=false` leaves it
+out), `vscode` (command line only: `.vscode/` settings
 with the Java extension's language server on Java 25 and its automatic build off, tasks for `vidocq:dev`/`run`/`test`, a
 debug attach to `vidocq:dev`; a file it did not write is left alone), `eclipse` (command line only: `.eclipse/` launch
 configurations, Maven builds of `vidocq:dev`/`run`/`test` and a debug attach to `vidocq:dev`; removes one it no longer

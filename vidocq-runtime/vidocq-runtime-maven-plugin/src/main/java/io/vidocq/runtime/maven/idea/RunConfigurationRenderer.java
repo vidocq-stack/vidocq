@@ -272,6 +272,45 @@ final class RunConfigurationRenderer {
         return xml.toString();
     }
 
+    /** The name IntelliJ gives the file of a shared JUnit template: {@code .run/Template JUnit.run.xml}. */
+    static final String JUNIT_TEMPLATE_NAME = "Template JUnit";
+
+    /** The group of the test agent the JUnit template names. */
+    static final String TEST_AGENT_GROUP_ID = "io.vidocq.runtime";
+
+    /** The artifact of the test agent the JUnit template names: a jar with a {@code Premain-Class}, no dependency. */
+    static final String TEST_AGENT_ARTIFACT_ID = "vidocq-runtime-test-agent";
+
+    /**
+     * The shared JUnit template: every JUnit run configuration IntelliJ creates from it starts the tests with the
+     * test agent at {@code agentVersion}, taken from IntelliJ's local Maven repository ({@code $MAVEN_REPOSITORY$}).
+     * IntelliJ IDEA 2026.3 puts JUnit on the module path of a module with a descriptor and leaves the module unable
+     * to read it or to open its test packages to it (IDEA-391927); the agent completes that access from inside the
+     * launched JVM. The template keeps the module path: no {@code useClassPathOnly}, the former workaround.
+     *
+     * <p>The options are those of a JUnit configuration as IntelliJ IDEA 2026.3 stores it, with IntelliJ's own
+     * {@code -ea} kept before the agent; the agent is quoted, so that a local repository under a directory with a
+     * space stays one option.
+     */
+    static String junitTemplateBody(String agentVersion) {
+        String agent = "$MAVEN_REPOSITORY$/" + TEST_AGENT_GROUP_ID.replace('.', '/') + "/" + TEST_AGENT_ARTIFACT_ID
+                + "/" + agentVersion + "/" + TEST_AGENT_ARTIFACT_ID + "-" + agentVersion + ".jar";
+        StringBuilder xml = new StringBuilder(600);
+        xml.append(COMPONENT_START);
+        xml.append("  <configuration default=\"true\" type=\"JUnit\" factoryName=\"JUnit\">\n");
+        xml.append("    <option name=\"MAIN_CLASS_NAME\" value=\"\" />\n");
+        xml.append("    <option name=\"METHOD_NAME\" value=\"\" />\n");
+        xml.append("    <option name=\"TEST_OBJECT\" value=\"class\" />\n");
+        xml.append("    <option name=\"VM_PARAMETERS\" value=\"").append(escapeAttribute("-ea \"-javaagent:" + agent + "\""))
+                .append(ATTRIBUTE_END);
+        xml.append("    <method v=\"2\">\n");
+        xml.append("      <option name=\"Make\" enabled=\"true\" />\n");
+        xml.append("    </method>\n");
+        xml.append(CONFIGURATION_END);
+        xml.append(COMPONENT_END);
+        return xml.toString();
+    }
+
     /** Escapes an attribute value as IntelliJ's {@code JDOMUtil} does; apostrophes are kept. */
     static String escapeAttribute(String value) {
         StringBuilder escaped = new StringBuilder(value.length() + 16);

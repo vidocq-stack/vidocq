@@ -35,7 +35,10 @@ import org.eclipse.aether.util.filter.DependencyFilterUtils;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** {@link ArtifactResolver} over the Aether objects Maven injects into a mojo. */
 public final class AetherArtifactResolver implements ArtifactResolver {
@@ -81,6 +84,22 @@ public final class AetherArtifactResolver implements ArtifactResolver {
             throw new IOException("Cannot resolve " + groupId + ":" + artifactId + ":" + version
                     + " and its dependencies: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * The project's repositories, then the plugin repositories — a snapshot repository may be declared only as a
+     * plugin repository — each repository (by id) once (#148). Either list may be {@code null}.
+     */
+    public static List<RemoteRepository> repositories(List<RemoteRepository> project, List<RemoteRepository> plugin) {
+        Map<String, RemoteRepository> byId = new LinkedHashMap<>();
+        for (List<RemoteRepository> list : Arrays.asList(project, plugin)) {
+            if (list != null) {
+                for (RemoteRepository repository : list) {
+                    byId.putIfAbsent(repository.getId(), repository);
+                }
+            }
+        }
+        return List.copyOf(byId.values());
     }
 
     private static DefaultArtifact artifact(String groupId, String artifactId, String version, String type,

@@ -385,4 +385,32 @@ class RunConfigurationRendererTest {
         assertTrue(runConfiguration.contains("<option value=\"vidocq:run\" />"), runConfiguration);
         assertTrue(runConfiguration.contains("name=\"ServerApp (run)\""), runConfiguration);
     }
+
+    /**
+     * IntelliJ IDEA 2026.3 runs the tests of a module with a descriptor on the module path and fails to start them
+     * (IDEA-391927). The shared JUnit template names the test agent, which completes the module's access from inside
+     * the launched JVM, in the local Maven repository: every JUnit run created from it gets the agent. It keeps the
+     * module path: no {@code useClassPathOnly}, the former workaround.
+     */
+    @Test
+    void theJunitTemplateNamesTheTestAgentInTheLocalRepository() {
+        String body = RunConfigurationRenderer.junitTemplateBody("1.2.3-SNAPSHOT");
+
+        assertEquals("""
+                <component name="ProjectRunConfigurationManager">
+                  <configuration default="true" type="JUnit" factoryName="JUnit">
+                    <option name="MAIN_CLASS_NAME" value="" />
+                    <option name="METHOD_NAME" value="" />
+                    <option name="TEST_OBJECT" value="class" />
+                    <option name="VM_PARAMETERS" value="-ea &quot;-javaagent:$MAVEN_REPOSITORY$/io/vidocq/runtime/\
+                vidocq-runtime-test-agent/1.2.3-SNAPSHOT/vidocq-runtime-test-agent-1.2.3-SNAPSHOT.jar&quot;" />
+                    <method v="2">
+                      <option name="Make" enabled="true" />
+                    </method>
+                  </configuration>
+                </component>""", body);
+        assertFalse(body.contains("useClassPathOnly"), body);
+        assertEquals("Template JUnit.run.xml",
+                RunConfigurationRenderer.fileName(RunConfigurationRenderer.JUNIT_TEMPLATE_NAME));
+    }
 }

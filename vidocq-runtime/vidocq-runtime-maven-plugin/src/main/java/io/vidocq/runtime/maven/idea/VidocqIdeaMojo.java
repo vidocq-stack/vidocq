@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.maven.idea;
 
+import io.vidocq.runtime.maven.depgen.AetherArtifactResolver;
+import io.vidocq.runtime.maven.depgen.ArtifactResolver;
 import io.vidocq.runtime.maven.idea.IdeaApplications.Diagnostic;
 import io.vidocq.runtime.maven.idea.IdeaApplications.Discovery;
 import io.vidocq.runtime.maven.idea.RunConfigurationFiles.State;
@@ -28,10 +30,14 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.repository.RemoteRepository;
 
 import java.io.File;
 import java.io.IOException;
@@ -77,7 +83,13 @@ import java.util.stream.Stream;
  * the application's pom; {@code -Dvidocq.idea.generateBeforeLaunch=false} leaves that second step out. An
  * application without a main class of its own gets no Application run, and a warning.
  *
- * <p>The goal writes nothing else: never {@code .idea/}, {@code *.iml} or any other project file, which
+ * <p>Next to them, it writes the shared JUnit template {@code .run/Template JUnit.run.xml}: IntelliJ IDEA 2026.3
+ * fails to start the tests of a module with a descriptor (IDEA-391927), and the template starts every test with
+ * {@code io.vidocq.runtime:vidocq-runtime-test-agent} of this plugin's version, taken from IntelliJ's local Maven
+ * repository, which completes the module's access from inside the test JVM. A write resolves the agent so that its
+ * jar is there; {@code -Dvidocq.idea.junitTemplate=false} leaves the template out.
+ *
+ * <p>The goal writes nothing else into the project: never {@code .idea/}, {@code *.iml} or any other project file, which
  * belong to IntelliJ's own Maven import (the retired {@code maven-idea-plugin} competed with it). It never
  * overwrites a file it did not generate, nor one edited since: those belong to the user, and the goal only
  * warns about them. Configuration errors, file name collisions and a run from inside a module of a larger
@@ -96,6 +108,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
     private static final String PREFIX = "Vidocq idea: ";
     /** How a message names a file of the run configuration directory. */
     private static final String RUN_DIRECTORY = ".run/";
+    /** How a message names what the JUnit template is for. */
+    private static final String JUNIT_TEMPLATE_OWNER = "the JUnit tests of this project";
 
     /**
      * {@link #kind}, parsed once at the start of {@link #run}: every method that renders a body reads it, and
@@ -165,6 +179,38 @@ public class VidocqIdeaMojo extends AbstractMojo {
     @Parameter(property = "vidocq.idea.skip", defaultValue = "false")
     private boolean skip;
 
+    /**
+     * Also write the shared JUnit template, {@code .run/Template JUnit.run.xml}, whose VM options start every test
+     * with {@code io.vidocq.runtime:vidocq-runtime-test-agent} of this plugin's version, from IntelliJ's local Maven
+     * repository: IntelliJ IDEA 2026.3 fails to start the tests of a module with a descriptor otherwise
+     * (IDEA-391927). A write resolves that agent, so that the jar is there; when it cannot, the template is written
+     * all the same, with a warning. {@code false} leaves the template out.
+     */
+    @Parameter(property = "vidocq.idea.junitTemplate", defaultValue = "true")
+    private boolean junitTemplate;
+
+    /** Aether repository session, to resolve the test agent the JUnit template names. */
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
+    private RepositorySystemSession repoSession;
+
+    /** The project's own remote repositories, where the test agent is looked for. */
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
+    private List<RemoteRepository> remoteRepos;
+
+    /** The project's plugin repositories, where the test agent is looked for too: it is released with this plugin. */
+    @Parameter(defaultValue = "${project.remotePluginRepositories}", readonly = true)
+    private List<RemoteRepository> pluginRepos;
+
+    @Component
+    private RepositorySystem repoSystem;
+
+    /** This plugin's own version, which is the runtime's, and the version of the test agent the template names. */
+    @Parameter(defaultValue = "${plugin.version}", readonly = true, required = true)
+    private String pluginVersion;
+
+    /** Resolves the test agent; built from the Aether objects above in {@link #execute}, a fake in the tests. */
+    private ArtifactResolver agentResolver;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         if (skip) {
@@ -175,6 +221,10 @@ public class VidocqIdeaMojo extends AbstractMojo {
             throw new MojoFailureException(PREFIX + "this goal runs from the command line only (\"mvn vidocq:idea\"),"
                     + " but execution '" + mojoExecution.getExecutionId() + "' binds it to the build. Remove that"
                     + " <execution> from the pom.");
+        }
+        if (agentResolver == null) {
+            agentResolver = new AetherArtifactResolver(repoSystem, repoSession,
+                    AetherArtifactResolver.repositories(remoteRepos, pluginRepos));
         }
         List<MavenProject> allProjects = session.getAllProjects() != null ? session.getAllProjects() : reactorProjects;
         run(reactorProjects, allProjects, session.getUserProperties(), Path.of(session.getExecutionRootDirectory()));
@@ -266,6 +316,9 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
         if (mode == Mode.WRITE) {
             write(targets.values(), runDirectory, targets);
+            if (junitTemplate) {
+                resolveTestAgent();
+            }
         } else {
             check(directory, targets.values(), runDirectory, targets, mode == Mode.STRICT_CHECK);
         }
@@ -294,15 +347,21 @@ public class VidocqIdeaMojo extends AbstractMojo {
      * One generated file and the application it belongs to. {@code withJre} re-renders its body for another
      * JRE, keeping everything else about this particular file (its goal, its name, or its debug host and
      * port) unchanged; {@link #pinHint} uses it to tell whether a user-owned file differs only by its JDK.
+     * {@code application} is {@code null} for the JUnit template, which belongs to no application.
      */
     record Target(IdeaApplication application, String shownPath, Path file, String body, byte[] onDisk,
                           State state, UnaryOperator<String> withJre) {
+
+        /** What the file is for, as a message names it: the application's coordinates, or the JUnit tests. */
+        String owner() {
+            return application == null ? JUNIT_TEMPLATE_OWNER : application.coordinates();
+        }
 
         @Override
         public boolean equals(Object other) {
             return other instanceof Target(var otherApplication, var otherShownPath, var otherFile, var otherBody,
                                            var otherOnDisk, var otherState, var otherWithJre)
-                    && application.equals(otherApplication) && shownPath.equals(otherShownPath)
+                    && Objects.equals(application, otherApplication) && shownPath.equals(otherShownPath)
                     && file.equals(otherFile) && body.equals(otherBody) && Arrays.equals(onDisk, otherOnDisk)
                     && state == otherState && withJre.equals(otherWithJre);
         }
@@ -343,7 +402,37 @@ public class VidocqIdeaMojo extends AbstractMojo {
                                 generateBeforeLaunch));
             }
         }
+        if (junitTemplate && !targets.isEmpty()) {
+            // IDEA-391927: the template names the test agent; it pins no JDK, so the JRE leaves it as it is.
+            String body = RunConfigurationRenderer.junitTemplateBody(
+                    Objects.requireNonNull(pluginVersion, "the plugin version"));
+            addTarget(targets, runDirectory, null, RunConfigurationRenderer.JUNIT_TEMPLATE_NAME, _ -> body);
+        }
         return targets;
+    }
+
+    /** The coordinates of the test agent the JUnit template names. */
+    private String testAgentCoordinates() {
+        return RunConfigurationRenderer.TEST_AGENT_GROUP_ID + ":" + RunConfigurationRenderer.TEST_AGENT_ARTIFACT_ID
+                + ":" + pluginVersion;
+    }
+
+    /**
+     * Resolves the test agent the JUnit template names, so that its jar is in the local repository when IntelliJ
+     * starts a test. A failure (offline, agent not published) is a warning: the template is right all the same.
+     */
+    private void resolveTestAgent() {
+        String coordinates = testAgentCoordinates();
+        try {
+            Path jar = agentResolver.resolve(RunConfigurationRenderer.TEST_AGENT_GROUP_ID,
+                    RunConfigurationRenderer.TEST_AGENT_ARTIFACT_ID, pluginVersion, "jar", null);
+            getLog().info(PREFIX + "the JUnit template starts every test with the test agent " + coordinates
+                    + ", resolved to " + jar + ".");
+        } catch (IOException e) {
+            getLog().warn(PREFIX + "cannot resolve " + coordinates + " (" + e.getMessage() + "). The JUnit template"
+                    + " names its jar in the local Maven repository: until it is there, a JUnit run created from the"
+                    + " template fails to start. Run \"mvn vidocq:idea\" again online to download it.");
+        }
     }
 
     /** Adds one file to {@code targets}, failing on a name collision with a file already added. */
@@ -353,17 +442,19 @@ public class VidocqIdeaMojo extends AbstractMojo {
         String fileName = RunConfigurationRenderer.fileName(configurationName);
         // Case-insensitive: two names that differ only by case are one file on macOS and Windows.
         String key = fileName.toLowerCase(Locale.ROOT);
-        Target other = targets.get(key);
-        if (other != null) {
-            throw new MojoFailureException(PREFIX + other.application().coordinates() + " and "
-                    + application.coordinates() + " both map to .run/" + fileName + " (configuration name \""
-                    + configurationName + "\"). Set <vidocq.idea.configurationName> in one of their poms.");
-        }
         Path file = runDirectory.resolve(fileName);
         String body = withJre.apply(jre);
         byte[] onDisk = Files.isRegularFile(file) ? read(file) : null;
-        targets.put(key, new Target(application, RUN_DIRECTORY + fileName, file, body, onDisk,
-                RunConfigurationFiles.classify(onDisk, body), withJre));
+        Target target = new Target(application, RUN_DIRECTORY + fileName, file, body, onDisk,
+                RunConfigurationFiles.classify(onDisk, body), withJre);
+        Target other = targets.get(key);
+        if (other != null) {
+            throw new MojoFailureException(PREFIX + other.owner() + " and " + target.owner() + " both map to .run/"
+                    + fileName + " (configuration name \"" + configurationName + "\"). Set"
+                    + " <vidocq.idea.configurationName> in "
+                    + (application == null ? "the pom of " + other.owner() : "one of their poms") + ".");
+        }
+        targets.put(key, target);
     }
 
     /**
@@ -408,7 +499,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
     /** Logs why a target vidocq:idea owns does not match, if it does not. */
     private void logState(Target target) {
-        String about = target.application().coordinates();
+        String about = target.owner();
         switch (target.state()) {
             case MISSING -> getLog().error(PREFIX + target.shownPath() + " is missing for " + about + ".");
             case OUTDATED -> {
@@ -431,7 +522,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
         getLog().error(PREFIX + target.shownPath() + (target.state() == State.EDITED
                 ? " was edited after vidocq:idea generated it"
                 : " was not generated by vidocq:idea") + " and differs from what vidocq:idea writes for "
-                + target.application().coordinates() + ":");
+                + target.owner() + ":");
         logDiff(target);
         String pinHint = pinHint(target, target.shownPath());
         if (pinHint != null) {
@@ -501,7 +592,9 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
     private Outcome writeFile(Target target, Path runDirectory) throws MojoExecutionException {
         IdeaApplication application = target.application();
-        String details = " (" + application.coordinates() + (application.mainClass() == null
+        String details = application == null
+                ? " (JUnit template: every test starts with the test agent " + testAgentCoordinates() + ")"
+                : " (" + application.coordinates() + (application.mainClass() == null
                 ? ", no main class of its own" : ", main class " + application.mainClass())
                 + ", IntelliJ module " + application.moduleName() + ")";
         return switch (target.state()) {
@@ -573,7 +666,9 @@ public class VidocqIdeaMojo extends AbstractMojo {
      * @param subject how the sentence names the file
      */
     private String pinHint(Target target, String subject) {
-        String pinned = jre == null ? RunConfigurationFiles.pinnedJre(target.onDisk()) : null;
+        // The JUnit template never pins a JDK, whatever vidocq.idea.jre says: nothing to keep.
+        String pinned = jre == null && target.application() != null
+                ? RunConfigurationFiles.pinnedJre(target.onDisk()) : null;
         if (pinned == null) {
             return null;
         }
@@ -611,7 +706,13 @@ public class VidocqIdeaMojo extends AbstractMojo {
                 continue;
             }
             String otherKind = otherKindFiles.get(key);
-            if (otherKind != null) {
+            if (key.equals(fileKey(RunConfigurationRenderer.JUNIT_TEMPLATE_NAME))) {
+                // Written only next to the configurations of an application: without one, it is not an orphan.
+                if (!junitTemplate) {
+                    getLog().info(PREFIX + RUN_DIRECTORY + name + " is the JUnit template, which"
+                            + " vidocq.idea.junitTemplate=false does not write: delete it if you no longer use it.");
+                }
+            } else if (otherKind != null) {
                 getLog().info(PREFIX + RUN_DIRECTORY + name + " is " + otherKind + ", which vidocq.idea.kind="
                         + renderKind.property() + " does not write: delete it if you no longer use it.");
             } else {
@@ -760,4 +861,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
     void setJre(String jre) { this.jre = jre; }
     void setSkip(boolean skip) { this.skip = skip; }
     void setMojoExecution(MojoExecution mojoExecution) { this.mojoExecution = mojoExecution; }
+    void setJunitTemplate(boolean junitTemplate) { this.junitTemplate = junitTemplate; }
+    void setPluginVersion(String pluginVersion) { this.pluginVersion = pluginVersion; }
+    void setAgentResolver(ArtifactResolver agentResolver) { this.agentResolver = agentResolver; }
 }
