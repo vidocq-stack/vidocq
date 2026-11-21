@@ -56,7 +56,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
 
 /**
@@ -521,16 +520,13 @@ public class VidocqJlinkMojo extends AbstractMojo {
 
         // jdeps --print-module-deps on the app jar, with the jars staged in module-path,
         // returns the minimum list of modules (including JDK) required transitively.
-        ToolProvider jdeps = ToolProvider.findFirst("jdeps")
-                .orElseThrow(() -> new IOException("jdeps tool is not available in this JDK"));
-
         Path appJar = project.getArtifact().getFile().toPath();
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
         int rc;
         try (var ps = new PrintStream(stdout, true, StandardCharsets.UTF_8);
              var pe = new PrintStream(stderr, true, StandardCharsets.UTF_8)) {
-            rc = jdeps.run(ps, pe,
+            rc = JdkTools.run("jdeps", ps, pe,
                     "--module-path", stage.toString(),
                     "--multi-release", "25",
                     "--ignore-missing-deps",
@@ -632,10 +628,8 @@ public class VidocqJlinkMojo extends AbstractMojo {
         deleteRecursive(distDir.toPath());
         List<String> args = jlinkArgs(rootModules, launch);
 
-        ToolProvider jlink = ToolProvider.findFirst("jlink")
-                .orElseThrow(() -> new IOException("jlink tool is not available in this JDK"));
         getLog().info("Modules: " + rootModules);
-        int rc = jlink.run(System.out, System.err, args.toArray(new String[0]));
+        int rc = JdkTools.run("jlink", System.out, System.err, args.toArray(new String[0]));
         if (rc != 0) {
             throw new IOException("jlink failed (rc=" + rc + ")");
         }

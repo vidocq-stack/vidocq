@@ -38,7 +38,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
 
 /**
@@ -146,10 +145,7 @@ public class VidocqJpackageMojo extends AbstractMojo {
             getLog().info("Vidocq jpackage — type=" + type + " name=" + appName
                     + " version=" + version + " main=" + launch.entryPoint());
 
-            ToolProvider jpackage = ToolProvider.findFirst("jpackage")
-                    .orElseThrow(() -> new MojoExecutionException(
-                            "jpackage tool is not available in this JDK"));
-            int rc = jpackage.run(System.out, System.err, args.toArray(new String[0]));
+            int rc = JdkTools.run("jpackage", System.out, System.err, args.toArray(new String[0]));
             if (rc != 0) {
                 throw new MojoExecutionException("jpackage failed (rc=" + rc + ")");
             }

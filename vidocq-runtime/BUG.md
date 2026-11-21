@@ -4470,3 +4470,20 @@ where this whole bug class is invisible.
 - **Cause**: the file was not updated with 2cf4cb00 and #314.
 - **Fix**: the file keeps the principles of the CLI and points to the reference page, the CLI/plugin table and
   `whats-new` for the commands, and to #339 for what is next: one description to keep up to date.
+
+## BUG-20261121-04 — A parallel build fails in `vidocq:jlink`: the JDK's jlink is not reentrant
+
+- **Date**: 2026-11-21
+- **Status**: FIXED on `build/examples-dist-opt-in`
+- **Affected module**: vidocq-runtime-maven-plugin (`VidocqJlinkMojo`, `VidocqJpackageMojo`)
+- **Symptom**: `./mvnw clean install -Dmaven.test.skip -T 1C` at the root fails in one of the examples:
+  `Error: java.lang.IllegalStateException: stream has already been operated upon or closed`, then
+  `Failed to create jlink image: jlink failed (rc=1)` (the Cyrano example on the first run).
+- **Minimal reproduction**: six `ToolProvider.findFirst("jlink").run(...)` at once in one JVM (JDK 25): five return 1
+  with that message. `JdkToolsTest.imagesLinkedAtOnceInOneJvmAreAllLinked` does it.
+- **Cause**: the goals run the JDK's tools inside the Maven JVM, and a parallel build runs the goals of several
+  modules at once; the `jlink` of JDK 25 shares state between its runs.
+- **Fix**: `JdkTools` runs `jdeps`, `jlink` and `jpackage` one at a time. The examples also build their images on
+  demand only (`-Pdist`, `vidocq-runtime-examples/build-images.sh`): no test reads them.
+- **Related**: the same command also fails, about one run in five, in Vauban's weaving of another module
+  (BUG-20261121-05, in Vauban's `BUG.md`).
