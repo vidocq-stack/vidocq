@@ -22,7 +22,12 @@ package io.vidocq.vauban.processor.weave;
 import io.vidocq.vauban.weaver.ProxyLinkWeaver;
 import io.vidocq.vauban.weaver.ProxyLinkWeaver.SuperChain;
 
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TaskEvent;
+import com.sun.source.util.TaskListener;
+
 import javax.annotation.processing.Filer;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.tools.StandardLocation;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -38,11 +43,17 @@ import java.util.List;
  * processor cannot weave the {@code (ProxyLink)} entry constructor itself; and the javac
  * plugin — public API only — has no access to the {@code -d} directory. The processor,
  * which learns that directory from its {@link Filer}, therefore {@linkplain #publish
- * publishes} a small <em>weave plan</em> into the class output and registers the
- * directory in a JVM-global system property; at {@code COMPILATION finished} the plugin
- * {@linkplain #executeRegisteredPlans() executes} every registered plan. System
- * properties are the channel because javac loads processors and plugins in distinct
- * class loaders — statics do not cross.
+ * publishes} a small <em>weave plan</em> into the class output, and runs it at
+ * {@code COMPILATION finished} of its own javac task, through a listener on that task.
+ *
+ * <p>Where the processing environment is not javac's own (a build tool that wraps it),
+ * the processor cannot reach its task: it registers the directory in a JVM-global system
+ * property instead, and at {@code COMPILATION finished} the plugin {@linkplain
+ * #executeRegisteredPlans() executes} every registered plan. System properties are that
+ * channel because javac loads processors and plugins in distinct class loaders — statics
+ * do not cross. In a parallel build ({@code mvn -T}) that channel lets a task run the plan
+ * of another task still writing its class files (BUG-20261121-05), so it is the fallback
+ * only.
  *
  * <p>Plan line format: {@code bean <fqn> <NO_ARG|MARKER>} (weave the marker, chaining the
  * superclass accordingly) and {@code proxy <fqn>} (retarget the generated proxy's
@@ -95,9 +106,9 @@ public final class WeavePlan {
      * plugin. Call at most once per compilation (the {@link Filer} rejects a second
      * resource creation anyway).
      */
-    public static void publish(Filer filer, List<Line> lines) throws IOException {
+    public static void publish(ProcessingEnvironment processingEnv, List<Line> lines) throws IOException {
         if (lines.isEmpty()) return;
-        var resource = filer.createResource(StandardLocation.CLASS_OUTPUT, "", PLAN_RESOURCE);
+        var resource = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", PLAN_RESOURCE);
         try (var writer = resource.openWriter()) {
             for (var line : lines) {
                 writer.write(line.serialize());
@@ -108,11 +119,51 @@ public final class WeavePlan {
         if ("file".equals(uri.getScheme())) {
             // …/META-INF/vauban/weave-plan → three levels up is the class output directory.
             Path outputDir = Path.of(uri).getParent().getParent().getParent();
-            System.setProperty(PROP_PREFIX + outputDir, outputDir.toString());
+            if (!runAtTheEndOfItsTask(processingEnv, outputDir)) {
+                System.setProperty(PROP_PREFIX + outputDir, outputDir.toString());
+            }
         } else {
             LOG.log(System.Logger.Level.WARNING,
                     "[Vauban] weave plan written to a non-file output ({0}) — "
                             + "the javac weaving plugin cannot execute it", uri);
+        }
+    }
+
+    /**
+     * Runs the plan of {@code outputDir} when the javac task of this processing environment ends; returns
+     * {@code false} when the environment is not javac's own, and the task out of reach.
+     */
+    private static boolean runAtTheEndOfItsTask(ProcessingEnvironment processingEnv, Path outputDir) {
+        JavacTask task;
+        try {
+            task = JavacTask.instance(processingEnv);
+        } catch (IllegalArgumentException _) {
+            return false;
+        }
+        task.addTaskListener(new TaskListener() {
+            @Override
+            public void finished(TaskEvent event) {
+                if (event.getKind() == TaskEvent.Kind.COMPILATION) {
+                    executeOwnPlan(outputDir);
+                }
+            }
+        });
+        return true;
+    }
+
+    /** Executes the plan of a task that has written all its class files: what is missing then is missing for good. */
+    private static void executeOwnPlan(Path outputDir) {
+        Path planFile = outputDir.resolve(PLAN_RESOURCE);
+        try {
+            if (Files.isRegularFile(planFile) && execute(outputDir, planFile)) {
+                Files.deleteIfExists(planFile);
+            } else if (Files.isRegularFile(planFile)) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "[Vauban] weave plan {0} names a class this compilation did not write", planFile);
+            }
+        } catch (IOException | UncheckedIOException e) {
+            LOG.log(System.Logger.Level.ERROR,
+                    "[Vauban] failed to execute weave plan " + planFile, e);
         }
     }
 

@@ -9441,3 +9441,12 @@ tutorial's `IllegalAccessException` before the fix; `ComponentCollectorMemberSel
   one module runs the plan of another that is still writing its class files, and two tasks can run one plan at once.
 - **Fix**: the plans run one at a time, under a lock on the system properties (one object for every class loader),
   and a class file the weaver cannot read counts as absent: the plan is kept for the task that owns it.
+- **Reopened** (2026-11-21): the same command still failed on `main` after that fix, in three modules at once:
+  `NullPointerException` (`dirac-cdi-vauban`, `knock-cdi-vauban`) and `Reading beyond classfile bounds: Index 8 out
+  of bounds for length 8` (`cyrano-cdi-vauban`). The Class-File API parses lazily: a truncated class file fails past
+  the `try`, or with another exception. Tolerating what another task writes was the wrong fix.
+- **Fix, second**: under javac the processor reaches its own task (`JavacTask.instance(processingEnv)`, public API)
+  and runs its plan when that task ends, through a listener on it: the plan is never published to the other tasks of
+  the JVM. The system property and the plugin remain for a processing environment that is not javac's own (a build
+  tool that wraps it). `WeavingJavacPluginTest#thePlanStaysWithItsCompilation` watches the system properties during a
+  compilation: a plan was published there before the fix.

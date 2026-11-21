@@ -19,6 +19,9 @@
  */
 package io.vidocq.vauban.processor.apt;
 
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TaskEvent;
+import com.sun.source.util.TaskListener;
 import io.vidocq.vauban.api.ProxyLink;
 import io.vidocq.vauban.processor.VaubanProcessor;
 import org.junit.jupiter.api.DisplayName;
@@ -137,10 +140,46 @@ class WeavingJavacPluginTest {
         }
     }
 
+    /**
+     * In a parallel build ({@code mvn -T}) the javac tasks of several modules share the JVM, and each ran every plan
+     * published in the JVM: a task read class files another one was still writing, and failed (BUG-20261121-05: Bad
+     * magic number, Reading beyond classfile bounds, a NullPointerException). Under javac a plan stays with its task.
+     */
+    @Test
+    @DisplayName("under javac, the weave plan is never published to the other compilations of the JVM")
+    void thePlanStaysWithItsCompilation() throws Exception {
+        var published = new java.util.concurrent.atomic.AtomicBoolean();
+        TaskListener watcher = new TaskListener() {
+            @Override
+            public void finished(TaskEvent event) {
+                if (System.getProperties().stringPropertyNames().stream()
+                        .anyMatch(name -> name.startsWith("vauban.weave.plan."))) {
+                    published.set(true);
+                }
+            }
+        };
+
+        Path out = compile(watcher, CONFIG, CONSUMER, OIDC);
+
+        assertFalse(published.get(), "no other compilation of the JVM can see the plan");
+        try (var loader = new URLClassLoader(new java.net.URL[]{out.toUri().toURL()},
+                getClass().getClassLoader())) {
+            assertTrue(Arrays.stream(loader.loadClass("io.repro.app.Oidc").getDeclaredConstructors())
+                            .anyMatch(c -> c.getParameterCount() == 1
+                                    && c.getParameterTypes()[0].getName().equals(ProxyLink.CLASS_NAME)),
+                    "and the compilation still weaves its own beans");
+        }
+    }
+
     // ---- Harness (mirrors UnproxyableBeanValidationTest, without -Xplugin) ----------------------
 
     /** Compiles and returns the class-output directory. */
     private Path compile(String... sources) throws IOException {
+        return compile(null, sources);
+    }
+
+    /** Compiles, with a listener on the javac task when there is one, and returns the class-output directory. */
+    private Path compile(TaskListener listener, String... sources) throws IOException {
         var compiler = ToolProvider.getSystemJavaCompiler();
         var diagnostics = new DiagnosticCollector<JavaFileObject>();
 
@@ -160,6 +199,9 @@ class WeavingJavacPluginTest {
             var task = compiler.getTask(null, fileManager, diagnostics, options, null,
                     writeSources(tempDir.resolve("src"), sources));
             task.setProcessors(List.of(new VaubanProcessor()));
+            if (listener != null) {
+                ((JavacTask) task).addTaskListener(listener);
+            }
             boolean success = task.call();
 
             var messages = new ArrayList<String>();

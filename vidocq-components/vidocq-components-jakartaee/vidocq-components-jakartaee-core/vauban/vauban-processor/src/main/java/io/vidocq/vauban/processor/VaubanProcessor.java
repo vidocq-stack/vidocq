@@ -1308,7 +1308,7 @@ public class VaubanProcessor extends AbstractProcessor {
         }
         if (lines.isEmpty()) return;
         try {
-            io.vidocq.vauban.processor.weave.WeavePlan.publish(processingEnv.getFiler(), lines);
+            io.vidocq.vauban.processor.weave.WeavePlan.publish(processingEnv, lines);
             weavePlanPublished = true;
         } catch (java.io.IOException e) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
