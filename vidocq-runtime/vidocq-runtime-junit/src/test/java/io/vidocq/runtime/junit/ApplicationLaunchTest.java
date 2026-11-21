@@ -404,5 +404,31 @@ class ApplicationLaunchTest {
     void withNeitherThePropertyNorTheFileThereIsNoRuntimePath() {
         assertEquals(null, ApplicationLaunch.runtimePath(null, dir.resolve("target/test-classes")));
         assertEquals(null, ApplicationLaunch.runtimePath(null, null));
+        assertEquals(null, ApplicationLaunch.runtimePath(null, Path.of("/")));
+    }
+
+    /** A file the build wrote but that cannot be read says so, rather than starting the application without it. */
+    @Test
+    void anUnreadableRuntimePathFileIsAnError() throws IOException {
+        Path testClasses = Files.createDirectories(dir.resolve("target/test-classes"));
+        Files.createDirectories(dir.resolve("target").resolve(ApplicationLaunch.RUNTIME_PATH_FILE));
+
+        assertThrows(java.io.UncheckedIOException.class, () -> ApplicationLaunch.runtimePath(null, testClasses));
+    }
+
+    /** The test classes are found from the code source of the test class: a file location only. */
+    @Test
+    void theTestClassesAreWhereTheTestClassWasLoadedFrom() throws Exception {
+        Path testClasses = Files.createDirectories(dir.resolve("target/test-classes"));
+        java.security.cert.Certificate[] none = null;
+
+        assertEquals(testClasses, ApplicationLaunch.classesOf(
+                new java.security.CodeSource(testClasses.toUri().toURL(), none)));
+        assertEquals(null, ApplicationLaunch.classesOf(
+                new java.security.CodeSource(java.net.URI.create("jrt:/java.base").toURL(), none)));
+        assertEquals(null, ApplicationLaunch.classesOf(new java.security.CodeSource(null, none)));
+        assertEquals(null, ApplicationLaunch.classesOf(null));
+        assertEquals(null, ApplicationLaunch.classesOf(
+                new java.security.CodeSource(java.net.URI.create("file://host/share/x").toURL(), none)));
     }
 }

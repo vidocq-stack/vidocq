@@ -97,6 +97,21 @@ class VidocqTestPathMojoTest {
                 Files.readString(build.resolve("target").resolve(VidocqTestPathMojo.FILE)));
     }
 
+    /** A build directory that cannot hold the file fails the goal, with the path in the message. */
+    @Test
+    void aFileThatCannotBeWrittenFailsTheGoal(@TempDir Path build) throws Exception {
+        MavenProject project = new MavenProject(new Model());
+        project.setArtifacts(new LinkedHashSet<>());
+        VidocqTestPathMojo mojo = new VidocqTestPathMojo();
+        mojo.project = project;
+        mojo.buildDirectory = Files.writeString(build.resolve("target"), "a file, not a directory").toFile();
+
+        org.apache.maven.plugin.MojoExecutionException failure = org.junit.jupiter.api.Assertions.assertThrows(
+                org.apache.maven.plugin.MojoExecutionException.class, mojo::execute);
+        org.junit.jupiter.api.Assertions.assertTrue(failure.getMessage().contains(VidocqTestPathMojo.FILE),
+                failure.getMessage());
+    }
+
     /**
      * The application {@code @VidocqTest} starts runs the copy {@code vidocq:generate} enriched of a dependency, as
      * {@code vidocq dev} and the packaged application do: the generated classes are in the copy only.

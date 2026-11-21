@@ -27,8 +27,11 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -99,13 +102,31 @@ final class ApplicationLaunch {
             return property;
         }
         Path build = testClasses == null ? null : testClasses.getParent();
-        if (build == null || !Files.isRegularFile(build.resolve(RUNTIME_PATH_FILE))) {
+        if (build == null) {
+            return null;
+        }
+        Path file = build.resolve(RUNTIME_PATH_FILE);
+        try {
+            return Files.readString(file).strip();
+        } catch (NoSuchFileException _) {
+            return null;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read " + file, e);
+        }
+    }
+
+    /**
+     * The directory or jar a test class was loaded from, given its code source: {@code target/test-classes} under
+     * Maven and in an IDE that builds into it; {@code null} when there is none, or it is not a file.
+     */
+    static Path classesOf(CodeSource source) {
+        if (source == null || source.getLocation() == null || !"file".equals(source.getLocation().getProtocol())) {
             return null;
         }
         try {
-            return Files.readString(build.resolve(RUNTIME_PATH_FILE)).strip();
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not read " + build.resolve(RUNTIME_PATH_FILE), e);
+            return Path.of(source.getLocation().toURI());
+        } catch (URISyntaxException | IllegalArgumentException _) {
+            return null;
         }
     }
 

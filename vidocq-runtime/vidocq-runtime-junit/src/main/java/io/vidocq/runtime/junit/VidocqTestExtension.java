@@ -27,9 +27,7 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.file.Path;
-import java.security.CodeSource;
 import java.time.Duration;
 import java.util.List;
 
@@ -91,7 +89,7 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
                 System.getProperty("vidocq.mainModule"));
         String modulePath = ApplicationLaunch.modulePath(System.getProperty("jdk.module.path"),
                 ApplicationLaunch.runtimePath(System.getProperty(ApplicationLaunch.RUNTIME_PATH_PROPERTY),
-                        testClasses(testClass)));
+                        ApplicationLaunch.classesOf(testClass.getProtectionDomain().getCodeSource())));
         List<String> properties = ApplicationLaunch.properties(
                 ApplicationLaunch.devServiceProperties(System.getProperties()), settings.properties());
         ApplicationLaunch.Layout layout = ApplicationLaunch.layout(modulePath, module, properties,
@@ -104,22 +102,6 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
                     Duration.ofSeconds(settings.startupTimeoutSeconds()));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not start the application module " + module, e);
-        }
-    }
-
-    /**
-     * The directory or jar the test class was loaded from ({@code target/test-classes} under Maven and in an IDE
-     * that builds into it), or {@code null} when its origin is not a file.
-     */
-    private static Path testClasses(Class<?> testClass) {
-        CodeSource source = testClass.getProtectionDomain().getCodeSource();
-        if (source == null || source.getLocation() == null || !"file".equals(source.getLocation().getProtocol())) {
-            return null;
-        }
-        try {
-            return Path.of(source.getLocation().toURI());
-        } catch (URISyntaxException | IllegalArgumentException _) {
-            return null;
         }
     }
 }
