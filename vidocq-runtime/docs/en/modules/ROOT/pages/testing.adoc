@@ -92,6 +92,12 @@ class HelloResourceTest {
     </configuration>
 </plugin>
 ----
++
+[[from-the-ide]]A test an IDE starts gets no property from Surefire [.tag-new]#NEW#: `vidocq:test-path` also writes the
+same path to `target/vidocq-test-runtime-path`, and `@VidocqTest` reads it, next to the test classes, when the property
+is not set. The application then starts from the IDE instead of stopping on `Module io.vidocq.runtime.core not found`.
+The file is the one the last Maven build wrote: after a change of dependencies, run `mvn test-compile` (or any later
+phase) once. A property the IDE sets, as the Vidocq IntelliJ plugin does, wins over the file.
 * [[dev-services]]**The dev services of the run**reach the application. `vidocq test`, `vidocq dev`
   and, under a plain `mvn test`, the `vidocq-runtime-devservices-junit` listener (see
   xref:dev-services.adoc[Dev services]) put the keys their containers publish, `vidocq.pool.url` or

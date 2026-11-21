@@ -21,6 +21,7 @@ package io.vidocq.runtime.maven;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -28,6 +29,8 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,6 +45,9 @@ import java.util.Set;
  * no module requires, a JDBC driver for one, stays on the class path of the tests, and the application never saw
  * it, while {@code vidocq:dev} and the packaged application have it on their module path (BUG-20261030-06).</p>
  *
+ * <p>The same path goes to {@value #FILE} in the build directory: a test an IDE starts gets no property from
+ * Surefire, and {@code vidocq-runtime-junit} reads the file then.</p>
+ *
  * <p>Bound to {@code process-test-classes} by {@code vidocq-runtime-parent}.</p>
  */
 @Mojo(name = "test-path",
@@ -53,6 +59,9 @@ public class VidocqTestPathMojo extends AbstractMojo {
     /** The property, read by Surefire's configuration in the parent and by {@code vidocq-runtime-junit}. */
     static final String PROPERTY = "vidocq.test.runtimePath";
 
+    /** The file, in the build directory, that {@code vidocq-runtime-junit} reads when the property is missing. */
+    static final String FILE = "vidocq-test-runtime-path";
+
     private static final Set<String> RUNTIME_SCOPES = Set.of(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME);
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -62,9 +71,17 @@ public class VidocqTestPathMojo extends AbstractMojo {
     File buildDirectory;
 
     @Override
-    public void execute() {
-        project.getProperties().setProperty(PROPERTY,
-                runtimePath(project.getArtifacts(), buildDirectory.toPath()));
+    public void execute() throws MojoExecutionException {
+        String path = runtimePath(project.getArtifacts(), buildDirectory.toPath());
+        project.getProperties().setProperty(PROPERTY, path);
+        // A test an IDE starts gets no property from Surefire: vidocq-runtime-junit reads this file instead.
+        Path file = buildDirectory.toPath().resolve(FILE);
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, path);
+        } catch (IOException e) {
+            throw new MojoExecutionException("Could not write " + file, e);
+        }
     }
 
     /**

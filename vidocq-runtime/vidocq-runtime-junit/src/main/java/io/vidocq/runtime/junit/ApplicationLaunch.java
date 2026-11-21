@@ -24,8 +24,10 @@ import io.vidocq.runtime.core.VidocqAppLayer;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -81,6 +83,31 @@ final class ApplicationLaunch {
      * Surefire: every jar the packaged application would have on its module path.
      */
     static final String RUNTIME_PATH_PROPERTY = "vidocq.test.runtimePath";
+
+    /**
+     * The file {@code vidocq:test-path} writes in the build directory, next to {@code test-classes}, with the value
+     * of {@value #RUNTIME_PATH_PROPERTY}: what a test an IDE starts reads, as it gets no property from Surefire.
+     */
+    static final String RUNTIME_PATH_FILE = "vidocq-test-runtime-path";
+
+    /**
+     * The runtime path of the application: {@code property}, the value the build or the IDE computed for this
+     * launch, else the file the last Maven build wrote next to {@code testClasses}, else {@code null}.
+     */
+    static String runtimePath(String property, Path testClasses) {
+        if (property != null && !property.isBlank()) {
+            return property;
+        }
+        Path build = testClasses == null ? null : testClasses.getParent();
+        if (build == null || !Files.isRegularFile(build.resolve(RUNTIME_PATH_FILE))) {
+            return null;
+        }
+        try {
+            return Files.readString(build.resolve(RUNTIME_PATH_FILE)).strip();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read " + build.resolve(RUNTIME_PATH_FILE), e);
+        }
+    }
 
     /**
      * Copy of {@code io.vidocq.runtime.devservices.host.DevServicesSession.PROVIDED_PREFIX}: the dev services session

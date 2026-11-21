@@ -375,4 +375,34 @@ class ApplicationLaunchTest {
                 ApplicationLaunch.properties(List.of("vidocq.pool.url=jdbc:postgresql://dev"),
                         new String[] {"vidocq.pool.url=jdbc:h2:mem:t"}));
     }
+
+    /**
+     * A test an IDE starts gets no {@code vidocq.test.runtimePath}: the application then runs on the runtime path the
+     * last Maven build wrote next to the test classes, instead of stopping on {@code Module io.vidocq.runtime.core
+     * not found}.
+     */
+    @Test
+    void withoutThePropertyTheRuntimePathIsTheOneTheLastMavenBuildWrote() throws IOException {
+        Path testClasses = Files.createDirectories(dir.resolve("target/test-classes"));
+        Files.writeString(dir.resolve("target").resolve(ApplicationLaunch.RUNTIME_PATH_FILE), "/m2/postgresql.jar\n");
+
+        assertEquals("/m2/postgresql.jar", ApplicationLaunch.runtimePath(null, testClasses));
+        assertEquals("/m2/postgresql.jar", ApplicationLaunch.runtimePath(" ", testClasses));
+    }
+
+    /** The property is what the build or the IDE computed for this launch: fresher than the file, it wins. */
+    @Test
+    void thePropertyWinsOverTheFileTheBuildWrote() throws IOException {
+        Path testClasses = Files.createDirectories(dir.resolve("target/test-classes"));
+        Files.writeString(dir.resolve("target").resolve(ApplicationLaunch.RUNTIME_PATH_FILE), "/m2/postgresql.jar");
+
+        assertEquals("/ide/h2.jar", ApplicationLaunch.runtimePath("/ide/h2.jar", testClasses));
+    }
+
+    /** No property and no Maven build yet: no runtime path, as before the file existed. */
+    @Test
+    void withNeitherThePropertyNorTheFileThereIsNoRuntimePath() {
+        assertEquals(null, ApplicationLaunch.runtimePath(null, dir.resolve("target/test-classes")));
+        assertEquals(null, ApplicationLaunch.runtimePath(null, null));
+    }
 }

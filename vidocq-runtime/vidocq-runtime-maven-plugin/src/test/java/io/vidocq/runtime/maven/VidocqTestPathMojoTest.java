@@ -66,17 +66,35 @@ class VidocqTestPathMojoTest {
     }
 
     @Test
-    void theGoalHandsTheRuntimePathToSurefireThroughAProjectProperty() {
+    void theGoalHandsTheRuntimePathToSurefireThroughAProjectProperty(@TempDir Path build) throws Exception {
         MavenProject project = new MavenProject(new Model());
         Set<Artifact> artifacts = new LinkedHashSet<>(List.of(artifact("postgresql", Artifact.SCOPE_RUNTIME, "jar")));
         project.setArtifacts(artifacts);
         VidocqTestPathMojo mojo = new VidocqTestPathMojo();
         mojo.project = project;
-        mojo.buildDirectory = new File("/nowhere");
+        mojo.buildDirectory = build.toFile();
 
         mojo.execute();
 
         assertEquals("/m2/postgresql.jar", project.getProperties().getProperty(VidocqTestPathMojo.PROPERTY));
+    }
+
+    /**
+     * A test an IDE starts gets no system property from Surefire: the goal also writes the path under the build
+     * directory, where {@code vidocq-runtime-junit} reads it when the property is missing.
+     */
+    @Test
+    void theGoalWritesTheRuntimePathForATestAnIdeStarts(@TempDir Path build) throws Exception {
+        MavenProject project = new MavenProject(new Model());
+        project.setArtifacts(new LinkedHashSet<>(List.of(artifact("postgresql", Artifact.SCOPE_RUNTIME, "jar"))));
+        VidocqTestPathMojo mojo = new VidocqTestPathMojo();
+        mojo.project = project;
+        mojo.buildDirectory = build.resolve("target").toFile();
+
+        mojo.execute();
+
+        assertEquals("/m2/postgresql.jar",
+                Files.readString(build.resolve("target").resolve(VidocqTestPathMojo.FILE)));
     }
 
     /**

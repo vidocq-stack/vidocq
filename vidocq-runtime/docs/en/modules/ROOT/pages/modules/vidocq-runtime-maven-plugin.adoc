@@ -58,7 +58,7 @@
 | Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.They include the `opens` of the packages the runtime reaches by reflection that `check-module-info` reports, so `mvn vidocq:complete-module-info` fixes what it asks for.
 
 | `vidocq:test-path`
-| Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path. Bound to `process-test-classes` by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
+| Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path; also writes it to `target/vidocq-test-runtime-path`, for a test an IDE starts. Bound to `process-test-classes` by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
 
 | `vidocq:build-info`
 | Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, the commit read from `.git` without running `git`; without a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by `vidocq-runtime-parent`, and by the plugin in an application without the parent. See <<build-info,the `vidocq:build-info` goal>>.
