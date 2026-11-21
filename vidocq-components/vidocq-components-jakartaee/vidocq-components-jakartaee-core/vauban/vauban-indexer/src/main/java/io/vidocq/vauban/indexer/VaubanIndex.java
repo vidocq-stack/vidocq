@@ -24,25 +24,23 @@ import io.vidocq.vauban.indexer.model.DotName;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 public final class VaubanIndex {
 
     /**
      * The classes by name. Not {@code Map.copyOf}: its iteration order changes from one JVM to the next, and so did
      * what a build compatible extension saw and froze, so a frozen record was never the same twice (BUG-20261121-01).
+     * Sorted by a {@link TreeMap} on {@link DotName}'s natural order, then copied for constant-time lookups: no lambda,
+     * so no hidden class at the container start (StartLoadsFewClassesModulePathTest).
      */
     private final Map<DotName, ClassInfo> classes;
 
     VaubanIndex(Map<DotName, ClassInfo> classes) {
-        var byName = new LinkedHashMap<DotName, ClassInfo>();
-        classes.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(DotName::value)))
-                .forEach(entry -> byName.put(entry.getKey(), entry.getValue()));
-        this.classes = Collections.unmodifiableMap(byName);
+        this.classes = Collections.unmodifiableMap(new LinkedHashMap<>(new TreeMap<>(classes)));
     }
 
     public Optional<ClassInfo> getClassByName(DotName name) {
