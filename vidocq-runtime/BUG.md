@@ -5,6 +5,44 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261121-03 — `vidocq-runtime-cassini-rest-example` does not start from its own folder: Maven cannot read its library
+
+- **Date**: 2026-11-21
+- **Status**: FIXED on `fix/rest-example-starts-from-its-folder`: the examples' aggregator pom is installed and deploys
+  its SNAPSHOT, and `vidocq-runtime-external-rest-lib` is installed.
+- **Module**: `vidocq-runtime-examples` (the aggregator pom, `vidocq-runtime-external-rest-lib`)
+- **Symptom**: after an install of `main`, `mvn vidocq:dev` in
+  `vidocq-runtime-examples/vidocq-runtime-cassini-rest-example` stops with `Could not resolve dependencies …
+  io.vidocq.runtime:vidocq-runtime-external-rest-lib:jar:0.4.0-SNAPSHOT was not found in
+  https://central.sonatype.com/repository/maven-snapshots/`. The six other examples have no such dependency. Any
+  launch on the example's own pom fails the same way: the run configurations `vidocq:idea` writes, the *Vidocq dev*
+  of an IDE plugin.
+- **Repro**: on `main` at cb876d648, each time with an empty `-Dmaven.repo.local`,
+  `-Dmaven.repo.local.tail=$HOME/.m2/repository`, and `dependency:resolve` on the example:
+  1. from its own pom, the library first installed by force (`-Dmaven.install.skip=false`): `Failed to read artifact
+     descriptor for …vidocq-runtime-external-rest-lib… vidocq-runtime-examples:pom:0.4.0-SNAPSHOT (absent)`;
+  2. from its own pom, nothing installed, with a `settings.xml` that reads `maven.vidocq.dev` for dependencies: the pom
+     of the library is downloaded (`0.4.0-20261121.170405-5`), then the same error on its parent;
+  3. from the root with `-pl` on the example and the same settings, the shape of a pull request build that rebuilds
+     the example and not the library: the same error.
+- **Cause**: the aggregator sets `maven.install.skip` and `maven.deploy.skip` to `true` for itself and its modules
+  (63406ed1d, 2026-05-31). The library deploys its SNAPSHOT since vidocq#724 and was still not installed; and the pom
+  it names as parent, the aggregator, was neither installed nor deployed. Maven builds the model of a dependency from
+  its parent chain, read from the repositories unless the session holds that project: a build that holds the example
+  alone finds the jar of the library at best, never its parent. `check-unpublished-dependencies.py` checks that a
+  module another one depends on deploys, not that the parent it names does.
+- **Fix**: `vidocq-runtime-examples/pom.xml` installs and deploys itself, with `maven-install-plugin` and
+  `maven-deploy-plugin` `<skip>false</skip>` declared not inherited; the library is installed the same way. The two
+  properties stay `true`. Checked with the examples reactor on a scratch repository: an install puts there the
+  aggregator pom and the library, and none of the seven applications; `dependency:resolve` and `process-classes` then
+  pass from the example's own pom. A deploy into a `file:` repository holds the same three files, and from the root
+  with `-pl` on the example, nothing installed, the library and its parent are read from it. `vidocq:dev` itself was
+  not started in that check.
+- **Not covered**: seven other modules deploy since vidocq#724 and name a parent that does not
+  (`noether-validation-core`, the four libraries of `vauban-examples`, `foy-it-session-scenarios`,
+  `vidocq-runtime-arquillian`): the third repro applies to them. And `maven.vidocq.dev` is a plugin repository of the
+  build, not a repository of dependencies: an example does not start on a machine that built nothing.
+
 ## BUG-20261120-02 — The first edit after `package` swaps the layer under `vidocq:dev`: the bean index header moved
 
 - **Date**: 2026-11-20
