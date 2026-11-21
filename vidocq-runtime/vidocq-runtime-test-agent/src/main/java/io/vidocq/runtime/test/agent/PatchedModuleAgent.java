@@ -92,7 +92,7 @@ public final class PatchedModuleAgent {
                 }
             }
         } catch (Throwable e) { // NOSONAR a launch must never fail because of this agent
-            System.err.println("[vidocq] test launch agent: stopped, " + e);
+            report("test launch agent: stopped, " + e);
         }
     }
 
@@ -143,11 +143,21 @@ public final class PatchedModuleAgent {
                     changes.add("reads " + names(reads));
                 }
                 opens.forEach((packageName, closedTo) -> changes.add("opens " + packageName + " to " + names(closedTo)));
-                System.err.println("[vidocq] " + module.getName() + ": " + String.join("; ", changes));
+                report(module.getName() + ": " + String.join("; ", changes));
             }
         } catch (Throwable e) { // NOSONAR a launch must never fail because of this agent
-            System.err.println("[vidocq] test launch agent: " + module.getName() + " left as it is, " + e);
+            report("test launch agent: " + module.getName() + " left as it is, " + e);
         }
+    }
+
+    /**
+     * Prints one line of the agent on the standard error stream, where the IDE shows the launch's own output. No
+     * logger: the agent runs before the application configures one, and a line of the JDK's default format would
+     * take two lines and a time stamp in each test run of the IDE.
+     */
+    @SuppressWarnings("java:S106")
+    private static void report(String line) {
+        System.err.println("[vidocq] " + line);
     }
 
     /**
@@ -224,10 +234,10 @@ public final class PatchedModuleAgent {
             instrumentation.redefineModule(module, Set.of(), exports, opens, Set.of(), Map.of());
             if (verbose) {
                 Collections.sort(changes);
-                System.err.println("[vidocq] " + module.getName() + ": " + String.join("; ", changes));
+                report(module.getName() + ": " + String.join("; ", changes));
             }
         } catch (Throwable e) { // NOSONAR a launch must never fail because of this agent
-            System.err.println("[vidocq] test launch agent: " + module.getName() + " left as it is, " + e);
+            report("test launch agent: " + module.getName() + " left as it is, " + e);
         }
     }
 

@@ -46,7 +46,30 @@ import java.util.spi.ToolProvider;
 final class IdeLaunch {
 
     /** What a launched JVM answered. */
-    record Result(int exit, String out, String err) {
+    static final class Result {
+        // A class, not a record: SonarQube reads this module at its main release, 9, and takes a record for an
+        // empty method.
+        private final int exit;
+        private final String out;
+        private final String err;
+
+        Result(int exit, String out, String err) {
+            this.exit = exit;
+            this.out = out;
+            this.err = err;
+        }
+
+        int exit() {
+            return exit;
+        }
+
+        String out() {
+            return out;
+        }
+
+        String err() {
+            return err;
+        }
     }
 
     private static final Map<String, Map<String, String>> MODULES = Map.of(
