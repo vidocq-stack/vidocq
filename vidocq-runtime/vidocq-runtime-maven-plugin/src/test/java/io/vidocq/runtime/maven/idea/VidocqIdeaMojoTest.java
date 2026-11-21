@@ -1014,7 +1014,7 @@ class VidocqIdeaMojoTest {
     }
 
     @Test
-    void theCheckReportsAMissingJunitTemplate() throws Exception {
+    void theCheckReportsAMissingJunitTemplate() {
         VidocqIdeaMojo maven = templateMojo(new AgentResolver(null));
         maven.setCheck("true");
 
@@ -1105,7 +1105,7 @@ class VidocqIdeaMojoTest {
     }
 
     @Test
-    void anApplicationNamedLikeTheJunitTemplateIsACollision() throws Exception {
+    void anApplicationNamedLikeTheJunitTemplateIsACollision() {
         projects.get(1).getProperties().setProperty("vidocq.idea.configurationName", "Template JUnit");
         VidocqIdeaMojo application = templateMojo(new AgentResolver(null));
         application.setKind("application");

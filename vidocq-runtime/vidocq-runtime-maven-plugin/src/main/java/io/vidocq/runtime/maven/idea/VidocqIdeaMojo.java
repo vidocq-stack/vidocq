@@ -30,7 +30,6 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
@@ -189,24 +188,27 @@ public class VidocqIdeaMojo extends AbstractMojo {
     @Parameter(property = "vidocq.idea.junitTemplate", defaultValue = "true")
     private boolean junitTemplate;
 
+    /** This plugin's own version, which is the runtime's, and the version of the test agent the template names. */
+    @Parameter(defaultValue = "${plugin.version}", readonly = true, required = true)
+    private String pluginVersion;
+
+    /**
+     * Resolves the test agent. Injected by the {@code <requirement>} of the hand-written descriptor
+     * ({@code META-INF/maven/plugin.xml}), which Maven reads instead of annotations.
+     */
+    private RepositorySystem repoSystem;
+
     /** Aether repository session, to resolve the test agent the JUnit template names. */
     @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
     private RepositorySystemSession repoSession;
 
-    /** The project's own remote repositories, where the test agent is looked for. */
-    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
-    private List<RemoteRepository> remoteRepos;
-
-    /** The project's plugin repositories, where the test agent is looked for too: it is released with this plugin. */
+    /** The project's plugin repositories, where the test agent is looked for first: it is released with this plugin. */
     @Parameter(defaultValue = "${project.remotePluginRepositories}", readonly = true)
     private List<RemoteRepository> pluginRepos;
 
-    @Component
-    private RepositorySystem repoSystem;
-
-    /** This plugin's own version, which is the runtime's, and the version of the test agent the template names. */
-    @Parameter(defaultValue = "${plugin.version}", readonly = true, required = true)
-    private String pluginVersion;
+    /** The project's own remote repositories, where the test agent is looked for too. */
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
+    private List<RemoteRepository> remoteRepos;
 
     /** Resolves the test agent; built from the Aether objects above in {@link #execute}, a fake in the tests. */
     private ArtifactResolver agentResolver;
@@ -316,9 +318,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
         if (mode == Mode.WRITE) {
             write(targets.values(), runDirectory, targets);
-            if (junitTemplate) {
-                resolveTestAgent();
-            }
+            resolveTestAgent();
         } else {
             check(directory, targets.values(), runDirectory, targets, mode == Mode.STRICT_CHECK);
         }
@@ -422,6 +422,9 @@ public class VidocqIdeaMojo extends AbstractMojo {
      * starts a test. A failure (offline, agent not published) is a warning: the template is right all the same.
      */
     private void resolveTestAgent() {
+        if (!junitTemplate) {
+            return;
+        }
         String coordinates = testAgentCoordinates();
         try {
             Path jar = agentResolver.resolve(RunConfigurationRenderer.TEST_AGENT_GROUP_ID,
@@ -590,13 +593,18 @@ public class VidocqIdeaMojo extends AbstractMojo {
         }
     }
 
+    /** What a write message says of the file: the application it runs, or the test agent of the JUnit template. */
+    private String details(IdeaApplication application) {
+        if (application == null) {
+            return " (JUnit template: every test starts with the test agent " + testAgentCoordinates() + ")";
+        }
+        String mainClass = application.mainClass() == null
+                ? ", no main class of its own" : ", main class " + application.mainClass();
+        return " (" + application.coordinates() + mainClass + ", IntelliJ module " + application.moduleName() + ")";
+    }
+
     private Outcome writeFile(Target target, Path runDirectory) throws MojoExecutionException {
-        IdeaApplication application = target.application();
-        String details = application == null
-                ? " (JUnit template: every test starts with the test agent " + testAgentCoordinates() + ")"
-                : " (" + application.coordinates() + (application.mainClass() == null
-                ? ", no main class of its own" : ", main class " + application.mainClass())
-                + ", IntelliJ module " + application.moduleName() + ")";
+        String details = details(target.application());
         return switch (target.state()) {
             case UNCHANGED -> {
                 getLog().info(PREFIX + "unchanged " + target.shownPath() + details);
