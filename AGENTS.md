@@ -7,9 +7,9 @@ precedence there.
 ## Layout
 
 See `README.md`. In short: `vidocq-parent/` (the parent of every module), `vidocq-components/` (stable bricks by
-family), `preview/` (usable, not complete or not certified: kerckhoffs, noether), `incubator/` (built and tested,
-never released), `vidocq-runtime/` (the runtime, its extensions, Maven plugin, CLI and BOM). `components.json` lists
-every component with its PR title tag, folder and maturity level.
+family), `vidocq-preview/` (usable, not complete or not certified: kerckhoffs, noether), `vidocq-incubator/` (built
+and tested, never released), `vidocq-runtime/` (the runtime, its extensions, Maven plugin, CLI and BOM).
+`components.json` lists every component with its PR title tag, folder and maturity level.
 
 ## Build
 
@@ -32,8 +32,8 @@ every component with its PR title tag, folder and maturity level.
   change; there are no companion branches any more.
 - **A change under `vauban/` goes in its own pull request, with its own test in `vauban/`** reproducing the problem
   without the module that found it. It must pass the CDI TCK and every stable dependent.
-- **Maturity levels**: an unusable module lives on `main` in `incubator/`, never on a long-lived branch; a usable
-  but incomplete or uncertified one in `preview/`. A move to the next level is one commit: move the folder to the
+- **Maturity levels**: an unusable module lives on `main` in `vidocq-incubator/`, never on a long-lived branch; a usable
+  but incomplete or uncertified one in `vidocq-preview/`. A move to the next level is one commit: move the folder to the
   same group path, update the grouping POMs, `components.json` and the BOM.
 - `BUG.md` and `BENCH.md` stay per component, in its folder. A bug id is unique across the monorepo.
 

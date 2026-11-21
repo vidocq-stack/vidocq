@@ -16,12 +16,12 @@
 
     <name>Noether :: Jakarta Persistence 3.2</name>
     <description>Jakarta Persistence 3.2 implementation for the Vidocq ecosystem.</description>
-    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether</url>
 
     <scm>
         <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
         <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
-        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether</url>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether</url>
         <tag>HEAD</tag>
     </scm>
 

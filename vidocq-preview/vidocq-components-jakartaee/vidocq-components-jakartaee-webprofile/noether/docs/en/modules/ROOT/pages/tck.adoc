@@ -20,7 +20,7 @@ The four skips are the TCK's own: `Client6.resultContainsFetchReference` (query 
 `Client.getDeclaredSingularAttributes` (metamodel), `Client2.createEntityManagerFactoryStringMapTest` (Java SE
 factory) and `Client.tableGeneratorTest` (Java SE table generator schema). The counts are aggregated from the
 failsafe XML reports, independently of the runner; the history of every run is in
-link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/TCK.md[`TCK.md`].
+link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/TCK.md[`TCK.md`].
 
 [#history]
 === Earlier results
@@ -43,7 +43,7 @@ they are not fresh Noether measurements.
 
 Of the 35 pre-P11 errors, ten were second-level cache assertions fixed in P11, and 25 were confined to the two
 delimited-default fixtures that TCK-BUG-001 covers. The milestones P0 to P12 are described in
-link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/ROADMAP.md[`noether-persistence/ROADMAP.md`].
+link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/ROADMAP.md[`noether-persistence/ROADMAP.md`].
 
 [#tck-bug-001]
 == The backported fixture, TCK-BUG-001
@@ -74,7 +74,7 @@ noether-persistence/check-validation-neutrality.sh   # with and without Bean Val
 
 The runner needs Docker (a throw-away `postgres:17-alpine` container), or an existing PostgreSQL with `--external`.
 The TCK is not on Maven Central: `noether-persistence/noether-jpa-tck/install-tck.sh` downloads it and installs it first; see the
-link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-tck/README.md[runner README].
+link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-tck/README.md[runner README].
 
 The Validation 3.1 runner, `noether-validation/noether-validation-tck/run-official-tck-validation-3.1.sh`, checks the
 provisional Validation provider used by Noether's tests; it is not a Noether deliverable.
@@ -84,7 +84,7 @@ provisional Validation provider used by Noether's tests; it is not a Noether del
 
 Some behaviour that Jakarta Persistence or Jakarta EE requires is not exercised by the TCK. Noether tests it itself,
 and records each gap as a proposal for the TCK in
-link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/PERSISTENCE_TCK_PROPOSALS.md[`PERSISTENCE_TCK_PROPOSALS.md`]:
+link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/PERSISTENCE_TCK_PROPOSALS.md[`PERSISTENCE_TCK_PROPOSALS.md`]:
 
 * *TCK-GAP-001* — the `<qualifier>` and `<scope>` elements of `persistence.xml` and the CDI beans of each unit
   (Jakarta Persistence 3.2 §8.2.1.5, §8.2.1.6; Jakarta EE 11 Platform §13.12). Noether tests them in
@@ -611,9 +611,9 @@ zero failures, zero errors and four unchanged official skips. All 259 XML report
 independently of the wrapper's exit status; official and derived fixture hashes are unchanged.
 This is a local patched result, not certification or an untouched official result.
 
-link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/TCK.md[Current and historical Persistence evidence]
+link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/TCK.md[Current and historical Persistence evidence]
 and
-link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-validation/noether-validation-tck/TCK.md[Validation evidence]
+link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-validation/noether-validation-tck/TCK.md[Validation evidence]
 retain historical sections with pre-extraction names and results; those historical sections
 are not measurements on Noether.
 Vidocq targets Jakarta EE Web Profile 11 certification, which requires Persistence 3.2 certification;

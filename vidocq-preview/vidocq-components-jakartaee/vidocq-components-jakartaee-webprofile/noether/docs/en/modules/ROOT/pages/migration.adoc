@@ -114,7 +114,7 @@ class allows it, and loads the others with their owner (see xref:concepts.adoc#l
 == From Mansart's Persistence modules
 
 Noether was extracted from Mansart on 2026-10-11, with the filtered history of Mansart's `persistence-work` branch
-(revision `c91d72c`). The source now lives at {repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether.
+(revision `c91d72c`). The source now lives at {repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether.
 
 * *Coordinates.* Replace `io.vidocq.mansart:mansart-jpa-*` with `io.vidocq.noether:noether-jpa-*`, and the
   Validation coordinates the same way. The root is `noether-root`, the Persistence aggregator `noether-jpa`, the

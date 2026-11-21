@@ -19,7 +19,7 @@ the persistence layer in the stack.
 | `mansart-pool`         | **Virtual-thread-native** JDBC connection pool, post-Loom, zero dependencies, optional and standalone. Usable outside Mansart. |
 
 Persistence and the provisional Validation implementation moved to the independent
-[Noether repository](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) on 2026-10-11.
+[Noether repository](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) on 2026-10-11.
 Their artifacts/packages now use `io.vidocq.noether`; they are no longer built
 or released by this reactor. Mansart Data remains on its direct JDBC backend;
 a Data/JPA bridge is deferred.
@@ -38,7 +38,7 @@ Jakarta Data, the pool and Transactions retain their production behavior.
 See [ROADMAP.md](ROADMAP.md) and each retained module's documentation.
 Persistence P0–P12 scope, Validation limitations and preserved historical
 TCK/benchmark evidence are now documented in
-[Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether).
+[Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether).
 No Persistence implementation or provisional Validation provider remains
 in the Mansart reactor.
 

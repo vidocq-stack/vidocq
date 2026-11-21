@@ -1,4 +1,4 @@
-> Persistence and Validation were extracted to [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether)
+> Persistence and Validation were extracted to [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether)
 > on 2026-10-11. Their entries below are historical Mansart evidence;
 > original commands, names and revisions are retained, not new Noether results.
 

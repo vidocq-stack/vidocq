@@ -8,8 +8,8 @@
       The root of the Vidocq monorepo: an aggregator, never a parent of a published module. Every brick inherits
       vidocq-parent (below), the grouping POMs inherit this one. It publishes nothing.
 
-      Maturity levels (MONOREPO.md §3): vidocq-components/ is stable, preview/ is usable and released but not
-      certified, incubator/ is built and tested but never released. The release runs with -P '!incubator'.
+      Maturity levels (MONOREPO.md §3): vidocq-components/ is stable, vidocq-preview/ is usable and released but not
+      certified, vidocq-incubator/ is built and tested but never released. The release runs with -P '!incubator'.
     -->
     <groupId>io.vidocq</groupId>
     <artifactId>vidocq-build</artifactId>
@@ -34,7 +34,7 @@
     <modules>
         <module>vidocq-parent</module>
         <module>vidocq-components</module>
-        <module>preview</module>
+        <module>vidocq-preview</module>
         <module>vidocq-runtime</module>
     </modules>
 
@@ -48,7 +48,7 @@
                 </property>
             </activation>
             <modules>
-                <module>incubator</module>
+                <module>vidocq-incubator</module>
             </modules>
         </profile>
     </profiles>

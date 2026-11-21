@@ -4,7 +4,7 @@
 
 Mansart owns Data, Pool and Transactions, usable separately or together.
 Persistence and the provisional Validation provider moved to the independent
-[Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) repository on 2026-10-11.
+[Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) repository on 2026-10-11.
 The diagram below describes the ecosystem, not a single Maven reactor;
 the Data/JPA bridge remains deferred.
 

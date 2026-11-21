@@ -92,7 +92,7 @@ with its `-codegen` companion and `vidocq-runtime-it-noether-persistence` vehicl
 On 2026-10-11 the tracked Persistence and Validation implementations were extracted
 from Mansart (source branch `persistence-work`, revision `c91d72c`), preserving their
 filtered Git history. Root build, licensing and CI infrastructure were adapted
-from Mansart. The source repository is <https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether>.
+from Mansart. The source repository is <https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether>.
 
 The original `BENCH.md`, `TCK.md` and `BUG.md` under the extracted modules retain
 their pre-extraction names, commands, source revisions and raw measurements,

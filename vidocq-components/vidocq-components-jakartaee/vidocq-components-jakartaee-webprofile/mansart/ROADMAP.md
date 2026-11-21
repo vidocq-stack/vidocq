@@ -15,10 +15,10 @@ zero or few external production dependencies. Independent runtime building block
 | `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
 
 Persistence and the provisional Validation provider were extracted on 2026-10-11.
-They are external [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) building blocks,
+They are external [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) building blocks,
 under `io.vidocq.noether`, not Mansart modules. Their roadmaps are
-[Persistence](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/ROADMAP.md)
-and [Validation](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-validation/ROADMAP.md).
+[Persistence](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/ROADMAP.md)
+and [Validation](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-validation/ROADMAP.md).
 Data remains frozen; a Data/JPA bridge stays deferred.
 
 ## Delivered phases
@@ -112,4 +112,4 @@ the pattern of the other sub-projects: short id, date, symptom, repro, status).
 - **`PLAN.md`** : architecture, structural decisions, overall vision.
 - **`<sous-projet>/PLAN.md`** : specific architecture (exists for `mansart-pool/`).
 - **`TCK.md`** : will be created in M6 (Jakarta Data conformance status).
-- **`BENCH.md`** : reproducible JMH numbers; historical JPA evidence is preserved in [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md).
+- **`BENCH.md`** : reproducible JMH numbers; historical JPA evidence is preserved in [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md).

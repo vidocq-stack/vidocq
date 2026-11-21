@@ -10,7 +10,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 - `mansart-transactions` — Jakarta Transactions 2.0 (virtual-thread-native TM, `@Transactional`, `@TransactionScoped`). **Delivered — TCK smoke 5/5 PASS.**
 - `mansart-pool` — virtual-thread-native JDBC pool, zero-dep, optional. **Delivered.**
 
-`mansart-jakarta-data` renders its SQL through `mansart-data-dialect-spi`; Noether Persistence through its own SQL AST and dialects (`noether-jpa-dialect-*`, decision D4 in [Noether roadmap](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/ROADMAP.md)). `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
+`mansart-jakarta-data` renders its SQL through `mansart-data-dialect-spi`; Noether Persistence through its own SQL AST and dialects (`noether-jpa-dialect-*`, decision D4 in [Noether roadmap](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/ROADMAP.md)). `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
 
 ## Prerequisites
 
@@ -81,7 +81,7 @@ Note: `mansart-data-api` was removed in M7-29 (redundant with `jakarta.persisten
 
 ### External Persistence and Validation
 
-These implementations were extracted to [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) on 2026-10-11. Their artifacts/packages use `io.vidocq.noether`; Mansart retains Data, Pool and Transactions unchanged. Data/JPA integration remains deferred.
+These implementations were extracted to [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) on 2026-10-11. Their artifacts/packages use `io.vidocq.noether`; Mansart retains Data, Pool and Transactions unchanged. Data/JPA integration remains deferred.
 
 ## Documentation (Antora) conventions
 

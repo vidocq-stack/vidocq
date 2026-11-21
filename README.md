@@ -58,11 +58,11 @@ vidocq/
 │       ├── cyrano               REST Client 4.0
 │       ├── humboldt             Telemetry 2.1
 │       └── grimm                OpenAPI 4.1
-├── preview/                     usable and released, not complete or not certified yet
+├── vidocq-preview/              usable and released, not complete or not certified yet
 │   └── vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/
 │       ├── kerckhoffs           Security 4.0
 │       └── noether              Persistence 3.2
-├── incubator/                   built and tested, never released (empty for now)
+├── vidocq-incubator/            built and tested, never released (empty for now)
 └── vidocq-runtime/              the runtime: extensions, Maven plugin, CLI, dev mode, BOM
 ```
 
@@ -74,8 +74,8 @@ Start with [`vidocq-runtime/README.md`](vidocq-runtime/README.md) for the runtim
 | Level      | Folder               | Usable | Released | In the BOM          | Certification claims |
 |------------|----------------------|--------|----------|---------------------|----------------------|
 | Stable     | `vidocq-components/` | yes    | yes      | yes                 | yes                  |
-| Preview    | `preview/`           | yes    | yes      | yes, marked preview | no                   |
-| Incubator  | `incubator/`         | no     | no       | no                  | no                   |
+| Preview    | `vidocq-preview/`    | yes    | yes      | yes, marked preview | no                   |
+| Incubator  | `vidocq-incubator/`  | no     | no       | no                  | no                   |
 
 A component moves to the next level in one commit: its folder moves to the same group path at that level.
 

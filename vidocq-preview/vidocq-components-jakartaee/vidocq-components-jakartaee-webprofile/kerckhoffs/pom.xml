@@ -18,7 +18,7 @@
 
     <name>Kerckhoffs</name>
     <description>Jakarta Security 4.0 implementation — zero third-party dependency, strict Java Modules, build-time generated authentication mechanisms and identity stores</description>
-    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs</url>
 
     <developers>
         <developer>
@@ -53,7 +53,7 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs</url>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs</url>
         <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
         <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
