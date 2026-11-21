@@ -39,6 +39,16 @@ final class JdkTools {
     }
 
     /**
+     * Runs the tool of that name, its output on the console as when it runs on its own, and returns its exit code.
+     *
+     * @throws IOException when the JDK that runs Maven has no such tool
+     */
+    @SuppressWarnings("java:S106") // the tool's own output, line for line: what jlink or jpackage prints in a shell
+    static int run(String name, String... args) throws IOException {
+        return run(name, System.out, System.err, args);
+    }
+
+    /**
      * Runs the tool of that name, after any other tool this plugin runs, and returns its exit code.
      *
      * @throws IOException when the JDK that runs Maven has no such tool

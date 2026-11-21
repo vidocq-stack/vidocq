@@ -629,7 +629,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         List<String> args = jlinkArgs(rootModules, launch);
 
         getLog().info("Modules: " + rootModules);
-        int rc = JdkTools.run("jlink", System.out, System.err, args.toArray(new String[0]));
+        int rc = JdkTools.run("jlink", args.toArray(new String[0]));
         if (rc != 0) {
             throw new IOException("jlink failed (rc=" + rc + ")");
         }

@@ -145,7 +145,7 @@ public class VidocqJpackageMojo extends AbstractMojo {
             getLog().info("Vidocq jpackage — type=" + type + " name=" + appName
                     + " version=" + version + " main=" + launch.entryPoint());
 
-            int rc = JdkTools.run("jpackage", System.out, System.err, args.toArray(new String[0]));
+            int rc = JdkTools.run("jpackage", args.toArray(new String[0]));
             if (rc != 0) {
                 throw new MojoExecutionException("jpackage failed (rc=" + rc + ")");
             }

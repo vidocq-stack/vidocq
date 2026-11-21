@@ -52,6 +52,11 @@ class JdkToolsTest {
     }
 
     @Test
+    void aToolPrintsOnTheConsoleByDefault() throws IOException {
+        assertEquals(0, JdkTools.run("jlink", "--version"));
+    }
+
+    @Test
     void aToolMissingFromTheJdkIsAnError() {
         IOException missing = assertThrows(IOException.class,
                 () -> JdkTools.run("no-such-tool", NOWHERE, NOWHERE));
