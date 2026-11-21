@@ -125,6 +125,11 @@ jobs:
       - name: Check documented version numbers stay in sync
         run: ./vidocq-runtime/check-doc-versions.sh
 
+      # The incremental build resolves from maven.vidocq.dev what it does not rebuild: a module another module depends
+      # on must deploy its SNAPSHOT (vidocq#724).
+      - name: Check every module another one depends on deploys its SNAPSHOT
+        run: python3 .forgejo/scripts/check-unpublished-dependencies.py
+
       - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
         if: steps.changes.outputs.docs-only != 'true'
 
