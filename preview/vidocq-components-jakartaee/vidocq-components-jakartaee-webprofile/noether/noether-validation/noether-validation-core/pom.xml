@@ -34,4 +34,18 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- A SNAPSHOT, never a release: noether-validation-tck, noether-validation-core-module-it and the tests of
+                 noether-jpa-core depend on it, and a pull request build that rebuilds them and not this module
+                 resolves it from maven.vidocq.dev. maven.deploy.skip stays true, so release.sh leaves it out of a
+                 release. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration><skip>false</skip></configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

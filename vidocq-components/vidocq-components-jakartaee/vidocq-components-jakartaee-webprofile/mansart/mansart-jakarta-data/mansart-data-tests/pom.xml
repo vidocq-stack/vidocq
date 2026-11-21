@@ -128,11 +128,20 @@
 
     <build>
         <plugins>
+            <!-- A SNAPSHOT, never a release: mansart-data-tck depends on it, and a pull request build that rebuilds
+                 it and not this module resolves it from maven.vidocq.dev. maven.deploy.skip stays true, so release.sh
+                 leaves it out of a release. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration><skip>false</skip></configuration>
+            </plugin>
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
                 <configuration>
-                    <skip>true</skip>
+                    <!-- skipPublishing, the plugin's parameter: it has no `skip`, which it ignored. -->
+                    <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
             <plugin>

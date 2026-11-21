@@ -22,4 +22,17 @@
             <scope>provided</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- A SNAPSHOT, never a release: example-app depends on it, and a pull request build that rebuilds
+                 it and not this module resolves it from maven.vidocq.dev. maven.deploy.skip stays true (inherited),
+                 so release.sh leaves it out of a release. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration><skip>false</skip></configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
