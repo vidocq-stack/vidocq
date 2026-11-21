@@ -23,15 +23,26 @@ import io.vidocq.vauban.indexer.model.ClassInfo;
 import io.vidocq.vauban.indexer.model.DotName;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
 public final class VaubanIndex {
 
+    /**
+     * The classes by name. Not {@code Map.copyOf}: its iteration order changes from one JVM to the next, and so did
+     * what a build compatible extension saw and froze, so a frozen record was never the same twice (BUG-20261121-01).
+     */
     private final Map<DotName, ClassInfo> classes;
 
     VaubanIndex(Map<DotName, ClassInfo> classes) {
-        this.classes = Map.copyOf(classes);
+        var byName = new LinkedHashMap<DotName, ClassInfo>();
+        classes.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(DotName::value)))
+                .forEach(entry -> byName.put(entry.getKey(), entry.getValue()));
+        this.classes = Collections.unmodifiableMap(byName);
     }
 
     public Optional<ClassInfo> getClassByName(DotName name) {

@@ -5,6 +5,27 @@ suspected cause, status. Updated on every investigation.
 
 ---
 
+## BUG-20261121-01 — The index lists its classes in another order at each JVM: a frozen record is never the same twice
+
+- **Date**: 2026-11-21
+- **Status**: FIXED on `fix/vauban-index-order`
+- **Module**: `vauban-indexer` (`VaubanIndex`)
+- **Symptom**: in the Vidocq tutorial (step 11, `grimm-openapi`), a save of a comment in `BookResource.java` under
+  `vidocq dev` restarts the application layer instead of redefining the class:
+  `restarting on a fresh application layer: META-INF/vauban-frozen-synthetic.properties changed`. Three compiles of
+  the same sources give three different records, on one line: `bean.3.param.classes` of Grimm's synthetic
+  `ScannedTypes` bean lists the same application classes in another order. The packaged jar is not reproducible
+  either.
+- **Minimal repro**: `VaubanIndexTest#listsItsClassesByName`: 64 classes added in reverse order, then
+  `getKnownClasses()` and `getClassesWithAnnotation()` listed by name. Application side: `./mvnw -o -q
+  process-classes` three times on the step-11 `library`, then compare the three
+  `target/classes/META-INF/vauban-frozen-synthetic.properties`.
+- **Cause**: `VaubanIndex` kept its classes in `Map.copyOf(...)`, whose iteration order depends on a salt drawn at
+  each JVM start. `@Enhancement` walks the index, so Grimm's `registerApplicationClass` saw the classes in another
+  order at each build, and `@Synthesis` froze that order.
+- **Fix**: the index keeps its classes sorted by name, whatever order `IndexBuilder` added them in. The three records
+  of the tutorial are identical with the fixed indexer.
+
 ## BUG-20261119-72 — The test round's provider of a module without main beans is never loaded
 
 - **Date**: 2026-11-19

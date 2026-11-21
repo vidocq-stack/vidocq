@@ -136,6 +136,28 @@ class VaubanIndexTest {
         assertEquals(5, index.size());
     }
 
+    /**
+     * An index lists its classes by name, whatever the order they were added in: a build compatible extension that
+     * collects what it sees writes the same frozen record on every build (BUG-20261121-01: Grimm's scanned types
+     * changed at each compile, and {@code vidocq:dev} restarted the application layer at each save).
+     */
+    @Test
+    @DisplayName("lists its classes by name, whatever the order they were added in")
+    void listsItsClassesByName() {
+        var names = new java.util.ArrayList<String>();
+        for (int i = 0; i < 64; i++) {
+            names.add("com.example.order.Type%02d".formatted(i));
+        }
+        var sorted = List.copyOf(names);
+        java.util.Collections.reverse(names);
+        var builder = new IndexBuilder();
+        names.forEach(name -> builder.add(classWithAnnotation(name, DEPRECATED)));
+        var ordered = builder.build();
+
+        assertEquals(sorted, ordered.getKnownClasses().stream().map(c -> c.name().value()).toList());
+        assertEquals(sorted, ordered.getClassesWithAnnotation(DEPRECATED).stream().map(c -> c.name().value()).toList());
+    }
+
     @Test
     @DisplayName("checks the presence")
     void shouldCheckContains() {
