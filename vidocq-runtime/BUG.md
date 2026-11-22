@@ -4518,7 +4518,7 @@ where this whole bug class is invisible.
 ## BUG-20261122-02 — A `@VidocqTest` test started from IntelliJ without a Maven build stops on `Module io.vidocq.runtime.core not found`, and nothing says which build to run
 
 - **Date**: 2026-11-22
-- **Status**: FIXED on `fix/vidocq-test-runtime-path-hint`
+- **Status**: FIXED (`ec1846993`, #738)
 - **Affected module**: vidocq-runtime-junit (`ApplicationLaunch`), vidocq-runtime-maven-plugin (`vidocq:idea`), the
   documentation (`testing.adoc`)
 - **Symptom**: found by the maintainer in IntelliJ IDEA 2026.3 with the Vidocq plugin disabled, on the `library`
@@ -4550,3 +4550,8 @@ where this whole bug class is invisible.
   the documentation names `process-test-classes`.
 - **Not done**: the file is still written by a Maven build only. A test started from IntelliJ after a change of
   dependencies runs on the path of the last build.
+- **Investigations**:
+  - 2026-11-22: the maintainer ran `./mvnw process-test-classes` in `library`, then started `HelloResourceTest` again
+    from IntelliJ IDEA 2026.3, the Vidocq plugin still disabled: the test passes. That is the third line of the
+    table, seen in the IDE itself. The message of the fix was seen in the replay only: the application of that
+    trial ran on a snapshot older than the fix.

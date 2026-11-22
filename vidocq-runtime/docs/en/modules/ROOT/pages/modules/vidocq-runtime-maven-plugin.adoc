@@ -1991,7 +1991,8 @@ xref:testing.adoc#from-the-ide[a test an IDE starts].
 
 Tried in IntelliJ IDEA 2026.3 without the Vidocq plugin, on 2026-11-22: the IDE loads the template, also from the
 `.run/` of an application below the directory it opened, and expands `$MAVEN_REPOSITORY$` to the local repository of
-its Maven settings, which must be the one Maven resolves into.
+its Maven settings, which must be the one Maven resolves into. A `@VidocqTest` test of an application started from
+the editor then passes, once `mvn process-test-classes` has run in that application.
 
 [WARNING]
 .Not verified yet
