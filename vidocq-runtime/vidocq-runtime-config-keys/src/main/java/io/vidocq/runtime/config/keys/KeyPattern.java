@@ -49,6 +49,13 @@ public final class KeyPattern {
     private static final Pattern FAMILY = Pattern.compile("[A-Za-z0-9_-]+");
     private static final Pattern LITERAL = Pattern.compile("[^<>\\[\\]*|\"\\s]+");
 
+    /**
+     * How many segments a pattern has at most, and how many of them may be absent: a key is matched segment by
+     * segment, and each name that may be absent is tried both ways.
+     */
+    private static final int MAX_SEGMENTS = 64;
+    private static final int MAX_OPTIONAL_NAMES = 8;
+
     private sealed interface Segment permits Literal, Name, Tail {}
 
     private record Literal(String text) implements Segment {}
@@ -80,9 +87,18 @@ public final class KeyPattern {
             throw refused(text == null ? "" : text, "it is empty");
         }
         String[] parts = text.split("\\.", -1);
+        if (parts.length > MAX_SEGMENTS) {
+            throw refused(text, "it has " + parts.length + " segments, and a key pattern has " + MAX_SEGMENTS
+                    + " at most");
+        }
         List<Segment> segments = new ArrayList<>(parts.length);
         for (int i = 0; i < parts.length; i++) {
             segments.add(segment(text, parts[i], i == parts.length - 1));
+        }
+        long optional = segments.stream().filter(segment -> segment instanceof Name name && name.optional()).count();
+        if (optional > MAX_OPTIONAL_NAMES) {
+            throw refused(text, "it has " + optional + " optional names, and a key pattern has "
+                    + MAX_OPTIONAL_NAMES + " at most");
         }
         if (!(segments.getFirst() instanceof Literal)) {
             throw refused(text, "its first segment is a name or a tail, and a key starts with a literal segment");

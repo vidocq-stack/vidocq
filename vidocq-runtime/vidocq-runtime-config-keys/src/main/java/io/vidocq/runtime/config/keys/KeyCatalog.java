@@ -46,8 +46,6 @@ public final class KeyCatalog {
     /** The file a build generates, for the keys annotations declare. */
     public static final String GENERATED = "META-INF/vidocq/config-keys.properties";
 
-    private static final String LIST = "list:";
-
     private final List<KeyDescription> keys;
     private final Map<String, KeyFamily> families;
     private final List<Problem> problems;
@@ -116,6 +114,51 @@ public final class KeyCatalog {
      */
     public Optional<KeyFamily> family(String name) {
         return Optional.ofNullable(families.get(name));
+    }
+
+    /**
+     * What a value an application gives a key has against the description of that key.
+     *
+     * @param key   the key, as written
+     * @param value the value, as the configuration gives it; null is no value
+     * @return what is wrong, in this order: the type, the allowed values, a deprecated key. Empty when no
+     *         description matches the key
+     */
+    public List<ValueProblem> check(String key, String value) {
+        Optional<KeyDescription> described = describe(key);
+        if (described.isEmpty()) {
+            return List.of();
+        }
+        KeyDescription description = described.get();
+        List<ValueProblem> problems = new ArrayList<>();
+        // White space around a value is not the value, an empty value is no value, and an expression is the
+        // runtime's to expand: a finding on any of them could be wrong.
+        String text = value == null ? "" : value.strip();
+        if (!text.isEmpty() && !KeyTypes.holdsExpression(text)) {
+            boolean list = KeyTypes.list(description.type());
+            List<String> items = list ? KeyTypes.items(text) : List.of(text);
+            for (String item : items) {
+                KeyTypes.refusal(KeyTypes.item(description.type()), item)
+                        .ifPresent(why -> problems.add(new ValueProblem(ValueProblem.Kind.NOT_OF_TYPE, key, value,
+                                description, said(list, item, why))));
+            }
+            List<String> allowed = description.values();
+            for (String item : items) {
+                if (!allowed.isEmpty() && allowed.stream().noneMatch(item::equalsIgnoreCase)) {
+                    problems.add(new ValueProblem(ValueProblem.Kind.NOT_ALLOWED, key, value, description,
+                            said(list, item, "is not one of " + String.join(", ", allowed))));
+                }
+            }
+        }
+        if (description.deprecated()) {
+            problems.add(new ValueProblem(ValueProblem.Kind.DEPRECATED, key, value, description, "is deprecated"));
+        }
+        return List.copyOf(problems);
+    }
+
+    /** What is said of a value, or of one item of a list, which is then named. */
+    private static String said(boolean list, String item, String why) {
+        return list ? "'" + item + "' " + why : why;
     }
 
     /** What is wrong: in each file, in the order given, then between the files. */
@@ -227,22 +270,32 @@ public final class KeyCatalog {
         private void check(KeyDescription key) {
             Facts facts = keys.get(key.key());
             String name = key.key().text();
-            key.fact(Attribute.DEFAULT).ifPresent(fact -> {
-                // An empty default is no value; the default of a list is its items.
-                List<String> items = key.type().startsWith(LIST) || fact.value().isEmpty()
-                        ? KeyDescription.list(fact.value())
-                        : List.of(fact.value());
-                for (String item : items) {
-                    if (!facts.allows(item)) {
-                        wrong(fact, name + "|default is '" + fact.value() + "', and '" + item
-                                + "' is not one of its values: " + key.values());
-                    }
-                }
-            });
+            key.fact(Attribute.DEFAULT).filter(fact -> !KeyTypes.holdsExpression(fact.value()))
+                    .ifPresent(fact -> defaultValue(key, facts, fact));
             key.fact(Attribute.REF).filter(fact -> !families.containsKey(fact.value())).ifPresent(fact -> wrong(fact,
                     name + "|ref names the family '" + fact.value()
                             + "', which no file describes and no key names"));
             key.when().ifPresent(condition -> condition(key, condition, facts.kept.get(Attribute.WHEN)));
+        }
+
+        /** A default must be of the type of its key and one of its values; an expression is not compared. */
+        private void defaultValue(KeyDescription key, Facts facts, Fact fact) {
+            String name = key.key().text();
+            boolean list = KeyTypes.list(key.type());
+            // An empty default is no value; the default of a list is its items.
+            List<String> items = list || fact.value().isEmpty()
+                    ? KeyDescription.list(fact.value())
+                    : List.of(fact.value());
+            String start = name + "|default is '" + fact.value() + "', ";
+            for (String item : items) {
+                KeyTypes.refusal(KeyTypes.item(key.type()), item)
+                        .ifPresent(why -> wrong(fact, start + (list ? "and '" + item + "' " : "which ") + why));
+            }
+            for (String item : items) {
+                if (!facts.allows(item)) {
+                    wrong(fact, start + "and '" + item + "' is not one of its values: " + key.values());
+                }
+            }
         }
 
         private void condition(KeyDescription key, KeyDescription.Condition condition, Fact fact) {

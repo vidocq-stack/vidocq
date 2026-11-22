@@ -302,6 +302,48 @@ class KeyCatalogTest {
     }
 
     @Test
+    void a_default_that_is_not_of_its_type_is_a_problem_at_the_line_of_the_default() {
+        Problem problem = onlyProblem(catalog(jar("a", "a.b|type=int", "a.b|default=x")));
+
+        assertEquals(new Problem("a", 3, Problem.Kind.WRONG, "a.b|default is 'x', which is not an int"), problem);
+    }
+
+    @Test
+    void a_default_that_is_not_a_boolean_is_a_problem() {
+        Problem problem = onlyProblem(catalog(jar("a", "a.b|default=maybe", "a.b|type=boolean")));
+
+        assertEquals(2, problem.line());
+        assertEquals(Problem.Kind.WRONG, problem.kind());
+        assertTrue(problem.message().startsWith("a.b|default is 'maybe', which is not a boolean"), problem.message());
+    }
+
+    @Test
+    void the_default_of_a_list_is_checked_against_the_type_item_by_item() {
+        Problem problem = onlyProblem(catalog(jar("a", "a.b|type=list:int", "a.b|default=1,x")));
+
+        assertEquals(new Problem("a", 3, Problem.Kind.WRONG, "a.b|default is '1,x', and 'x' is not an int"), problem);
+    }
+
+    @Test
+    void a_default_that_is_an_expression_or_empty_is_not_checked_against_the_type() {
+        assertEquals(List.of(), catalog(jar("a", "a.b|type=int", "a.b|default=${PORT}")).problems());
+        assertEquals(List.of(), catalog(jar("a", "a.b|type=int", "a.b|default=")).problems());
+        assertEquals(List.of(), catalog(jar("a", "a.b|type=int", "a.b|default=8080")).problems());
+    }
+
+    @Test
+    void a_default_that_is_an_expression_is_not_compared_with_the_allowed_values() {
+        assertEquals(List.of(), catalog(jar("a", "a.b|values=x,y", "a.b|default=${OTHER}")).problems());
+    }
+
+    @Test
+    void a_default_of_another_jar_is_checked_against_the_type_the_catalog_keeps() {
+        Problem problem = onlyProblem(catalog(jar("a", "a.b|type=int"), jar("b", "a.b|default=x")));
+
+        assertEquals(new Problem("b", 2, Problem.Kind.WRONG, "a.b|default is 'x', which is not an int"), problem);
+    }
+
+    @Test
     void a_problem_between_files_names_the_file_and_the_line_of_the_fact() {
         assertEquals(new Problem("one", 3, Problem.Kind.WRONG, ""), withoutMessage(
                 onlyProblem(catalog(jar("one", "a.b|values=x,y", "a.b|default=Z")))));

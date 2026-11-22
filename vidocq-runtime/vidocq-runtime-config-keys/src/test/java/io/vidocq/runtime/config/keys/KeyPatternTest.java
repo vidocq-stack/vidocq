@@ -147,6 +147,28 @@ class KeyPatternTest {
     }
 
     @Test
+    void a_pattern_has_sixty_four_segments_at_most() {
+        String sixtyFour = "a" + ".b".repeat(63);
+
+        assertEquals(sixtyFour, KeyPattern.parse(sixtyFour).text());
+        IllegalArgumentException refused =
+                assertThrows(IllegalArgumentException.class, () -> KeyPattern.parse(sixtyFour + ".b"));
+        assertTrue(refused.getMessage().endsWith("it has 65 segments, and a key pattern has 64 at most"),
+                refused.getMessage());
+    }
+
+    @Test
+    void a_pattern_has_eight_optional_names_at_most() {
+        String eight = "a" + ".[<n>]".repeat(8) + ".b";
+
+        assertTrue(KeyPattern.parse(eight).match("a.b").isPresent());
+        IllegalArgumentException refused =
+                assertThrows(IllegalArgumentException.class, () -> KeyPattern.parse("a.[<n>]" + eight.substring(1)));
+        assertTrue(refused.getMessage().endsWith("it has 9 optional names, and a key pattern has 8 at most"),
+                refused.getMessage());
+    }
+
+    @Test
     void the_same_family_twice_binds_its_first_name() {
         KeyPattern p = KeyPattern.parse("a.<x>.b.<x>");
         assertEquals(Map.of("x", "1"), p.match("a.1.b.2").orElseThrow().names());

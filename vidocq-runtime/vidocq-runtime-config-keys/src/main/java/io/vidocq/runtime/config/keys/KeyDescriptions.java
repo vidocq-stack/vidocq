@@ -29,7 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -115,8 +114,6 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
         private static final Pattern BREAKS_A_PROPERTIES_KEY = Pattern.compile("[\\s:]");
         private static final Pattern SEGMENT = Pattern.compile("[^<>\\[\\]*|\"\\s.=]+");
         private static final Pattern JAVA_NAME = Pattern.compile("[A-Za-z_$][\\w$]*");
-        private static final Set<String> TYPES = Set.of("string", "boolean", "int", "long", "double", "duration");
-        private static final String LIST = "list:";
 
         private final String origin;
         private final List<Problem> problems = new ArrayList<>();
@@ -278,10 +275,10 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
         }
 
         private static boolean isType(String type, boolean listAllowed) {
-            if (listAllowed && type.startsWith(LIST)) {
-                return isType(type.substring(LIST.length()), false);
+            if (listAllowed && KeyTypes.list(type)) {
+                return isType(KeyTypes.item(type), false);
             }
-            return TYPES.contains(type) || qualifiedJavaName(type);
+            return KeyTypes.ofTheFormat(type) || qualifiedJavaName(type);
         }
 
         /**
