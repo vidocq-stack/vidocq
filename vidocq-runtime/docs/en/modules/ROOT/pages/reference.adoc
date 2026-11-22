@@ -296,9 +296,11 @@ the keys of an application from the jars it uses, without running it.
 
 A jar has one, both or neither. Both files have the same format.
 
-NOTE: The reader of the format is in place, in the module `vidocq-runtime-config-keys`
-(`io.vidocq.runtime.config.keys`, no dependency). In this version nothing reads the files yet and nothing generates
-`config-keys.properties`: `vidocq:doctor`, the startup audit and the generation come next.
+NOTE: The reader of the format is the module `vidocq-runtime-config-keys` (`io.vidocq.runtime.config.keys`, no
+dependency). In this version the doctor reads the files of the project and of its jars
+(<<key-descriptions-doctor>>). Nothing generates `config-keys.properties` yet, the startup audit does not read the
+files, and no Vidocq extension ships its own: these come next. Until then the doctor has something to say for a
+project, or a library, that writes its file.
 
 === A file
 
@@ -376,6 +378,9 @@ A key is often not one key: the application chooses a name in the middle of it.
 A key starts with a literal segment. A name that holds a dot is written between double quotes in the application's
 configuration: `vidocq.persistence."my.unit".datasource`; a quoted segment is a name, never a literal.
 
+A pattern has 64 segments at most, and 8 names that may be absent at most. Beyond, it is a pattern the reader cannot
+read: the line is reported and skipped.
+
 When several patterns match the key an application writes, the most precise one describes it:
 
 . a pattern that describes the key wins over one that covers it with a final `+*+`;
@@ -419,6 +424,7 @@ vidocq.http.mount.<mount>.type|values=restful
 vidocq.http.mount.<mount>.include-packages|when=type=restful
 ----
 
+[#key-descriptions-problems]
 === What a reader reports
 
 A reader never fails on what a file holds: it reports what is wrong, with the file and the line, and reads the
@@ -433,6 +439,66 @@ value to compare.
 * An attribute it does not know is reported apart and skipped, and a file whose `format` is above the one it knows is
 not read: both are expected from a jar built with a later version. A new attribute does not change `format`; a change
 of meaning does.
+
+[#key-descriptions-doctor]
+=== What the doctor checks [.tag-new]#NEW#
+
+xref:modules/vidocq-runtime-cli.adoc#doctor[`vidocq doctor`] and
+xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`vidocq:doctor`] read the files of the project, then
+those of the jars it runs with, its runtime dependencies, in the order Maven resolves them. Of the project, the
+file its author writes is the one in `src/main/resources`, or the copy in `target/classes` when the sources have
+none, and the generated file is the one in `target/classes`. The project is read first: what it writes of a key
+wins over what a jar says.
+
+Two checks follow. Both warn and neither fails the doctor.
+
+`Key descriptions` reports what is wrong in the files (<<key-descriptions-problems>>), with the file and the line: the
+first ten, then how many more. An attribute the reader does not know, or a `format` above the one it knows, is a
+warning in a file of the project, where it is a mistake to fix, and is only counted in a jar, which may be built
+with a later version. When nothing is wrong, the check says how much was read: `2 files, 3 keys described`.
+
+`Config values` takes each key of the project's `vidocq.properties` that a file describes, and reports, in the
+order of the keys, the first ten findings then how many more:
+
+* a value that is not of the `type` of its key: `vidocq.sample.port=eighty — is not an int`;
+* a value that is not one of its `values`, compared without regard to case: `… — is not one of fast, safe`;
+* a key that is `deprecated`, whatever its value, with the documentation of the key, which says what to use.
+
+[cols="1,4"]
+|===
+| Type | A value fits when it is
+
+| `boolean`
+| `true`, `yes`, `y`, `on`, `1`, `false`, `no`, `n`, `off` or `0`, in any case
+
+| `int`, `long`
+| a whole number of that size: `8080`, `-1`
+
+| `double`
+| a number: `0.5`, `1e3`
+
+| `duration`
+| an ISO-8601 duration: `PT30S`, `PT5M`
+
+| `list:<type>`
+| items of that type separated by commas; `+\,+` is a comma inside an item, and an empty item is left out
+
+| `string`, a Java type name
+| anything: the value is not checked
+|===
+
+The value is the one the runtime reads from the file, the escapes of a `.properties` file undone and the white
+space around it dropped. A finding prints the first 40 characters of a value, and the hint of a finding says in
+which file and at which line the key is described.
+
+What is not checked:
+
+* an empty value, and a value that holds an expression, `${PORT:8080}`: a tool cannot expand it;
+* a key no file describes: nothing is said of it here, the `Config` check still reports a `vidocq.*` key outside the
+namespaces it knows;
+* a key under a profile prefix, `%dev.vidocq.sample.port`;
+* `required`, `when` and `ref`: the doctor reads one file, and the application may give a key elsewhere, in the
+environment or in a system property.
 
 == Maven plugin goals
 

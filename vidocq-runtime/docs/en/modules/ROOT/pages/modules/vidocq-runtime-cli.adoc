@@ -716,7 +716,9 @@ is cached in `~/.vidocq/cache/project-extensions/`, one file per project:
 * otherwise it records the size and modification time of every SNAPSHOT JAR and POM in the local
   repository (and of a SNAPSHOT parent POM), and resolves again as soon as one of them was
   re-downloaded. A newer SNAPSHOT still sitting in the remote repository is not seen until
-  something fetches it: `vidocq extension list --refresh` forces a resolution.
+  something fetches it: `vidocq extension list --refresh` forces a resolution;
+* it also records which resolved jars describe configuration keys, for <<doctor-keys,`vidocq doctor`>>. A cache
+  file an earlier CLI wrote does not: the project is resolved again, once.
 
 [source,bash]
 ----
@@ -810,6 +812,20 @@ read what the pom and `module-info.java` declare.
 | **Dev services**| ✔ each extension with a dev service (`mansart-pool`, `cervantes-jwt`, `humboldt-telemetry`) has its provider on `vidocq-runtime-maven-plugin`, the provider and `vidocq-runtime-devservices-junit` in test scope (not for the collector), and, for the pool, a JDBC driver; ⚠ one is missing (xref:dev-services.adoc#declared-for-you[Declared for you]).
 | **Maven version** | ✔ the wrapper runs the Maven Vidocq is built with, or a newer one; ⚠ an older one. Shown when the project has a wrapper.
 | **HTTP port** | ✔ the port of `vidocq.chappe.listener.default.port`, else `vidocq.http.port`, else 8080, is free; ⚠ something listens there.
+|===
+
+[#doctor-keys]
+Last, `doctor` reads the xref:reference.adoc#configuration-key-descriptions[descriptions of configuration keys] the
+project and the jars it runs with ship, and checks `vidocq.properties` against them [.tag-new]#NEW#. Both checks
+warn and never fail; xref:reference.adoc#key-descriptions-doctor[What the doctor checks] says what a value is
+compared with, and what is not checked.
+
+[cols="1,3"]
+|===
+| Check | Meaning
+
+| **Key descriptions** | ✔ how many files were read and how many keys they describe, or no jar of the project describes any; ⚠ a line of a file that is wrong, with the file and the line: the first ten, then how many more.
+| **Config values** | ✔ every value of a described key fits, or `vidocq.properties` has no described key; ⚠ a value that is not of the type of its key (`vidocq.sample.port=eighty — is not an int`) or not one of its allowed values, and a deprecated key: the first ten, then how many more.
 |===
 
 A fixable ✘ or ⚠ is followed by `↳ Fix: vidocq doctor --fix`. `--fix` first repairs, then reports:
