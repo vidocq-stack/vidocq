@@ -39,17 +39,28 @@ public final class DoctorFacts {
     /**
      * How many extensions the project runs with, or why they could not be found.
      *
-     * @param count the {@code VidocqExtension} providers on the runtime class path, transitive ones included
-     * @param error why the dependencies could not be resolved, or {@code null}
+     * @param count     the {@code VidocqExtension} providers on the runtime class path, transitive ones included
+     * @param error     why the dependencies could not be resolved, or {@code null}
+     * @param classPath the jars, or directories of classes, the count came from, as far as the tool knows them;
+     *                  {@link KeyDoctor#read} looks there for the descriptions of the configuration keys. Empty
+     *                  when it is not known
      */
-    public record Extensions(int count, String error) {
+    public record Extensions(int count, String error, List<Path> classPath) {
+
+        public Extensions {
+            classPath = List.copyOf(classPath);
+        }
 
         public static Extensions found(int count) {
-            return new Extensions(count, null);
+            return found(count, List.of());
+        }
+
+        public static Extensions found(int count, List<Path> classPath) {
+            return new Extensions(count, null, classPath);
         }
 
         public static Extensions failed(String error) {
-            return new Extensions(0, error);
+            return new Extensions(0, error, List.of());
         }
     }
 

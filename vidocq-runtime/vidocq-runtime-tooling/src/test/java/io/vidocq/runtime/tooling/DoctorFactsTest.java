@@ -62,6 +62,18 @@ class DoctorFactsTest {
     }
 
     @Test
+    void theExtensionsComeWithTheClassPathTheyWereFoundOn() {
+        List<Path> classPath = List.of(Path.of("a.jar"), Path.of("classes"));
+
+        assertEquals(classPath, DoctorFacts.Extensions.found(2, classPath).classPath());
+        assertEquals(2, DoctorFacts.Extensions.found(2, classPath).count());
+        assertNull(DoctorFacts.Extensions.found(2, classPath).error());
+        assertEquals(List.of(), DoctorFacts.Extensions.found(2).classPath());
+        assertEquals(List.of(), DoctorFacts.Extensions.failed("x").classPath());
+        assertEquals("x", DoctorFacts.Extensions.failed("x").error());
+    }
+
+    @Test
     void extensionsAreResolvedOnlyForAVidocqProject() throws IOException {
         AtomicBoolean asked = new AtomicBoolean();
         Files.writeString(dir.resolve("pom.xml"), "<project><artifactId>other</artifactId></project>");

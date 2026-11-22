@@ -24,6 +24,8 @@
  */
 module io.vidocq.runtime.tooling {
     requires java.xml;
+    // The doctor's API names KeyCatalog: who requires the tooling reads the key descriptions too.
+    requires transitive io.vidocq.runtime.config.keys;
 
     exports io.vidocq.runtime.tooling;
 }

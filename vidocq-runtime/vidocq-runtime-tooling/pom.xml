@@ -16,10 +16,15 @@
         Project editing shared by the Vidocq CLI and the Vidocq Maven plugin: the extension catalog built from
         the extensions' descriptors, the text-based pom.xml and module-info.java editors, and the extension
         add/remove flow, which reports through a Reporter each tool implements. Build tooling, never in an
-        application. Zero dependency — requires only java.xml.
+        application. No third-party dependency — requires only java.xml and the reader of the configuration key
+        descriptions, vidocq-runtime-config-keys, which requires nothing.
     </description>
 
     <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-config-keys</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
