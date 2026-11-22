@@ -4513,4 +4513,4 @@ where this whole bug class is invisible.
   `repackaged-api` profile. No other source names the old folders (`git grep` for `preview"`, `preview/pom`,
   `incubator"`, `incubator/pom` outside the documentation). The module's 367 tests pass.
 - **Not checked**: the nightly build stops at this module, so what comes after it in the reactor has not run on
-  `main` since 2026-11-21. Dispatch the nightly build on the branch to see the rest.
+  `main` since 2026-11-21. The nightly build runs on `main` only: the first one after the merge shows the rest.
