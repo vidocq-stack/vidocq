@@ -28,10 +28,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,6 +54,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DevServicesSessionListenerTest {
 
     private static final System.Logger LOG = System.getLogger("test");
+    /** The two paths of this test JVM, which two tests replace for a moment. */
+    private static final String MODULE_PATH = System.getProperty("jdk.module.path");
+    private static final String CLASS_PATH = System.getProperty("java.class.path");
 
     @AfterEach
     void restoreSystemProperties() {
@@ -58,6 +65,16 @@ class DevServicesSessionListenerTest {
         System.clearProperty(StateFile.PROPERTY);
         System.clearProperty("vidocq.dev.devServices");
         System.clearProperty("basedir");
+        restore("jdk.module.path", MODULE_PATH);
+        restore("java.class.path", CLASS_PATH);
+    }
+
+    private static void restore(String name, String value) {
+        if (value == null) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, value);
+        }
     }
 
     @Test
@@ -65,7 +82,7 @@ class DevServicesSessionListenerTest {
         System.setProperty("basedir", basedir.toString());
         Fake fake = new Fake("a", false);
         AtomicInteger calls = new AtomicInteger();
-        DevServicesSessionListener listener = new DevServicesSessionListener(dir -> {
+        DevServicesSessionListener listener = new DevServicesSessionListener((dir, classes) -> {
             calls.incrementAndGet();
             try {
                 return DevServicesSession.forTesting("test", dir, List.of(fake), LOG);
@@ -93,7 +110,7 @@ class DevServicesSessionListenerTest {
         System.setProperty("a.url", "already-set");
         Fake fake = new Fake("a", false);
         DevServicesSessionListener listener = new DevServicesSessionListener(
-                dir -> forTesting(dir, fake));
+                (dir, classes) -> forTesting(dir, fake));
 
         listener.launcherSessionOpened(null);
 
@@ -109,7 +126,7 @@ class DevServicesSessionListenerTest {
         System.setProperty("vidocq.dev.devServices", "false");
         AtomicInteger calls = new AtomicInteger();
         DevServicesSessionListener listener =
-                new DevServicesSessionListener(dir -> {
+                new DevServicesSessionListener((dir, classes) -> {
                     calls.incrementAndGet();
                     return forTesting(dir, new Fake("a", false));
                 });
@@ -127,7 +144,7 @@ class DevServicesSessionListenerTest {
         System.setProperty("basedir", basedir.toString());
         writeVidocqProperties(basedir, "vidocq.dev.devServices = False\n");
         AtomicInteger calls = new AtomicInteger();
-        DevServicesSessionListener listener = new DevServicesSessionListener(dir -> {
+        DevServicesSessionListener listener = new DevServicesSessionListener((dir, classes) -> {
             calls.incrementAndGet();
             return forTesting(dir, new Fake("a", false));
         });
@@ -144,7 +161,7 @@ class DevServicesSessionListenerTest {
         writeVidocqProperties(basedir, "vidocq.dev.devServices=false\n");
         System.setProperty("vidocq.dev.devServices", " TRUE ");
         AtomicInteger calls = new AtomicInteger();
-        DevServicesSessionListener listener = new DevServicesSessionListener(dir -> {
+        DevServicesSessionListener listener = new DevServicesSessionListener((dir, classes) -> {
             calls.incrementAndGet();
             return forTesting(dir, new Fake("a", false));
         });
@@ -153,6 +170,141 @@ class DevServicesSessionListenerTest {
 
         assertEquals(1, calls.get(), "the explicit true wins over the file's false");
         listener.launcherSessionClosed(null);
+    }
+
+    /**
+     * BUG-20261122-03: a test started from an IDE that compiles into {@code target-ide/} runs on those classes; the
+     * {@code vidocq.properties} Maven left in {@code target/classes} is another build's.
+     */
+    @Test
+    void theApplicationsFilesAreReadWhereTheTestJvmRuns(@TempDir Path basedir) throws Exception {
+        System.setProperty("basedir", basedir.toString());
+        writeVidocqProperties(basedir, "vidocq.dev.devServices=true\n");
+        Path ides = Files.createDirectories(basedir.resolve("target-ide").resolve("classes"));
+        Files.writeString(ides.resolve("vidocq.properties"), "vidocq.dev.devServices=false\n");
+        System.setProperty("jdk.module.path", ides + File.pathSeparator + basedir.resolve("lib.jar"));
+        AtomicInteger calls = new AtomicInteger();
+        DevServicesSessionListener listener = new DevServicesSessionListener((dir, classes) -> {
+            calls.incrementAndGet();
+            return forTesting(dir, new Fake("a", false));
+        });
+
+        listener.launcherSessionOpened(null);
+
+        assertEquals(0, calls.get(), "the false of the classes the JVM runs on is read, not Maven's true");
+        listener.launcherSessionClosed(null);
+    }
+
+    /** The session reads the application's files from the directory the flag was read from. */
+    @Test
+    void theSessionIsOpenedOnTheSameClasses(@TempDir Path basedir) throws Exception {
+        System.setProperty("basedir", basedir.toString());
+        Path ides = Files.createDirectories(basedir.resolve("target-ide").resolve("classes"));
+        System.clearProperty("jdk.module.path");
+        System.setProperty("java.class.path", basedir.resolve("target-ide").resolve("test-classes")
+                + File.pathSeparator + ides);
+        List<Path> opened = new ArrayList<>();
+        DevServicesSessionListener listener = new DevServicesSessionListener((dir, classes) -> {
+            opened.add(classes);
+            return forTesting(dir, new Fake("a", false));
+        });
+
+        listener.launcherSessionOpened(null);
+
+        assertEquals(List.of(ides.toRealPath()), opened.stream().map(DevServicesSessionListenerTest::real).toList());
+        listener.launcherSessionClosed(null);
+    }
+
+    @Test
+    void theApplicationsClassesAreTheFirstClassesFolderOfTheModulePathUnderTheBaseDirectory(@TempDir Path dir)
+            throws Exception {
+        Path basedir = Files.createDirectories(dir.resolve("todo-app"));
+        Path ides = Files.createDirectories(basedir.resolve("target-ide").resolve("classes"));
+        Path library = Files.createDirectories(dir.resolve("todo-lib").resolve("target-ide").resolve("classes"));
+        Path jar = Files.writeString(dir.resolve("core.jar"), "");
+        Files.createDirectories(basedir.resolve("target").resolve("classes"));
+
+        Path classes = DevServicesSessionListener.applicationClasses(basedir, path(jar, library, ides),
+                path(basedir.resolve("target").resolve("classes")));
+
+        assertEquals(ides.toRealPath(), real(classes));
+    }
+
+    /** No module path, or none of its entries: the class path, where a test of an application without modules runs. */
+    @Test
+    void thenOfTheClassPath(@TempDir Path basedir) throws Exception {
+        Path ides = Files.createDirectories(basedir.resolve("target-ide").resolve("classes"));
+        Path tests = Files.createDirectories(basedir.resolve("target-ide").resolve("test-classes"));
+        Path jar = Files.writeString(basedir.resolve("core.jar"), "");
+
+        assertEquals(ides.toRealPath(),
+                real(DevServicesSessionListener.applicationClasses(basedir, null, path(tests, ides, jar))));
+        assertEquals(ides.toRealPath(),
+                real(DevServicesSessionListener.applicationClasses(basedir, path(jar), path(tests, ides, jar))));
+    }
+
+    /** What Maven's own run gives: the module path of Surefire names {@code target/classes}. */
+    @Test
+    void underMavenTheyAreMavens(@TempDir Path basedir) throws Exception {
+        Path mavens = Files.createDirectories(basedir.resolve("target").resolve("classes"));
+        Files.createDirectories(basedir.resolve("target-ide").resolve("classes"));
+
+        assertEquals(mavens.toRealPath(),
+                real(DevServicesSessionListener.applicationClasses(basedir, path(mavens), "surefirebooter.jar")));
+    }
+
+    /**
+     * The folder of another module, a folder of another name, an entry that is no directory, an entry that is no
+     * path: none is the application's. Without one, Maven's folder as before: Surefire's class path mode hides its
+     * class path behind a jar that holds a manifest only.
+     */
+    @Test
+    void withoutSuchAnEntryTheyAreMavens(@TempDir Path dir) throws Exception {
+        Path basedir = Files.createDirectories(dir.resolve("todo-app"));
+        Path library = Files.createDirectories(dir.resolve("todo-lib").resolve("target").resolve("classes"));
+        Path tests = Files.createDirectories(basedir.resolve("target-ide").resolve("test-classes"));
+        Path file = Files.writeString(Files.createDirectories(basedir.resolve("packed")).resolve("classes"), "");
+        Path missing = basedir.resolve("target-ide").resolve("classes");
+        Path mavens = basedir.resolve("target").resolve("classes");
+
+        assertEquals(mavens, DevServicesSessionListener.applicationClasses(basedir, null, null));
+        assertEquals(mavens, DevServicesSessionListener.applicationClasses(basedir, "", ""));
+        assertEquals(mavens, DevServicesSessionListener.applicationClasses(basedir,
+                path(library, tests, file, missing), path(library) + File.pathSeparator + File.pathSeparator));
+        assertEquals(mavens, DevServicesSessionListener.applicationClasses(basedir, "\0", "surefirebooter.jar"));
+        assertEquals(mavens, DevServicesSessionListener.applicationClasses(basedir, dir.getRoot().toString(), null));
+    }
+
+    /** A base directory that is not there has no classes but Maven's to name. */
+    @Test
+    void aBaseDirectoryThatDoesNotExistAnswersMavensFolder(@TempDir Path dir) throws Exception {
+        Path basedir = dir.resolve("gone");
+        Path elsewhere = Files.createDirectories(dir.resolve("todo").resolve("target-ide").resolve("classes"));
+
+        assertEquals(basedir.resolve("target").resolve("classes"),
+                DevServicesSessionListener.applicationClasses(basedir, path(elsewhere), null));
+    }
+
+    /** The JVM keeps a path as it was given: an entry is read from the working directory, as the JVM read it. */
+    @Test
+    void aRelativeEntryIsReadFromTheWorkingDirectory(@TempDir Path basedir) throws Exception {
+        Path ides = Files.createDirectories(basedir.resolve("target-ide").resolve("classes")).toRealPath();
+        Path relative = Path.of("").toRealPath().relativize(ides);
+
+        assertEquals(ides, real(DevServicesSessionListener.applicationClasses(basedir, relative.toString(), null)));
+    }
+
+    private static String path(Path... entries) {
+        return String.join(File.pathSeparator, Arrays.stream(entries).map(Path::toString).toList());
+    }
+
+    /** {@code path} with its links followed, as the temporary folder of macOS needs; as it is when it is missing. */
+    private static Path real(Path path) {
+        try {
+            return Files.exists(path) ? path.toRealPath() : path.toAbsolutePath().normalize();
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     /**

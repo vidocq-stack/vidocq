@@ -28,11 +28,17 @@ import io.vidocq.runtime.devservices.host.StateFile;
 import org.junit.platform.launcher.LauncherSession;
 import org.junit.platform.launcher.LauncherSessionListener;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 /**
  * Hosts dev services for a whole JUnit Platform test run (spec 2026-09-24-devservices-visibility-run-tests §7):
@@ -49,14 +55,16 @@ import java.util.function.Predicate;
  */
 public final class DevServicesSessionListener implements LauncherSessionListener {
 
-    private final Function<Path, DevServicesSession> opener;
+    private static final String CLASSES = "classes";
+
+    /** Opens the session of a base directory and of the directory of the application's classes. */
+    private final BiFunction<Path, Path, DevServicesSession> opener;
     private DevServicesSession session;
 
     /** Used by the JUnit Platform, through {@code META-INF/services}. */
     public DevServicesSessionListener() {
-        this(basedir -> {
+        this((basedir, classes) -> {
             try {
-                Path classes = basedir.resolve("target").resolve("classes");
                 return DevServicesSession.open(
                         "test",
                         basedir,
@@ -82,18 +90,72 @@ public final class DevServicesSessionListener implements LauncherSessionListener
     }
 
     /** For {@code vidocq-runtime-devservices-junit}'s own tests, which supply a fake opener. */
-    DevServicesSessionListener(Function<Path, DevServicesSession> opener) {
+    DevServicesSessionListener(BiFunction<Path, Path, DevServicesSession> opener) {
         this.opener = opener;
+    }
+
+    /**
+     * The directory of the application's classes, where its {@code vidocq.properties} is read: the one the test JVM
+     * runs on. That is the first entry of {@code modulePath} (the system property {@code jdk.module.path}), then of
+     * {@code classPath} ({@code java.class.path}), that is a directory named {@code classes} under {@code basedir}:
+     * {@code target/classes} in a Maven build, the folder an IDE compiles into when it has one of its own
+     * ({@code target-ide/classes}), where Maven's folder holds the files of another build, or none
+     * (BUG-20261122-03). A folder of another module of the build is not under {@code basedir}, and the test classes
+     * are in a folder of another name.
+     *
+     * <p>Without such an entry, {@code <basedir>/target/classes}: Surefire's class path mode hides its class path
+     * behind a jar that holds a manifest only, and its classes are Maven's.</p>
+     */
+    static Path applicationClasses(Path basedir, String modulePath, String classPath) {
+        Path base = real(basedir);
+        for (String path : new String[] {modulePath, classPath}) {
+            if (path == null) {
+                continue;
+            }
+            for (String entry : path.split(Pattern.quote(File.pathSeparator))) {
+                Path classes = classesUnder(base, entry);
+                if (classes != null) {
+                    return classes;
+                }
+            }
+        }
+        return basedir.resolve("target").resolve(CLASSES);
+    }
+
+    /** {@code entry} as a path when it is a directory named {@code classes} under {@code base}, or null. */
+    private static Path classesUnder(Path base, String entry) {
+        if (entry.isEmpty()) {
+            return null;
+        }
+        try {
+            // A relative entry is read from the working directory, as the JVM read it.
+            Path directory = Path.of(entry).toAbsolutePath().normalize();
+            return directory.getFileName() != null && CLASSES.equals(directory.getFileName().toString())
+                    && Files.isDirectory(directory) && real(directory).startsWith(base) ? directory : null;
+        } catch (InvalidPathException _) {
+            return null;
+        }
+    }
+
+    /** {@code path} with its links followed, so that two spellings of a folder compare; as it is when unreadable. */
+    private static Path real(Path path) {
+        try {
+            return path.toRealPath();
+        } catch (IOException _) {
+            return path.toAbsolutePath().normalize();
+        }
     }
 
     @Override
     public void launcherSessionOpened(LauncherSession launcherSession) {
         Path basedir = Path.of(System.getProperty("basedir", System.getProperty("user.dir")));
-        Function<String, Optional<String>> files = ApplicationFiles.of(basedir.resolve("target").resolve("classes"));
+        Path classes = applicationClasses(basedir, System.getProperty("jdk.module.path"),
+                System.getProperty("java.class.path"));
+        Function<String, Optional<String>> files = ApplicationFiles.of(classes);
         if (!DevServicesFlag.enabled(Optional.ofNullable(System.getProperty(DevServicesFlag.KEY)), files, true)) {
             return;
         }
-        session = opener.apply(basedir);
+        session = opener.apply(basedir, classes);
         session.foldInto(System.getProperties());
         System.setProperty(StateFile.PROPERTY, session.stateFile().toAbsolutePath().toString());
     }

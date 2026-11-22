@@ -4555,3 +4555,39 @@ where this whole bug class is invisible.
     from IntelliJ IDEA 2026.3, the Vidocq plugin still disabled: the test passes. That is the third line of the
     table, seen in the IDE itself. The message of the fix was seen in the replay only: the application of that
     trial ran on a snapshot older than the fix.
+
+## BUG-20261122-03 — A test started from an IDE that compiles into `target-ide/` reads the application's `vidocq.properties` from `target/classes`
+
+- **Date**: 2026-11-22
+- **Status**: FIXED on `feat/ide-output-participant`
+- **Affected module**: vidocq-runtime-devservices-junit (`DevServicesSessionListener`)
+- **Symptom**: found by a review of the change that gives an IDE a build directory of its own (`target-ide/`), by
+  reading the code; no run showed it. The dev services of a test run read the application's files, the switch
+  `vidocq.dev.devServices` and what the dev services ask of `vidocq.properties`, from `<basedir>/target/classes`.
+  A test started from an IDE that compiles into `target-ide/classes` gets the copy of the last Maven build, which
+  an edit in the IDE does not reach, or no file at all on a clone Maven never built: a switch turned off in the
+  IDE still starts the containers, and one turned on is not seen.
+- **Minimal reproduction**: `DevServicesSessionListenerTest.theApplicationsFilesAreReadWhereTheTestJvmRuns`: a base
+  directory with `target/classes/vidocq.properties` holding `vidocq.dev.devServices=true` and
+  `target-ide/classes/vidocq.properties` holding `false`, the module path of the test JVM naming
+  `target-ide/classes`. Before the fix the session was opened (`expected: <0> but was: <1>`).
+- **Cause**: the listener named Maven's folder by its path, in the two places that read the application's files
+  (the switch, and the session it opens). That was the only folder a test could run on before an IDE had one of
+  its own.
+- **Fix**: the directory of the application's classes is the one the test JVM runs on: the first entry of the
+  system property `jdk.module.path`, then of `java.class.path`, that is a directory named `classes` under the base
+  directory; without one, `<basedir>/target/classes` as before (Surefire's class path mode hides its class path
+  behind a jar that holds a manifest only). It is found once, and the session is opened on the directory the
+  switch was read from. `jdk.module.path` is readable after startup: a JVM of JDK 25 started with `--module-path`,
+  `-p`, `--module-path=…`, and with the option in an `@argfile`, prints it as it was given.
+- **Not done**: the state file of a test run stays under `<basedir>/target/`
+  (`DevServicesSession.stateFileOf`, which `vidocq:dev` and `vidocq:test` share). The application is given its path
+  in a property, the connection file beside it is written for external tools at the place the documentation names,
+  and it is the record of a run, which the build does not package. A test started from an IDE therefore still
+  creates `target/` for it. An IDE that shortens a long class path into a jar with a manifest leaves no entry to
+  read, and the listener falls back to Maven's folder.
+- **Investigations**:
+  - 2026-11-22: the listener's own tests run under Surefire on the class path (`jdk.module.path` unset, 30 entries
+    in `java.class.path`), and the function answers `target/classes` there. The module path of a test started by
+    the language server of VS Code's Java extension names `target-ide/classes` (survey of the same day); the
+    listener was not run in that launch.
