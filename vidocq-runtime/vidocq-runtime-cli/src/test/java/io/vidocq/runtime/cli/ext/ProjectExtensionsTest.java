@@ -112,6 +112,19 @@ class ProjectExtensionsTest {
                 new ResolvedArtifact("g", "written", "1.0", written))));
     }
 
+    /** Dropped, the doctor of the CLI would pass where the Maven goal warns of the damaged jar. */
+    @Test
+    void aJarThatCannotBeOpenedIsKeptForTheDoctorToReport() throws IOException {
+        Path plain = jar("plain.jar", Map.of("x/Y.class", new byte[0]));
+        Path bad = Files.writeString(dir.resolve("bad-1.0.jar"), "PK truncated");
+        Path pom = Files.writeString(dir.resolve("parent-1.0.pom"), "<project/>");
+
+        assertEquals(List.of(bad), ProjectExtensions.described(List.of(
+                new ResolvedArtifact("g", "plain", "1.0", plain),
+                new ResolvedArtifact("g", "bad", "1.0", bad),
+                new ResolvedArtifact("g", "parent", "1.0", pom))));
+    }
+
     private Path namedModuleJar(String name, String module, String clazz, boolean provides)
             throws IOException {
         ClassDesc type = ClassDesc.of(clazz);

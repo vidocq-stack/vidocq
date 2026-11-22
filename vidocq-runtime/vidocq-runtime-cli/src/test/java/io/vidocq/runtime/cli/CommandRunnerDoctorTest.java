@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.ext.ProjectExtensions;
+import io.vidocq.runtime.cli.ext.ResolvedArtifact;
 import io.vidocq.runtime.tooling.DoctorFacts;
 import io.vidocq.runtime.tooling.ProjectSpec;
 import org.junit.jupiter.api.Test;
@@ -168,6 +170,25 @@ class CommandRunnerDoctorTest {
 
         assertTrue(out.toString().contains("no jar of the project describes its configuration keys"), out.toString());
         assertFalse(out.toString().contains("is not an int"), out.toString());
+    }
+
+    /** A dependency whose jar is damaged: the line of the Maven goal, from what a resolution keeps for the doctor. */
+    @Test
+    void aJarThatCannotBeOpenedIsReportedAsTheMavenGoalReportsIt(@TempDir Path dir) throws IOException {
+        Path project = sampleProject(dir, "80");
+        Path jar = sampleJar(dir);
+        Path bad = Files.writeString(dir.resolve("bad-1.0.jar"), "PK truncated");
+        List<Path> described = ProjectExtensions.described(List.of(
+                new ResolvedArtifact("com.acme", "sample", "1.0", jar),
+                new ResolvedArtifact("com.acme", "bad", "1.0", bad)));
+        StringBuilder out = new StringBuilder();
+
+        assertEquals(0, doctor(project, out, () -> DoctorFacts.Extensions.found(1, described)), out.toString());
+
+        assertTrue(out.toString().contains("Key descriptions  " + bad + " — cannot be read as a jar"),
+                out.toString());
+        assertTrue(out.toString().contains("damaged"), out.toString());
+        assertTrue(out.toString().contains("Config values     1 described key, every value fits"), out.toString());
     }
 
     @Test

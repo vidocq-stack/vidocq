@@ -219,6 +219,24 @@ class VidocqProjectReportMojoTest {
         assertTrue(lines.stream().noneMatch(l -> l.startsWith("warn: ⚠ Config values")), lines.toString());
     }
 
+    /** A dependency whose jar is damaged: the goal names the jar, and the CLI prints the same line. */
+    @Test
+    void doctorWarnsOfAJarThatCannotBeOpened() throws Exception {
+        MavenProject project = describedProject("vidocq.sample.port=80\n");
+        Path bad = Files.writeString(dir.resolve("bad-1.0.jar"), "PK truncated");
+        Set<Artifact> artifacts = new LinkedHashSet<>(project.getArtifacts());
+        artifacts.add(artifact("com.acme", "bad", bad));
+        project.setArtifacts(artifacts);
+
+        mojo(new VidocqDoctorMojo(), project).execute();
+
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith(
+                "warn: ⚠ Key descriptions  " + bad + " — cannot be read as a jar")), lines.toString());
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith("warn:     ↳ ") && l.contains("damaged")),
+                lines.toString());
+        assertTrue(lines.contains("info: ✔ Config values     1 described key, every value fits"), lines.toString());
+    }
+
     /** The two checks come last, after those of the project, and a project whose jars describe nothing passes. */
     @Test
     void doctorChecksTheKeyDescriptionsAfterTheProject() throws Exception {

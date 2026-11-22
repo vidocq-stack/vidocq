@@ -68,6 +68,10 @@ public final class KeyDoctor {
             + " the project's META-INF/vidocq/config-user-keys.properties; in a jar, it is its author's to fix."
             + " The format is in the reference documentation, \"Configuration key descriptions\".";
 
+    private static final String UNREADABLE_HINT = "The file itself cannot be opened, so what it describes is not"
+            + " known. A jar is damaged or was not downloaded whole: delete it from the local Maven repository and"
+            + " build again, so that it is fetched again.";
+
     private KeyDoctor() {}
 
     /**
@@ -168,8 +172,9 @@ public final class KeyDoctor {
                 .toList();
         if (!wrong.isEmpty()) {
             return shown(DESCRIPTIONS_CHECK, wrong.stream()
+                    // Line 0 is the file itself, which could not be read: nothing in it is to correct.
                     .map(problem -> Diagnostic.warn(DESCRIPTIONS_CHECK, at(problem.origin(), problem.line()) + " — "
-                            + problem.message(), DESCRIPTIONS_HINT))
+                            + problem.message(), problem.line() == 0 ? UNREADABLE_HINT : DESCRIPTIONS_HINT))
                     .toList());
         }
         int skipped = facts.catalog().problems().size();

@@ -152,6 +152,22 @@ class KeyDoctorTest {
         assertTrue(warning.detail().startsWith(broken + " — cannot be read as a jar"), warning.detail());
     }
 
+    /** A jar that cannot be opened is not a description to correct: the remedy is the jar. */
+    @Test
+    void aJarThatCannotBeOpenedHasAHintOfItsOwn() throws IOException {
+        Path broken = Files.writeString(dir.resolve("broken.jar"), "this is not a zip file");
+        KeyDescriptions wrong = file("a.jar!/keys", "shop.c|type=itn");
+
+        Diagnostic unopened = only(check(KeyDoctor.read(dir, List.of(broken)), KEYS));
+        Diagnostic line = only(check(facts(Map.of(), wrong), KEYS));
+
+        assertTrue(unopened.hint().contains("damaged"), unopened.hint());
+        assertTrue(unopened.hint().contains("local Maven repository"), unopened.hint());
+        assertFalse(unopened.hint().contains("config-user-keys.properties"), unopened.hint());
+        assertTrue(line.hint().contains("config-user-keys.properties"), line.hint());
+        assertFalse(line.hint().contains("damaged"), line.hint());
+    }
+
     @Test
     void tenProblemsAreShownAndTheRestIsCounted() {
         String[] lines = new String[12];

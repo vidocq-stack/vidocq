@@ -66,10 +66,12 @@ public final class KeyFiles {
     }
 
     /**
-     * Whether a jar file or a directory of classes ships one of the two files.
+     * Whether {@link #of} has something to give for a jar file or a directory of classes: one of the two files,
+     * or the problem of a jar file that cannot be opened. A tool that keeps only the locations to read later
+     * keeps that jar too, and so reports it as one that reads every location does.
      *
      * @param location a jar file or a directory of classes
-     * @return whether it does; false for anything that cannot be read
+     * @return whether it has; false for what is neither, and for a path that does not exist
      */
     public static boolean present(Path location) {
         if (Files.isDirectory(location)) {
@@ -82,7 +84,8 @@ public final class KeyFiles {
         try (ZipFile jar = new ZipFile(location.toFile())) {
             return jar.getEntry(KeyCatalog.WRITTEN) != null || jar.getEntry(KeyCatalog.GENERATED) != null;
         } catch (IOException _) {
-            return false;
+            // What it ships is not known: of() says that it cannot be opened.
+            return true;
         }
     }
 

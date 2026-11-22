@@ -172,7 +172,7 @@ class KeyFilesTest {
         assertEquals(0, problem.line());
         assertEquals(Problem.Kind.WRONG, problem.kind());
         assertTrue(problem.message().startsWith("cannot be read as a jar"), problem.message());
-        assertFalse(KeyFiles.present(broken));
+        assertTrue(KeyFiles.present(broken), "kept by a tool that keeps what is present: of() reports it");
     }
 
     @Test
