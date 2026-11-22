@@ -4591,3 +4591,7 @@ where this whole bug class is invisible.
     in `java.class.path`), and the function answers `target/classes` there. The module path of a test started by
     the language server of VS Code's Java extension names `target-ide/classes` (survey of the same day); the
     listener was not run in that launch.
+  - 2026-11-22, the fix verified in the language server of VS Code's Java extension: an application of one module
+    with the listener as a test dependency and no dev service on its class path. `vidocq.dev.devServices=false`
+    saved in `src/main/resources` reaches `target-ide/classes` only, and a test the IDE starts opens no session;
+    without the key, the session writes `target/vidocq-dev-services-test.json`. No container was started.
