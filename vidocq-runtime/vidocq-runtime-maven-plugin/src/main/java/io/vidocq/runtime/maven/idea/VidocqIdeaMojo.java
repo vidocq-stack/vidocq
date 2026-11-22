@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.idea;
 
+import io.vidocq.runtime.maven.VidocqTestPathMojo;
 import io.vidocq.runtime.maven.depgen.AetherArtifactResolver;
 import io.vidocq.runtime.maven.depgen.ArtifactResolver;
 import io.vidocq.runtime.maven.idea.IdeaApplications.Diagnostic;
@@ -436,6 +437,11 @@ public class VidocqIdeaMojo extends AbstractMojo {
                     + " names its jar in the local Maven repository: until it is there, a JUnit run created from the"
                     + " template fails to start. Run \"mvn vidocq:idea\" again online to download it.");
         }
+        // The agent is for the test JVM. The application a @VidocqTest test starts needs the path of
+        // vidocq:test-path, and IntelliJ runs no Maven build (BUG-20261122-02).
+        getLog().info(PREFIX + "a test annotated @VidocqTest also needs the runtime path of its application, which a"
+                + " Maven build writes to target/" + VidocqTestPathMojo.FILE + ": run \"mvn process-test-classes\""
+                + " once in the application, and again after a change of dependencies.");
     }
 
     /** Adds one file to {@code targets}, failing on a name collision with a file already added. */

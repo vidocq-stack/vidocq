@@ -1013,6 +1013,23 @@ class VidocqIdeaMojoTest {
         assertEquals(1, resolver.requests.size(), "a check resolves nothing");
     }
 
+    /**
+     * The template is half of what a {@code @VidocqTest} test needs from IntelliJ: the application it starts runs on
+     * the runtime path a Maven build writes, and IntelliJ runs none. The goal says which build to run, where the test
+     * stopped on {@code Module io.vidocq.runtime.core not found} (BUG-20261122-02).
+     */
+    @Test
+    void theGoalSaysWhichBuildAVidocqTestNeeds() throws Exception {
+        VidocqIdeaMojo maven = templateMojo(new AgentResolver(null));
+
+        maven.run(projects, projects, new Properties(), root);
+
+        assertTrue(log.has("INFO", "Vidocq idea: a test annotated @VidocqTest also needs the runtime path of its"
+                + " application, which a Maven build writes to target/vidocq-test-runtime-path: run \"mvn"
+                + " process-test-classes\" once in the application, and again after a change of dependencies."),
+                log.toString());
+    }
+
     @Test
     void theCheckReportsAMissingJunitTemplate() {
         VidocqIdeaMojo maven = templateMojo(new AgentResolver(null));

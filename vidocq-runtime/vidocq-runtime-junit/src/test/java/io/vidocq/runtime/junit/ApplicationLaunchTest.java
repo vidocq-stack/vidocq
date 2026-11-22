@@ -238,6 +238,39 @@ class ApplicationLaunchTest {
                 + " holds: " + modulePath, e.getMessage());
     }
 
+    /**
+     * A test an IDE starts before any Maven build has no runtime path, neither Surefire's property nor the file
+     * {@code vidocq:test-path} writes, so the runtime is not on the module path. The launch says which build to run,
+     * where the JVM it started only said {@code Module io.vidocq.runtime.core not found} (BUG-20261122-02).
+     */
+    @Test
+    void aModulePathWithoutTheRuntimeSaysWhichBuildToRun() throws IOException {
+        String modulePath = path(explicit("com.acme.demo"), automatic("acme-lib-1.0.jar"));
+        List<String> properties = List.of();
+
+        var e = assertThrows(IllegalStateException.class,
+                () -> ApplicationLaunch.layout(modulePath, "com.acme.demo", properties, warnings::add));
+
+        assertEquals("@VidocqTest starts the application with the runtime module io.vidocq.runtime.core, which no"
+                + " entry of the module path of the tests holds. The runtime dependencies of the application come"
+                + " from vidocq:test-path: Surefire passes them in vidocq.test.runtimePath, and a test an IDE starts"
+                + " reads them from the file vidocq-test-runtime-path of the build directory, which a Maven build"
+                + " writes. Run \"mvn process-test-classes\" once, and again after a change of dependencies, then"
+                + " start the test again.", e.getMessage());
+    }
+
+    /** The runtime may be in an entry the split cannot read: the JVM reports that one, as before. */
+    @Test
+    void anUnreadableEntryLeavesTheMissingRuntimeToTheJvm() throws IOException {
+        Path app = explicit("com.acme.demo");
+        Path missing = dir.resolve("missing.jar");
+
+        var layout = ApplicationLaunch.layout(path(app, missing), "com.acme.demo", List.of(), warnings::add);
+
+        assertEquals(List.of(missing), layout.modulePath());
+        assertEquals(List.of(app), layout.appPath());
+    }
+
     @Test
     void theModuleNamedOnTheAnnotationWins() {
         assertEquals("com.acme.other", ApplicationLaunch.module("com.acme.other", "com.acme.demo", "com.acme.prop"));

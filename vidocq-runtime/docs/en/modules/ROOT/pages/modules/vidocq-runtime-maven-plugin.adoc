@@ -1983,12 +1983,19 @@ warning, `vidocq.idea.check`. It is written only when the build has an applicati
 reported, never deleted. A run configuration created from the template earlier keeps the options it was created
 with: the template applies to new ones.
 
+The agent serves the test JVM only. A `@VidocqTest` test also starts the application, in a JVM of its own, on the
+runtime path `vidocq:test-path` writes to `target/vidocq-test-runtime-path`, and IntelliJ runs no Maven build: run
+`mvn process-test-classes` once in the application, and again after a change of dependencies. The goal says so when
+it writes the template, and the test names that build when the file is missing. See
+xref:testing.adoc#from-the-ide[a test an IDE starts].
+
+Tried in IntelliJ IDEA 2026.3 without the Vidocq plugin, on 2026-11-22: the IDE loads the template, also from the
+`.run/` of an application below the directory it opened, and expands `$MAVEN_REPOSITORY$` to the local repository of
+its Maven settings, which must be the one Maven resolves into.
+
 [WARNING]
 .Not verified yet
 ====
-* That IntelliJ expands `$MAVEN_REPOSITORY$` in the VM options of a run configuration has not been tried in the IDE
-  yet; nor that it loads a template stored in `.run/`. `$MAVEN_REPOSITORY$` is the local repository set in
-  IntelliJ's Maven settings, which must be the one Maven resolves into.
 * The Vidocq IntelliJ plugin also adds the agent to such a launch, so a test can get it twice. Read in its code, a
   second run of the agent finds the access already given and changes nothing; no test runs it twice yet.
 ====

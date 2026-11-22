@@ -60,7 +60,7 @@ public class VidocqTestPathMojo extends AbstractMojo {
     static final String PROPERTY = "vidocq.test.runtimePath";
 
     /** The file, in the build directory, that {@code vidocq-runtime-junit} reads when the property is missing. */
-    static final String FILE = "vidocq-test-runtime-path";
+    public static final String FILE = "vidocq-test-runtime-path";
 
     private static final Set<String> RUNTIME_SCOPES = Set.of(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME);
 

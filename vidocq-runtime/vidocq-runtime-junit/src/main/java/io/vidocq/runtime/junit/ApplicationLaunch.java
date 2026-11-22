@@ -58,8 +58,11 @@ import java.util.stream.Collectors;
  */
 final class ApplicationLaunch {
 
+    /** The module of the runtime, which every launch starts: the module path must hold it. */
+    static final String RUNTIME_MODULE = "io.vidocq.runtime.core";
+
     /** The runtime's own main, which boots the application of {@code vidocq.app.path}. */
-    static final String RUNTIME_MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
+    static final String RUNTIME_MAIN = RUNTIME_MODULE + "/io.vidocq.runtime.core.Vidocq";
 
     /** What {@code --add-modules} always holds: every module of the module path is resolved. */
     private static final String ALL_MODULE_PATH = "ALL-MODULE-PATH";
@@ -226,8 +229,9 @@ final class ApplicationLaunch {
      * honoured falls back to {@code classes} and says why through {@code warn}; an {@code all} asked for fails. An
      * entry that holds no module the split can read stays on the module path, where the JVM reports it.
      *
-     * @throws IllegalStateException when no entry of {@code modulePath} holds {@code module}, or when an {@code all}
-     *                               asked for cannot be honoured
+     * @throws IllegalStateException when no entry of {@code modulePath} holds {@code module}, when none holds the
+     *                               runtime ({@value #RUNTIME_MODULE}): a test an IDE starts before any Maven build
+     *                               (BUG-20261122-02), or when an {@code all} asked for cannot be honoured
      */
     static Layout layout(String modulePath, String module, List<String> properties, Consumer<String> warn) {
         List<LayerSplit.Candidate> candidates = new ArrayList<>();
@@ -244,6 +248,16 @@ final class ApplicationLaunch {
         if (candidates.stream().noneMatch(candidate -> isModule(candidate, module))) {
             throw new IllegalStateException("@VidocqTest starts the module " + module
                     + ", which no entry of the module path of the tests holds: " + modulePath);
+        }
+        // An entry the split cannot read may be the runtime: the JVM reports that one.
+        if (unreadable.isEmpty() && candidates.stream().noneMatch(candidate -> isModule(candidate, RUNTIME_MODULE))) {
+            throw new IllegalStateException("@VidocqTest starts the application with the runtime module "
+                    + RUNTIME_MODULE + ", which no entry of the module path of the tests holds. The runtime"
+                    + " dependencies of the application come from vidocq:test-path: Surefire passes them in "
+                    + RUNTIME_PATH_PROPERTY + ", and a test an IDE starts reads them from the file "
+                    + RUNTIME_PATH_FILE + " of the build directory, which a Maven build writes. Run \"mvn"
+                    + " process-test-classes\" once, and again after a change of dependencies, then start the test"
+                    + " again.");
         }
         Optional<LayerSplit.Result> all = all(candidates, module, properties, warn);
         LayerSplit.Result split = all.orElseGet(() -> new LayerSplit.Result(

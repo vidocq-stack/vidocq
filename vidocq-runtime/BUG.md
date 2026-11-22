@@ -4514,3 +4514,39 @@ where this whole bug class is invisible.
   `incubator"`, `incubator/pom` outside the documentation). The module's 367 tests pass.
 - **Not checked**: the nightly build stops at this module, so what comes after it in the reactor has not run on
   `main` since 2026-11-21. The nightly build runs on `main` only: the first one after the merge shows the rest.
+
+## BUG-20261122-02 — A `@VidocqTest` test started from IntelliJ without a Maven build stops on `Module io.vidocq.runtime.core not found`, and nothing says which build to run
+
+- **Date**: 2026-11-22
+- **Status**: FIXED on `fix/vidocq-test-runtime-path-hint`
+- **Affected module**: vidocq-runtime-junit (`ApplicationLaunch`), vidocq-runtime-maven-plugin (`vidocq:idea`), the
+  documentation (`testing.adoc`)
+- **Symptom**: found by the maintainer in IntelliJ IDEA 2026.3 with the Vidocq plugin disabled, on the `library`
+  application of `vidocq-tutorial`, after `mvn vidocq:idea`. `HelloResourceTest` starts, the dev services start, then:
+  `IllegalStateException: The application stopped with exit code 1 before it listened. Its output: Error occurred
+  during initialization of boot layer / java.lang.module.FindException: Module io.vidocq.runtime.core not found`.
+  The launch does carry the test agent of the JUnit template: the failure is in the JVM of the application.
+- **Minimal reproduction**: an application with a `@VidocqTest` test, no `target/vidocq-test-runtime-path` (IntelliJ
+  compiled, Maven never ran `process-test-classes`), the test started from the IDE without the Vidocq plugin.
+  Replayed outside the IDE with the command line IntelliJ printed, on a copy of the application:
+
+  | State of `target/` | Result |
+  |---|---|
+  | classes compiled by IntelliJ, no file | the error above |
+  | after `mvn test-compile` | no file written |
+  | the same classes compiled by IntelliJ, plus the file of `mvn process-test-classes` | the test passes |
+
+- **Cause**: `@VidocqTest` starts the application on the module path of the tests plus the runtime path of
+  `vidocq:test-path`. In an IDE that path comes from `target/vidocq-test-runtime-path`, which only a Maven build
+  writes; without it the runtime, which the IDE leaves on the class path of the tests as Surefire does, is on no
+  module path. Three defects around that:
+  - nothing checked the module path before the launch, so the only message was the JVM's;
+  - `vidocq:idea`, the goal a developer runs to set IntelliJ up, did not mention the build;
+  - `testing.adoc` named `mvn test-compile`, and `vidocq:test-path` is bound to `process-test-classes`, the phase
+    after it.
+- **Fix**: `ApplicationLaunch.layout` fails before the launch when no entry of the module path holds
+  `io.vidocq.runtime.core`, and names the build to run (an entry it cannot read may be the runtime: the JVM still
+  reports that one); `vidocq:idea` says which build a `@VidocqTest` test needs when it writes the JUnit template;
+  the documentation names `process-test-classes`.
+- **Not done**: the file is still written by a Maven build only. A test started from IntelliJ after a change of
+  dependencies runs on the path of the last build.
