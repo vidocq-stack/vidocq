@@ -243,7 +243,6 @@ class KeyCatalogTest {
         KeyCatalog catalog = catalog(jar("one", "a.b.<y>|doc=2", "a.<x>.c|doc=1"));
 
         assertEquals(Optional.of("1"), catalog.describe("a.b.c").orElseThrow().doc());
-        assertEquals(Optional.of("1"), catalog.describe("a.b.c").orElseThrow().doc());
     }
 
     @Test
@@ -259,7 +258,80 @@ class KeyCatalogTest {
 
         assertEquals(2, catalog.problems().size());
         assertEquals(2, catalog.problems().get(0).line());
-        assertEquals(0, catalog.problems().get(1).line());
+        assertEquals(3, catalog.problems().get(1).line());
+    }
+
+    @Test
+    void the_problems_of_every_file_come_before_those_between_files() {
+        KeyCatalog catalog = catalog(jar("one", "a.b|ref=nobody", "nonsense"), jar("two", "more nonsense"));
+
+        assertEquals(List.of("one:3", "two:2", "one:2"),
+                catalog.problems().stream().map(p -> p.origin() + ":" + p.line()).toList());
+    }
+
+    @Test
+    void a_key_wins_over_its_optional_twin() {
+        KeyCatalog catalog = catalog(jar("one", "vidocq.pool.[<datasource>].url|doc=2", "vidocq.pool.url|doc=1"));
+
+        assertEquals(Optional.of("1"), catalog.describe("vidocq.pool.url").orElseThrow().doc());
+        assertEquals(Optional.of("2"), catalog.describe("vidocq.pool.audit.url").orElseThrow().doc());
+    }
+
+    @Test
+    void a_tail_after_a_name_wins_over_a_tail_alone() {
+        KeyCatalog catalog = catalog(jar("one", "a.*|doc=1", "a.<x>.*|doc=2"));
+
+        assertEquals(Optional.of("2"), catalog.describe("a.b.c").orElseThrow().doc());
+        assertEquals(Optional.of("1"), catalog.describe("a.b").orElseThrow().doc());
+    }
+
+    @Test
+    void the_default_of_a_list_is_compared_item_by_item() {
+        assertEquals(List.of(), catalog(jar("one", "a.b|type=list:string", "a.b|values=x,y,z", "a.b|default=x, y"))
+                .problems());
+
+        Problem problem = onlyProblem(catalog(jar("one", "a.b|type=list:string", "a.b|values=x,y,z",
+                "a.b|default=x,w")));
+        assertTrue(problem.message().contains("'w'"), problem.message());
+    }
+
+    @Test
+    void an_empty_default_is_no_value_to_compare() {
+        assertEquals(List.of(), catalog(jar("one", "a.b|values=x,y", "a.b|default=")).problems());
+    }
+
+    @Test
+    void a_problem_between_files_names_the_file_and_the_line_of_the_fact() {
+        assertEquals(new Problem("one", 3, Problem.Kind.WRONG, ""), withoutMessage(
+                onlyProblem(catalog(jar("one", "a.b|values=x,y", "a.b|default=Z")))));
+        assertEquals(new Problem("one", 2, Problem.Kind.WRONG, ""), withoutMessage(
+                onlyProblem(catalog(jar("one", "a.b|ref=datasource")))));
+        assertEquals(new Problem("one", 3, Problem.Kind.WRONG, ""), withoutMessage(
+                onlyProblem(catalog(jar("one", "# c", "a.<m>.classpath|when=type=static")))));
+        assertEquals(new Problem("two", 4, Problem.Kind.WRONG, ""), withoutMessage(
+                onlyProblem(catalog(jar("one", "a.b|type=int"), jar("two", "# c", "# c", "a.b|type=long")))));
+    }
+
+    private static Problem withoutMessage(Problem problem) {
+        return new Problem(problem.origin(), problem.line(), problem.kind(), "");
+    }
+
+    @Test
+    void a_merged_key_says_where_each_fact_it_kept_comes_from() {
+        KeyCatalog catalog = catalog(
+                new KeyCatalog.Jar(file("written", "a.b|doc=Written."), file("generated", "a.b|type=int")),
+                jar("other", "# c", "a.b|values=x", "a.b|doc=Other."));
+
+        KeyDescription key = key(catalog, "a.b");
+        assertEquals(Optional.of(new Fact("Written.", "written", 2)), key.fact(Attribute.DOC));
+        assertEquals(Optional.of(new Fact("int", "generated", 2)), key.fact(Attribute.TYPE));
+        assertEquals(Optional.of(new Fact("x", "other", 3)), key.fact(Attribute.VALUES));
+    }
+
+    @Test
+    void a_jar_has_its_two_files_or_none() {
+        org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                () -> new KeyCatalog.Jar(null, KeyDescriptions.none()));
     }
 
     @Test

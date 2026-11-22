@@ -34,6 +34,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class KeyDescriptionsTest {
 
+    private static final String BYTE_ORDER_MARK = "\uFEFF";
+
     private static KeyDescriptions read(String... lines) {
         return KeyDescriptions.read("f", String.join("\n", lines));
     }
@@ -109,7 +111,18 @@ class KeyDescriptionsTest {
     @Test
     void comments_blank_lines_a_byte_order_mark_and_windows_line_ends_are_skipped() {
         KeyDescriptions file = KeyDescriptions.read("f",
-                "﻿# a comment\r\n\r\n  ! another\r\nformat=1\r\n  a.b | type = int  \r\n");
+                BYTE_ORDER_MARK + "# a comment\r\n\r\n  ! another\r\nformat=1\r\n  a.b|type = int  \r\n");
+
+        assertEquals(List.of(), file.problems());
+        assertEquals("int", file.keys().getFirst().type());
+    }
+
+    @Test
+    void a_byte_order_mark_is_skipped_in_a_stream_too() throws IOException {
+        byte[] bytes = (BYTE_ORDER_MARK + "format=1\na.b|type=int\n").getBytes(StandardCharsets.UTF_8);
+        assertEquals((byte) 0xEF, bytes[0]);
+
+        KeyDescriptions file = KeyDescriptions.read("f", new ByteArrayInputStream(bytes));
 
         assertEquals(List.of(), file.problems());
         assertEquals("int", file.keys().getFirst().type());
@@ -244,6 +257,75 @@ class KeyDescriptionsTest {
             "a.b|required=true", "a.b|required=false", "a.b|doc=", "<f>|doc=A family."})
     void a_fact_of_the_format_is_right(String line) {
         assertEquals(List.of(), read("format=1", line).problems());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a.b|doc=C:\\tmp", "a.b|doc=a\\tb", "a.b |type=int", "a.b| type=int", "a:b|type=int",
+            "a.b|ty pe=int"})
+    void what_java_util_properties_would_read_otherwise_is_wrong(String line) {
+        Problem problem = onlyProblem(read("format=1", line));
+
+        assertEquals(Problem.Kind.WRONG, problem.kind());
+        assertEquals(2, problem.line());
+    }
+
+    @Test
+    void a_colon_and_white_space_are_fine_in_a_value() {
+        KeyDescriptions file = read("format=1", "a.b|doc=Note: one of a, b.");
+
+        assertEquals(List.of(), file.problems());
+        assertEquals(Optional.of("Note: one of a, b."), file.keys().getFirst().doc());
+    }
+
+    @Test
+    void a_key_named_by_a_fact_of_a_later_format_still_exists() {
+        KeyDescriptions file = read("format=1", "a.b|secret=true");
+
+        assertEquals(Problem.Kind.NEWER, onlyProblem(file).kind());
+        assertEquals(List.of("a.b"), file.keys().stream().map(key -> key.key().text()).toList());
+        assertEquals("string", file.keys().getFirst().type());
+    }
+
+    @Test
+    void a_key_named_by_a_wrong_fact_still_exists() {
+        KeyDescriptions file = read("format=1", "a.b|type=itn");
+
+        assertEquals(Problem.Kind.WRONG, onlyProblem(file).kind());
+        assertEquals(List.of("a.b"), file.keys().stream().map(key -> key.key().text()).toList());
+    }
+
+    @Test
+    void a_family_named_by_a_fact_of_a_later_format_still_exists() {
+        KeyDescriptions file = read("format=1", "<unit>|scope=application");
+
+        assertEquals(Problem.Kind.NEWER, onlyProblem(file).kind());
+        assertEquals(List.of(new KeyFamily("unit", List.of(), Optional.empty())), file.families());
+    }
+
+    @Test
+    void an_attribute_that_is_not_a_word_is_wrong_and_not_newer() {
+        KeyDescriptions file = read("format=1", "a.b|c|type=int");
+
+        assertEquals(Problem.Kind.WRONG, onlyProblem(file).kind());
+        assertEquals(List.of(), file.keys());
+    }
+
+    @Test
+    void a_fact_keeps_its_file_and_its_line() {
+        KeyDescriptions file = read("format=1", "# c", "a.b|type=int", "a.b|doc=A key.");
+
+        KeyDescription key = file.keys().getFirst();
+        assertEquals(Optional.of(new Fact("int", "f", 3)), key.fact(Attribute.TYPE));
+        assertEquals(Optional.of(new Fact("A key.", "f", 4)), key.fact(Attribute.DOC));
+        assertEquals(Optional.empty(), key.fact(Attribute.DEFAULT));
+    }
+
+    @Test
+    void a_description_built_by_hand_with_a_condition_that_is_none_has_no_condition() {
+        KeyDescription key = new KeyDescription(KeyPattern.parse("a.b"),
+                java.util.Map.of(Attribute.WHEN, new Fact("nonsense", "f", 1)));
+
+        assertEquals(Optional.empty(), key.when());
     }
 
     @Test

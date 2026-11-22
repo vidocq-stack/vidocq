@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -45,6 +46,8 @@ public final class KeyCatalog {
     /** The file a build generates, for the keys annotations declare. */
     public static final String GENERATED = "META-INF/vidocq/config-keys.properties";
 
+    private static final String LIST = "list:";
+
     private final List<KeyDescription> keys;
     private final Map<String, KeyFamily> families;
     private final List<Problem> problems;
@@ -61,7 +64,13 @@ public final class KeyCatalog {
      * @param written   the file its author wrote, or {@link KeyDescriptions#none()}
      * @param generated the generated file, or {@link KeyDescriptions#none()}
      */
-    public record Jar(KeyDescriptions written, KeyDescriptions generated) {}
+    public record Jar(KeyDescriptions written, KeyDescriptions generated) {
+
+        public Jar {
+            Objects.requireNonNull(written, "written: KeyDescriptions.none() for a jar that has no such file");
+            Objects.requireNonNull(generated, "generated: KeyDescriptions.none() for a jar that has no such file");
+        }
+    }
 
     /**
      * Merges what jars say of their keys.
@@ -114,26 +123,21 @@ public final class KeyCatalog {
         return problems;
     }
 
-    /** The facts kept for one key or one family, with the file that gave each. */
+    /** The facts kept for one key or one family. */
     private static final class Facts {
 
-        private final Map<Attribute, String> values = new EnumMap<>(Attribute.class);
-        private final Map<Attribute, String> origins = new EnumMap<>(Attribute.class);
+        private final Map<Attribute, Fact> kept = new EnumMap<>(Attribute.class);
         /** The items of {@code values}, or of {@code names} for a family: they add up. */
         private final Set<String> items = new LinkedHashSet<>();
 
         /** Keeps a fact that is the first of its attribute; answers the one kept before it otherwise. */
-        String keep(Attribute attribute, String value, String origin) {
-            if (attribute == Attribute.VALUES || attribute == Attribute.NAMES) {
-                items.addAll(KeyDescription.list(value));
-                origins.putIfAbsent(attribute, origin);
+        Fact keep(Attribute attribute, Fact fact) {
+            if (attribute == Attribute.VALUES) {
+                items.addAll(KeyDescription.list(fact.value()));
+                kept.putIfAbsent(attribute, fact);
                 return null;
             }
-            String earlier = values.putIfAbsent(attribute, value);
-            if (earlier == null) {
-                origins.put(attribute, origin);
-            }
-            return earlier;
+            return kept.putIfAbsent(attribute, fact);
         }
 
         boolean allows(String value) {
@@ -164,7 +168,7 @@ public final class KeyCatalog {
             problems.addAll(between);
             Map<String, KeyFamily> known = new LinkedHashMap<>();
             families.forEach((name, facts) -> known.put(name, new KeyFamily(name, List.copyOf(facts.items),
-                    Optional.ofNullable(facts.values.get(Attribute.DOC)))));
+                    Optional.ofNullable(facts.kept.get(Attribute.DOC)).map(Fact::value))));
             return new KeyCatalog(new ArrayList<>(sorted.values()), known, problems);
         }
 
@@ -174,18 +178,21 @@ public final class KeyCatalog {
             for (KeyDescriptions file : List.of(jar.written(), jar.generated())) {
                 for (KeyDescription key : file.keys()) {
                     Facts facts = own.computeIfAbsent(key.key(), p -> new Facts());
-                    key.attributes().forEach((attribute, value) -> {
-                        String written = facts.keep(attribute, value, file.origin());
-                        if (written != null && attribute == Attribute.DEFAULT && !written.equals(value)) {
-                            wrong(facts.origins.get(attribute), key.key().text() + "|default is '" + written
-                                    + "' here and '" + value + "' in " + file.origin() + ": this one is kept");
+                    key.facts().forEach((attribute, fact) -> {
+                        Fact written = facts.keep(attribute, fact);
+                        boolean contradicted = written != null && attribute == Attribute.DEFAULT
+                                && !written.value().equals(fact.value());
+                        if (contradicted) {
+                            wrong(written, key.key().text() + "|default is '" + written.value() + "' here and '"
+                                    + fact.value() + "' in " + fact.origin() + ": this one is kept");
                         }
                     });
                 }
                 for (KeyFamily family : file.families()) {
                     Facts facts = families.computeIfAbsent(family.name(), f -> new Facts());
                     facts.items.addAll(family.names());
-                    family.doc().ifPresent(doc -> facts.keep(Attribute.DOC, doc, file.origin()));
+                    family.doc().ifPresent(
+                            doc -> facts.kept.putIfAbsent(Attribute.DOC, new Fact(doc, file.origin(), 0)));
                 }
             }
             own.forEach(this::merge);
@@ -194,59 +201,76 @@ public final class KeyCatalog {
         /** What one jar says of a key, against what the jars before it said. */
         private void merge(KeyPattern pattern, Facts jar) {
             Facts facts = keys.computeIfAbsent(pattern, p -> new Facts());
-            jar.values.forEach((attribute, value) -> {
-                String origin = jar.origins.get(attribute);
-                String earlier = facts.keep(attribute, value, origin);
+            jar.kept.forEach((attribute, fact) -> {
+                if (attribute == Attribute.VALUES) {
+                    facts.kept.putIfAbsent(attribute, fact);
+                    return;
+                }
+                Fact earlier = facts.keep(attribute, fact);
                 boolean mustAgree = attribute == Attribute.TYPE || attribute == Attribute.DEFAULT;
-                if (earlier != null && mustAgree && !earlier.equals(value)) {
-                    wrong(origin, pattern.text() + "|" + attribute.text() + " is '" + value + "' here and '"
-                            + earlier + "' in " + facts.origins.get(attribute) + ", which is kept");
+                if (earlier != null && mustAgree && !earlier.value().equals(fact.value())) {
+                    wrong(fact, pattern.text() + "|" + attribute.text() + " is '" + fact.value() + "' here and '"
+                            + earlier.value() + "' in " + earlier.origin() + ", which is kept");
                 }
             });
-            if (!jar.items.isEmpty()) {
-                facts.items.addAll(jar.items);
-                facts.origins.putIfAbsent(Attribute.VALUES, jar.origins.get(Attribute.VALUES));
-            }
+            facts.items.addAll(jar.items);
         }
 
         private static KeyDescription description(KeyPattern pattern, Facts facts) {
-            Map<Attribute, String> attributes = new EnumMap<>(facts.values);
-            if (!facts.items.isEmpty()) {
-                attributes.put(Attribute.VALUES, String.join(",", facts.items));
+            Map<Attribute, Fact> kept = new EnumMap<>(facts.kept);
+            Fact first = kept.get(Attribute.VALUES);
+            if (first != null) {
+                kept.put(Attribute.VALUES, new Fact(String.join(",", facts.items), first.origin(), first.line()));
             }
-            return new KeyDescription(pattern, attributes);
+            return new KeyDescription(pattern, kept);
         }
 
         /** What a key says that the other keys and the families must bear out. */
         private void check(KeyDescription key) {
             Facts facts = keys.get(key.key());
             String name = key.key().text();
-            key.defaultValue().filter(value -> !facts.allows(value)).ifPresent(value -> wrong(
-                    facts.origins.get(Attribute.DEFAULT),
-                    name + "|default is '" + value + "', which is not one of its values: " + key.values()));
-            key.ref().filter(family -> !families.containsKey(family)).ifPresent(family -> wrong(
-                    facts.origins.get(Attribute.REF),
-                    name + "|ref names the family '" + family + "', which no file describes and no key names"));
-            key.when().ifPresent(condition -> condition(key, condition, facts.origins.get(Attribute.WHEN)));
+            key.fact(Attribute.DEFAULT).ifPresent(fact -> {
+                // An empty default is no value; the default of a list is its items.
+                List<String> items = key.type().startsWith(LIST) || fact.value().isEmpty()
+                        ? KeyDescription.list(fact.value())
+                        : List.of(fact.value());
+                for (String item : items) {
+                    if (!facts.allows(item)) {
+                        wrong(fact, name + "|default is '" + fact.value() + "', and '" + item
+                                + "' is not one of its values: " + key.values());
+                    }
+                }
+            });
+            key.fact(Attribute.REF).filter(fact -> !families.containsKey(fact.value())).ifPresent(fact -> wrong(fact,
+                    name + "|ref names the family '" + fact.value()
+                            + "', which no file describes and no key names"));
+            key.when().ifPresent(condition -> condition(key, condition, facts.kept.get(Attribute.WHEN)));
         }
 
-        private void condition(KeyDescription key, KeyDescription.Condition condition, String origin) {
-            KeyPattern sibling = key.key().sibling(condition.sibling());
+        private void condition(KeyDescription key, KeyDescription.Condition condition, Fact fact) {
+            KeyPattern sibling;
+            try {
+                sibling = key.key().sibling(condition.sibling());
+            } catch (IllegalArgumentException e) {
+                wrong(fact, key.key().text() + "|when: " + e.getMessage());
+                return;
+            }
             Facts facts = keys.get(sibling);
             if (facts == null) {
-                wrong(origin, key.key().text() + "|when is on " + sibling.text() + ", which no file describes");
+                wrong(fact, key.key().text() + "|when is on " + sibling.text() + ", which no file describes");
                 return;
             }
             for (String value : condition.values()) {
                 if (!facts.allows(value)) {
-                    wrong(origin, key.key().text() + "|when is on the value '" + value + "' of " + sibling.text()
+                    wrong(fact, key.key().text() + "|when is on the value '" + value + "' of " + sibling.text()
                             + ", which is not one of its values: " + List.copyOf(facts.items));
                 }
             }
         }
 
-        private void wrong(String origin, String message) {
-            between.add(new Problem(origin, 0, Problem.Kind.WRONG, message));
+        /** A problem between files, at the fact that is wrong. */
+        private void wrong(Fact at, String message) {
+            between.add(new Problem(at.origin(), at.line(), Problem.Kind.WRONG, message));
         }
     }
 }

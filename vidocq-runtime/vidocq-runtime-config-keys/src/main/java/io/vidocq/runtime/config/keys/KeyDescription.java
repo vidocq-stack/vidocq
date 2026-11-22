@@ -29,63 +29,77 @@ import java.util.Optional;
 /**
  * What is known of a configuration key: its pattern and the facts a file, or several, give about it.
  *
- * @param key        the pattern of the key
- * @param attributes the facts, as written; never {@link Attribute#NAMES}, which is a family's
+ * @param key   the pattern of the key
+ * @param facts the fact kept for each attribute, with the file and the line it comes from; never
+ *              {@link Attribute#NAMES}, which is a family's. In a {@link KeyCatalog}, the fact of
+ *              {@link Attribute#VALUES} holds the values of every file and names the first that gave some
  */
-public record KeyDescription(KeyPattern key, Map<Attribute, String> attributes) {
+public record KeyDescription(KeyPattern key, Map<Attribute, Fact> facts) {
 
     /** The type of a key whose description gives none. */
     public static final String STRING = "string";
 
     public KeyDescription {
-        attributes = attributes.isEmpty()
-                ? Map.of()
-                : Collections.unmodifiableMap(new EnumMap<>(attributes));
+        facts = facts.isEmpty() ? Map.of() : Collections.unmodifiableMap(new EnumMap<>(facts));
+    }
+
+    /**
+     * The fact kept for an attribute.
+     *
+     * @param attribute the attribute
+     * @return its value and where it is written, or empty when no file gives it
+     */
+    public Optional<Fact> fact(Attribute attribute) {
+        return Optional.ofNullable(facts.get(attribute));
+    }
+
+    private Optional<String> value(Attribute attribute) {
+        return fact(attribute).map(Fact::value);
     }
 
     /** The type of the value: one of the format's, {@code list:<type>}, or a qualified Java type name. */
     public String type() {
-        return attributes.getOrDefault(Attribute.TYPE, STRING);
+        return value(Attribute.TYPE).orElse(STRING);
     }
 
     /** The value the key takes when the application gives none. */
     public Optional<String> defaultValue() {
-        return Optional.ofNullable(attributes.get(Attribute.DEFAULT));
+        return value(Attribute.DEFAULT);
     }
 
     /** Whether the application must give the key. */
     public boolean required() {
-        return Boolean.parseBoolean(attributes.get(Attribute.REQUIRED));
+        return value(Attribute.REQUIRED).map(Boolean::parseBoolean).orElse(false);
     }
 
     /** The allowed values; empty when any value of the type is allowed. */
     public List<String> values() {
-        return list(attributes.get(Attribute.VALUES));
+        return value(Attribute.VALUES).map(KeyDescription::list).orElse(List.of());
     }
 
     /** One line of documentation. */
     public Optional<String> doc() {
-        return Optional.ofNullable(attributes.get(Attribute.DOC));
+        return value(Attribute.DOC);
     }
 
     /** The sibling key and the values of it for which this key exists. */
     public Optional<Condition> when() {
-        return Optional.ofNullable(attributes.get(Attribute.WHEN)).map(Condition::parse);
+        return value(Attribute.WHEN).flatMap(Condition::parse);
     }
 
     /** The family whose names the value takes. */
     public Optional<String> ref() {
-        return Optional.ofNullable(attributes.get(Attribute.REF));
+        return value(Attribute.REF);
     }
 
     /** Whether the key should no longer be used. */
     public boolean deprecated() {
-        return Boolean.parseBoolean(attributes.get(Attribute.DEPRECATED));
+        return value(Attribute.DEPRECATED).map(Boolean::parseBoolean).orElse(false);
     }
 
     /** The class and the member that declare the key. */
     public Optional<String> source() {
-        return Optional.ofNullable(attributes.get(Attribute.SOURCE));
+        return value(Attribute.SOURCE);
     }
 
     /** The items of a list written with commas, trimmed, the empty ones left out. */
@@ -109,10 +123,18 @@ public record KeyDescription(KeyPattern key, Map<Attribute, String> attributes) 
             values = List.copyOf(values);
         }
 
-        /** Reads {@code <sibling>=<value>[,<value>]}; the text was checked when the file was read. */
-        static Condition parse(String text) {
+        /** Reads {@code <sibling>=<value>[,<value>]}; empty when the text is not a condition. */
+        static Optional<Condition> parse(String text) {
             int equals = text.indexOf('=');
-            return new Condition(text.substring(0, equals).strip(), list(text.substring(equals + 1)));
+            if (equals <= 0) {
+                return Optional.empty();
+            }
+            List<String> values = list(text.substring(equals + 1));
+            String sibling = text.substring(0, equals).strip();
+            if (sibling.isEmpty() || values.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new Condition(sibling, values));
         }
     }
 }

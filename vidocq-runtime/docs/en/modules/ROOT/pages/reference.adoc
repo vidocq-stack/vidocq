@@ -276,7 +276,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 |===
 
 [#configuration-key-descriptions]
-== Configuration key descriptions [.tag-new]#NEW#
+== Configuration key descriptions
 
 A jar that reads configuration says which keys it reads, in two files under `META-INF/vidocq/`. A tool then knows
 the keys of an application from the jars it uses, without running it.
@@ -314,8 +314,9 @@ vidocq.devconsole.port|doc=Port the dev console listens on.
 ----
 
 The file is UTF-8. Blank lines and lines that start with `#` or `!` are skipped; a fact is split at its first `=`
-and the white space around each side is dropped. There is no escape and no continuation line: a line that ends with
-a backslash is refused. It is the part of the `.properties` syntax every tool reads the same way.
+and the white space around each side is dropped. It is a `.properties` file kept to what every tool reads the same
+way: a fact holds no backslash, so there is no escape and no continuation line, and the part before the `=` holds no
+white space and no colon. An attribute is written in lower case.
 
 [cols="1,4"]
 |===
@@ -372,10 +373,17 @@ A key is often not one key: the application chooses a name in the middle of it.
 | `+vidocq.persistence.<unit>.properties.*+`
 |===
 
-A key starts with a literal segment. When several patterns match the key an application writes, a literal segment
-wins over a name, and a pattern that describes the key wins over one that covers it with a final `+*+`. A name that
-holds a dot is written between double quotes in the application's configuration:
-`vidocq.persistence."my.unit".datasource`.
+A key starts with a literal segment. A name that holds a dot is written between double quotes in the application's
+configuration: `vidocq.persistence."my.unit".datasource`; a quoted segment is a name, never a literal.
+
+When several patterns match the key an application writes, the most precise one describes it:
+
+. a pattern that describes the key wins over one that covers it with a final `+*+`;
+. then a literal segment wins over a name: `vidocq.chappe.listener.default.port` over
+`vidocq.chappe.listener.<listener>.port`;
+. then, of two final `+*+`, the one that starts further in the key: `+a.<x>.*+` over `+a.*+`;
+. then a key wins over its optional twin: `vidocq.pool.url` over `vidocq.pool.[<datasource>].url`;
+. and of two patterns still equal, the first in the order of their text.
 
 === Families
 
@@ -392,7 +400,8 @@ documentation:
 
 === Several files
 
-In a jar, the file its author wrote is read before the generated one. Jars are read one after the other.
+In a jar, the file its author wrote is read before the generated one. Jars are read one after the other. Two
+descriptions are of the same key when their patterns are written the same: `a.<x>.b` and `a.<y>.b` are two keys.
 
 * `values`, and the `names` of a family, add up. A jar adds a value to a key another jar describes by writing that
 key's `values` with the value it adds.
@@ -412,13 +421,15 @@ vidocq.http.mount.<mount>.include-packages|when=type=restful
 
 === What a reader reports
 
-A reader never fails on what a file holds: it reports what is wrong and reads the rest.
+A reader never fails on what a file holds: it reports what is wrong, with the file and the line, and reads the
+rest. A key exists from the first fact that names it, even a fact the reader skips.
 
 * In a file: a line that is not a fact, a pattern it cannot read, a fact written twice (the first is kept), a value
 an attribute cannot have, a file whose first fact is not `format=1`.
 * Between files: a `type` or a `default` two jars disagree on, a written `default` that contradicts the generated
 one, a `default` outside the `values`, a `when` on a sibling or on a value no file describes, a `ref` to a family no
-file describes and no key names.
+file describes and no key names. The `default` of a `list:` is compared item by item, and an empty `default` is no
+value to compare.
 * An attribute it does not know is reported apart and skipped, and a file whose `format` is above the one it knows is
 not read: both are expected from a jar built with a later version. A new attribute does not change `format`; a change
 of meaning does.

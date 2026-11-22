@@ -39,8 +39,9 @@ import java.util.regex.Pattern;
  * <p>A file is a list of facts, one per line: {@code <key pattern>|<attribute>=<value>}, after a first fact
  * {@code format=1}. A line on a family, {@code <family>|names=...}, gives the names that exist without being
  * written in the application's configuration. Blank lines and lines starting with {@code #} or {@code !} are
- * skipped. The file is UTF-8, has no escape and no continuation line: it is the part of the
- * {@code .properties} syntax every tool reads the same way.
+ * skipped. The file is UTF-8 and holds no backslash, so no escape and no continuation line, and the part of a
+ * line before its {@code =} holds no white space and no colon: {@code java.util.Properties} reads the same keys
+ * and the same values, but for the white space at the end of a value, which this reader drops.
  *
  * <p>Reading never fails on what a file holds: what is wrong becomes a {@link Problem} and the rest is read.
  *
@@ -54,6 +55,8 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
 
     /** The version of the format this reader knows. */
     public static final int FORMAT = 1;
+
+    private static final String BYTE_ORDER_MARK = "\uFEFF";
 
     private static final KeyDescriptions NONE = new KeyDescriptions("", List.of(), List.of(), List.of());
 
@@ -91,11 +94,15 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
         return new Reading(origin).read(text);
     }
 
-    /** The facts of one key or of one family, with the line that gave each. */
+    /** The facts of one key or of one family. */
     private static final class Facts {
 
-        private final Map<Attribute, String> values = new EnumMap<>(Attribute.class);
-        private final Map<Attribute, Integer> lines = new EnumMap<>(Attribute.class);
+        private final Map<Attribute, Fact> kept = new EnumMap<>(Attribute.class);
+
+        private String value(Attribute attribute) {
+            Fact fact = kept.get(attribute);
+            return fact == null ? null : fact.value();
+        }
     }
 
     /** The reading of one file. */
@@ -103,6 +110,8 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
 
         private static final Pattern FAMILY_LINE = Pattern.compile("<([A-Za-z0-9_-]+)>");
         private static final Pattern FAMILY = Pattern.compile("[A-Za-z0-9_-]+");
+        private static final Pattern ATTRIBUTE = Pattern.compile("[a-z][a-z0-9-]*");
+        private static final Pattern BREAKS_A_PROPERTIES_KEY = Pattern.compile("[\\s:]");
         private static final Pattern SEGMENT = Pattern.compile("[^<>\\[\\]*|\"\\s.=]+");
         private static final Pattern JAVA_TYPE = Pattern.compile("[A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)+");
         private static final Set<String> TYPES = Set.of("string", "boolean", "int", "long", "double", "duration");
@@ -118,7 +127,7 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
         }
 
         KeyDescriptions read(String text) {
-            String[] lines = (text.startsWith("﻿") ? text.substring(1) : text).split("\r\n|\r|\n", -1);
+            String[] lines = (text.startsWith(BYTE_ORDER_MARK) ? text.substring(1) : text).split("\r\n|\r|\n", -1);
             boolean first = true;
             for (int i = 0; i < lines.length; i++) {
                 String line = lines[i].strip();
@@ -139,8 +148,8 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
 
         /** Reads one fact; answers whether it says the file is of a format this reader cannot read. */
         private boolean fact(int number, String line, boolean first) {
-            if (line.endsWith("\\")) {
-                wrong(number, "a line cannot end with a backslash: the format has no continuation line");
+            if (line.indexOf('\\') >= 0) {
+                wrong(number, "a backslash cannot be written: the format has no escape and no continuation line");
                 return false;
             }
             int equals = line.indexOf('=');
@@ -157,21 +166,42 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
                 wrong(number, "'" + line + "' is not a fact, written <key>|<attribute>=<value>");
                 return false;
             }
-            String key = left.substring(0, bar).strip();
-            String name = left.substring(bar + 1).strip();
-            Optional<Attribute> attribute = Attribute.of(name);
-            if (attribute.isEmpty()) {
-                problems.add(new Problem(origin, number, Problem.Kind.NEWER,
-                        "'" + name + "' is not an attribute of format " + FORMAT + ": the fact is skipped"));
+            if (BREAKS_A_PROPERTIES_KEY.matcher(left).find()) {
+                wrong(number, "'" + left + "' holds a white space or a colon, where a .properties file ends its key");
                 return false;
             }
+            String key = left.substring(0, bar);
+            String name = left.substring(bar + 1);
+            if (!ATTRIBUTE.matcher(name).matches()) {
+                wrong(number, "'" + name + "' cannot be an attribute, written in lower case: '" + line
+                        + "' is not a fact, written <key>|<attribute>=<value>");
+                return false;
+            }
+            Optional<Attribute> attribute = Attribute.of(name);
             Matcher family = FAMILY_LINE.matcher(key);
             if (family.matches()) {
-                family(number, family.group(1), attribute.get(), value);
-            } else {
-                key(number, key, attribute.get(), value);
+                Facts facts = families.computeIfAbsent(family.group(1), f -> new Facts());
+                attribute.ifPresentOrElse(known -> family(number, family.group(1), facts, known, value),
+                        () -> newer(number, name));
+                return false;
             }
+            KeyPattern pattern;
+            try {
+                pattern = KeyPattern.parse(key);
+            } catch (IllegalArgumentException e) {
+                wrong(number, e.getMessage());
+                return false;
+            }
+            // The key exists from the first fact that names it, even one this reader skips: a reader that
+            // dropped it would later take the key for one nobody describes.
+            Facts facts = keys.computeIfAbsent(pattern, p -> new Facts());
+            attribute.ifPresentOrElse(known -> key(number, key, facts, known, value), () -> newer(number, name));
             return false;
+        }
+
+        private void newer(int number, String attribute) {
+            problems.add(new Problem(origin, number, Problem.Kind.NEWER,
+                    "'" + attribute + "' is not an attribute of format " + FORMAT + ": the fact is skipped"));
         }
 
         private boolean format(int number, String value, boolean first) {
@@ -197,7 +227,7 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
             return false;
         }
 
-        private void family(int number, String family, Attribute attribute, String value) {
+        private void family(int number, String family, Facts facts, Attribute attribute, String value) {
             if (attribute != Attribute.NAMES && attribute != Attribute.DOC) {
                 wrong(number, "a family takes names and doc only, and <" + family + "> is given "
                         + attribute.text());
@@ -207,19 +237,12 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
                 wrong(number, "names of <" + family + "> is empty");
                 return;
             }
-            put(number, families.computeIfAbsent(family, f -> new Facts()), "<" + family + ">", attribute, value);
+            put(number, facts, "<" + family + ">", attribute, value);
         }
 
-        private void key(int number, String key, Attribute attribute, String value) {
+        private void key(int number, String key, Facts facts, Attribute attribute, String value) {
             if (attribute == Attribute.NAMES) {
                 wrong(number, "names is said of a family, written <family>|names=..., and '" + key + "' is a key");
-                return;
-            }
-            KeyPattern pattern;
-            try {
-                pattern = KeyPattern.parse(key);
-            } catch (IllegalArgumentException e) {
-                wrong(number, e.getMessage());
                 return;
             }
             String refusal = refusal(attribute, value);
@@ -227,17 +250,15 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
                 wrong(number, key + "|" + attribute.text() + ": " + refusal);
                 return;
             }
-            put(number, keys.computeIfAbsent(pattern, p -> new Facts()), key, attribute, value);
+            put(number, facts, key, attribute, value);
         }
 
         private void put(int number, Facts facts, String subject, Attribute attribute, String value) {
-            Integer earlier = facts.lines.putIfAbsent(attribute, number);
+            Fact earlier = facts.kept.putIfAbsent(attribute, new Fact(value, origin, number));
             if (earlier != null) {
-                wrong(number, subject + "|" + attribute.text() + " was already given on line " + earlier
+                wrong(number, subject + "|" + attribute.text() + " was already given on line " + earlier.line()
                         + ": the first is kept");
-                return;
             }
-            facts.values.put(attribute, value);
         }
 
         /** Why a key cannot have this value for this attribute, or null when it can. */
@@ -271,15 +292,15 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
 
         private List<KeyDescription> descriptions() {
             List<KeyDescription> descriptions = new ArrayList<>(keys.size());
-            keys.forEach((pattern, facts) -> descriptions.add(new KeyDescription(pattern, facts.values)));
+            keys.forEach((pattern, facts) -> descriptions.add(new KeyDescription(pattern, facts.kept)));
             return descriptions;
         }
 
         private List<KeyFamily> familyDescriptions() {
             List<KeyFamily> descriptions = new ArrayList<>(families.size());
             families.forEach((family, facts) -> descriptions.add(new KeyFamily(family,
-                    KeyDescription.list(facts.values.get(Attribute.NAMES)),
-                    Optional.ofNullable(facts.values.get(Attribute.DOC)))));
+                    KeyDescription.list(facts.value(Attribute.NAMES)),
+                    Optional.ofNullable(facts.value(Attribute.DOC)))));
             return descriptions;
         }
 

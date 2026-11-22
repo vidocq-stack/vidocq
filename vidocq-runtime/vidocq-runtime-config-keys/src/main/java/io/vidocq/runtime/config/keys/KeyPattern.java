@@ -20,6 +20,7 @@
 package io.vidocq.runtime.config.keys;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -167,36 +168,42 @@ public final class KeyPattern {
         if (parts.isEmpty()) {
             return Optional.empty();
         }
-        Map<String, String> names = new LinkedHashMap<>();
-        return match(0, parts, 0, names, 0);
+        return match(0, parts, 0, new Match(Map.of(), 0, 0, 0, false));
     }
 
-    private Optional<Match> match(int at, List<Part> parts, int part, Map<String, String> names, int literals) {
+    /** Matches the segments from {@code at} against the parts from {@code part}; {@code so} is the match so far. */
+    private Optional<Match> match(int at, List<Part> parts, int part, Match so) {
         if (at == segments.size()) {
-            return part == parts.size() ? Optional.of(new Match(names, literals, false)) : Optional.empty();
+            return part == parts.size() ? Optional.of(so) : Optional.empty();
         }
         return switch (segments.get(at)) {
-            case Tail _ -> part < parts.size() ? Optional.of(new Match(names, literals, true)) : Optional.empty();
+            case Tail _ -> part < parts.size()
+                    ? Optional.of(new Match(so.names(), so.literals(), so.named(), so.absent(), true))
+                    : Optional.empty();
             case Literal literal -> part < parts.size() && !parts.get(part).quoted()
                     && parts.get(part).text().equals(literal.text())
-                    ? match(at + 1, parts, part + 1, names, literals + 1)
+                    ? match(at + 1, parts, part + 1,
+                            new Match(so.names(), so.literals() + 1, so.named(), so.absent(), false))
                     : Optional.empty();
-            case Name name -> named(name, at, parts, part, names, literals);
+            case Name name -> named(name, at, parts, part, so);
         };
     }
 
     /** A name takes the segment when the rest then matches; an optional one is otherwise taken as absent. */
-    private Optional<Match> named(Name name, int at, List<Part> parts, int part, Map<String, String> names,
-            int literals) {
+    private Optional<Match> named(Name name, int at, List<Part> parts, int part, Match so) {
         if (part < parts.size()) {
-            Map<String, String> bound = new LinkedHashMap<>(names);
+            Map<String, String> bound = new LinkedHashMap<>(so.names());
             bound.putIfAbsent(name.family(), parts.get(part).text());
-            Optional<Match> present = match(at + 1, parts, part + 1, bound, literals);
+            Optional<Match> present = match(at + 1, parts, part + 1,
+                    new Match(bound, so.literals(), so.named() + 1, so.absent(), false));
             if (present.isPresent()) {
                 return present;
             }
         }
-        return name.optional() ? match(at + 1, parts, part, names, literals) : Optional.empty();
+        if (!name.optional()) {
+            return Optional.empty();
+        }
+        return match(at + 1, parts, part, new Match(so.names(), so.literals(), so.named(), so.absent() + 1, false));
     }
 
     /** The segments of a key, split on the dots outside double quotes; empty when the key is not well formed. */
@@ -244,14 +251,31 @@ public final class KeyPattern {
     }
 
     /**
-     * How a key matches a pattern. Matches order best first: a pattern that describes the key before one that
-     * only covers it with a tail, then the one with more literal segments, so that a literal wins over a name.
+     * How a key matches a pattern. Matches order best first, the most precise pattern first:
+     *
+     * <ol>
+     *   <li>a pattern that describes the key, before one that only covers it with a final {@code *};</li>
+     *   <li>then more literal segments: a literal wins over a name;</li>
+     *   <li>then more segments taken as names: of two tails, the one that starts further in the key;</li>
+     *   <li>then fewer optional names taken as absent: a key wins over its optional twin
+     *       ({@code vidocq.pool.url} over {@code vidocq.pool.[<datasource>].url}).</li>
+     * </ol>
+     *
+     * <p>Two matches that order the same are not always equal: the order ignores the names themselves.
      *
      * @param names    the name the key gives each family of the pattern; a family absent from the key is absent here
      * @param literals how many literal segments of the pattern the key matched
+     * @param named    how many segments of the key were taken as names
+     * @param absent   how many optional names of the pattern the key does not have
      * @param tail     whether the end of the key was matched by the pattern's final {@code *}
      */
-    public record Match(Map<String, String> names, int literals, boolean tail) implements Comparable<Match> {
+    public record Match(Map<String, String> names, int literals, int named, int absent, boolean tail)
+            implements Comparable<Match> {
+
+        private static final Comparator<Match> BEST_FIRST = Comparator.comparing(Match::tail)
+                .thenComparing(Match::literals, Comparator.reverseOrder())
+                .thenComparing(Match::named, Comparator.reverseOrder())
+                .thenComparing(Match::absent);
 
         public Match {
             names = Map.copyOf(names);
@@ -259,8 +283,7 @@ public final class KeyPattern {
 
         @Override
         public int compareTo(Match other) {
-            int byTail = Boolean.compare(tail, other.tail);
-            return byTail != 0 ? byTail : Integer.compare(other.literals, literals);
+            return BEST_FIRST.compare(this, other);
         }
     }
 }

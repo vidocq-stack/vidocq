@@ -103,6 +103,40 @@ class KeyPatternTest {
         assertTrue(tail.compareTo(exact) > 0);
     }
 
+    @Test
+    void a_key_is_better_than_its_optional_twin() {
+        String key = "vidocq.pool.url";
+        KeyPattern.Match exact = KeyPattern.parse("vidocq.pool.url").match(key).orElseThrow();
+        KeyPattern.Match twin = KeyPattern.parse("vidocq.pool.[<datasource>].url").match(key).orElseThrow();
+        assertTrue(exact.compareTo(twin) < 0);
+        assertTrue(twin.compareTo(exact) > 0);
+    }
+
+    @Test
+    void a_tail_after_a_name_is_better_than_a_tail_alone() {
+        String key = "a.b.c";
+        KeyPattern.Match named = KeyPattern.parse("a.<x>.*").match(key).orElseThrow();
+        KeyPattern.Match tail = KeyPattern.parse("a.*").match(key).orElseThrow();
+        assertTrue(named.compareTo(tail) < 0);
+    }
+
+    @Test
+    void an_optional_name_before_a_tail_takes_a_segment_when_one_is_left_for_the_tail() {
+        KeyPattern p = KeyPattern.parse("a.[<x>].*");
+        assertEquals(Map.of("x", "b"), p.match("a.b.c").orElseThrow().names());
+        assertEquals(Map.of(), p.match("a.b").orElseThrow().names());
+        assertTrue(p.match("a").isEmpty());
+    }
+
+    @Test
+    void two_optional_names_are_taken_from_the_first() {
+        KeyPattern p = KeyPattern.parse("a.[<x>].[<y>].z");
+        assertEquals(Map.of(), p.match("a.z").orElseThrow().names());
+        assertEquals(Map.of("x", "1"), p.match("a.1.z").orElseThrow().names());
+        assertEquals(Map.of("x", "1", "y", "2"), p.match("a.1.2.z").orElseThrow().names());
+        assertTrue(p.match("a.1.2.3.z").isEmpty());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"", "vidocq..port", "vidocq.<>.x", "vidocq.*.x", "vidocq.<a.x", "vidocq.po|ol",
             "vidocq.[x].y", "vidocq.a b", "<listener>.port", "*", "vidocq.\"a\".b", "vidocq.port."})
