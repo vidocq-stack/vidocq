@@ -4595,3 +4595,26 @@ where this whole bug class is invisible.
     with the listener as a test dependency and no dev service on its class path. `vidocq.dev.devServices=false`
     saved in `src/main/resources` reaches `target-ide/classes` only, and a test the IDE starts opens no session;
     without the key, the session writes `target/vidocq-dev-services-test.json`. No container was started.
+
+## BUG-20261122-04 — The invoker test `peano-accessors` fails on some runners: the processor path lacks `peano-api`
+
+- **Date**: 2026-11-22
+- **Status**: FIXED on `fix/tck-nightly-and-runtime-coverage` (#745)
+- **Affected module**: vidocq-runtime-maven-plugin (invoker tests of the `it` profile, build only)
+- **Symptom**: `main` and pull request builds fail in the plugin's invoker tests, `peano-accessors` FAILED in about
+  2 s, on runners `87c30ab4` and `f924a289` (CI runs 5673, 5677, 5680, 5687, 5697; pr-validate 5709 of #745), never
+  on a local run. The build log streamed since #744 names it: `The POM for io.vidocq.peano:peano-processor:jar:
+  0.4.0-SNAPSHOT is missing, no dependency information available`, then `Fatal error compiling:
+  java.lang.NoClassDefFoundError: io/vidocq/peano/annotation/ELAccessible`.
+- **Minimal reproduction**: a scratch local repository holding only `peano-processor-0.4.0-SNAPSHOT.jar` (no pom),
+  in front of a complete one as `maven.repo.local.tail`, then
+  `./mvnw -o -pl vidocq-runtime/vidocq-runtime-maven-plugin -Pit verify -Dinvoker.test=peano-accessors
+  -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=<scratch> -Dmaven.repo.local.tail=...`:
+  the same two lines, FAILED.
+- **Cause**: the test names `peano-processor` in its `annotationProcessorPaths`; the plugin depends on it in `test`
+  scope only, so `invoker:install` did not stage it in `target/it-repo`. The inner build copied it from the outer
+  local repository (`local.central`, `src/it/settings.xml`), and a runner whose cached repository holds the jar
+  without its pom gives a processor with no dependency information: Maven warns and puts it alone on the processor
+  path, without `peano-api`. Which runners hold such a repository depends on their cache, hence the runner pattern.
+- **Fix**: `invoker:install` stages `peano-processor` with its pom and dependencies (`extraArtifacts`). With the same
+  scratch repository, `peano-accessors` passes, and so do the other invoker tests.

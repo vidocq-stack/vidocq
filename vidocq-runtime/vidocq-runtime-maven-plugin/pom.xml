@@ -246,6 +246,15 @@
                                  of it (peano-accessors failed on main on 2026-11-22 and passed in every local run). -->
                             <streamLogsOnFailures>true</streamLogsOnFailures>
                             <filterProperties><peano.version>${peano.version}</peano.version></filterProperties>
+                            <!-- peano-accessors names peano-processor on its processor path, and the plugin depends
+                                 on it in test scope only, so install did not stage it. The test then copied it from
+                                 the outer local repository, where a runner may hold its jar without its pom: Maven
+                                 warned "The POM for ... peano-processor ... is missing", put the processor alone on
+                                 the path, without peano-api, and the compile died on ELAccessible (main, 2026-11-22,
+                                 on some runners only). Staged here, with its pom and dependencies. -->
+                            <extraArtifacts>
+                                <extraArtifact>io.vidocq.peano:peano-processor:${peano.version}:jar</extraArtifact>
+                            </extraArtifacts>
                         </configuration>
                         <executions>
                             <execution>
