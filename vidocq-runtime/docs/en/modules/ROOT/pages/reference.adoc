@@ -433,9 +433,11 @@ rest. A key exists from the first fact that names it, even a fact the reader ski
 * In a file: a line that is not a fact, a pattern it cannot read, a fact written twice (the first is kept), a value
 an attribute cannot have, a file whose first fact is not `format=1`.
 * Between files: a `type` or a `default` two jars disagree on, a written `default` that contradicts the generated
-one, a `default` outside the `values`, a `when` on a sibling or on a value no file describes, a `ref` to a family no
-file describes and no key names. The `default` of a `list:` is compared item by item, and an empty `default` is no
-value to compare.
+one, a `default` that is not of the `type` of its key, a `default` outside the `values`, a `when` on a sibling or on
+a value no file describes, a `ref` to a family no file describes and no key names. A `default` is of a `type` as a
+value of the application is (<<key-descriptions-doctor>>). The `default` of a `list:` is compared item by item, an
+empty `default` is no value to compare, and a `default` that holds an expression, `${PORT:8080}`, is compared
+neither with the `type` nor with the `values`: only the runtime expands it.
 * An attribute it does not know is reported apart and skipped, and a file whose `format` is above the one it knows is
 not read: both are expected from a jar built with a later version. A new attribute does not change `format`; a change
 of meaning does.
@@ -455,7 +457,9 @@ Two checks follow. Both warn and neither fails the doctor.
 `Key descriptions` reports what is wrong in the files (<<key-descriptions-problems>>), with the file and the line: the
 first ten, then how many more. An attribute the reader does not know, or a `format` above the one it knows, is a
 warning in a file of the project, where it is a mistake to fix, and is only counted in a jar, which may be built
-with a later version. When nothing is wrong, the check says how much was read: `2 files, 3 keys described`.
+with a later version. A jar that cannot be opened is reported by its path: it is damaged, and is fetched again once
+deleted from the local repository. When nothing is wrong, the check says how much was read:
+`2 files, 3 keys described`.
 
 `Config values` takes each key of the project's `vidocq.properties` that a file describes, and reports, in the
 order of the keys, the first ten findings then how many more:
@@ -490,6 +494,10 @@ order of the keys, the first ten findings then how many more:
 The value is the one the runtime reads from the file, the escapes of a `.properties` file undone and the white
 space around it dropped. A finding prints the first 40 characters of a value, and the hint of a finding says in
 which file and at which line the key is described.
+
+When `vidocq doctor` cannot resolve the dependencies of the project, offline for one, it reads the files of the
+project alone and checks the values against them. Each check then ends with a warning: the jars of the project could
+not be read, and the values were not checked against them. Neither says that no jar describes a key.
 
 What is not checked:
 

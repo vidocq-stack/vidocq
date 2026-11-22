@@ -824,8 +824,8 @@ compared with, and what is not checked.
 |===
 | Check | Meaning
 
-| **Key descriptions** | ✔ how many files were read and how many keys they describe, or no jar of the project describes any; ⚠ a line of a file that is wrong, with the file and the line: the first ten, then how many more.
-| **Config values** | ✔ every value of a described key fits, or `vidocq.properties` has no described key; ⚠ a value that is not of the type of its key (`vidocq.sample.port=eighty — is not an int`) or not one of its allowed values, and a deprecated key: the first ten, then how many more.
+| **Key descriptions** | ✔ how many files were read and how many keys they describe, or no jar of the project describes any; ⚠ a line of a file that is wrong, with the file and the line, or a jar that cannot be opened: the first ten, then how many more; ⚠ the jars of the project could not be read, when Maven could not resolve them.
+| **Config values** | ✔ every value of a described key fits, or `vidocq.properties` has no described key; ⚠ a value that is not of the type of its key (`vidocq.sample.port=eighty — is not an int`) or not one of its allowed values, and a deprecated key: the first ten, then how many more; ⚠ the values were not checked against the jars of the project, when Maven could not resolve them.
 |===
 
 A fixable ✘ or ⚠ is followed by `↳ Fix: vidocq doctor --fix`. `--fix` first repairs, then reports:
