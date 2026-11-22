@@ -166,6 +166,18 @@ class KeyCatalogCheckTest {
     }
 
     @Test
+    void a_long_item_of_a_list_is_not_quoted_whole() {
+        String item = "x".repeat(40) + "y".repeat(20);
+        KeyCatalog catalog = catalog("a.b|type=list:int", "a.b|values=1,2");
+
+        String start = "'" + "x".repeat(40) + "…' ";
+        assertEquals(List.of(start + "is not an int", start + "is not one of 1, 2"),
+                catalog.check("a.b", "1," + item).stream().map(ValueProblem::message).toList());
+        assertEquals("'" + "x".repeat(40) + "' is not an int",
+                only(catalog("a.b|type=list:int").check("a.b", "x".repeat(40))).message());
+    }
+
+    @Test
     void the_type_is_reported_before_the_allowed_values() {
         assertEquals(List.of(ValueProblem.Kind.NOT_OF_TYPE, ValueProblem.Kind.NOT_ALLOWED),
                 kinds(catalog("a.b|type=int", "a.b|values=1,2").check("a.b", "three")));

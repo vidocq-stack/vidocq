@@ -46,6 +46,9 @@ public final class KeyCatalog {
     /** The file a build generates, for the keys annotations declare. */
     public static final String GENERATED = "META-INF/vidocq/config-keys.properties";
 
+    /** How much of an item of a list a message quotes. */
+    private static final int ITEM_QUOTED = 40;
+
     private final List<KeyDescription> keys;
     private final Map<String, KeyFamily> families;
     private final List<Problem> problems;
@@ -156,9 +159,12 @@ public final class KeyCatalog {
         return List.copyOf(problems);
     }
 
-    /** What is said of a value, or of one item of a list, which is then named. */
+    /** What is said of a value, or of one item of a list, which is then named by its start: it can be long. */
     private static String said(boolean list, String item, String why) {
-        return list ? "'" + item + "' " + why : why;
+        if (!list) {
+            return why;
+        }
+        return "'" + (item.length() > ITEM_QUOTED ? item.substring(0, ITEM_QUOTED) + "…" : item) + "' " + why;
     }
 
     /** What is wrong: in each file, in the order given, then between the files. */
