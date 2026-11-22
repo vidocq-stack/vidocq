@@ -179,9 +179,51 @@ class VidocqVscodeMojoTest {
         mojo(false).run(projects, projects, new Properties(), root);
 
         assertEquals(1, log.lines.stream().filter(line -> line.startsWith("WARN ")).count(), log.toString());
-        assertTrue(log.hasContaining("WARN", "Vidocq vscode: 1 module(s) are compiled by VS Code into target/classes,"
-                + " which Maven then packages: todo-model. They have neither"), log.toString());
-        assertTrue(log.hasContaining("WARN", "give their parent pom the ide-output profile"), log.toString());
+        assertTrue(log.has("WARN", "Vidocq vscode: 1 module of this build is compiled by VS Code into target/classes,"
+                + " which Maven then packages: todo-model. Give its parent pom the ide-output profile (documentation,"
+                + " \"What an IDE compiles, and where\")."), log.toString());
+    }
+
+    @Test
+    void severalModulesAreNamedInThePlural() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+        projects.add(library("todo-model"));
+        projects.add(library("todo-api"));
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertTrue(log.has("WARN", "Vidocq vscode: 2 modules of this build are compiled by VS Code into"
+                + " target/classes, which Maven then packages: todo-model, todo-api. Give their parent pom the"
+                + " ide-output profile (documentation, \"What an IDE compiles, and where\")."), log.toString());
+    }
+
+    /** Maven loads what moves an application from a build extension only: the attribute is the remedy. */
+    @Test
+    void anApplicationThatDeclaresThePluginWithoutTheAttributeIsToldToAddIt() throws Exception {
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertEquals(1, log.lines.stream().filter(line -> line.startsWith("WARN ")).count(), log.toString());
+        assertTrue(log.has("WARN", "Vidocq vscode: 1 module of this build declares vidocq-runtime-maven-plugin without"
+                + " <extensions>true</extensions>, so VS Code compiles it into target/classes, which Maven then"
+                + " packages: todo. Add the attribute to the plugin (documentation, \"What an IDE compiles, and"
+                + " where\")."), log.toString());
+    }
+
+    @Test
+    void severalModulesWithoutTheAttributeAreToldInThePlural() throws Exception {
+        MavenProject billing = library("billing");
+        billing.getBuild().addPlugin(IdeaApplicationsTest.vidocqPlugin());
+        billing.getProperties().setProperty("vidocq.mainModule", "com.example.billing");
+        Files.createDirectories(root.resolve("billing"));
+        Files.writeString(root.resolve("billing").resolve("pom.xml"), "<project/>");
+        projects.add(billing);
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertTrue(log.has("WARN", "Vidocq vscode: 2 modules of this build declare vidocq-runtime-maven-plugin without"
+                + " <extensions>true</extensions>, so VS Code compiles them into target/classes, which Maven then"
+                + " packages: todo, billing. Add the attribute to the plugin (documentation, \"What an IDE compiles,"
+                + " and where\")."), log.toString());
     }
 
     /** The check of a CI job names them too: the files are right and the reactor still has the modules. */
@@ -198,7 +240,7 @@ class VidocqVscodeMojoTest {
         assertTrue(log.has("INFO", "Vidocq vscode: .vscode/ is up to date (3 files)."), log.toString());
     }
 
-    /** A reactor of many libraries: the first ten by name, then how many more. */
+    /** A reactor of many libraries: the first ten by name, then how many more; all of them at debug level. */
     @Test
     void aLongListOfModulesIsCut() throws Exception {
         projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
@@ -208,9 +250,23 @@ class VidocqVscodeMojoTest {
 
         mojo(false).run(projects, projects, new Properties(), root);
 
-        assertTrue(log.hasContaining("WARN", "Vidocq vscode: 12 module(s) are compiled by VS Code into target/classes,"
-                + " which Maven then packages: lib-1, lib-2, lib-3, lib-4, lib-5, lib-6, lib-7, lib-8, lib-9, lib-10"
-                + " and 2 more. They have neither"), log.toString());
+        assertTrue(log.has("WARN", "Vidocq vscode: 12 modules of this build are compiled by VS Code into"
+                + " target/classes, which Maven then packages: lib-1, lib-2, lib-3, lib-4, lib-5, lib-6, lib-7, lib-8,"
+                + " lib-9, lib-10 and 2 more. Give their parent pom the ide-output profile (documentation,"
+                + " \"What an IDE compiles, and where\")."), log.toString());
+        assertTrue(log.has("DEBUG", "Vidocq vscode: the 12 modules: lib-1, lib-2, lib-3, lib-4, lib-5, lib-6, lib-7,"
+                + " lib-8, lib-9, lib-10, lib-11, lib-12"), log.toString());
+    }
+
+    /** A list that fits is not said twice. */
+    @Test
+    void aShortListIsNotRepeatedAtDebugLevel() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+        projects.add(library("todo-model"));
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertFalse(log.hasContaining("DEBUG", "Vidocq vscode: the "), log.toString());
     }
 
     @Test

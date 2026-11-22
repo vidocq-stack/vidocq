@@ -29,17 +29,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The modules of a reactor an IDE still compiles into Maven's folders.
+ * The modules of a build an IDE still compiles into Maven's folders, and what would move each.
  *
  * <p>An IDE that reads a project through m2e gets a build directory of its own from one of two places
- * ({@link IdeOutput}): the lifecycle participant of this plugin, which Maven loads for a module that declares the
- * plugin as a build extension, or a profile activated by the property m2e sets, in the module's pom or in one it
- * inherits. A module with neither, the library next to an application for instance, is compiled by the IDE into
- * {@code target/classes}, which the build then packages: {@code vidocq:vscode} and {@code vidocq:eclipse} name it.</p>
+ * ({@link IdeOutput}): the lifecycle participant of this plugin, for an application of one module, or a profile
+ * activated by the property m2e sets, in the module's pom or in one it inherits. A module with neither is compiled
+ * by the IDE into {@code target/classes}, which the build then packages: {@code vidocq:vscode} and
+ * {@code vidocq:eclipse} name it, with what its pom lacks.</p>
  *
- * <p>Read from the projects Maven built for the goal, as {@link IdeaApplications} reads the applications: no pom is
- * parsed again. A module that declares the plugin and sets {@link IdeOutput#SKIP} is not named: its pom chose
- * {@code target/}.</p>
+ * <p>What the participant moves is asked of the participant's own rule ({@link IdeOutput#moves}), on the projects
+ * Maven built for the goal: no pom is parsed again, and the rule is written once. The participant runs when Maven
+ * loads it, which it does for a build one of whose modules declares the plugin as a build extension. A module that
+ * sets {@link IdeOutput#SKIP} is not named: its pom chose {@code target/}.</p>
  */
 final class IdeOutputReach {
 
@@ -49,32 +50,57 @@ final class IdeOutputReach {
     }
 
     /**
-     * The artifactIds, in the order of {@code projects}, of those an IDE compiles into Maven's folders: packaging
-     * other than {@code pom}, the plugin not declared as a build extension, and no profile activated by
-     * {@link IdeOutput#M2E_VERSION} in the project's own pom or in a pom it inherits.
+     * The artifactIds, in the order of the build, of the modules an IDE compiles into Maven's folders.
+     *
+     * @param needingTheProfile   those the profile {@link IdeOutput#PROFILE} would move, in a pom they inherit: the
+     *                            modules of a build of several modules, a library that does not declare the plugin
+     * @param needingTheExtension those the participant would move if Maven loaded it: they declare the plugin
+     *                            without {@code <extensions>true</extensions>}, and no module of the build has it
      */
-    static List<String> unreached(List<MavenProject> projects) {
-        List<String> names = new ArrayList<>();
-        for (MavenProject project : projects) {
-            if (!PACKAGING_POM.equals(project.getPackaging()) && !byThePlugin(project) && !byAProfile(project)) {
-                names.add(project.getArtifactId());
-            }
-        }
-        return names;
+    record Unreached(List<String> needingTheProfile, List<String> needingTheExtension) {
     }
 
-    private static boolean byThePlugin(MavenProject project) {
+    /**
+     * What an IDE that reads {@code projects} compiles into Maven's folders: a module of packaging other than
+     * {@code pom} that the participant does not move, that no profile activated by {@link IdeOutput#M2E_VERSION}
+     * gives a build directory, in its own pom or in a pom it inherits, and that does not take the way out.
+     */
+    static Unreached unreached(List<MavenProject> projects) {
+        boolean loaded = projects.stream().anyMatch(IdeOutputReach::asAnExtension);
+        List<String> needingTheProfile = new ArrayList<>();
+        List<String> needingTheExtension = new ArrayList<>();
+        for (MavenProject project : projects) {
+            if (PACKAGING_POM.equals(project.getPackaging()) || IdeOutput.takesTheWayOut(project)
+                    || byAProfile(project)) {
+                continue;
+            }
+            if (!IdeOutput.moves(project, projects)) {
+                needingTheProfile.add(project.getArtifactId());
+            } else if (!loaded) {
+                needingTheExtension.add(project.getArtifactId());
+            }
+        }
+        return new Unreached(List.copyOf(needingTheProfile), List.copyOf(needingTheExtension));
+    }
+
+    /** Whether {@code project} declares the plugin as a build extension, which is when Maven loads the participant. */
+    private static boolean asAnExtension(MavenProject project) {
         Plugin plugin = project.getPlugin(IdeaApplications.PLUGIN_KEY);
         return plugin != null && plugin.isExtensions();
     }
 
-    /** Whether the pom of {@code project}, or one above it, holds a profile the property of m2e activates. */
+    /**
+     * Whether the pom of {@code project}, or one above it, holds a profile that the property of m2e activates and
+     * that sets the build directory. A profile on that property that holds something else, the lifecycle mapping of
+     * m2e for instance, moves nothing.
+     */
     private static boolean byAProfile(MavenProject project) {
         for (MavenProject current = project; current != null; current = current.getParent()) {
             for (Profile profile : current.getModel().getProfiles()) {
                 Activation activation = profile.getActivation();
                 if (activation != null && activation.getProperty() != null
-                        && IdeOutput.M2E_VERSION.equals(activation.getProperty().getName())) {
+                        && IdeOutput.M2E_VERSION.equals(activation.getProperty().getName())
+                        && profile.getBuild() != null && profile.getBuild().getDirectory() != null) {
                     return true;
                 }
             }

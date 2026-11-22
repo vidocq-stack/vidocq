@@ -54,6 +54,8 @@ abstract class IdeFilesMojo extends AbstractMojo {
 
     /** How many modules a message names before it counts the rest. */
     private static final int NAMED_MODULES = 10;
+    /** Where the remedy of a module an IDE compiles into Maven's folders is written out. */
+    private static final String DOCUMENTATION = "(documentation, \"What an IDE compiles, and where\").";
 
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     private MavenSession session;
@@ -129,22 +131,40 @@ abstract class IdeFilesMojo extends AbstractMojo {
     }
 
     /**
-     * Names the modules of the build the IDE compiles into {@code target/classes}: the files of the goal cannot move
-     * them, their poms can.
+     * Names the modules of the build the IDE compiles into {@code target/classes}, with what their poms lack: the
+     * files of the goal cannot move them, their poms can.
      */
     private void warnOfModulesCompiledIntoTarget(List<MavenProject> allProjects) {
-        List<String> modules = IdeOutputReach.unreached(allProjects);
-        if (modules.isEmpty()) {
-            return;
+        IdeOutputReach.Unreached unreached = IdeOutputReach.unreached(allProjects);
+        List<String> modules = unreached.needingTheProfile();
+        if (!modules.isEmpty()) {
+            boolean one = modules.size() == 1;
+            getLog().warn(prefix() + counted(modules) + (one ? " is" : " are") + " compiled by " + ide()
+                    + " into target/classes, which Maven then packages: " + named(modules) + ". Give "
+                    + (one ? "its" : "their") + " parent pom the " + IdeOutput.PROFILE + " profile " + DOCUMENTATION);
         }
-        String names = String.join(", ", modules.subList(0, Math.min(NAMED_MODULES, modules.size())));
-        if (modules.size() > NAMED_MODULES) {
-            names += " and " + (modules.size() - NAMED_MODULES) + " more";
+        modules = unreached.needingTheExtension();
+        if (!modules.isEmpty()) {
+            boolean one = modules.size() == 1;
+            getLog().warn(prefix() + counted(modules) + (one ? " declares" : " declare")
+                    + " vidocq-runtime-maven-plugin without <extensions>true</extensions>, so " + ide() + " compiles "
+                    + (one ? "it" : "them") + " into target/classes, which Maven then packages: " + named(modules)
+                    + ". Add the attribute to the plugin " + DOCUMENTATION);
         }
-        getLog().warn(prefix() + modules.size() + " module(s) are compiled by " + ide() + " into target/classes, which"
-                + " Maven then packages: " + names + ". They have neither vidocq-runtime-maven-plugin as a build"
-                + " extension nor a profile on " + IdeOutput.M2E_VERSION + ": give their parent pom the "
-                + IdeOutput.PROFILE + " profile (documentation, \"What an IDE compiles, and where\").");
+    }
+
+    private static String counted(List<String> modules) {
+        return modules.size() == 1 ? "1 module of this build" : modules.size() + " modules of this build";
+    }
+
+    /** The first names of {@code modules} and how many more there are; all of them at debug level when cut. */
+    private String named(List<String> modules) {
+        if (modules.size() <= NAMED_MODULES) {
+            return String.join(", ", modules);
+        }
+        getLog().debug(prefix() + "the " + modules.size() + " modules: " + String.join(", ", modules));
+        return String.join(", ", modules.subList(0, NAMED_MODULES)) + " and " + (modules.size() - NAMED_MODULES)
+                + " more";
     }
 
     /** {@code executionRoot}, which must be the reactor root: the IDE opens it, and the folder belongs there. */

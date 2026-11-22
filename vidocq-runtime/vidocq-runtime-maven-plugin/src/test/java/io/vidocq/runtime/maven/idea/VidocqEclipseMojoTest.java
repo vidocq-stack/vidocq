@@ -121,10 +121,19 @@ class VidocqEclipseMojoTest {
         mojo(false).run(projects, projects, new Properties(), root);
 
         assertEquals(1, log.lines.stream().filter(line -> line.startsWith("WARN ")).count(), log.toString());
-        assertTrue(log.has("WARN", "Vidocq eclipse: 1 module(s) are compiled by Eclipse into target/classes, which"
-                + " Maven then packages: todo-model. They have neither vidocq-runtime-maven-plugin as a build extension"
-                + " nor a profile on m2e.version: give their parent pom the ide-output profile (documentation,"
+        assertTrue(log.has("WARN", "Vidocq eclipse: 1 module of this build is compiled by Eclipse into target/classes,"
+                + " which Maven then packages: todo-model. Give its parent pom the ide-output profile (documentation,"
                 + " \"What an IDE compiles, and where\")."), log.toString());
+    }
+
+    @Test
+    void anApplicationThatDeclaresThePluginWithoutTheAttributeIsToldToAddIt() throws Exception {
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertTrue(log.has("WARN", "Vidocq eclipse: 1 module of this build declares vidocq-runtime-maven-plugin"
+                + " without <extensions>true</extensions>, so Eclipse compiles it into target/classes, which Maven then"
+                + " packages: todo. Add the attribute to the plugin (documentation, \"What an IDE compiles, and"
+                + " where\")."), log.toString());
     }
 
     @Test
