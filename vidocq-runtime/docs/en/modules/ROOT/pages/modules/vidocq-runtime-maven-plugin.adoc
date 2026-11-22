@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twenty-one goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `test-path`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `eclipse`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twenty-one goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `test-path`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `eclipse`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq-runtime/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -536,7 +536,7 @@ Foy's `merge` file is also among its `markers`: a jar that already has it was bu
 == `vidocq:build-info` goal
 
 `vidocq:build-info` writes `META-INF/vidocq/build-info/<artifactId>.properties` into `target/classes` at the
-`initialize` phase: the file the xref:vidocq-runtime-core.adoc#build-identity[startup banner] and the dev console read
+`initialize` phase: the file the xref:modules/vidocq-runtime-core.adoc#build-identity[startup banner] and the dev console read
 for the version, the commit and the build time of the application. `vidocq-runtime-parent` binds it; in an
 application without the parent, the plugin binds it itself (Vidocq/vidocq#380), and a pom that runs
 `git-commit-id-maven-plugin` or binds the goal on its own is left alone. Until BUG-20261117-06 the parent ran
@@ -1011,7 +1011,7 @@ application layer off, and `--add-modules` naming the modules of the image that 
 its `release` file, minus the modules of the JDK that runs the build). An image built by `vidocq:jlink` already holds
 them; one given through `runtimeImage` may not.
 
-See `vidocq/JLINK.md` §3 for the exhaustive parameter list.
+See `vidocq-runtime/JLINK.md` §3 for the exhaustive parameter list.
 
 == `vidocq:docker` goal
 
@@ -1807,7 +1807,9 @@ step out; it does not concern the Maven kind. Here `vidocq.idea.jre` is the alte
 configuration, and without it IntelliJ launches the application on the module SDK.
 
 The goal never writes `.idea/`, `*.iml` or any other project file — those belong to IntelliJ's own Maven
-import — nor run configuration templates, nor Eclipse launch configurations. It never deletes a file, and it
+import — nor Eclipse launch configurations. The one run configuration template it writes is the shared JUnit
+template, `.run/Template JUnit.run.xml`, by default (<<idea-junit-template,The JUnit template>>);
+`-Dvidocq.idea.junitTemplate=false` leaves it out. It never deletes a file, and it
 refuses to run when a pom binds it to a lifecycle phase.
 
 [#applications]
@@ -1887,8 +1889,11 @@ on how Maven was invoked.
 
 | `vidocq.idea.kind`
 | `maven`
-| `maven`: a Maven run configuration of `vidocq:run` on the application's pom. `application`: an Application run
-  configuration of the main class, with Make and `vidocq:generate` before launch. Any other value fails the goal.
+| `maven`: three run configurations per application, on the application's pom: a Maven run of
+  `process-classes vidocq:dev` suffixed ` (dev)`, a Maven run of `vidocq:run` suffixed ` (run)`, and a Remote JVM
+  Debug run suffixed ` (debug)` that attaches to the debug agent `vidocq:dev` starts. `application`: a single
+  Application run configuration of the main class, with Make and `vidocq:generate` before launch. Any other value
+  fails the goal.
 
 | `vidocq.idea.generateBeforeLaunch`
 | `true`
@@ -2382,10 +2387,10 @@ has not been tried in Eclipse yet.
 * **Custom `java.util.logging` Handler** — declare the module in `logging.properties` so `jlink` embeds it (`handlers=com.example.MyHandler`).
 * **macOS app-image** — the bundle requires a valid `--app-version`; the plugin defaults to the project Maven version.
 
-See `vidocq/JLINK.md` §6 and §8 for the full list of known limitations.
+See `vidocq-runtime/JLINK.md` §6 and §8 for the full list of known limitations.
 
 == Next steps
 
 * xref:usage.adoc[Usage] — packaging workflows
 * xref:reference.adoc[Reference] — configuration keys
-* `vidocq/JLINK.md` — internal packaging documentation
+* `vidocq-runtime/JLINK.md` — internal packaging documentation

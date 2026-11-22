@@ -6,7 +6,7 @@ This page consolidates the **official TCK** results for Jakarta JSON Processing 
 
 [NOTE]
 ====
-The `champollion-tck` module is **in-reactor, gated behind the `tck` Maven profile** (TCK harmonisation, same pattern as the `vidocq-runtime-tck-*` runners): a plain `mvn install` neither downloads nor runs anything TCK-related. Invoke through the `run-official-tck-*.sh` scripts, or directly via `./mvnw -Ptck,jsonp-tck -pl champollion-tck test` / `./mvnw -Ptck,jsonp-tck-pluggability -pl champollion-tck test` / `./mvnw -Ptck,jsonb-tck -pl champollion-tck test`. (Historical note: it used to be a standalone out-of-reactor POM to bypass ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — obsolete since the Maven 3.9.16 / Model 4.0.0 migration.)
+The `champollion-tck` module is **in-reactor, gated behind the `tck` Maven profile** (TCK harmonisation, same pattern as the `vidocq-runtime-tck-*` runners): a plain `mvn install` neither downloads nor runs anything TCK-related. Invoke through the `run-official-tck-*.sh` scripts, from Champollion's folder of the monorepo, or directly from the root of the monorepo via `./mvnw -Ptck,jsonp-tck -pl <champollion>/champollion-tck test` / `./mvnw -Ptck,jsonp-tck-pluggability -pl <champollion>/champollion-tck test` / `./mvnw -Ptck,jsonb-tck -pl <champollion>/champollion-tck test`, where `<champollion>` is `vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion`. (Historical note: it used to be a standalone out-of-reactor POM to bypass ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 — obsolete since the Maven 3.9.16 / Model 4.0.0 migration.)
 ====
 
 == Global summary
@@ -88,11 +88,12 @@ As of today, **none**. Should a spec-interpretation divergence appear later, it 
 
 === Install the official TCKs
 
-The repo-root script downloads the official ZIPs from `download.eclipse.org` and installs them via `mvn install:install-file` with their genuine POMs (idempotent — won't re-download if already present):
+Champollion's `install-tck.sh` downloads the official ZIPs from `download.eclipse.org` and installs them via `mvn install:install-file` with their genuine POMs (idempotent — won't re-download if already present):
 
 [source,bash]
 ----
-cd champollion
+# from the root of the monorepo
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion
 ./install-tck.sh          # JSON-P + JSON-B
 ./install-tck.sh jsonp    # JSON-P 2.1 only
 ./install-tck.sh jsonb    # JSON-B 3.0 only
@@ -109,7 +110,7 @@ Maven coordinates installed:
 
 [source,bash]
 ----
-cd champollion
+# from Champollion's folder of the monorepo
 ./run-official-tck-jsonp-2.1.sh             # full suite (default, same as `all`)
 ./run-official-tck-jsonp-2.1.sh all         # full suite
 ./run-official-tck-jsonp-2.1.sh -Dtest=Foo  # targeted test
@@ -121,7 +122,7 @@ Report: `champollion-tck/target/tck-report-jsonp.txt`.
 
 [source,bash]
 ----
-cd champollion
+# from Champollion's folder of the monorepo
 ./run-official-tck-jsonb-3.0.sh                    # full suite (default, same as `all`)
 ./run-official-tck-jsonb-3.0.sh all                # full suite (runtime mode)
 ./run-official-tck-jsonb-3.0.sh all --static       # static codegen mode

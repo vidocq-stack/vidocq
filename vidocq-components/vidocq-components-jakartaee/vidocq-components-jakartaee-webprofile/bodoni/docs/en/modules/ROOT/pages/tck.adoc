@@ -60,7 +60,7 @@ The test tooling dependencies are listed in xref:reference.adoc#test-tooling[Ref
 
 == Results
 
-Both runs on 2026-10-24 (Temurin 25, macOS arm64, zone `Europe/Paris`), with `./run-official-tck-tags-3.0.sh all`. The second run, after the TCK fixes, used Peano and Ibarra built from their `main` branches (Peano with the COMP-010 fix of https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61]).
+Both runs on 2026-10-24 (Temurin 25, macOS arm64, zone `Europe/Paris`), with `./run-official-tck-tags-3.0.sh all`. The second run, after the TCK fixes, used Peano and Ibarra built from their `main` branches (Peano with the COMP-010 fix of Vidocq/peano#61).
 
 [cols="2,1,1",options="header"]
 |===
@@ -87,7 +87,7 @@ The causes of the first run's 89 errors, all fixed:
 | Cause | Owner | Tests | Fix
 
 | JSTL 1.0 `_rt` URIs not shipped | known decision | 40 | The four JSTL 1.0 request-time TLDs (`c_rt`, `fmt_rt`, `sql_rt`, `x_rt`) on the 3.0 handlers
-| A constant `${…}` on a deferred-value attribute: Peano's compiled constant expression lacked the `(ELContext, Class)` constructor (COMP-010) | Peano | 32 | https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61]; Ibarra regression test IBARRA-156, https://codefloe.com/Vidocq/ibarra/pulls/64[Vidocq/ibarra#64]
+| A constant `${…}` on a deferred-value attribute: Peano's compiled constant expression lacked the `(ELContext, Class)` constructor (COMP-010) | Peano | 32 | Vidocq/peano#61; Ibarra regression test IBARRA-156, Vidocq/ibarra#64
 | Translation-time constraints not enforced (BOD-006) | Bodoni | 9 | Tag library validators for `c`, `fmt`, `sql` and `x`, run by Ibarra at page `init()`
 | `LocalizationContext` unreadable under `peano.reflection=deny` (BOD-007) | Bodoni | 3 | A `LocalizationContext` accessor table in `bodoni-peano`
 | `fmt:message` with `bundle` does not set the response locale (BOD-008) | Bodoni | 2 | The `bundle` attribute sets the response locale (§8.4)
@@ -102,7 +102,7 @@ The four interpretations Bodoni recorded in B3 and B4 are not settled by this su
 [#smoke]
 == Smoke and CI
 
-`./run-official-tck-tags-3.0.sh smoke` runs eight classes, 138 tests (138/138 after the TCK fixes): `compat.onedotzero` (the JSTL 1.0 request-time URIs, with the `sql` database), `spec.core.conditional.cwo` (the `c:choose` rules of the tag library validators), `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`, and is a required check of `main`: a pull request that breaks the smoke set cannot be merged. The smoke set is a regression subset; the full `all` run is not in CI.
+`./run-official-tck-tags-3.0.sh smoke` runs eight classes, 138 tests (138/138 after the TCK fixes): `compat.onedotzero` (the JSTL 1.0 request-time URIs, with the `sql` database), `spec.core.conditional.cwo` (the `c:choose` rules of the tag library validators), `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). Before the monorepo, the `official-tags-tck-smoke` check of Bodoni's own repository ran it on every pull request. In the monorepo a pull request runs no TCK, and Bodoni's root `pom.xml` names no `ci.tck.modules` or `ci.tck.command` yet, so the `TCK nightly` workflow does not run it either: the smoke set, a regression subset, and the full `all` run are run by hand with the script.
 
 == Plan
 

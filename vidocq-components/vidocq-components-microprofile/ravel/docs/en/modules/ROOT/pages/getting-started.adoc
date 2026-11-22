@@ -4,7 +4,7 @@
 == Prerequisites
 
 * Java 25+
-* Maven 3.9.16 (pinned via `.sdkmanrc` — run `sdk env`) or Gradle
+* Maven or Gradle (the monorepo itself builds with the Maven 3.10.0 its root `.sdkmanrc` pins — run `sdk env` there)
 
 == Installation
 

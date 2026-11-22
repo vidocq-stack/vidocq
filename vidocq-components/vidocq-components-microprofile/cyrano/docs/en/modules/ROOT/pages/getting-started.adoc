@@ -7,7 +7,7 @@ This page shows how to declare a typed client interface, inject it through CDI, 
 == Prerequisites
 
 * **Java 25** — Temurin recommended. Module path enabled.
-* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root (`sdk env`).
+* **Maven 3.10.0** — pinned via `.sdkmanrc` at the root of the monorepo (`sdk env` there), which builds with its wrapper `./mvnw`.
 * **strict Java Modules** — one `module-info.java` per Maven module.
 * A JSON-B implementation on the classpath/module-path at runtime — xref:champollion::index.adoc[Champollion] in the Vidocq ecosystem.
 * For CDI integration: xref:vauban::index.adoc[Vauban] as the container, xref:ravel::index.adoc[Ravel] for MP Config.
@@ -181,10 +181,11 @@ UserDto user = users.findById(42L);
 
 [source,bash]
 ----
-cd cyrano
+# from the root of the monorepo
 sdk env
-./mvnw -ntp install -DskipTests
-./mvnw test
+./mvnw -ntp install -DskipTests      # the whole reactor, Cyrano included
+cd vidocq-components/vidocq-components-microprofile/cyrano
+./mvnw test                          # Cyrano's modules only
 ----
 
 To run the official MicroProfile Rest Client 4.0 TCK, see xref:tck.adoc[the TCK page] (`./run-official-tck-mp-rest-client-4.0.sh`).

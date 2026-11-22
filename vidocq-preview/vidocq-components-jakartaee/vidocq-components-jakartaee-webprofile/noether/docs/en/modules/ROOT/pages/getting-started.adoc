@@ -9,7 +9,7 @@ stores two books and queries them back. Every file below is complete; together t
 == Prerequisites
 
 * **Java 25** — Temurin recommended.
-* **Maven 3.9** — the Noether project itself pins 3.9.16.
+* **Maven 3.9** or later — the monorepo that builds Noether pins 3.10.0.
 * Noether has no release yet. Version `{project-version}` comes from the Vidocq snapshot repository,
   `https://maven.vidocq.dev/snapshots/`, which the POM below declares.
 

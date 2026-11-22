@@ -2,7 +2,7 @@
 :repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Conformance status for the Jakarta Technology Compatibility Kits covered by Mansart.
 
-NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+NOTE: Persistence and Validation now live in xref:noether::index.adoc[Noether], a component of its own in the monorepo (`vidocq-preview/`). Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to Noether's folder.
 
 
 [.lead]
@@ -89,7 +89,8 @@ producer reconciliation; Data is unchanged. No formal certification or Web Profi
 
 [source,bash]
 ----
-cd noether/main/noether-persistence/noether-jpa-tck
+# from the root of the monorepo
+cd vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-tck
 ./run-official-tck-persistence-3.2.sh
 ----
 
@@ -112,11 +113,12 @@ Local reproduction:
 
 [source,bash]
 ----
-cd mansart/mansart-jakarta-data/mansart-data-tck
+# from the root of the monorepo
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-jakarta-data/mansart-data-tck
 ./run-official-tck-data-1.0.sh all
 ----
 
-In CI: every pull request runs `EntityTests` and `SignatureTests` (74 tests, H2 in memory). The root `pom.xml` declares them in `ci.tck.command`, which the shared `pr-validate` workflow runs once the reactor is installed at the pull request's version: `mvn -f mansart-jakarta-data/mansart-data-tck/pom.xml -Ptck-run,tck-sig test`, with `mansart.version` set to that version, since the runner is outside the reactor and would otherwise test the published snapshot. A single failing test fails the check; the run takes under a minute on a fresh runner. `jakarta.data:jakarta.data-tck:1.0.1` is public on Maven Central.
+In CI: a pull request runs no TCK. Mansart's root `pom.xml` declares `EntityTests` and `SignatureTests` (74 tests, H2 in memory) in `ci.tck.command`, which the `TCK nightly` workflow of the monorepo (`.forgejo/workflows/tck-nightly.yml`) runs in Mansart's folder once a day, on demand on a branch (dispatched with the `MANSART` tag), and for a release: `mvn -f mansart-jakarta-data/mansart-data-tck/pom.xml -Ptck-run,tck-sig test`, with `mansart.version` set to the version of the build, since the runner is outside the reactor and would otherwise test the published snapshot. A single failing test fails the run; it takes under a minute on a fresh runner. `jakarta.data:jakarta.data-tck:1.0.1` is public on Maven Central.
 
 Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled because compiled without the processor in the APT classpath). Resolved by the M7 runtime runner (`MansartRuntimeRepoCreator`). See link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-jakarta-data/BUG.md[BUG.md].
 
@@ -142,7 +144,8 @@ Manual reproduction:
 
 [source,bash]
 ----
-cd mansart/mansart-transactions
+# from the root of the monorepo
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-transactions
 ./install-tck.sh                           # download + unpack
 cd .tck-cache/transactions-tck/bin
 $EDITOR ts.jte                             # JAVA_HOME, jta.classes, Mansart provider
@@ -167,19 +170,20 @@ Not run in CI. The official suite is not a Maven artifact: `install-tck.sh` down
 
 == Tests skipped due to environment
 
-None to date. The Jakarta Data TCK runs on every pull request on H2 in memory, with no external dependency. The Jakarta Transactions TCK is run by hand (see above).
+None to date. The Jakarta Data TCK runs in the `TCK nightly` workflow on H2 in memory, with no external dependency. The Jakarta Transactions TCK is run by hand (see above).
 
 == Reproduce locally
 
 [source,bash]
 ----
+# from Mansart's folder of the monorepo,
+# vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart
+
 # Jakarta Data 1.0
-cd mansart/mansart-jakarta-data/mansart-data-tck
-./run-official-tck-data-1.0.sh all
+(cd mansart-jakarta-data/mansart-data-tck && ./run-official-tck-data-1.0.sh all)
 
 # Jakarta Transactions 2.0 (smoke)
-cd mansart/mansart-transactions/mansart-transactions-tck
-./run-official-tck-transactions-2.0.sh smoke
+(cd mansart-transactions/mansart-transactions-tck && ./run-official-tck-transactions-2.0.sh smoke)
 ----
 
 Prerequisites: none for Jakarta Data, whose TCK Maven resolves from Maven Central. The full Jakarta Transactions suite needs the official zip from Eclipse and Apache Ant: `mansart-transactions/install-tck.sh` downloads and unpacks it (see `mansart-transactions/TCK.md`).

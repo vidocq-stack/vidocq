@@ -69,12 +69,13 @@ Because conformance is 100% with no disabled tests, there is no `TCK.md` listing
 
 == Reproduce locally
 
-The TCK runs through a dedicated script at the repo root:
+The TCK runs through a dedicated script in Knock's folder of the monorepo:
 
 [source,bash]
 ----
-cd knock
+# from the root of the monorepo
 sdk env
+cd vidocq-components/vidocq-components-microprofile/knock
 
 # Smoke test (KnockTckSmokeTest only)
 ./run-official-tck-mp-health-4.0.sh
@@ -86,12 +87,13 @@ sdk env
 ./run-official-tck-mp-health-4.0.sh -Dtest=TestName
 ----
 
-The runner can also be invoked directly through the reactor:
+The runner can also be invoked directly through the reactor, from the root of the monorepo once the reactor is
+installed:
 
 [source,bash]
 ----
-./mvnw -Ptck -pl knock-tck test                  # smoke
-./mvnw -Ptck,tck-official -pl knock-tck test     # full official suite
+./mvnw -Ptck -pl vidocq-components/vidocq-components-microprofile/knock/knock-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl vidocq-components/vidocq-components-microprofile/knock/knock-tck test     # full official suite
 ----
 
 [NOTE]

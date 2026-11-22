@@ -1,11 +1,11 @@
 = Persistence moved to Noether
 :description: Migration landing page for the extracted Persistence implementation.
 
-Persistence and the provisional Validation provider moved to the independent
-xref:noether::index.adoc[Noether repository] on 2026-10-11.
+Persistence and the provisional Validation provider moved to
+xref:noether::index.adoc[Noether], a component of its own, on 2026-10-11.
 
 Their coordinates and packages now use `io.vidocq.noether`, with artifacts
 `noether-jpa-*` and `noether-validation-*`.
 See xref:noether::migration.adoc[migration instructions] and
-xref:noether::modules/noether-persistence.adoc[the detailed Persistence guide].
+xref:noether::usage.adoc[the detailed Persistence guide].
 Mansart retains Data, Pool and Transactions unchanged.

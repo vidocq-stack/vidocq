@@ -1163,15 +1163,17 @@ Detach/clear/close behavior is unchanged. See xref:internals.adoc[] for hydratio
 [#building]
 == Building Noether from source
 
-Noether builds with Java 25 (Temurin) and Maven 3.9.16, both pinned in `.sdkmanrc`. The build needs the snapshots of
-`vidocq-parent`, Mansart and Vauban: declare `https://maven.vidocq.dev/snapshots/` as a repository in your Maven
-`settings.xml`, because the POM declares it for plugins only.
+Noether builds in the monorepo, from its root, with Java 25 (Temurin) and Maven 3.10.0, both pinned in the root
+`.sdkmanrc`, and the root's Maven wrapper. `vidocq-parent`, Mansart and Vauban are modules of the same build, so no
+snapshot repository is needed.
 
 [source,sh]
 ----
+# from the root of the monorepo
 sdk env
-./mvnw -ntp install -DskipTests   # full build
-./mvnw -ntp test                  # unit and module-path tests
+./mvnw -ntp install -DskipTests   # full build, Noether and what it needs included
+# one module and what it needs, with its unit and module-path tests
+./mvnw -ntp -pl vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-core -am test
 ----
 
 The official TCK runners and the benchmarks are separate; see xref:tck.adoc[TCK] and

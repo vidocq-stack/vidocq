@@ -7,8 +7,8 @@ This page boots a Chappe HTTP server in under 30 lines of Java, then walks throu
 == Prerequisites
 
 * **Java 25** — Temurin recommended.
-* **Maven 3.9.16** — pinned via `.sdkmanrc` at the root of the `chappe` repo.
-* `sdk env` from the repo root loads the right JDK and Maven. If another Maven version is active in the shell, switch to the pinned one: `sdk use maven 3.9.16`.
+* **Maven 3.10.0** — pinned via `.sdkmanrc` at the root of the monorepo, which builds with its wrapper `./mvnw`.
+* `sdk env` from the root of the monorepo loads the right JDK and Maven. If another Maven version is active in the shell, switch to the pinned one: `sdk use maven 3.10.0`.
 * Optional: `wrk` for the final load test (`brew install wrk` or equivalent).
 
 == Maven coordinates
@@ -110,7 +110,7 @@ Server.builder().port(8080).handler(staticHandler).build().start();
 
 [source,bash]
 ----
-sdk env                        # loads JDK 25 + Maven 3.9.16
+sdk env                        # loads JDK 25 + Maven 3.10.0
 ./mvnw -ntp install -DskipTests
 java \
      --module-path target/lib:target/myapp.jar \

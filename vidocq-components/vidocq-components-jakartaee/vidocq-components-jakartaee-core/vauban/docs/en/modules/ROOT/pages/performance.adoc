@@ -10,7 +10,7 @@ in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakart
 == TL;DR
 
 Between 2026-09-14 and the close of
-https://codefloe.com/Vidocq/vauban/issues/70[vauban#70^], qualifier matching, injection and
+vauban#70, qualifier matching, injection and
 interceptor binding comparison stopped reading annotations at run time. Same benchmark, same machine,
 before and after:
 

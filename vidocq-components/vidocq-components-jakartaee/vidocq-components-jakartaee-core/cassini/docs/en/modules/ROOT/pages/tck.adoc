@@ -100,7 +100,8 @@ Historical note: the module used to be **excluded** from the parent `<modules>` 
 
 [source,bash]
 ----
-cd cassini
+# from the root of the monorepo
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini
 
 # 1. Prerequisites: Java 25 + Maven 3.9.16 (via .sdkmanrc)
 sdk env

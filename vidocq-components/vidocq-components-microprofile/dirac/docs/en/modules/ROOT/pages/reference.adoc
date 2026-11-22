@@ -210,7 +210,7 @@ MetricRegistry vendor;
 
 == Compatibility
 
-* Java 25 (LTS), Maven 3.9.16.
+* Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
 * CDI 4.1 Lite (Vauban) or Lite-compatible — the standard `Interceptor` and `BuildCompatibleExtension` suffice. Proven on Weld SE 6.0 and Open Liberty (CDI 4.0): see <<other-containers>>.
 * JAX-RS 4.0 (Cassini) — only if `dirac-rest` is used.
 * No MicroProfile Config integration: the `mp.metrics.distribution.*` keys are read from system properties or `META-INF/microprofile-config.properties` directly.
@@ -219,7 +219,7 @@ MetricRegistry vendor;
 == Bugs and benchmarks
 
 * link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/BUG.md[BUG.md] — tracked reproducible bugs.
-* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/BENCH.md[BENCH.md] — JMH benchmarks (vs Micrometer / SmallRye).
+* No benchmark has been recorded yet: Dirac has no `BENCH.md`. The figures of the JMH harness (`dirac-bench`, vs Micrometer / SmallRye) go there with its first recorded run.
 
 == Further reading
 

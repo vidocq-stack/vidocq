@@ -2,8 +2,8 @@
 :description: The Vidocq command-line interface — scaffold, run in dev mode, build, manage extensions and configuration.
 
 [.lead]
-`vidocq-runtime-cli` is the zero-dependency, JPMS-native command-line interface for the
-Vidocq runtime. It scaffolds new applications, runs them in a live-reloading dev mode,
+`vidocq-runtime-cli` is the zero-dependency command-line interface for the
+Vidocq runtime, itself a Java module. It scaffolds new applications, runs them in a live-reloading dev mode,
 wraps the packaging goals of the Maven plugin, manages extensions and configuration, and
 diagnoses your environment — all from a single `vidocq` command. This page is a complete
 user guide; jump straight to <<getting-started>> for a Hello-World walkthrough.
@@ -13,7 +13,7 @@ user guide; jump straight to <<getting-started>> for a Hello-World walkthrough.
 [cols="1,3"]
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-cli:{project-version}`
-| JPMS module | `io.vidocq.runtime.cli`
+| Java module | `io.vidocq.runtime.cli`
 | Main class | `io.vidocq.runtime.cli.VidocqCli`
 | Dependencies | None beyond the JDK and `io.vidocq.runtime.core` (hand-rolled arg parser, pure Java 25)
 |===
@@ -53,7 +53,7 @@ runtime (see <<create-snapshot>>). Run the installer again to go back to the lat
 
 Without the installer, download `vidocq-runtime-cli-<version>-cli.zip` from Maven Central,
 unzip it anywhere and add its `bin/` directory to your `PATH`. The launcher runs the CLI
-as a JPMS module:
+as a Java module:
 
 [source,bash]
 ----
@@ -95,7 +95,7 @@ This generates a ready-to-build Maven project:
 [source]
 ----
 hello-world/
-├── pom.xml                                  # inherits vidocq-runtime-parent, depends on core, sets vidocq.mainModule
+├── pom.xml                                  # no parent: imports vidocq-runtime-bom, loads the plugin as a build extension, depends on core, sets vidocq.mainModule
 ├── mvnw, mvnw.cmd, .mvn/wrapper/            # the Maven wrapper of the Vidocq repositories
 ├── .gitignore, README.md
 └── src/main/
@@ -201,7 +201,7 @@ vidocq extension add cassini-rest
 ----
 
 See xref:getting-started.adoc[Getting started] for a complete REST + persistence example,
-including the resource class, the JPMS module declarations, and `curl` calls.
+including the resource class, the Java module declarations, and `curl` calls.
 
 == Command reference
 
@@ -590,7 +590,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 | Sub-command | Description
 
 | `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` lists the catalog built into the CLI, by family (Jakarta EE, MicroProfile, Data, Web); `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list.
-| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java`. The dependency and the codegen path carry the parent's version, written out.
+| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when the build needs one (<<extension-codegen-path>>), and its directives into `src/main/java/module-info.java`. From 0.4.0, where `vidocq-runtime-bom` versions the Vidocq artifacts (the pom `vidocq create` writes, which imports it, or a `vidocq-runtime-parent` from 0.4.0), the `<dependency>` carries no `<version>` and no codegen path is written: the plugin wires the bundle. Under an older parent, the dependency and the codegen path carry the parent's version, written out.
 | `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`. The settings `add` wrote into `vidocq.properties` stay: they are the application's.
 | [[extension-required]]required extensions | An extension may need another to work: `mansart-data` reads the DataSource of `mansart-pool`. `add mansart-data` (and `create -x mansart-data`) adds the pool too, with its dev service, driver and test block, and says so. `remove mansart-data` keeps the pool, which works alone, and names `vidocq extension remove mansart-pool`; removing the pool while `mansart-data` stays warns, as Mansart Data then has no DataSource unless the application produces one. `vidocq doctor` shows **Required extensions** when one is missing.
 |===

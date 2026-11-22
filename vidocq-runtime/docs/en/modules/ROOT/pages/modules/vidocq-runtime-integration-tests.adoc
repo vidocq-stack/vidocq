@@ -9,7 +9,7 @@
 [cols="1,3"]
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-integration-tests:{project-version}`
-| Source | `vidocq-runtime-integration-tests/src/test/java/`
+| Source | `vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-it-*/src/test/java/` in the monorepo
 |===
 
 == Scope
@@ -20,31 +20,35 @@
 * What `vidocq create` writes: `vidocq-runtime-it-create` (profile `it`, on every CI run) runs
   `mvn verify vidocq:jlink` on a created REST application — its first `@VidocqTest` test included, then the jlink
   image `vidocq build jlink` makes — and fails on any warning but the three javac ones documented as expected.
-* Regressions tracked by bugs documented in `vidocq/BUG.md`, `vidocq/CHAPPE-BUGS.md`, `vidocq/VAUBAN-BUGS.md`.
+* Regressions tracked by bugs documented in `vidocq-runtime/BUG.md`, `vidocq-runtime/CHAPPE-BUGS.md`, `vidocq-runtime/VAUBAN-BUGS.md`.
 
 [NOTE]
 ====
-// TODO@user: enumerate the test classes precisely once the module is stabilised. Source to index: `vidocq-runtime-integration-tests/src/test/java/`.
+// TODO@user: enumerate the test classes precisely once the module is stabilised. Source to index: `vidocq-runtime-integration-tests/vidocq-runtime-it-*/src/test/java/`.
 ====
 
 == Run
 
-[source,bash]
-----
-cd vidocq-runtime-integration-tests
-./mvnw -ntp test
-----
-
-For a targeted test:
+From the root of the monorepo, with its wrapper: every integration test module, once the reactor is installed
+(`./mvnw -ntp install -DskipTests`).
 
 [source,bash]
 ----
-./mvnw -ntp test -Dtest=BootSequenceIT
+./mvnw -ntp -pl vidocq-runtime/vidocq-runtime-integration-tests -amd test
+----
+
+For one module, or one test of it:
+
+[source,bash]
+----
+./mvnw -ntp -pl vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-it-cassini-rest -am test
+./mvnw -ntp -pl vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-it-cassini-rest -am test \
+    -Dtest=RestExtensionTest -Dsurefire.failIfNoSpecifiedTests=false
 ----
 
 == Difference from TCKs
 
-* **TCKs** (Cassini, Foy, Champollion, Vauban) verify conformance to Jakarta specifications — run via dedicated `run-official-tck-*.sh` scripts, outside the parent reactor.
+* **TCKs** (Cassini, Foy, Champollion, Vauban) verify conformance to Jakarta specifications — run behind each component's `tck` Maven profile or through its `run-official-tck-*.sh` script.
 * **Integration tests** verify the orchestration internal to Vidocq Runtime — boot, lifecycle, inter-extension interaction, AOT readiness.
 
 The two are complementary and both required to release a version.

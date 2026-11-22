@@ -4,7 +4,7 @@
 [.lead]
 A **dev service** provisions a Testcontainers container — PostgreSQL, Keycloak, an OpenTelemetry collector with Grafana (`vidocq-runtime-devservice-otel`)— and wires its coordinates into your application as plain configuration, with no `docker run` and no hand-copied JDBC URL. Providers run outside the application, in the host that starts them: `vidocq:dev`, `vidocq:run` (opt-in), or a JUnit test run. Whichever host it is, the application sees the same thing — a `devservices` section of the startup report, and, in a `dev` launch, a dev console panel of the same name — without depending on Testcontainers or Docker itself.
 
-TIP: This page covers where dev services run, how the application sees them, and how a test gets one. `DEV_SERVICES.md` at the repository root covers the providers themselves — PostgreSQL, Keycloak, OpenTelemetry, multi-datasource, stable ports — in full.
+TIP: This page covers where dev services run, how the application sees them, and how a test gets one. `vidocq-runtime/DEV_SERVICES.md` in the monorepo covers the providers themselves — PostgreSQL, Keycloak, OpenTelemetry, multi-datasource, stable ports — in full.
 
 [#where-they-run]
 == Where they run

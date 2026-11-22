@@ -286,7 +286,7 @@ Bound to `generate-sources`. `<targets>` takes **explicit record FQNs** (present
 == Compatibility
 
 * **Java**: 25 (LTS).
-* **Maven**: 3.9.16 (Model 4.0.0 — the whole Vidocq stack moved to Maven 3.9; see xref:tck.adoc[] for the historical ShrinkWrap note).
+* **Maven**: 3.10.0, pinned at the root of the monorepo (Model 4.0.0 — the whole Vidocq stack moved to Maven 3.9 and later; see xref:tck.adoc[] for the historical ShrinkWrap note).
 * **Java Modules**: strict, every module has a `module-info.java`.
 * **Virtual threads**: no `synchronized`; the only thread-local state is an internal per-thread parser cache, invisible to applications.
 * **AOT**: GraalVM `native-image` and Leyden CDS friendly in static codegen mode.

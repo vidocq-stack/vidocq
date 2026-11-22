@@ -41,7 +41,7 @@ sdk env                              # Java 25 + Maven 3.9.16
 
 == Runner execution
 
-The `run-official-tck-mp-jwt-2.2.sh` script at the repository root drives every variant.
+The `run-official-tck-mp-jwt-2.2.sh` script in Cervantes' folder of the monorepo (`vidocq-components/vidocq-components-microprofile/cervantes`) drives every variant.
 
 [source,bash]
 ----

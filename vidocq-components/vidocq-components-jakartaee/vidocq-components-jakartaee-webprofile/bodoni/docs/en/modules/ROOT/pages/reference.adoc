@@ -64,7 +64,7 @@ The official TCK runner `bodoni-tck` (xref:tck.adoc[TCK status]) is built only u
 |===
 | Dependency | Scope | Note
 
-| `io.vidocq.ibarra:ibarra-arquillian:0.4.0-SNAPSHOT` | `test` | The Arquillian adapter that precompiles each TCK WAR with Ibarra and runs it on modular Foy. Brings the Arquillian container SPI, ShrinkWrap 1.2.6 (both Apache-2.0), the Ibarra compiler, Foy, Peano and Chappe.
+| `io.vidocq.ibarra:ibarra-arquillian:{project-version}` | `test` | The Arquillian adapter that precompiles each TCK WAR with Ibarra and runs it on modular Foy. Brings the Arquillian container SPI, ShrinkWrap 1.2.6 (both Apache-2.0), the Ibarra compiler, Foy, Peano and Chappe.
 | `org.jboss.arquillian:arquillian-bom:1.9.4.Final` | `import` | One Arquillian version for the TCK clients, the JUnit 5 container and the adapter's SPI (Apache-2.0). Imported in the module's own `dependencyManagement`.
 | `org.jboss.arquillian.junit5:arquillian-junit5-container:1.9.4.Final` | `test` | The Arquillian JUnit 5 runtime the TCK clients run on (Apache-2.0).
 | `org.junit.platform:junit-platform-launcher` | `test` | The launcher API of the listener that starts the TCK database. Managed by `vidocq-parent`.
@@ -197,7 +197,7 @@ Formatting in a locale other than English needs the JDK module `jdk.localedata` 
 
 `fmt:bundle`, `fmt:setBundle` and `fmt:message` load a bundle by name with `ResourceBundle.getBundle(basename, locale, loader)`, where `loader` is the thread context class loader, or the system class loader when it is `null`. This is also the loader of the `LocaleSupport` class of the JSTL API. The first-level matching rules of spec 8.3.1 are applied by Bodoni itself: the JDK refuses a `ResourceBundle.Control` supplied by a named module, so Bodoni filters the candidate locales, and the JVM default locale is never used.
 
-The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. BOD-002 is fixed in link:https://codefloe.com/Vidocq/foy/pulls/76[Vidocq/foy#76] (Foy BUG-20261022-06). Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
+The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. BOD-002 is fixed in Vidocq/foy#76 (Foy BUG-20261022-06). Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
 
 What the lookup can see depends on where the application keeps its bundles. Observed on JDK 25 (2026-10-22), from a library module, with a named application module in the same class loader:
 
@@ -446,7 +446,7 @@ The `key` and `value` of the `Map.Entry` items of a `c:forEach` over a `Map` nee
 == Compatibility
 
 * **Java**: 25 (LTS).
-* **Maven**: 3.9.16 (Model 4.0.0).
+* **Maven**: 3.10.0, pinned at the root of the monorepo (Model 4.0.0).
 * **Java Modules**: strict, every module has a `module-info.java`.
 * **Virtual threads**: no `synchronized`, no `ThreadLocal`. The JDBC calls of `sql:` run on the thread that renders the page.
 * **Runtime image**: a `jlink` image, or a runtime started with `--limit-modules`, must contain the JDK modules `bodoni-core` requires: `java.xml`, `java.sql`, `java.naming` and `java.net.http` (with `java.desktop`, which the JSTL API module requires).

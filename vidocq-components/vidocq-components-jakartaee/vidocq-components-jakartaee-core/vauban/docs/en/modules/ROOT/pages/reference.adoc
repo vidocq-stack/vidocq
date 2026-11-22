@@ -624,7 +624,7 @@ The test tooling is named here as the zero-dependency rule asks: `io.vidocq:vido
 
 == Compatibility
 
-* Java 25 (LTS), Maven 3.9.16.
+* Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
 * Generated class files target Java 25 (class file 69) whatever JDK runs the build, so a brick built
   on a newer JDK still loads on the baseline runtime and passes `jlink`. Weaving keeps the version of
   the class it patches.

@@ -65,7 +65,7 @@ The panel above is the *all-in-one* form: `AcmeCacheExtension` is both the exten
 implements `DevConsolePanel` ships in every binary that has the extension, whether or not `vidocq:dev` is ever
 run (Vidocq/vidocq#143). Every extension the Vidocq Runtime itself ships — Mansart's pools, Knock's health,
 Cassini's REST mounts, Dirac's metrics, the schema migration extension, the langchain4j-cdi MCP server — instead
-splits its live half into a **`-dev` module**: a second, small JPMS module next to the runtime extension, that
+splits its live half into a **`-dev` module**: a second, small Java module next to the runtime extension, that
 `vidocq:dev` alone puts on the child's module path. The all-in-one form still works, still ships in the binary,
 and stays the right shape for an extension of your own that has no packaging concerns of its own to keep small;
 the split below is what this repository's own extensions do, and what a `-dev` module of a component with a
@@ -93,7 +93,7 @@ release cycle of its own — an application's, or a third-party extension's — 
 The brick never changes for this: it is used outside Vidocq and depends on no Vidocq SPI, in or out of a
 `-dev` module. The runtime extension keeps the startup-report section — it is not a dev tool, it prints in
 every mode, production logs included — and drops only the live half, `sample`/`charts`/`actions`, into the
-`-dev` module next to it, same parent, same version, artifact id suffixed `-dev`, JPMS module name suffixed
+`-dev` module next to it, same parent, same version, artifact id suffixed `-dev`, Java module name suffixed
 `.dev`: `vidocq-runtime-mansart-pool-extension-dev`, module `io.vidocq.runtime.extensions.jakartaee.web.
 mansart.pool.dev`. Nothing else ever depends on the `-dev` module, and it is never a dependency of anything
 that gets packaged.

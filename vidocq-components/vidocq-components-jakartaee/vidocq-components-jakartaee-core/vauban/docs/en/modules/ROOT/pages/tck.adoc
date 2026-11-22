@@ -17,7 +17,7 @@ This page consolidates the state of the official CDI 4.1 TCK runs against Vauban
 
 | Last run
 | 2026-11-18
-| Vauban `0.4.0-SNAPSHOT`
+| Vauban `main`, the 0.4.0 development line
 | Profile `-Ptck` on `vauban-tck-runner` (CDI Lite 774/774) and `vauban-atinject-tck-runner` (AtInject 1/1).
 
 | Language model TCK
@@ -162,7 +162,9 @@ None is listed: the last two, `BUG-20261117-42` (no inherited members) and `BUG-
 
 [source,bash]
 ----
-./mvnw test -Ptck -pl vauban-tck-runner -Dtest=LangModelTckTest -Dsurefire.failIfNoSpecifiedTests=false
+# from the root of the monorepo
+./mvnw test -Ptck -pl vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-tck-runner -am \
+    -Dtest=LangModelTckTest -Dsurefire.failIfNoSpecifiedTests=false
 ----
 
 == Open bugs impacting coverage
@@ -186,9 +188,17 @@ Tracked in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-component
 
 [source,bash]
 ----
-cd vauban
+# from the root of the monorepo
 sdk env
-mvn install -DskipTests -q && mvn test -pl vauban-tck-runner -Ptck
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban
+./run-tck.sh    # both runners, CDI Lite and AtInject, with the modules they need (-am)
+----
+
+Through Maven, from the root of the monorepo:
+
+[source,bash]
+----
+./mvnw -ntp -Ptck -pl vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-tck-runner -am verify
 ----
 
 The runner uses Arquillian + TestNG. The Surefire report lands in `vauban-tck-runner/target/surefire-reports/`.

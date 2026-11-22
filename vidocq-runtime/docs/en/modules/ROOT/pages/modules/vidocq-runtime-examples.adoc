@@ -8,9 +8,14 @@
 
 [cols="1,3"]
 |===
-| Reactor | `vidocq-runtime-examples/`
-| Build | `cd vidocq-runtime-examples/<example> && ./mvnw -ntp package`
+| Reactor | `vidocq-runtime/vidocq-runtime-examples/` in the monorepo
+| Build | From the root of the monorepo: `./mvnw -ntp -pl vidocq-runtime/vidocq-runtime-examples/<example> -am package`
 |===
+
+An example builds from the root of the monorepo, with its wrapper: there is no `mvnw` in the examples' folders.
+The root build declares `vidocq-runtime-maven-plugin` in `pluginManagement` only, so the `vidocq:` prefix does not
+resolve there: install the reactor once (`./mvnw -ntp install -DskipTests`), then name the plugin by its group and
+artifact, `io.vidocq.runtime:vidocq-runtime-maven-plugin:<goal>`, as the quick starts below do.
 
 No example has a main class. Each pom declares `vidocq.mainModule` only, and the runtime's own
 main boots the module under `vidocq:dev`, `vidocq:run`, the `vidocq:package` launchers and the `vidocq:jlink` /
@@ -54,11 +59,11 @@ xref:usage.adoc[the `@VidocqMain` trampoline].
 
 [source,bash]
 ----
-cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
-./mvnw -ntp package -DskipTests
+# from the root of the monorepo; the dist profile builds the jlink image
+./mvnw -ntp -Pdist -pl vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cassini-rest-example -am package -DskipTests
 
 # standalone jlink image
-./target/dist/bin/todo-app
+./vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cassini-rest-example/target/dist/bin/todo-app
 
 # UI on http://127.0.0.1:8080/
 # API on http://127.0.0.1:8080/api/todos
@@ -68,11 +73,12 @@ cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 
 [source,bash]
 ----
-cd vidocq-runtime-examples/vidocq-runtime-mansart-h2-example
-./mvnw -ntp package
+# from the root of the monorepo, after ./mvnw -ntp install -DskipTests
+./mvnw -ntp -pl vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-mansart-h2-example \
+    package io.vidocq.runtime:vidocq-runtime-maven-plugin:package
 
 # vidocq:package produced a bin/ + lib/ distribution (also zipped as *-dist.zip)
-./target/vidocq-runtime-mansart-h2-example-<version>/bin/vidocq-runtime-mansart-h2-example.sh
+./vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/target/vidocq-runtime-mansart-h2-example-<version>/bin/vidocq-runtime-mansart-h2-example.sh
 
 curl -X POST http://localhost:8080/api/products \
      -H 'Content-Type: application/json' \
@@ -81,17 +87,18 @@ curl -X POST http://localhost:8080/api/products \
 curl http://localhost:8080/api/products
 ----
 
-In dev mode, `mvn vidocq:dev`, the example also serves the xref:dev-console.adoc[dev console]: it logs `Vidocq dev console: http://127.0.0.1:8888/`, a page with the startup report, the two pools, `@Default` and `audit`, live, and the JVM. Its `DevConsoleSnapshotTest` boots the example in a dev launch, reads that URL from the log, and checks the snapshot the page polls: both pools, the heap, and no pool password anywhere in it.
+In dev mode, the plugin's `dev` goal (`io.vidocq.runtime:vidocq-runtime-maven-plugin:dev`), the example also serves the xref:dev-console.adoc[dev console]: it logs `Vidocq dev console: http://127.0.0.1:8888/`, a page with the startup report, the two pools, `@Default` and `audit`, live, and the JVM. Its `DevConsoleSnapshotTest` boots the example in a dev launch, reads that URL from the log, and checks the snapshot the page polls: both pools, the heap, and no pool password anywhere in it.
 
-The example demonstrates the `@TransactionScoped` scope and the xref:mansart::index.adoc[Mansart] transactional bridge. It also served as the reproduction harness for bug VAU-INJ-001 (normal-scope proxy resolution) — see `vidocq/VAUBAN-BUGS.md`.
+The example demonstrates the `@TransactionScoped` scope and the xref:mansart::index.adoc[Mansart] transactional bridge. It also served as the reproduction harness for bug VAU-INJ-001 (normal-scope proxy resolution) — see `vidocq-runtime/VAUBAN-BUGS.md`.
 
 [[foy-servlet-example-quick-start]]
 == `vidocq-runtime-foy-servlet-example` — quick start
 
 [source,bash]
 ----
-cd vidocq-runtime-examples/vidocq-runtime-foy-servlet-example
-mvn vidocq:dev
+# from the root of the monorepo, after ./mvnw -ntp install -DskipTests
+./mvnw -pl vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-foy-servlet-example \
+    io.vidocq.runtime:vidocq-runtime-maven-plugin:dev
 
 # menu and basket on http://localhost:8080/
 # kitchen on http://localhost:8080/kitchen, sign in as chef, password chef

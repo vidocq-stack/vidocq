@@ -2,7 +2,7 @@
 :description: Conformance status against the Jakarta Servlet 6.1 Technology Compatibility Kit.
 
 [.lead]
-This page consolidates the status of the official Jakarta Servlet 6.1 TCK runs against Foy. It is regenerated on every release. The day-to-day source of truth remains link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/TCK.md[`TCK.md`] at the repo root.
+This page consolidates the status of the official Jakarta Servlet 6.1 TCK runs against Foy. It is regenerated on every release. The day-to-day source of truth remains link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/TCK.md[`TCK.md`] in Foy's folder of the monorepo.
 
 == Summary
 
@@ -104,8 +104,10 @@ The `sigtest` profile of `foy-tck` runs the TCK's own `servlet.tck.signature.Ser
 
 [source,bash]
 ----
-./mvnw -ntp -Ptck,tck-official,sigtest -pl foy-tck test -Dtest=ServletSigTest \
-    -Dsurefire.failIfNoSpecifiedTests=false
+# from the root of the monorepo, with the reactor installed
+./mvnw -ntp -Ptck,tck-official,sigtest \
+    -pl vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/foy-tck \
+    test -Dtest=ServletSigTest -Dsurefire.failIfNoSpecifiedTests=false
 ----
 
 At the Phase 7 exit it passes: `Tests run: 1, Failures: 0, Errors: 0, Skipped: 0`. The profile needs the `tck-official` artefacts; its two build-time tools (`sigtest-maven-plugin` 2.5, `maven-dependency-plugin`) are never shipped.
@@ -118,7 +120,7 @@ Per-class figures come from `foy-tck/tck-tally.sh <log>`, which prints `<class> 
 
 == Runner architecture
 
-`foy-tck` is an **in-reactor module gated behind the `tck` Maven profile** (TCK harmonisation, same pattern as the `vidocq-runtime-tck-*` runners): a plain `mvn install` neither downloads nor runs anything TCK-related, and the release reactor never sees the module. Invoke through `./run-official-tck-servlet6.1.sh`, or directly via `./mvnw -Ptck,tck-official -pl foy-tck test`.
+`foy-tck` is an **in-reactor module gated behind the `tck` Maven profile** (TCK harmonisation, same pattern as the `vidocq-runtime-tck-*` runners): a plain `mvn install` neither downloads nor runs anything TCK-related, and the release reactor never sees the module. Invoke through `./run-official-tck-servlet6.1.sh` from Foy's folder, or directly from the root of the monorepo via `./mvnw -Ptck,tck-official -pl vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/foy-tck test`.
 
 **Historical note.** The module used to be excluded from the reactor as a standalone Model 4.0.0 POM: ShrinkWrap Maven Resolver 3.3 (transitive dependency of the official Jakarta TCK) could not parse the `Model 4.1.0` POMs the workspace used at the time (`Bad artifact coordinates ... jar:`). That constraint disappeared with the workspace-wide migration to Maven 3.9.16 / Model 4.0.0.
 
@@ -138,7 +140,8 @@ Detailed procedure in link:{repo-vidocq}/src/branch/main/vidocq-components/vidoc
 
 [source,bash]
 ----
-cd foy
+# from the root of the monorepo
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy
 ./run-official-tck-servlet6.1.sh                     # smoke test (fast)
 ./run-official-tck-servlet6.1.sh --all               # full suite (long)
 ./run-official-tck-servlet6.1.sh -Dtest=ServletTests # one class
@@ -155,14 +158,9 @@ prints the Maven commands, and `--help` lists every mode.
 
 === CI integration
 
-[source,yaml]
-----
-- name: Build foy reactor
-  run: cd foy && ./mvnw -ntp install -DskipTests
-
-- name: Run Jakarta Servlet 6.1 TCK
-  run: cd foy && ./run-official-tck-servlet6.1.sh --all
-  # Prereq: official TCK artefacts cached in ~/.m2
-----
+A pull request runs no TCK. The `TCK nightly` workflow of the monorepo (`.forgejo/workflows/tck-nightly.yml`) runs
+what a component's root POM names in `ci.tck.modules` and `ci.tck.command`, once a day, on demand on a branch and for
+a release. Foy's root POM names neither: the Servlet 6.1 TCK artefacts are not public, so the suite runs by hand,
+with the script above, on a machine where they are installed.
 
 Surefire reports live in `foy-tck/target/surefire-reports/`.

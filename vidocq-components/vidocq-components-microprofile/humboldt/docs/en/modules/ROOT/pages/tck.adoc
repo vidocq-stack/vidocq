@@ -37,8 +37,9 @@ The road to green (M7b Arquillian adapter, M7c failure clusters — `@Arquillian
 
 [source,bash]
 ----
-cd humboldt
+# from the root of the monorepo
 sdk env
+cd vidocq-components/vidocq-components-microprofile/humboldt
 
 # Smoke — local harness tests to validate the install
 ./run-official-tck-telemetry-2.2.sh

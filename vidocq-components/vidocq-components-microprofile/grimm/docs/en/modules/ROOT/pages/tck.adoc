@@ -40,7 +40,7 @@ sdk env                              # Java 25 + Maven 3.9.16
 
 == Runner execution
 
-The `run-official-tck-mp-openapi-4.2.sh` script at the repository root drives every variant.
+The `run-official-tck-mp-openapi-4.2.sh` script in Grimm's folder of the monorepo (`vidocq-components/vidocq-components-microprofile/grimm`) drives every variant.
 
 [source,bash]
 ----
@@ -120,9 +120,9 @@ None to date: the full suite runs and passes at 367/367. Should an exclusion eve
 
 == Quality contract
 
-Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 367/367 score before merge. A TCK regression is a CI blocker: the PR does not pass.
+Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 367/367 score before merge.
 
-Every pull request runs the full suite. The root `pom.xml` declares it in `ci.tck.command`, which the shared `pr-validate` workflow runs once the reactor is installed at the pull request's version: `mvn -f grimm-tck/pom.xml -Ptck-official test`, with `grimm.version` set to that version, since `grimm-tck` is outside the reactor and would otherwise test the published snapshot. A single failing test fails the check. The suite takes under a minute on a fresh runner. A pull request that changes only documentation skips it.
+A pull request runs no TCK. Grimm's root `pom.xml` declares the full suite in `ci.tck.command`, which the `TCK nightly` workflow of the monorepo (`.forgejo/workflows/tck-nightly.yml`) runs in Grimm's folder once a day, on demand on a branch (dispatched with the `GRIMM` tag), and for a release, which requires it green: `mvn -f grimm-tck/pom.xml -Ptck-official test`, with `grimm.version` set to the version of the build, since `grimm-tck` is outside the reactor and would otherwise test the published snapshot. A single failing test fails the run. A pull request that changes Grimm dispatches it on its branch before merging.
 
 == Further reading
 

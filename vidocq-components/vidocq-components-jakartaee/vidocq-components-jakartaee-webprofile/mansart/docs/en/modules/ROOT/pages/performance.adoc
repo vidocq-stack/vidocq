@@ -28,16 +28,16 @@ with `-foe true`, so any setup, preflight or benchmark failure stops the run wit
 (JMH's default would only report the error and exit 0). JMH reports throughput, iteration confidence
 intervals and allocation via its GC profiler.
 
-Build/install the provider and processor from the separate Noether reactor, then run each provider separately
+Build/install the Noether provider and processor from the root of the monorepo, then run each provider separately
 with an explicit Temurin 25:
 
 [source,bash]
 ----
 export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem
 export PATH=$JAVA_HOME/bin:$PATH
-cd noether/main
-./mvnw -ntp -pl noether-persistence/noether-jpa-processor-module-it -am install -DskipTests
-cd noether-persistence/noether-jpa-bench
+# from the root of the monorepo
+./mvnw -ntp -pl vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-processor-module-it -am install -DskipTests
+cd vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-bench
 export BENCH_RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)
 ./run-bench.sh noether
 ./run-bench.sh hibernate

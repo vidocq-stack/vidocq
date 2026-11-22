@@ -9,7 +9,7 @@ EL, TLD functions, listeners and initial tag-handler invocations are generated a
 == Prerequisites
 
 * **Java 25** — Temurin recommended. Module path enabled.
-* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
+* **Maven 3.10.0** — pinned via `.sdkmanrc` at the root of the monorepo, which builds with its wrapper `./mvnw`.
 * Strict Java Modules: one `module-info.java` per Maven module.
 
 == Maven setup (initial I4)

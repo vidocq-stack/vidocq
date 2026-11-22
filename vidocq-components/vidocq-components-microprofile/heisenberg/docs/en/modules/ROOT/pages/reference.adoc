@@ -325,7 +325,7 @@ The shared state registries (`CircuitBreakerStateRegistry`, `BulkheadStateRegist
 
 == Compatibility
 
-* Java 25 (LTS), Maven 3.9.16.
+* Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
 * CDI 4.1 Lite (Vauban) or any CDI 4.0 Lite-compatible container — proven on Weld and Open Liberty, see <<other-containers>>.
 * MicroProfile Config 3.1 (Ravel) in `provided`.
 * OpenTelemetry 1.39 (Humboldt) in `requires static` — optional.

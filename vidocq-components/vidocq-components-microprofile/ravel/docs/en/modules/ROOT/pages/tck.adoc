@@ -85,7 +85,7 @@ Ravel's implementation reached these milestones:
 
 == Known issues and workarounds
 
-If you encounter a TCK failure, check `TCK.md` in the repository root for documented issues and workarounds.
+If you encounter a TCK failure, check `TCK.md` in Ravel's folder of the monorepo for documented issues and workarounds.
 
 Common issues:
 

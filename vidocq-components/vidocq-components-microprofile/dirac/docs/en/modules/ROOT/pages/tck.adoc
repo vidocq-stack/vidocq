@@ -33,7 +33,7 @@ sdk env                                              # Java 25 + Maven 3.9.16
 
 == Running the runner
 
-The script `run-official-tck-mp-metrics-5.1.sh` at the repository root orchestrates every variant.
+The script `run-official-tck-mp-metrics-5.1.sh` in Dirac's folder of the monorepo (`vidocq-components/vidocq-components-microprofile/dirac`) orchestrates every variant.
 
 [source,bash]
 ----
@@ -113,4 +113,3 @@ Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` 
 * xref:internals.adoc[Internals] — what the TCK validates.
 * xref:reference.adoc[Reference] — annotations and keys exercised.
 * link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/BUG.md[BUG.md] — tracked reproducible bugs.
-* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/BENCH.md[BENCH.md] — consolidated JMH benchmarks.

@@ -45,7 +45,7 @@ vidocq create --name todo --group-id com.acme --extension cassini-rest
 cd todo
 ----
 
-`--extension cassini-rest` (short: `-x`) enables Jakarta REST — it transitively brings the Chappe HTTP server, CDI (Vauban) and JSON-B (Champollion). The generated project is a standard JPMS Maven project:
+`--extension cassini-rest` (short: `-x`) enables Jakarta REST — it transitively brings the Chappe HTTP server, CDI (Vauban) and JSON-B (Champollion). The generated project is a standard Maven project of Java Modules:
 
 [source]
 ----

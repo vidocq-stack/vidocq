@@ -289,7 +289,7 @@ Read a statement's first keyword (is it an `UPDATE` or a `DELETE`?) and the enti
 
 == Compatibility
 
-* Java 25 (LTS), Maven 3.9.16.
+* Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
 * {spec-data-1}[Jakarta Data 1.0] (delivered), {spec-jpa-3-2}[Jakarta Persistence 3.2] (P0–P12 delivered within documented scope), Jakarta Transactions 2.0.
 * {spec-cdi-4-1}[CDI 4.1 Lite] via xref:vauban::index.adoc[Vauban].
 * Virtual Threads for any JDBC execution.

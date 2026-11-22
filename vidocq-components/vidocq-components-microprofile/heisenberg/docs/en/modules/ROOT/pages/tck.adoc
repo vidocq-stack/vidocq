@@ -40,7 +40,7 @@ sdk env                              # Java 25 + Maven 3.9.16
 
 == Main runner
 
-The `run-official-tck-mp-fault-tolerance-4.1.sh` script at the repo root orchestrates every variant.
+The `run-official-tck-mp-fault-tolerance-4.1.sh` script in Heisenberg's folder of the monorepo (`vidocq-components/vidocq-components-microprofile/heisenberg`) orchestrates every variant.
 
 [source,bash]
 ----

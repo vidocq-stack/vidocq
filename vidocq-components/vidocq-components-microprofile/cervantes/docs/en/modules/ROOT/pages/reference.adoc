@@ -43,7 +43,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 | Official MP JWT 2.2 TCK runner — in-reactor, but only under the `tck` Maven profile (a plain `mvn install` never builds it). Do not declare as an application dependency.
 |===
 
-All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`.
+All versions at `{project-version}`, shared parent `io.vidocq:vidocq-parent` included: the monorepo has one version.
 
 [#java-modules]
 == Java modules
@@ -319,7 +319,7 @@ An unrecognised `mp.jwt.verify.publickey.algorithm`, an unrecognised `mp.jwt.dec
 
 == Compatibility
 
-* Java 25 (LTS), Maven 3.9.16.
+* Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
 * JAX-RS 4.0 (xref:cassini::index.adoc[Cassini] or another compliant runtime).
 * CDI 4.1 Lite (xref:vauban::index.adoc[Vauban]) with BCE support, or any CDI 4.0 Lite container with BCE support — proven on Weld and Open Liberty, see <<other-containers>>.
 * MicroProfile Config 3.1+ (xref:ravel::index.adoc[Ravel]).

@@ -17,7 +17,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | The versions of every Vidocq artifact an application declares: runtime, extensions, `-codegen` bundles, `-dev` modules, Dev Services, test support. The pom `vidocq create` writes imports it (`<type>pom</type>`, `<scope>import</scope>`), and so does `vidocq-runtime-parent`.
 
 | `io.vidocq.runtime:vidocq-runtime-build:{project-version}`
-| The root of the runtime's own reactor, with the settings of this repository (CI, SonarQube, TCK). The parent of the runtime's modules; an application never inherits it.
+| The root of the runtime's own reactor, the `vidocq-runtime/` folder of the monorepo, with the build settings of the runtime's modules (CI, SonarQube, TCK). The parent of the runtime's modules; an application never inherits it.
 
 | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
 | Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`, the startup report contributors)
@@ -760,9 +760,9 @@ breaks a rule fails the build.
 
 == Bugs and benchmarks
 
-* Vidocq Runtime bugs: `vidocq/BUG.md`
-* Cross-cutting bugs: `vidocq/CHAPPE-BUGS.md`, `vidocq/VAUBAN-BUGS.md`
-* Benchmarks: `vidocq/BENCH.md`
+* Vidocq Runtime bugs: `vidocq-runtime/BUG.md`
+* Cross-cutting bugs: `vidocq-runtime/CHAPPE-BUGS.md`, `vidocq-runtime/VAUBAN-BUGS.md`
+* Benchmarks: `vidocq-runtime/BENCH.md`
 
 == Compatibility
 

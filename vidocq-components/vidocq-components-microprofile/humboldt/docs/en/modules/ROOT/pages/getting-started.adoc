@@ -2,12 +2,12 @@
 :description: Add Humboldt to a Vidocq project, configure an OTLP exporter, emit a first trace in five minutes.
 
 [.lead]
-This page walks through a first integration: declare the artifacts, configure the OTLP exporter, boot the auto-configured runtime, and observe a span in the Collector. The target is a Java 25 + Maven 3.9.16 project that already consumes Cassini (JAX-RS) and Vauban (CDI) — HTTP and CDI integration is then automatic.
+This page walks through a first integration: declare the artifacts, configure the OTLP exporter, boot the auto-configured runtime, and observe a span in the Collector. The target is a Java 25 + Maven project that already consumes Cassini (JAX-RS) and Vauban (CDI) — HTTP and CDI integration is then automatic.
 
 == Prerequisites
 
-* Java 25 (Temurin) — `sdk env` from the repo (`.sdkmanrc` provided).
-* Maven 3.9.16 — if `mvn` fails with “modelVersion 4.1.0 not supported”, `sdk use maven 3.9.16`.
+* Java 25 (Temurin) — `sdk env` at the root of the monorepo (`.sdkmanrc` provided).
+* Maven 3.10.0 — pinned by the same `.sdkmanrc`; the monorepo builds with its wrapper `./mvnw`.
 * An OpenTelemetry Collector reachable over HTTP (or any OTLP/HTTP-JSON receiver). For trials: `docker run --rm -p 4318:4318 otel/opentelemetry-collector:latest`.
 
 == Declare the artifacts

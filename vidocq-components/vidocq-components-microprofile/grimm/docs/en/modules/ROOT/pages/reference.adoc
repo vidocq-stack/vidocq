@@ -257,15 +257,15 @@ Grimm's own classes (`io.vidocq.grimm.*`) never enter the document, so `/openapi
 
 == Compatibility
 
-* Java 25 (LTS), Maven 3.9.16.
+* Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
 * JAX-RS 4.0 (Cassini or any conformant runtime).
 * CDI 4.1 Lite (Vauban) or Lite-compatible — proven on Weld SE 6.0 and Open Liberty (CDI 4.0): see <<other-containers>>.
 * No Jakarta EE Full Profile dependency.
 
 == Bugs and benchmarks
 
-* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm/BUG.md[BUG.md] — tracked reproducible bugs (to be created if missing).
-* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm/BENCH.md[BENCH.md] — JMH benchmarks (to be created if missing).
+* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm/BUG.md[BUG.md] — tracked reproducible bugs.
+* No benchmark has been recorded yet: Grimm has no `BENCH.md`. The figures of the JMH harness (`grimm-bench`) go there with its first recorded run.
 
 == Further reading
 
