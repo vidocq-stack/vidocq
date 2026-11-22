@@ -137,9 +137,10 @@
                     </delimiters>
                 </configuration>
             </plugin>
-            <!-- The lifecycle participant (CodegenPaths*) is compiled for Java 17: an IDE may run its Maven import on an
-                 older runtime than the build (VS Code's Java extension runs m2e on Java 21), and a participant it cannot
-                 load fails the whole import. CodegenPathsParticipantTest checks the class files. -->
+            <!-- The lifecycle participant (CodegenPaths*, with ApplicationBuild* and IdeOutput*, which it calls) is
+                 compiled for Java 17: an IDE may run its Maven import on an older runtime than the build (VS Code's
+                 Java extension runs m2e on Java 21), and a participant it cannot load fails the whole import.
+                 CodegenPathsParticipantTest checks the class files. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -150,6 +151,7 @@
                             <excludes>
                                 <exclude>io/vidocq/runtime/maven/CodegenPaths*.java</exclude>
                                 <exclude>io/vidocq/runtime/maven/ApplicationBuild*.java</exclude>
+                                <exclude>io/vidocq/runtime/maven/IdeOutput*.java</exclude>
                             </excludes>
                             <!-- vidocq:checkpom reads ApplicationBuild: javac compiles an excluded source a compiled one
                                  refers to all the same, and would write it as a Java 25 class file, which the
@@ -172,6 +174,7 @@
                             <includes>
                                 <include>io/vidocq/runtime/maven/CodegenPaths*.java</include>
                                 <include>io/vidocq/runtime/maven/ApplicationBuild*.java</include>
+                                <include>io/vidocq/runtime/maven/IdeOutput*.java</include>
                             </includes>
                         </configuration>
                     </execution>

@@ -78,10 +78,11 @@ class CodegenPathsParticipantTest {
         List<Path> classes;
         try (var files = Files.list(Path.of("target/classes/io/vidocq/runtime/maven"))) {
             classes = files.filter(f -> f.getFileName().toString().startsWith("CodegenPaths")
-                    || f.getFileName().toString().startsWith("ApplicationBuild")).toList();
+                    || f.getFileName().toString().startsWith("ApplicationBuild")
+                    || f.getFileName().toString().startsWith("IdeOutput")).toList();
         }
-        // CodegenPaths, CodegenPathsParticipant, ApplicationBuild and its nested Execution record.
-        assertEquals(4, classes.size(), classes.toString());
+        // CodegenPaths, CodegenPathsParticipant, ApplicationBuild, its nested Execution record, and IdeOutput.
+        assertEquals(5, classes.size(), classes.toString());
         for (Path file : classes) {
             ClassModel model = ClassFile.of().parse(Files.readAllBytes(file));
             assertTrue(model.majorVersion() <= ClassFile.JAVA_17_VERSION,
