@@ -50,6 +50,9 @@ jobs:
           SLOW_RUNTIME = ["vidocq-runtime-integration-tests/vidocq-runtime-tck-cyrano-restclient",
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-heisenberg-faulttolerance",
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry"]
+          # Left out of the install as well (header): a module of the tck profile whose TCK jar Maven cannot resolve
+          # fails the whole install of its component (the runtime's, every night since the monorepo).
+          LEFT_OUT = {"vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations"}
           def reactor(path):
               """The module at path and every module below it: <modules>, and those of its tck profile and of its
               repackaged-api profile, which holds modules of every Maven build that the IntelliJ import leaves out."""
@@ -63,7 +66,7 @@ jobs:
               for ms in filter(lambda x: x is not None, lists):
                   for m in ms.findall("{%s}module" % ns):
                       sub = os.path.normpath(os.path.join(path, (m.text or "").strip()))
-                      if os.path.isfile(os.path.join(sub, "pom.xml")) and sub not in found:
+                      if os.path.isfile(os.path.join(sub, "pom.xml")) and sub not in found and sub not in LEFT_OUT:
                           found += reactor(sub)
               return found
           include = []

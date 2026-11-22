@@ -152,9 +152,10 @@
             modules count for the code they exercise in the other modules. The second path is the
             per-module default: applications created by `vidocq create` inherit this POM, and
             they have no vidocq-runtime-coverage module (SonarQube only warns about a missing
-            report and merges the ones it finds).
+            report and merges the ones it finds). maven.multiModuleProjectDirectory is the root of
+            the monorepo, where the build starts: the first path names the runtime's folder.
         -->
-        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-runtime-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-runtime/vidocq-runtime-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <!-- The examples are analysed (people copy them) but not measured for coverage, and they
              may print to System.out (rule java:S106). So does the CLI, whose job is to print on the
              terminal: its output is no log (as chappe-cli in Chappe, QUALITY.md). -->
