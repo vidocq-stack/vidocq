@@ -1,0 +1,129 @@
+# The release of the monorepo: every published module at one version, to Maven Central in one deployment
+# (MONOREPO.md: the BOM and the stable and preview modules; vidocq-incubator/ never). Run by hand, on main only.
+#
+# What it does is release.sh of Vidocq/ci (release-maven), as the repositories before the monorepo did:
+#   - a release/<version> branch from main, every POM of the reactor at <version>, commit, push;
+#   - the whole reactor built with -P release,crac,!incubator and without tests, then deployed: signed jars,
+#     sources, javadoc and one CycloneDX SBOM per artifact (vidocq-parent's release profile);
+#   - the tag v<version>, then main at <next>-SNAPSHOT, committed and pushed by vidocq-ci-bot, signed with its key.
+# A module whose maven.deploy.skip is true (its own, or its parent's in the reactor) is left out of the build and of
+# the deployment; one that must be built but not published sets skipPublishing (vidocq-runtime-integration-tests).
+#
+# Before it: the release runs no test, so it requires a successful Nightly build and TCK nightly on the very commit it
+# publishes (.forgejo/scripts/release-gate.py). Run both on main by hand when the last scheduled ones were not on it.
+# A dry run (the default) builds, signs and bundles, and pushes and uploads nothing; the gate only warns there.
+#
+# The whole build runs on Azul Zulu CRaC 25: vidocq-runtime-crac-extension requires jdk.crac and is published with the
+# rest (as the runtime's own releases did, on the crac runner). With auto_publish 'manual' (the default) the deployment
+# waits on central.sonatype.com for a maintainer's Publish.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version, without -SNAPSHOT (e.g. 0.4.0)'
+        type: string
+        required: true
+      next_dev_version:
+        description: 'Next development version, without -SNAPSHOT (e.g. 0.5.0); -SNAPSHOT is appended'
+        type: string
+        required: true
+      dry_run:
+        description: "'true': build, sign and bundle only, no push, no upload, main untouched"
+        type: choice
+        required: true
+        default: 'true'
+        options: ['true', 'false']
+      auto_publish:
+        description: "'manual': the deployment waits for Publish on central.sonatype.com; 'auto': published once validated"
+        type: choice
+        required: true
+        default: 'manual'
+        options: ['manual', 'auto']
+
+# Not while the nightly deploys SNAPSHOTs of the same coordinates (nightly.yml uses the same group).
+concurrency:
+  group: publish-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: vidocq-runner
+    env:
+      # Every Maven call of release.sh: the whole reactor (no incremental build), build-info as the nightly writes it.
+      MAVEN_ARGS: -Dgib.disable=true -Dvidocq.build-info.dirty=^none
+    steps:
+      # This job holds the release credentials, the signing keys and the bot token: every action it runs is pinned to
+      # a commit (workspace CYBER_SECU.md, F-04). Bump the SHAs on purpose, never to a branch.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, the commit Vidocq/ci pins
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          # The head of main when the job starts, not the commit of the dispatch: the gate below checks that one.
+          ref: ${{ github.ref_name }}
+
+      - name: Nightly build and TCK nightly green on this commit
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          GATE_TOKEN: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+        run: |
+          set -uo pipefail
+          if python3 -I .forgejo/scripts/release-gate.py "$(git rev-parse HEAD)"; then
+            exit 0
+          elif [ "$DRY_RUN" = "true" ]; then
+            echo "::warning::a real release of this commit would stop here"
+          else
+            exit 1
+          fi
+
+      - name: Install Azul Zulu CRaC
+        run: |
+          set -euo pipefail
+          ./vidocq-runtime/install-zulu-crac.sh "$RUNNER_TEMP/zulu"
+          echo "JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/zulu/bin" >> "$GITHUB_PATH"
+
+      - uses: https://codefloe.com/Vidocq/ci/release-maven@f79ddba722c722227e6d5b013d4b94a39c68009b
+        with:
+          java-setup: 'false'
+          maven-version: '3.10.0'
+          release-profile: release,crac,!incubator
+          release-version: ${{ inputs.release_version }}
+          next-dev-version: ${{ inputs.next_dev_version }}
+          dry-run: ${{ inputs.dry_run }}
+          auto-publish: ${{ inputs.auto_publish == 'auto' && 'true' || 'false' }}
+          central-username: ${{ secrets.CENTRAL_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_PASSWORD }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+          bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          git-signing-private-key: ${{ secrets.CI_BOT_GPG_PRIVATE_KEY }}
+          git-signing-passphrase: ${{ secrets.CI_BOT_GPG_PASSPHRASE }}
+          git-signing-key-id: ${{ secrets.CI_BOT_GPG_KEY_ID }}
+
+      - name: Notify Slack, release success
+        if: success() && inputs.dry_run != 'true'
+        uses: https://codefloe.com/Vidocq/ci/notify-slack@f79ddba722c722227e6d5b013d4b94a39c68009b
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: release-success
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+          release-version: ${{ inputs.release_version }}
+          next-dev-version: ${{ inputs.next_dev_version }}
+          release-tag-url: ${{ github.server_url }}/${{ github.repository }}/src/tag/v${{ inputs.release_version }}
+
+      - name: Notify Slack, release failure
+        if: failure()
+        uses: https://codefloe.com/Vidocq/ci/notify-slack@f79ddba722c722227e6d5b013d4b94a39c68009b
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: release-failure
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+          release-version: ${{ inputs.release_version }}

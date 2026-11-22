@@ -3,7 +3,8 @@
 #   - schedule           every component, on main;
 #   - workflow_dispatch  on the chosen branch, the components named in `components` (PR title tags, e.g.
 #                        `CASSINI,FOY`), every component when it is empty;
-#   - workflow_call      the release workflow, same input.
+#   - workflow_call      another workflow, same input.
+# The release (release.yml) requires a successful run of every component on the commit it publishes.
 #
 # A component's TCK is what its root pom declares (ci.tck.modules, each run with -Ptck; ci.tck.command, run in
 # its folder). The runtime adds three slow runners (humboldt-telemetry ~256 s, heisenberg-faulttolerance and
