@@ -1,0 +1,22 @@
+name: Notify docs
+
+# Rebuilds doc.vidocq.dev (deploy-pages.yaml of Vidocq/vidocq-docs) when a push changes the Antora sources of a
+# component. The site reads every component's dev docs from this repository's main, and the released docs from its
+# docs/<version> branches: a fix cherry-picked there must redeploy too. The repositories before the monorepo each had
+# this workflow, on docs/**; the monorepo had none, so its docs changes reached the site only with the next push to
+# vidocq-docs. A workflow of its own, so the path filter does not skip the rest of CI.
+
+on:
+  push:
+    branches: [main, 'docs/*']
+    paths:
+      - '**/docs/en/**'
+
+jobs:
+  notify-docs:
+    runs-on: vidocq-runner
+    steps:
+      - uses: https://codefloe.com/Vidocq/ci/trigger-docs-rebuild@main
+        with:
+          bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          source-repo: ${{ github.repository }}
