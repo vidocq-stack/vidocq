@@ -171,6 +171,69 @@ class VidocqVscodeMojoTest {
         assertTrue(log.has("INFO", "Vidocq vscode: removed .vscode/old.json"), log.toString());
     }
 
+    @Test
+    void aModuleAnIdeStillCompilesIntoTargetIsNamed() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+        projects.add(library("todo-model"));
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertEquals(1, log.lines.stream().filter(line -> line.startsWith("WARN ")).count(), log.toString());
+        assertTrue(log.hasContaining("WARN", "Vidocq vscode: 1 module(s) are compiled by VS Code into target/classes,"
+                + " which Maven then packages: todo-model. They have neither"), log.toString());
+        assertTrue(log.hasContaining("WARN", "give their parent pom the ide-output profile"), log.toString());
+    }
+
+    /** The check of a CI job names them too: the files are right and the reactor still has the modules. */
+    @Test
+    void theCheckNamesThemToo() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+        projects.add(library("todo-model"));
+        mojo(false).run(projects, projects, new Properties(), root);
+        log.lines.clear();
+
+        mojo(true).run(projects, projects, new Properties(), root);
+
+        assertTrue(log.hasContaining("WARN", "Maven then packages: todo-model."), log.toString());
+        assertTrue(log.has("INFO", "Vidocq vscode: .vscode/ is up to date (3 files)."), log.toString());
+    }
+
+    /** A reactor of many libraries: the first ten by name, then how many more. */
+    @Test
+    void aLongListOfModulesIsCut() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+        for (int i = 1; i <= 12; i++) {
+            projects.add(library("lib-" + i));
+        }
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertTrue(log.hasContaining("WARN", "Vidocq vscode: 12 module(s) are compiled by VS Code into target/classes,"
+                + " which Maven then packages: lib-1, lib-2, lib-3, lib-4, lib-5, lib-6, lib-7, lib-8, lib-9, lib-10"
+                + " and 2 more. They have neither"), log.toString());
+    }
+
+    @Test
+    void noWarningWhenEveryModuleIsReached() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertFalse(log.lines.stream().anyMatch(line -> line.startsWith("WARN ")), log.toString());
+    }
+
+    private MavenProject library(String artifactId) {
+        Model model = new Model();
+        model.setGroupId("com.example");
+        model.setArtifactId(artifactId);
+        model.setVersion("1.0.0-SNAPSHOT");
+        model.setPackaging("jar");
+        model.setBuild(new Build());
+        MavenProject project = new MavenProject(model);
+        project.setFile(root.resolve(artifactId).resolve("pom.xml").toFile());
+        return project;
+    }
+
     private VidocqVscodeMojo mojo(boolean check) {
         VidocqVscodeMojo mojo = new VidocqVscodeMojo();
         mojo.setLog(log);

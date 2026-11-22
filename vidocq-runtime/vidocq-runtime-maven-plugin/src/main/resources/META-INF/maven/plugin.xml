@@ -1157,7 +1157,7 @@
         </mojo>
         <mojo>
             <goal>vscode</goal>
-            <description>Write the .vscode/ files of a Vidocq project for VS Code's Java extension (Vidocq/vidocq#339): settings.json runs the language server on Java 25, which Vauban's annotation processors need, and turns its automatic build off, which would write target/classes while vidocq:dev does; tasks.json runs vidocq:dev, vidocq:run and vidocq:test of each application; launch.json attaches the debugger to vidocq:dev. A file that does not start with the line vidocq:vscode writes is left alone, with what to add to it. vidocq.vscode.check verifies the files instead.</description>
+            <description>Write the .vscode/ files of a Vidocq project for VS Code's Java extension (Vidocq/vidocq#339): settings.json runs the language server on Java 25, which Vauban's annotation processors need; tasks.json runs vidocq:dev, vidocq:run and vidocq:test of each application; launch.json attaches the debugger to vidocq:dev. A file that does not start with the line vidocq:vscode writes is left alone, with what to add to it. vidocq.vscode.check verifies the files instead. The goal names the modules VS Code still compiles into target/classes: an application compiles into target-ide/.</description>
             <requiresDependencyResolution>none</requiresDependencyResolution>
             <requiresDirectInvocation>true</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
@@ -1184,7 +1184,7 @@
         </mojo>
         <mojo>
             <goal>eclipse</goal>
-            <description>Write the Eclipse launch configurations of a Vidocq project into .eclipse/ (Vidocq/vidocq#339): Maven builds (m2e) of vidocq:dev, vidocq:run and vidocq:test of each application on a Java 25 runtime, and a Remote Java Application that attaches the debugger to vidocq:dev. A file that does not start with the line vidocq:eclipse writes is left alone; one that does and is no longer written is removed. vidocq.eclipse.check verifies the files instead. Eclipse keeps Build Automatically per workspace: turn it off while vidocq:dev runs.</description>
+            <description>Write the Eclipse launch configurations of a Vidocq project into .eclipse/ (Vidocq/vidocq#339): Maven builds (m2e) of vidocq:dev, vidocq:run and vidocq:test of each application on a Java 25 runtime, and a Remote Java Application that attaches the debugger to vidocq:dev. A file that does not start with the line vidocq:eclipse writes is left alone; one that does and is no longer written is removed. vidocq.eclipse.check verifies the files instead. The goal names the modules Eclipse still compiles into target/classes: an application compiles into target-ide/.</description>
             <requiresDependencyResolution>none</requiresDependencyResolution>
             <requiresDirectInvocation>true</requiresDirectInvocation>
             <requiresProject>true</requiresProject>

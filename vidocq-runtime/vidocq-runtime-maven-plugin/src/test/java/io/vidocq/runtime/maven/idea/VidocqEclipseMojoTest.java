@@ -72,8 +72,9 @@ class VidocqEclipseMojoTest {
                 "vidocq:generate", null, 0);
         EclipseFiles.launches(List.of(todo)).forEach((name, content) -> assertEquals(content, read(name), name));
         assertTrue(log.has("INFO", "Vidocq eclipse: created .eclipse/todo (dev).launch"), log.toString());
-        assertTrue(log.hasContaining("INFO", "Turn Project > Build Automatically off while vidocq:dev runs"),
-                log.toString());
+        assertTrue(log.hasContaining("INFO", "Eclipse compiles an application into target-ide/ and leaves target/ to"
+                + " Maven."), log.toString());
+        assertFalse(log.toString().contains("Build Automatically"), log.toString());
 
         mojo(true).run(projects, projects, new Properties(), root);
 
@@ -110,6 +111,42 @@ class VidocqEclipseMojoTest {
         assertTrue(log.has("ERROR", "Vidocq eclipse: .eclipse/old (dev).launch is no longer written"), log.toString());
         assertTrue(Files.exists(folder.resolve("old (dev).launch")), "the check removes nothing");
         assertFalse(Files.exists(folder.resolve("todo (dev).launch")), "the check writes nothing");
+    }
+
+    @Test
+    void aModuleAnIdeStillCompilesIntoTargetIsNamed() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+        projects.add(library("todo-model"));
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertEquals(1, log.lines.stream().filter(line -> line.startsWith("WARN ")).count(), log.toString());
+        assertTrue(log.has("WARN", "Vidocq eclipse: 1 module(s) are compiled by Eclipse into target/classes, which"
+                + " Maven then packages: todo-model. They have neither vidocq-runtime-maven-plugin as a build extension"
+                + " nor a profile on m2e.version: give their parent pom the ide-output profile (documentation,"
+                + " \"What an IDE compiles, and where\")."), log.toString());
+    }
+
+    @Test
+    void noWarningWhenEveryModuleIsReached() throws Exception {
+        projects.get(0).getPlugin(IdeaApplications.PLUGIN_KEY).setExtensions(true);
+
+        mojo(false).run(projects, projects, new Properties(), root);
+
+        assertFalse(log.lines.stream().anyMatch(line -> line.startsWith("WARN ")), log.toString());
+        assertTrue(log.hasContaining("INFO", "target-ide/"), log.toString());
+    }
+
+    private MavenProject library(String artifactId) {
+        Model model = new Model();
+        model.setGroupId("com.example");
+        model.setArtifactId(artifactId);
+        model.setVersion("1.0.0-SNAPSHOT");
+        model.setPackaging("jar");
+        model.setBuild(new Build());
+        MavenProject project = new MavenProject(model);
+        project.setFile(root.resolve(artifactId).resolve("pom.xml").toFile());
+        return project;
     }
 
     private VidocqEclipseMojo mojo(boolean check) {

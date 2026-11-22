@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.idea;
 
+import io.vidocq.runtime.maven.IdeOutput;
 import io.vidocq.runtime.maven.idea.IdeaApplications.Discovery;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
@@ -45,8 +46,14 @@ import java.util.Properties;
  * <p>Each file starts with the IDE's marker line: a file that does is rewritten, and removed when the goal no longer
  * writes it; any other file is left alone, with what to add to it. With {@code check}, the goal writes nothing and
  * fails when a file is missing, out of date or no longer written.</p>
+ *
+ * <p>Both IDEs read the project through m2e and compile it themselves: the goals name the modules that still
+ * compile into {@code target/} ({@link IdeOutputReach}).</p>
  */
 abstract class IdeFilesMojo extends AbstractMojo {
+
+    /** How many modules a message names before it counts the rest. */
+    private static final int NAMED_MODULES = 10;
 
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     private MavenSession session;
@@ -113,11 +120,31 @@ abstract class IdeFilesMojo extends AbstractMojo {
             throw new MojoFailureException(prefix() + drift.size() + " file(s) missing or out of date: run mvn"
                     + " vidocq:" + goal() + ".");
         }
+        warnOfModulesCompiledIntoTarget(allProjects);
         if (check) {
             getLog().info(prefix() + folder() + "/ is up to date (" + files.size() + " files).");
         } else {
             after();
         }
+    }
+
+    /**
+     * Names the modules of the build the IDE compiles into {@code target/classes}: the files of the goal cannot move
+     * them, their poms can.
+     */
+    private void warnOfModulesCompiledIntoTarget(List<MavenProject> allProjects) {
+        List<String> modules = IdeOutputReach.unreached(allProjects);
+        if (modules.isEmpty()) {
+            return;
+        }
+        String names = String.join(", ", modules.subList(0, Math.min(NAMED_MODULES, modules.size())));
+        if (modules.size() > NAMED_MODULES) {
+            names += " and " + (modules.size() - NAMED_MODULES) + " more";
+        }
+        getLog().warn(prefix() + modules.size() + " module(s) are compiled by " + ide() + " into target/classes, which"
+                + " Maven then packages: " + names + ". They have neither vidocq-runtime-maven-plugin as a build"
+                + " extension nor a profile on " + IdeOutput.M2E_VERSION + ": give their parent pom the "
+                + IdeOutput.PROFILE + " profile (documentation, \"What an IDE compiles, and where\").");
     }
 
     /** {@code executionRoot}, which must be the reactor root: the IDE opens it, and the folder belongs there. */

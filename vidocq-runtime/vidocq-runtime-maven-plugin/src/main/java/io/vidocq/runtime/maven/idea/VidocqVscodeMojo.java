@@ -31,7 +31,7 @@ import java.util.Map;
 
 /**
  * Writes the {@code .vscode/} files of a Vidocq project for VS Code's Java extension (Vidocq/vidocq#339): the
- * language server on the build's JDK with no automatic build, {@code vidocq dev}, {@code run} and {@code test} tasks
+ * language server on the build's JDK, {@code vidocq dev}, {@code run} and {@code test} tasks
  * per application, and a configuration that attaches the debugger to {@code vidocq:dev}. See {@link VscodeFiles}.
  *
  * <p>Command line only, at the directory VS Code opens. A file that does not start with {@link VscodeFiles#MARKER}

@@ -35,15 +35,22 @@ class VscodeFilesTest {
     private static final IdeaApplication SHOP = new IdeaApplication("com.example:shop", null, "shop", "shop",
             "apps/shop/pom.xml", "vidocq:generate", "127.0.0.1", 5006);
 
+    /**
+     * The settings run the language server on the JDK and no longer turn the extension's automatic build off: it
+     * writes into the IDE's own folder, and with it off that folder is empty until the debugger's first build, so
+     * that the first test started after an import ran no test at all.
+     */
     @Test
-    void theSettingsRunTheLanguageServerOnTheJdkAndLeaveTheBuildToVidocqDev() {
+    void theSettingsLeaveTheAutomaticBuildToTheExtension() {
+        String settings = VscodeFiles.settings("/opt/jdk-25");
+
         assertEquals(VscodeFiles.MARKER + """
                 {
                   "java.jdt.ls.java.home": "/opt/jdk-25",
-                  "java.autobuild.enabled": false,
                   "java.configuration.updateBuildConfiguration": "automatic"
                 }
-                """, VscodeFiles.settings("/opt/jdk-25"));
+                """, settings);
+        assertFalse(settings.contains("java.autobuild.enabled"), settings);
     }
 
     @Test

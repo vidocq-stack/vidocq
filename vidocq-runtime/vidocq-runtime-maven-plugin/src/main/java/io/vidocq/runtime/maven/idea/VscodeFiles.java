@@ -27,9 +27,10 @@ import java.util.List;
  *
  * <ul>
  *   <li>The settings run the extension's language server on the build's JDK: it runs the annotation processors in its
- *   own JVM, and Vauban's are Java 25 class files, which the Java 21 the extension ships cannot load. They turn the
- *   extension's automatic build off: under {@code vidocq dev}, both would write {@code target/classes} on every save;
- *   the editor keeps its diagnostics and completion, and {@code vidocq dev} compiles.</li>
+ *   own JVM, and Vauban's are Java 25 class files, which the Java 21 the extension ships cannot load. They leave
+ *   the extension's automatic build as it is, on by default: the extension compiles an application into a folder of
+ *   its own ({@code IdeOutput}), not into {@code target/classes}, and with the build off that folder is empty until
+ *   the debugger's first build, so that the first test started after an import ran no test at all.</li>
  *   <li>The tasks run {@code vidocq:dev}, {@code vidocq:run} and {@code vidocq:test} of each application, through
  *   the Maven wrapper when the project has one.</li>
  *   <li>The launch configurations attach VS Code's debugger to the agent {@code vidocq:dev} starts.</li>
@@ -47,11 +48,10 @@ final class VscodeFiles {
     private VscodeFiles() {
     }
 
-    /** {@code settings.json}: the language server on {@code jdkHome}, no automatic build. */
+    /** {@code settings.json}: the language server on {@code jdkHome}, its build configuration kept up to date. */
     static String settings(String jdkHome) {
         return MARKER + "{\n"
                 + "  \"java.jdt.ls.java.home\": " + json(jdkHome) + ",\n"
-                + "  \"java.autobuild.enabled\": false,\n"
                 + "  \"java.configuration.updateBuildConfiguration\": \"automatic\"\n"
                 + "}\n";
     }

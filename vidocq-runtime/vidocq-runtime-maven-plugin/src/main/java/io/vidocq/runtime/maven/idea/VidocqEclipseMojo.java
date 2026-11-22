@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.idea;
 
+import io.vidocq.runtime.maven.IdeOutput;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 
@@ -35,8 +36,9 @@ import java.util.Map;
  * alone; one that does and that the goal no longer writes is removed. {@code -Dvidocq.eclipse.check=true} writes
  * nothing and fails when a file is missing or out of date.</p>
  *
- * <p>Eclipse keeps "Build automatically" per workspace, not per project, so the goal cannot turn it off as
- * {@code vidocq:vscode} does for VS Code: it says so.</p>
+ * <p>Eclipse keeps "Build automatically" per workspace, not per project, and no file of the goal sets it. It need
+ * not be off: read through m2e, an application compiles into a folder of its own ({@link IdeOutput}), and the goal
+ * says so.</p>
  */
 @Mojo(name = "eclipse",
       aggregator = true,
@@ -72,7 +74,7 @@ public class VidocqEclipseMojo extends IdeFilesMojo {
     @Override
     void after() {
         getLog().info(prefix() + "the configurations are under Run > Run Configurations once the project is imported"
-                + " (File > Import > Existing Maven Projects). Turn Project > Build Automatically off while vidocq:dev"
-                + " runs: both would write target/classes on every save. Eclipse keeps that setting per workspace.");
+                + " (File > Import > Existing Maven Projects). Eclipse compiles an application into "
+                + IdeOutput.DIRECTORY + "/ and leaves target/ to Maven.");
     }
 }
