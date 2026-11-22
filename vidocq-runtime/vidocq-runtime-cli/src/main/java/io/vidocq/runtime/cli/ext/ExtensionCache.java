@@ -47,8 +47,14 @@ import java.util.regex.Pattern;
  * A newer SNAPSHOT still sitting in the remote repository is not seen until something
  * fetches it — {@code vidocq extension list --refresh} forces a resolution.</p>
  *
+ * <p>An entry also records which resolved artifacts describe configuration keys, so that
+ * {@code vidocq doctor} reads their descriptions without opening every jar again: they change
+ * when the resolution does, and with a SNAPSHOT jar, which the fingerprints watch.</p>
+ *
  * <p>Pure apart from {@link #fingerprint(Path)}: the text format is
- * {@code key=value} lines, fields separated by {@code |}, the path always last.</p>
+ * {@code key=value} lines, fields separated by {@code |}, the path always last. The jars
+ * that describe keys are one {@code keyFiles=<count>} line then one {@code keyFile=<path>}
+ * line each: a text without that count, as an earlier version wrote, is not an entry.</p>
  */
 public final class ExtensionCache {
 
@@ -56,6 +62,8 @@ public final class ExtensionCache {
     private static final String RUNTIME_GROUP = "io.vidocq.runtime";
     private static final String APPLICATION_PARENT = "vidocq-runtime-parent";
     private static final String RUNTIME_BOM = "vidocq-runtime-bom";
+    private static final String KEY_FILES = "keyFiles";
+    private static final String KEY_FILE = "keyFile";
 
     /** A SNAPSHOT fetched from a remote repository resolves to {@code 1.0-20261001.204500-53}. */
     private static final Pattern TIMESTAMPED = Pattern.compile("-\\d{8}\\.\\d{6}-\\d+$");
@@ -63,13 +71,18 @@ public final class ExtensionCache {
     /** Size and modification time of a local-repository file, {@code null} when absent. */
     public record Fingerprint(Path file, long size, long lastModified) {}
 
-    /** What was resolved for a given {@code pom.xml}, and what it depends on. */
+    /**
+     * What was resolved for a given {@code pom.xml}, and what it depends on.
+     *
+     * @param described the files of the resolved artifacts that describe configuration keys, in resolution order
+     */
     public record Entry(String pomHash, List<Fingerprint> snapshots,
-                        List<ProjectExtensions.Installed> extensions) {
+                        List<ProjectExtensions.Installed> extensions, List<Path> described) {
         public Entry {
             Objects.requireNonNull(pomHash, "pomHash");
             snapshots = List.copyOf(snapshots);
             extensions = List.copyOf(extensions);
+            described = List.copyOf(described);
         }
     }
 
@@ -151,6 +164,10 @@ public final class ExtensionCache {
                     .append('|').append(a.groupId()).append('|').append(a.artifactId())
                     .append('|').append(a.version()).append('|').append(a.file()).append('\n');
         }
+        out.append(KEY_FILES).append('=').append(entry.described().size()).append('\n');
+        for (Path jar : entry.described()) {
+            out.append(KEY_FILE).append('=').append(jar).append('\n');
+        }
         return out.toString();
     }
 
@@ -159,6 +176,8 @@ public final class ExtensionCache {
         String pomHash = null;
         List<Fingerprint> snapshots = new ArrayList<>();
         List<ProjectExtensions.Installed> extensions = new ArrayList<>();
+        int keyFiles = -1;
+        List<Path> described = new ArrayList<>();
         try {
             for (String line : text.split("\\R")) {
                 int eq = line.indexOf('=');
@@ -182,14 +201,17 @@ public final class ExtensionCache {
                                 new ResolvedArtifact(f[2], f[3], f[4], Path.of(f[5])),
                                 Boolean.parseBoolean(f[1])));
                     }
+                    case KEY_FILES -> keyFiles = Integer.parseInt(value);
+                    case KEY_FILE -> described.add(Path.of(value));
                     default -> { return Optional.empty(); }
                 }
             }
         } catch (RuntimeException _) {
             return Optional.empty();
         }
-        return pomHash == null ? Optional.empty()
-                : Optional.of(new Entry(pomHash, snapshots, extensions));
+        // Without the count of the jars that describe keys, the text is of an earlier version, or was cut.
+        return pomHash == null || keyFiles != described.size() ? Optional.empty()
+                : Optional.of(new Entry(pomHash, snapshots, extensions, described));
     }
 
     private static boolean isSnapshot(String version) {

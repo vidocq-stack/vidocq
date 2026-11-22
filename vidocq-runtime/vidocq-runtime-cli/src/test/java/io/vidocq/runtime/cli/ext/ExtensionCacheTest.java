@@ -52,9 +52,48 @@ class ExtensionCacheTest {
 
     @Test
     void entrySurvivesARoundTrip() {
-        var entry = new ExtensionCache.Entry("abc", List.of(FP), List.of(CASSINI));
+        var entry = new ExtensionCache.Entry("abc", List.of(FP), List.of(CASSINI), List.of());
 
         assertEquals(Optional.of(entry), ExtensionCache.read(ExtensionCache.write(entry)));
+    }
+
+    @Test
+    void theJarsThatDescribeKeysSurviveARoundTripInTheirOrder() {
+        var entry = new ExtensionCache.Entry("abc", List.of(FP), List.of(CASSINI),
+                List.of(Path.of("/m2/b-1.0.jar"), Path.of("/m2/a=1|0.jar")));
+
+        String text = ExtensionCache.write(entry);
+
+        assertTrue(text.endsWith("keyFiles=2\nkeyFile=/m2/b-1.0.jar\nkeyFile=/m2/a=1|0.jar\n"), text);
+        assertEquals(Optional.of(entry), ExtensionCache.read(text));
+    }
+
+    @Test
+    void anEntryWithNoSuchJarSaysSo() {
+        var entry = new ExtensionCache.Entry("abc", List.of(), List.of(CASSINI), List.of());
+
+        assertTrue(ExtensionCache.write(entry).endsWith("keyFiles=0\n"), ExtensionCache.write(entry));
+        assertEquals(Optional.of(entry), ExtensionCache.read(ExtensionCache.write(entry)));
+    }
+
+    /** A cache written before the jars were recorded says nothing of them: the project is resolved again, once. */
+    @Test
+    void aCacheOfAnEarlierVersionIsAMiss() {
+        String earlier = "pomHash=abc\nsnapshot=10|1000|/m2/a-1.0-SNAPSHOT.jar\n"
+                + "extension=cassini-rest|true|g|a|0.4.0|/m2/cassini-0.4.0.jar\n";
+
+        assertTrue(ExtensionCache.read(earlier).isEmpty());
+        assertTrue(ExtensionCache.read(earlier + "keyFiles=0\n").isPresent());
+    }
+
+    @Test
+    void aCountThatDoesNotMatchTheJarsIsAMiss() {
+        assertTrue(ExtensionCache.read("pomHash=abc\nkeyFiles=2\nkeyFile=/m2/a.jar\n").isEmpty());
+        assertTrue(ExtensionCache.read("pomHash=abc\nkeyFiles=0\nkeyFile=/m2/a.jar\n").isEmpty());
+        assertTrue(ExtensionCache.read("pomHash=abc\nkeyFiles=two\n").isEmpty());
+        assertTrue(ExtensionCache.read("pomHash=abc\nkeyFile=/m2/a.jar\n").isEmpty());
+        assertEquals(Optional.of(new ExtensionCache.Entry("abc", List.of(), List.of(), List.of(Path.of("/m2/a.jar")))),
+                ExtensionCache.read("pomHash=abc\nkeyFiles=1\nkeyFile=/m2/a.jar\n"));
     }
 
     @Test
@@ -65,21 +104,21 @@ class ExtensionCacheTest {
 
     @Test
     void releaseOnlyEntryIsDefinitive() {
-        var entry = new ExtensionCache.Entry("abc", List.of(), List.of(CASSINI));
+        var entry = new ExtensionCache.Entry("abc", List.of(), List.of(CASSINI), List.of());
 
         assertTrue(ExtensionCache.isValid(entry, "abc", file -> null));
     }
 
     @Test
     void changedPomInvalidates() {
-        var entry = new ExtensionCache.Entry("abc", List.of(), List.of(CASSINI));
+        var entry = new ExtensionCache.Entry("abc", List.of(), List.of(CASSINI), List.of());
 
         assertFalse(ExtensionCache.isValid(entry, "def", file -> null));
     }
 
     @Test
     void snapshotIsValidOnlyWhileItsLocalFileIsUnchanged() {
-        var entry = new ExtensionCache.Entry("abc", List.of(FP), List.of(CASSINI));
+        var entry = new ExtensionCache.Entry("abc", List.of(FP), List.of(CASSINI), List.of());
 
         assertTrue(ExtensionCache.isValid(entry, "abc", file -> FP));
         assertFalse(ExtensionCache.isValid(entry, "abc",

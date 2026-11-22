@@ -26,12 +26,19 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -89,6 +96,94 @@ class CommandRunnerDoctorTest {
         assertEquals(0, doctor(dir.resolve("demo"), true, out));
 
         assertTrue(out.toString().contains("Nothing to fix."), out.toString());
+    }
+
+    /** A project created healthy, whose {@code vidocq.properties} gives {@code vidocq.sample.port} this value. */
+    private static Path sampleProject(Path dir, String value) throws IOException {
+        CommandRunner.runCreate(new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo",
+                Set.of("cassini-rest"), null, false)), dir);
+        Path config = dir.resolve("demo/src/main/resources/vidocq.properties");
+        Files.createDirectories(config.getParent());
+        Files.writeString(config, "\nvidocq.sample.port=" + value + "\n",
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        return dir.resolve("demo");
+    }
+
+    /** A jar that describes {@code vidocq.sample.port} as an int. */
+    private static Path sampleJar(Path dir) throws IOException {
+        Path jar = dir.resolve("sample.jar");
+        try (OutputStream out = Files.newOutputStream(jar); ZipOutputStream zip = new ZipOutputStream(out)) {
+            zip.putNextEntry(new ZipEntry("META-INF/vidocq/config-user-keys.properties"));
+            zip.write("format=1\nvidocq.sample.port|type=int\n".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        return jar;
+    }
+
+    private static int doctor(Path project, StringBuilder out, Supplier<DoctorFacts.Extensions> extensions) {
+        int[] exit = new int[1];
+        out.append(captured(() -> exit[0] = CommandRunner.runDoctor(new Command.Doctor(false, false), project,
+                extensions)));
+        return exit[0];
+    }
+
+    @Test
+    void aValueThatIsNotOfTheTypeOfItsKeyIsAWarningAndNotAFailure(@TempDir Path dir) throws IOException {
+        Path project = sampleProject(dir, "eighty");
+        Path jar = sampleJar(dir);
+        AtomicInteger asked = new AtomicInteger();
+        StringBuilder out = new StringBuilder();
+
+        int exit = doctor(project, out, () -> {
+            asked.incrementAndGet();
+            return DoctorFacts.Extensions.found(1, List.of(jar));
+        });
+
+        assertEquals(0, exit, out.toString());
+        assertTrue(out.toString().contains("Key descriptions  1 file, 1 key described"), out.toString());
+        assertTrue(out.toString().contains("Config values     vidocq.sample.port=eighty — is not an int"),
+                out.toString());
+        assertTrue(out.toString().contains("sample.jar!/META-INF/vidocq/config-user-keys.properties:2"),
+                out.toString());
+        assertEquals(1, asked.get(), "the extensions are resolved once, for the count and for the class path");
+    }
+
+    @Test
+    void theValuesOfTheDescribedKeysThatFitAreCounted(@TempDir Path dir) throws IOException {
+        Path project = sampleProject(dir, "80");
+        Path jar = sampleJar(dir);
+        StringBuilder out = new StringBuilder();
+
+        assertEquals(0, doctor(project, out, () -> DoctorFacts.Extensions.found(1, List.of(jar))), out.toString());
+
+        assertTrue(out.toString().contains("Config values     1 described key, every value fits"), out.toString());
+    }
+
+    @Test
+    void aProjectWhoseExtensionsCouldNotBeResolvedHasNoDescriptionToCheck(@TempDir Path dir) throws IOException {
+        Path project = sampleProject(dir, "eighty");
+        StringBuilder out = new StringBuilder();
+
+        doctor(project, out, () -> DoctorFacts.Extensions.failed("Maven exited with code 1"));
+
+        assertTrue(out.toString().contains("no jar of the project describes its configuration keys"), out.toString());
+        assertFalse(out.toString().contains("is not an int"), out.toString());
+    }
+
+    @Test
+    void aDirectoryThatIsNoVidocqProjectResolvesNothing(@TempDir Path dir) {
+        AtomicInteger asked = new AtomicInteger();
+        StringBuilder out = new StringBuilder();
+
+        doctor(dir, out, () -> {
+            asked.incrementAndGet();
+            return DoctorFacts.Extensions.found(1);
+        });
+
+        assertEquals(0, asked.get());
+        assertTrue(out.toString().contains("Key descriptions  no jar of the project describes its configuration keys"),
+                out.toString());
+        assertTrue(out.toString().contains("Config values     no described key in vidocq.properties"), out.toString());
     }
 
     private static String captured(Runnable action) {

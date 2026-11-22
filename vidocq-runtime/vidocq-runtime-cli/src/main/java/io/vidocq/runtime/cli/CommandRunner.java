@@ -44,6 +44,7 @@ import io.vidocq.runtime.tooling.Diagnostic;
 import io.vidocq.runtime.tooling.Diagnostics;
 import io.vidocq.runtime.tooling.DoctorFacts;
 import io.vidocq.runtime.tooling.ExtensionEditor;
+import io.vidocq.runtime.tooling.KeyDoctor;
 import io.vidocq.runtime.tooling.KnownExtensions;
 import io.vidocq.runtime.tooling.ProjectDoctor;
 import io.vidocq.runtime.tooling.PropertiesText;
@@ -60,6 +61,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 /**
@@ -188,7 +190,7 @@ public final class CommandRunner {
                 }
                 yield 1;
             }
-            case ProjectExtensions.Resolution.Resolved(var extensions, var cached) -> {
+            case ProjectExtensions.Resolution.Resolved(var extensions, var _, var cached) -> {
                 if (extensions.isEmpty()) {
                     CliOutput.println(CliOutput.dim(
                             "  (none — add one with 'vidocq extension add <id>')"));
@@ -229,12 +231,17 @@ public final class CommandRunner {
     private static int runDoctor(Command.Doctor doctor) {
         Path cwd = Path.of("").toAbsolutePath();
         return runDoctor(doctor, cwd, () -> switch (resolveProjectExtensions(cwd, false)) {
-            case ProjectExtensions.Resolution.Resolved r -> DoctorFacts.Extensions.found(r.extensions().size());
+            case ProjectExtensions.Resolution.Resolved r ->
+                    DoctorFacts.Extensions.found(r.extensions().size(), r.described());
             case ProjectExtensions.Resolution.Failed f   -> DoctorFacts.Extensions.failed(f.reason());
         });
     }
 
-    /** {@code vidocq doctor} on the project in {@code dir}, whose extensions {@code extensions} counts. */
+    /**
+     * {@code vidocq doctor} on the project in {@code dir}. {@code extensions} counts its extensions and gives the
+     * jars to read the descriptions of the configuration keys from: it is asked once at most, and only for a
+     * Vidocq project, as it may run Maven.
+     */
     static int runDoctor(Command.Doctor doctor, Path dir, Supplier<DoctorFacts.Extensions> extensions) {
         CliOutput.println(CliOutput.bold("Vidocq doctor — environment & project checks"));
         CliOutput.println();
@@ -242,9 +249,16 @@ public final class CommandRunner {
             fixProject(dir);
         }
 
+        // What the supplier answered, when the facts asked it: the checks of the keys read the same class path.
+        AtomicReference<DoctorFacts.Extensions> resolved = new AtomicReference<>();
         List<Diagnostic> diagnostics = new ArrayList<>(Diagnostics.run(
-                DoctorFacts.gather(dir, System.getenv("JAVA_HOME"), extensions)));
+                DoctorFacts.gather(dir, System.getenv("JAVA_HOME"), () -> {
+                    resolved.set(extensions.get());
+                    return resolved.get();
+                })));
         diagnostics.addAll(ProjectDoctor.check(ProjectDoctor.read(dir, DoctorFacts::portFree)));
+        List<Path> classPath = resolved.get() == null ? List.of() : resolved.get().classPath();
+        diagnostics.addAll(KeyDoctor.check(KeyDoctor.read(dir, classPath)));
         diagnostics.forEach(d -> printDiagnostic(d, doctor.verbose()));
 
         int exit = Diagnostics.exitCode(diagnostics);
@@ -828,7 +842,7 @@ public final class CommandRunner {
         if (!refresh) {
             var cached = ProjectExtensions.fromCache(cwd, cacheFile);
             if (cached.isPresent()) {
-                return new ProjectExtensions.Resolution.Resolved(cached.get(), true);
+                return cached.get();
             }
         }
         CliOutput.println(CliOutput.dim("  resolving the project's runtime dependencies with Maven…"));

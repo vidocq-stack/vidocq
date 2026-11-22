@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import io.vidocq.runtime.config.keys.KeyFiles;
 import io.vidocq.runtime.tooling.ExtensionCoordinate;
 import io.vidocq.runtime.tooling.ExtensionJars;
 import io.vidocq.runtime.tooling.KnownExtensions;
@@ -54,8 +55,18 @@ public final class ProjectExtensions {
 
     /** Outcome of {@link #resolve(Path, String)}: the extensions, or why Maven failed. */
     public sealed interface Resolution {
-        /** {@code cached}: served by {@link #fromCache} without running Maven. */
-        record Resolved(List<Installed> extensions, boolean cached) implements Resolution {}
+        /**
+         * @param extensions the extensions on the runtime class path
+         * @param described  the files of the resolved artifacts that describe configuration keys, in resolution
+         *                   order: what {@code vidocq doctor} reads the descriptions from
+         * @param cached     served by {@link #fromCache} without running Maven
+         */
+        record Resolved(List<Installed> extensions, List<Path> described, boolean cached) implements Resolution {
+            public Resolved {
+                extensions = List.copyOf(extensions);
+                described = List.copyOf(described);
+            }
+        }
 
         /**
          * @param reason      one-line cause
@@ -67,10 +78,10 @@ public final class ProjectExtensions {
     private ProjectExtensions() {}
 
     /**
-     * The extensions recorded in {@code cacheFile} for the project in {@code projectDir},
-     * when {@link ExtensionCache#isValid} still holds — no Maven involved.
+     * What {@code cacheFile} recorded for the project in {@code projectDir}, when
+     * {@link ExtensionCache#isValid} still holds — no Maven involved.
      */
-    public static Optional<List<Installed>> fromCache(Path projectDir, Path cacheFile) {
+    public static Optional<Resolution.Resolved> fromCache(Path projectDir, Path cacheFile) {
         try {
             if (!Files.isRegularFile(cacheFile)) {
                 return Optional.empty();
@@ -78,7 +89,7 @@ public final class ProjectExtensions {
             String pomHash = ExtensionCache.hash(Files.readString(projectDir.resolve(POM_XML)));
             return ExtensionCache.read(Files.readString(cacheFile))
                     .filter(e -> ExtensionCache.isValid(e, pomHash, ExtensionCache::fingerprint))
-                    .map(ExtensionCache.Entry::extensions);
+                    .map(e -> new Resolution.Resolved(e.extensions(), e.described(), true));
         } catch (IOException _) {
             return Optional.empty();
         }
@@ -104,7 +115,7 @@ public final class ProjectExtensions {
                 }
                 Files.createDirectories(cacheFile.getParent());
                 Files.writeString(cacheFile, ExtensionCache.write(new ExtensionCache.Entry(
-                        ExtensionCache.hash(pomXml), snapshots, r.extensions())));
+                        ExtensionCache.hash(pomXml), snapshots, r.extensions(), r.described())));
             } catch (IOException | IllegalArgumentException _) {
                 // best effort: the next run resolves again
             }
@@ -140,7 +151,7 @@ public final class ProjectExtensions {
             List<ResolvedArtifact> resolved = DependencyList.parse(Files.readString(output));
             List<ExtensionCoordinate> declared = PomDependencies.parse(Files.readString(pom));
             resolvedOut.addAll(resolved);
-            return new Resolution.Resolved(detect(resolved, declared), false);
+            return new Resolution.Resolved(detect(resolved, declared), described(resolved), false);
         } catch (IOException | IllegalArgumentException e) {
             return new Resolution.Failed(String.valueOf(e.getMessage()), "");
         } catch (InterruptedException _) {
@@ -166,6 +177,14 @@ public final class ProjectExtensions {
             }
         }
         return result;
+    }
+
+    /**
+     * The files of {@code resolved} that describe configuration keys, in resolution order: a jar that ships
+     * {@code META-INF/vidocq/config-user-keys.properties} or {@code config-keys.properties}.
+     */
+    public static List<Path> described(List<ResolvedArtifact> resolved) {
+        return resolved.stream().map(ResolvedArtifact::file).filter(KeyFiles::present).toList();
     }
 
     private static String lastLines(Path log) {

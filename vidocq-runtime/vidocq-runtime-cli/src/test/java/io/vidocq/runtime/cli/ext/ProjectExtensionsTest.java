@@ -31,6 +31,7 @@ import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.ModuleDesc;
 import java.lang.reflect.AccessFlag;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -87,13 +88,28 @@ class ProjectExtensionsTest {
         Files.writeString(cacheFile, ExtensionCache.write(new ExtensionCache.Entry(
                 ExtensionCache.hash("<project/>"),
                 List.of(ExtensionCache.fingerprint(snapshotJar)),
-                List.of(installed))));
+                List.of(installed), List.of(dir.resolve("described.jar")))));
 
-        assertEquals(java.util.Optional.of(List.of(installed)),
+        assertEquals(java.util.Optional.of(new ProjectExtensions.Resolution.Resolved(
+                        List.of(installed), List.of(dir.resolve("described.jar")), true)),
                 ProjectExtensions.fromCache(project, cacheFile));
 
         Files.writeString(snapshotJar, "v2, re-downloaded");
         assertTrue(ProjectExtensions.fromCache(project, cacheFile).isEmpty());
+    }
+
+    @Test
+    void theArtifactsThatDescribeConfigurationKeysAreKeptInResolutionOrder() throws IOException {
+        byte[] keys = "format=1\nacme.port|type=int\n".getBytes(StandardCharsets.UTF_8);
+        Path generated = jar("generated.jar", Map.of("META-INF/vidocq/config-keys.properties", keys));
+        Path plain = jar("plain.jar", Map.of("x/Y.class", new byte[0]));
+        Path written = jar("written.jar", Map.of("META-INF/vidocq/config-user-keys.properties", keys));
+
+        assertEquals(List.of(generated, written), ProjectExtensions.described(List.of(
+                new ResolvedArtifact("g", "generated", "1.0", generated),
+                new ResolvedArtifact("g", "plain", "1.0", plain),
+                new ResolvedArtifact("g", "missing", "1.0", dir.resolve("missing.jar")),
+                new ResolvedArtifact("g", "written", "1.0", written))));
     }
 
     private Path namedModuleJar(String name, String module, String clazz, boolean provides)
