@@ -23,10 +23,15 @@ import org.apache.maven.AbstractMavenLifecycleParticipant;
 import org.apache.maven.execution.DefaultMavenExecutionRequest;
 import org.apache.maven.execution.DefaultMavenExecutionResult;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.Build;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.w3c.dom.Element;
 
 import java.lang.classfile.ClassFile;
@@ -34,10 +39,13 @@ import java.lang.classfile.ClassModel;
 import java.lang.classfile.constantpool.ClassEntry;
 import java.lang.classfile.constantpool.PoolEntry;
 import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -46,6 +54,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** How Maven finds the participant, and what it does to the projects of a session (Vidocq/vidocq#339). */
 class CodegenPathsParticipantTest {
+
+    @TempDir
+    Path dir;
 
     /**
      * A Plexus descriptor, not a Sisu index: Maven 3.9.9 reads an index with an ASM that does not know Java 25 class
@@ -143,11 +154,155 @@ class CodegenPathsParticipantTest {
                 String.valueOf(project.getContextValue(ApplicationBuild.CONTEXT_KEY)));
     }
 
-    /** A session of {@code projects}, which is all the participant reads. */
-    @SuppressWarnings("deprecation")
+    /**
+     * Read by m2e, which sets {@code m2e.version} on its session, every project compiles into a folder of its own,
+     * the application that declares the plugin and the library next to it ({@link IdeOutput}).
+     */
+    @Test
+    void anIdeGetsItsOwnOutputFolderForEveryProjectOfTheSession() {
+        MavenProject application = project("todo", true);
+        MavenProject library = project("todo-model", false);
+        Properties user = new Properties();
+        user.setProperty("m2e.version", "2.8.0");
+
+        new CodegenPathsParticipant().afterProjectsRead(session(List.of(application, library), user, new Properties()));
+
+        assertEquals(dir.resolve("todo/target-ide/classes").toString(), application.getBuild().getOutputDirectory());
+        assertEquals(dir.resolve("todo-model/target-ide/classes").toString(), library.getBuild().getOutputDirectory());
+        assertEquals(dir.resolve("todo-model/target-ide/test-classes").toString(),
+                library.getBuild().getTestOutputDirectory());
+        assertEquals(dir.resolve("todo-model/target-ide").toString(), library.getBuild().getDirectory());
+    }
+
+    @Test
+    void alsoWhenTheSystemPropertiesCarryIt() {
+        MavenProject application = project("todo", true);
+        Properties system = new Properties();
+        system.setProperty("m2e.version", "2.8.0");
+
+        new CodegenPathsParticipant().afterProjectsRead(session(List.of(application), new Properties(), system));
+
+        assertEquals(dir.resolve("todo/target-ide/classes").toString(), application.getBuild().getOutputDirectory());
+    }
+
+    /** A Maven build, on the command line, in CI or started from an IDE, builds where it always did. */
+    @Test
+    void theCommandLineKeepsMavensFolders() {
+        MavenProject application = project("todo", true);
+        String output = dir.resolve("todo/target/classes").toString();
+        application.getBuild().setOutputDirectory(output);
+
+        new CodegenPathsParticipant().afterProjectsRead(session(List.of(application)));
+
+        assertEquals(output, application.getBuild().getOutputDirectory());
+        assertFalse(Files.exists(dir.resolve("todo/target-ide")));
+    }
+
+    /** IntelliJ IDEA's import runs the participant and names itself otherwise: its output folders are its own. */
+    @Test
+    void intelliJsImportKeepsMavensFolders() {
+        MavenProject application = project("todo", true);
+        String output = dir.resolve("todo/target/classes").toString();
+        application.getBuild().setOutputDirectory(output);
+        Properties idea = new Properties();
+        idea.setProperty("idea.version", "2026.3");
+        idea.setProperty("idea.maven.embedder.version", "2026.3");
+
+        new CodegenPathsParticipant().afterProjectsRead(session(List.of(application), idea, idea));
+
+        assertEquals(output, application.getBuild().getOutputDirectory());
+        assertFalse(Files.exists(dir.resolve("todo/target-ide")));
+    }
+
+    /**
+     * What the participant adds to a project without the parent is evaluated when a goal runs, so it follows the
+     * folder: a configuration that named Maven's folder by its path would send the IDE back into it.
+     */
+    @Test
+    void nothingTheParticipantAddsNamesMavensFolder() {
+        MavenProject application = project("todo", true);
+        application.getBuild().addPlugin(plugin("org.apache.maven.plugins", "maven-compiler-plugin"));
+        application.getBuild().addPlugin(plugin("org.apache.maven.plugins", "maven-surefire-plugin"));
+        Properties user = new Properties();
+        user.setProperty("m2e.version", "2.8.0");
+
+        new CodegenPathsParticipant().afterProjectsRead(session(List.of(application), user, new Properties()));
+
+        assertNotNull(application.getContextValue(ApplicationBuild.CONTEXT_KEY), "the build was not completed");
+        assertEquals(dir.resolve("todo/target-ide").toString(), application.getBuild().getDirectory());
+        String mavens = dir.resolve("todo/target").toString();
+        List<String> named = new ArrayList<>();
+        for (Plugin plugin : application.getBuild().getPlugins()) {
+            collect(plugin.getConfiguration(), plugin.getArtifactId(), mavens, named);
+            for (PluginExecution execution : plugin.getExecutions()) {
+                collect(execution.getConfiguration(), plugin.getArtifactId() + "#" + execution.getId(), mavens, named);
+            }
+        }
+        application.getProperties().forEach((name, value) -> {
+            if (names(String.valueOf(value), mavens)) {
+                named.add("property " + name + "=" + value);
+            }
+        });
+        assertEquals(List.of(), named);
+    }
+
+    /** Whether {@code value} holds the folder {@code mavens}, and not one whose name only starts as it does. */
+    private static boolean names(String value, String mavens) {
+        return value.endsWith(mavens) || value.contains(mavens + File.separator) || value.contains(mavens + "/");
+    }
+
+    private static void collect(Object configuration, String where, String mavens, List<String> named) {
+        if (configuration instanceof Xpp3Dom dom) {
+            if (dom.getValue() != null && names(dom.getValue(), mavens)) {
+                named.add(where + " " + dom.getName() + "=" + dom.getValue());
+            }
+            for (String attribute : dom.getAttributeNames()) {
+                if (names(dom.getAttribute(attribute), mavens)) {
+                    named.add(where + " " + dom.getName() + "@" + attribute + "=" + dom.getAttribute(attribute));
+                }
+            }
+            for (Xpp3Dom child : dom.getChildren()) {
+                collect(child, where, mavens, named);
+            }
+        }
+    }
+
+    /** A project read from {@code dir/<artifactId>/pom.xml}, with the plugin as a build extension or without it. */
+    private MavenProject project(String artifactId, boolean withThePlugin) {
+        Model model = new Model();
+        model.setGroupId("com.example");
+        model.setArtifactId(artifactId);
+        model.setPackaging("jar");
+        model.setBuild(new Build());
+        if (withThePlugin) {
+            Plugin vidocq = plugin("io.vidocq.runtime", "vidocq-runtime-maven-plugin");
+            vidocq.setExtensions(true);
+            model.getBuild().addPlugin(vidocq);
+        }
+        MavenProject project = new MavenProject(model);
+        project.setFile(dir.resolve(artifactId).resolve("pom.xml").toFile());
+        return project;
+    }
+
+    private static Plugin plugin(String groupId, String artifactId) {
+        Plugin plugin = new Plugin();
+        plugin.setGroupId(groupId);
+        plugin.setArtifactId(artifactId);
+        return plugin;
+    }
+
+    /** A session of {@code projects} as the command line gives it: no property of an IDE. */
     private static MavenSession session(List<MavenProject> projects) {
-        MavenSession session = new MavenSession(null, null, new DefaultMavenExecutionRequest(),
-                new DefaultMavenExecutionResult());
+        return session(projects, new Properties(), new Properties());
+    }
+
+    /** A session of {@code projects} and of the properties the participant reads, which is all it reads. */
+    @SuppressWarnings("deprecation")
+    private static MavenSession session(List<MavenProject> projects, Properties user, Properties system) {
+        DefaultMavenExecutionRequest request = new DefaultMavenExecutionRequest();
+        request.setUserProperties(user);
+        request.setSystemProperties(system);
+        MavenSession session = new MavenSession(null, null, request, new DefaultMavenExecutionResult());
         session.setProjects(projects);
         return session;
     }
