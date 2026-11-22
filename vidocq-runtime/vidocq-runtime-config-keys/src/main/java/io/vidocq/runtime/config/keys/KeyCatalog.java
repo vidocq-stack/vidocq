@@ -218,10 +218,8 @@ public final class KeyCatalog {
 
         private static KeyDescription description(KeyPattern pattern, Facts facts) {
             Map<Attribute, Fact> kept = new EnumMap<>(facts.kept);
-            Fact first = kept.get(Attribute.VALUES);
-            if (first != null) {
-                kept.put(Attribute.VALUES, new Fact(String.join(",", facts.items), first.origin(), first.line()));
-            }
+            kept.computeIfPresent(Attribute.VALUES,
+                    (_, first) -> new Fact(String.join(",", facts.items), first.origin(), first.line()));
             return new KeyDescription(pattern, kept);
         }
 

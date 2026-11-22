@@ -270,6 +270,34 @@ class KeyDescriptionsTest {
     }
 
     @Test
+    void a_type_name_of_very_many_segments_is_read_and_does_not_overflow_the_reader() {
+        String type = "a.".repeat(200_000) + "B";
+
+        KeyDescriptions file = read("format=1", "a.b|type=" + type);
+
+        assertEquals(List.of(), file.problems());
+        assertEquals(type, file.keys().getFirst().type());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"java.net.URI", "a.B", "_a.$b.C1", "com.acme.Outer$Inner"})
+    void a_qualified_java_type_name_is_a_type(String type) {
+        KeyDescriptions file = read("format=1", "a.b|type=" + type);
+
+        assertEquals(List.of(), file.problems());
+        assertEquals(type, file.keys().getFirst().type());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"URI", "java..URI", ".java.URI", "java.URI.", "java.1a.URI", "java.net.U-RI",
+            "java net.URI"})
+    void what_is_not_a_qualified_java_type_name_is_not_a_type(String type) {
+        KeyDescriptions file = read("format=1", "a.b|type=" + type);
+
+        assertEquals(Problem.Kind.WRONG, onlyProblem(file).kind());
+    }
+
+    @Test
     void a_colon_and_white_space_are_fine_in_a_value() {
         KeyDescriptions file = read("format=1", "a.b|doc=Note: one of a, b.");
 

@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -113,7 +114,7 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
         private static final Pattern ATTRIBUTE = Pattern.compile("[a-z][a-z0-9-]*");
         private static final Pattern BREAKS_A_PROPERTIES_KEY = Pattern.compile("[\\s:]");
         private static final Pattern SEGMENT = Pattern.compile("[^<>\\[\\]*|\"\\s.=]+");
-        private static final Pattern JAVA_TYPE = Pattern.compile("[A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)+");
+        private static final Pattern JAVA_NAME = Pattern.compile("[A-Za-z_$][\\w$]*");
         private static final Set<String> TYPES = Set.of("string", "boolean", "int", "long", "double", "duration");
         private static final String LIST = "list:";
 
@@ -212,7 +213,7 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
             int format;
             try {
                 format = Integer.parseInt(value);
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException _) {
                 format = 0;
             }
             if (format < 1) {
@@ -280,7 +281,16 @@ public record KeyDescriptions(String origin, List<KeyDescription> keys, List<Key
             if (listAllowed && type.startsWith(LIST)) {
                 return isType(type.substring(LIST.length()), false);
             }
-            return TYPES.contains(type) || JAVA_TYPE.matcher(type).matches();
+            return TYPES.contains(type) || qualifiedJavaName(type);
+        }
+
+        /**
+         * Whether a text is Java names separated by dots, two at least. Read name by name: one expression
+         * for the whole text repeats a group, and overflows the stack on a text of thousands of names.
+         */
+        private static boolean qualifiedJavaName(String text) {
+            String[] names = text.split("\\.", -1);
+            return names.length > 1 && Arrays.stream(names).allMatch(name -> JAVA_NAME.matcher(name).matches());
         }
 
         private static boolean isCondition(String condition) {

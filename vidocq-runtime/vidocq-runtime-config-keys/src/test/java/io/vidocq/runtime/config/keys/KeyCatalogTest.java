@@ -20,6 +20,7 @@
 package io.vidocq.runtime.config.keys;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -330,8 +331,9 @@ class KeyCatalogTest {
 
     @Test
     void a_jar_has_its_two_files_or_none() {
-        org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
-                () -> new KeyCatalog.Jar(null, KeyDescriptions.none()));
+        KeyDescriptions none = KeyDescriptions.none();
+
+        assertThrows(NullPointerException.class, () -> new KeyCatalog.Jar(null, none));
     }
 
     @Test

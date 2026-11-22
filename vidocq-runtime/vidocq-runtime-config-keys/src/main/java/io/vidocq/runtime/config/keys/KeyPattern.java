@@ -104,16 +104,16 @@ public final class KeyPattern {
             if (part.length() > 4 && part.startsWith("[<") && part.endsWith(">]")) {
                 return new Name(family(pattern, part.substring(2, part.length() - 2)), true);
             }
-            throw refused(pattern, "the segment '" + part + "' is not an optional name, written [<family>]");
+            throw refusedSegment(pattern, part, "is not an optional name, written [<family>]");
         }
         if (part.startsWith("<")) {
             if (part.length() > 2 && part.endsWith(">")) {
                 return new Name(family(pattern, part.substring(1, part.length() - 1)), false);
             }
-            throw refused(pattern, "the segment '" + part + "' is not a name, written <family>");
+            throw refusedSegment(pattern, part, "is not a name, written <family>");
         }
         if (!LITERAL.matcher(part).matches()) {
-            throw refused(pattern, "the segment '" + part + "' holds a character a key segment cannot hold");
+            throw refusedSegment(pattern, part, "holds a character a key segment cannot hold");
         }
         return new Literal(part);
     }
@@ -123,6 +123,10 @@ public final class KeyPattern {
             throw refused(pattern, "'" + family + "' is not the name of a family: letters, digits, '-' and '_'");
         }
         return family;
+    }
+
+    private static IllegalArgumentException refusedSegment(String pattern, String part, String why) {
+        return refused(pattern, "the segment '" + part + "' " + why);
     }
 
     private static IllegalArgumentException refused(String pattern, String why) {
@@ -180,8 +184,8 @@ public final class KeyPattern {
             case Tail _ -> part < parts.size()
                     ? Optional.of(new Match(so.names(), so.literals(), so.named(), so.absent(), true))
                     : Optional.empty();
-            case Literal literal -> part < parts.size() && !parts.get(part).quoted()
-                    && parts.get(part).text().equals(literal.text())
+            case Literal(String literal) -> part < parts.size() && !parts.get(part).quoted()
+                    && parts.get(part).text().equals(literal)
                     ? match(at + 1, parts, part + 1,
                             new Match(so.names(), so.literals() + 1, so.named(), so.absent(), false))
                     : Optional.empty();
@@ -214,25 +218,33 @@ public final class KeyPattern {
         List<Part> parts = new ArrayList<>();
         int at = 0;
         while (at <= key.length()) {
-            int end;
-            if (at < key.length() && key.charAt(at) == '"') {
-                int quote = key.indexOf('"', at + 1);
-                if (quote < 0 || quote == at + 1 || (quote + 1 < key.length() && key.charAt(quote + 1) != '.')) {
-                    return List.of();
-                }
-                parts.add(new Part(key.substring(at + 1, quote), true));
-                end = quote + 1;
-            } else {
-                end = key.indexOf('.', at);
-                end = end < 0 ? key.length() : end;
-                if (end == at) {
-                    return List.of();
-                }
-                parts.add(new Part(key.substring(at, end), false));
+            boolean quoted = at < key.length() && key.charAt(at) == '"';
+            int end = quoted ? endOfQuoted(key, at) : endOfPlain(key, at);
+            if (end < 0) {
+                return List.of();
             }
+            String segment = quoted ? key.substring(at + 1, end - 1) : key.substring(at, end);
+            parts.add(new Part(segment, quoted));
             at = end + 1;
         }
         return parts;
+    }
+
+    /**
+     * Where the quoted segment that starts at {@code at} ends, after its closing quote; negative when it is
+     * empty, not closed, or followed by something else than a dot.
+     */
+    private static int endOfQuoted(String key, int at) {
+        int quote = key.indexOf('"', at + 1);
+        boolean closed = quote > at + 1 && (quote + 1 == key.length() || key.charAt(quote + 1) == '.');
+        return closed ? quote + 1 : -1;
+    }
+
+    /** Where the segment that starts at {@code at} ends, at its dot or at the end of the key; negative when empty. */
+    private static int endOfPlain(String key, int at) {
+        int dot = key.indexOf('.', at);
+        int end = dot < 0 ? key.length() : dot;
+        return end == at ? -1 : end;
     }
 
     @Override
