@@ -160,7 +160,7 @@ class NoetherPersistencePanelModulePathTest {
 
     @Test
     void theDropdownOffersEveryUnitOfTheBoot() {
-        assertEquals(Set.of("ledger", ARCHIVE, "catalog", "journal", DRAFTS),
+        assertEquals(Set.of("ledger", ARCHIVE, "catalog", "journal", DRAFTS, "receipts", "vouchers"),
                 Set.copyOf(action("model").arguments().getFirst().allowedValues()));
     }
 
@@ -183,7 +183,7 @@ class NoetherPersistencePanelModulePathTest {
                 .orElseThrow(() -> new AssertionError("no language " + language.group(1))).json();
         assertTrue(json.contains("\"Draft\""), json);
         assertFalse(json.contains("\"Note\""), json);
-        assertEquals(5, panel.languages().size(), "a language per unit");
+        assertEquals(7, panel.languages().size(), "a language per unit");
     }
 
     @Test

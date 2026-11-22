@@ -42,6 +42,22 @@
         </properties>
     </persistence-unit>
     <!--
+        Two units whose factory the application creates itself, with Persistence.createEntityManagerFactory
+        (Vidocq/vidocq#676): each names the pool `notes`, and the runtime hands Noether that pool, enlisting in the
+        current transaction for the JTA unit. The schema action comes from the test, so the factories the container
+        creates at the start touch no table.
+    -->
+    <persistence-unit name="receipts" transaction-type="JTA">
+        <jta-data-source>notes</jta-data-source>
+        <class>io.vidocq.runtime.it.noether.Receipt</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+    </persistence-unit>
+    <persistence-unit name="vouchers" transaction-type="RESOURCE_LOCAL">
+        <non-jta-data-source>notes</non-jta-data-source>
+        <class>io.vidocq.runtime.it.noether.Voucher</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+    </persistence-unit>
+    <!--
         Another provider than Noether (Jakarta Persistence 3.2, §9.1): the runtime hands the unit to that provider's
         createContainerEntityManagerFactory, on the named pool `notes`.
     -->

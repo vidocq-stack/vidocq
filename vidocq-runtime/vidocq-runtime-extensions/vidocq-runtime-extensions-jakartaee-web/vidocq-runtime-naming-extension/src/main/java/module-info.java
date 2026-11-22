@@ -25,6 +25,11 @@
 module io.vidocq.runtime.extensions.jakartaee.web.naming {
     requires transitive io.vidocq.vauban.naming;
     requires io.vidocq.runtime.spi;
+    // The pools answer java:comp/DefaultDataSource and java:comp/env/<name> (PoolNames).
+    requires java.sql;
+    // Optional: with transactions, a pool answers its name through Mansart's JtaDataSource (Enlisting).
+    requires static io.vidocq.mansart.transactions.jdbc;
+    requires static jakarta.transaction;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.naming.NamingExtension;

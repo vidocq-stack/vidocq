@@ -28,6 +28,7 @@ import io.vidocq.noether.jpa.core.bootstrap.PersistenceUnits;
 import io.vidocq.noether.jpa.core.bootstrap.UnitSettings;
 import io.vidocq.noether.jpa.core.generation.IdGenerators;
 import io.vidocq.noether.jpa.core.jdbc.ConnectionSources;
+import io.vidocq.noether.jpa.core.jdbc.NamedDataSources;
 import io.vidocq.noether.jpa.core.mapping.MappedUnit;
 import io.vidocq.noether.jpa.core.model.source.ClassFileSource;
 import io.vidocq.noether.jpa.core.model.source.ClassInfos;
@@ -104,6 +105,7 @@ public final class NoetherPersistenceProvider implements PersistenceProvider {
     }
 
     private static void generateSchema(UnitSettings settings, ClassLoader loader) {
+        settings = NamedDataSources.resolve(settings);
         MappedUnit mapping = mapping(settings, loader);
         var connections = ConnectionSources.of(settings, loader);
         try {
@@ -163,7 +165,7 @@ public final class NoetherPersistenceProvider implements PersistenceProvider {
     }
 
     private static EntityManagerFactory build(UnitSettings settings, ClassLoader loader) {
-        settings = withTransactionIntegration(settings, loader);
+        settings = withTransactionIntegration(NamedDataSources.resolve(settings), loader);
         if (settings.transactionType() == PersistenceUnitTransactionType.JTA
                 && !(settings.property(TransactionIntegration.PROPERTY) instanceof TransactionIntegration)) {
             throw new PersistenceException("Persistence unit " + settings.unitName() + " is JTA and no transaction bridge "

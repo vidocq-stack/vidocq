@@ -42,8 +42,8 @@ import javax.sql.DataSource;
 /**
  * Builds the {@link ConnectionSource} of a resource-local unit, in this order (§8.2.1.5, §8.2.1.9): a
  * {@link DataSource} object given as {@code jakarta.persistence.nonJtaDataSource} or {@code jakarta.persistence.dataSource},
- * then the {@code jakarta.persistence.jdbc.*} properties. A data source <em>name</em> needs JNDI, which Java SE
- * does not have: it is refused with a message saying what to do instead.
+ * then the {@code jakarta.persistence.jdbc.*} properties. A data source <em>name</em> that JNDI did
+ * not turn into an object ({@link NamedDataSources}) is refused with a message saying what to do instead.
  *
  * <p>Decision D7: the connections of a {@code jakarta.persistence.jdbc.*} unit come from a pool when the application
  * has a {@link ConnectionPoolFactory}, found with {@link java.util.ServiceLoader} ({@code noether-jpa-pool-mansart}
@@ -92,13 +92,17 @@ public final class ConnectionSources {
         if (url != null && !url.isBlank()) {
             return jdbc(settings, url, loader, pools);
         }
-        String name = dataSource != null ? dataSource.toString() : settings.definition().nonJtaDataSourceName();
+        boolean jta = settings.transactionType() == jakarta.persistence.PersistenceUnitTransactionType.JTA;
+        String key = jta ? Definitions.JTA_DATA_SOURCE : Definitions.NON_JTA_DATA_SOURCE;
+        String name = dataSource != null ? dataSource.toString()
+            : jta ? settings.definition().jtaDataSourceName() : settings.definition().nonJtaDataSourceName();
         return () -> {
             throw new SQLException(name == null
                 ? "Persistence unit " + settings.unitName() + " has no connection: set jakarta.persistence.jdbc.url, "
-                    + "or pass a javax.sql.DataSource as jakarta.persistence.nonJtaDataSource"
-                : "Persistence unit " + settings.unitName() + " names the data source '" + name + "', which needs JNDI; "
-                    + "in Java SE pass the javax.sql.DataSource object as jakarta.persistence.nonJtaDataSource");
+                    + "or pass a javax.sql.DataSource as " + key
+                : "Persistence unit " + settings.unitName() + " names the data source '" + name + "', which JNDI binds to "
+                    + "no javax.sql.DataSource, as written or under java:comp/env: bind it, or pass the "
+                    + "javax.sql.DataSource object as " + key);
         };
     }
 

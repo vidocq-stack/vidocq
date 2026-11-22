@@ -96,12 +96,14 @@ final class ArchitectureRules {
 
     /**
      * noether-jpa-core: the Jakarta Persistence API, the Bean Validation API ({@code requires static}: the
-     * validation of an entity runs only when a provider is present), JDBC, the JDK's XML parser for
-     * {@code persistence.xml} and {@code orm.xml}, and the dialect SPI (module-info.java).
+     * validation of an entity runs only when a provider is present), JDBC, JNDI ({@code requires static}: it answers
+     * the data source a unit names, Vidocq/vidocq#676), the JDK's XML parser for {@code persistence.xml} and
+     * {@code orm.xml}, and the dialect SPI (module-info.java).
      */
     static final ArchRule CORE_DEPENDENCIES = VidocqArchRules.dependOnlyOn(
             CORE,
-            Packages.of(Jdk.runtimePackages(), "javax.sql..", "jakarta.persistence..", "jakarta.validation..",
+            Packages.of(Jdk.runtimePackages(), "javax.sql..", "javax.naming..", "jakarta.persistence..",
+                    "jakarta.validation..",
                     "io.vidocq.noether.jpa.dialect", "io.vidocq.noether.jpa.dialect.sql",
                     "io.vidocq.noether.jpa.core.."),
             "workspace AGENTS.md, a brick depends on the APIs it implements; module-info.java of noether-jpa-core");

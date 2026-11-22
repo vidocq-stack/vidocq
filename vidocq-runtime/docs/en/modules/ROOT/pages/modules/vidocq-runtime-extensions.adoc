@@ -69,7 +69,7 @@
 
 | `vidocq-runtime-naming-extension`
 | `jakartaee-web`
-| Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. See <<naming>>.
+| Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. The pools answer `java:comp/DefaultDataSource` and `java:comp/env/<name>` without a declaration. See <<naming>>.
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
@@ -462,7 +462,7 @@ Code written for an application server looks its resources up by name, and the b
 
 The extension needs no codegen and no directive in the application's module unless the application looks names up itself or declares some in code, with `requires io.vidocq.runtime.extensions.jakartaee.web.naming`. `vidocq extension add naming` adds the dependency and that directive.
 
-*Declaring names.* Vidocq answers only the names the application declares, one key of `vidocq.properties` per name: `vidocq.naming.` followed by the name without `java:`.
+*Declaring names.* Beyond the names of the platform and of the pools, below, Vidocq answers the names the application declares, one key of `vidocq.properties` per name: `vidocq.naming.` followed by the name without `java:`.
 
 [source,properties]
 ----
@@ -480,7 +480,9 @@ vidocq.naming.app/env/jdbc/reporting = java:comp/env/jdbc/orders
 * *The key* copies into a lookup as it is: `vidocq.naming.comp/env/com.acme.Orders/ds` is `java:comp/env/com.acme.Orders/ds`. A properties key takes `/`; only a `:` would need escaping, and the key has none. A key under `vidocq.naming.` that does not start with `comp/`, `module/`, `app/` or `global/` fails the start, so that `vidocq.naming.comp.env.orders`, with dots for slashes, is not silently ignored.
 * *A value starting with `java:`* links to that name. *Any other value* is a bean written as text: `@Named`, `@Default` and `@Any` take their short name, every other qualifier its fully qualified name, and a member is a Java source literal (xref:vauban::jndi.adoc#text[the grammar]). A properties file reads `\\` as `\`, so double each backslash of a literal: `@Named("say \"hi\"")` is written `@Named("say \\"hi\\"")` in `vidocq.properties`.
 * *The four namespaces are distinct*, as in the Jakarta EE Platform: `java:comp`, `java:module`, `java:app` and `java:global`. A name exists only in the namespace it is declared in, so `java:comp/env/jdbc/orders` does not answer `java:app/env/jdbc/orders`: declare both, or link one to the other.
-* *Only the transaction names of the platform are declared by default*, not even the pools of the Mansart Pool extension: a pool `vidocq.pool.orders.url` is the `@Named("orders")` data source, and `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` names it.
+* *The pools answer by default* [.tag-new]#NEW#, as the data sources of an application server do (Vidocq/vidocq#676): `java:comp/DefaultDataSource` (Jakarta EE Platform, §5.19) is the default pool (`vidocq.pool.url`), and `java:comp/env/<name>` the pool `vidocq.pool.<name>.url`: the pool `orders` answers `java:comp/env/orders`. Any `DataSource` bean does: the `@Default` one and each `@Named` one.
+** *With the transactions extension*, the name answers the pool through Mansart's `JtaDataSource`: within a transaction, its connections are the one connection of that transaction and that pool, which the transaction manager alone commits or rolls back, and which a Jakarta Data repository or a JTA persistence unit on the same pool works on too. Outside a transaction, and without the transactions extension, they are the pool's own.
+** *A key of `vidocq.properties` that declares the name replaces it*, and binds the pool itself, which never takes part in a transaction: `vidocq.naming.comp/env/jdbc/orders-raw = javax.sql.DataSource @Named("orders")`. This is the `non-jta-data-source` of a JTA persistence unit whose factory the application creates itself.
 * *The transaction names of the platform* come with the transactions extension (`vidocq-runtime-mansart-transactions-extension`): `java:comp/UserTransaction` is its `UserTransaction` bean and `java:comp/TransactionSynchronizationRegistry` its `TransactionSynchronizationRegistry` bean, as the Jakarta EE Platform defines them (§5.10, §5.11). Without that extension, neither name is bound. A key of `vidocq.properties` that declares one of them replaces it.
 * *Environment variables* override a key already in a file, as MicroProfile Config maps them (`VIDOCQ_NAMING_COMP_ENV_JDBC_ORDERS`), but cannot declare a new name: the `/` of the name cannot be read back from the variable.
 
@@ -1328,6 +1330,7 @@ See xref:dev@noether::usage.adoc#references[References declared on a class] in N
 
 * *A JTA unit* uses the pool its `jta-data-source` names, `@Named("orders")` for `<jta-data-source>orders</jta-data-source>` (`vidocq.pool.orders.url`), or the default pool (`vidocq.pool.url`) when it names none. Within a transaction, every connection the unit asks for is the one connection Mansart Transactions keeps for that transaction and that pool, enlisted in the transaction and given back to the pool once it completes: the transaction manager commits or rolls it back, and the unit cannot. The unit's non-JTA data source, which the TABLE identifier generator and schema generation use outside the transaction, is the pool its `non-jta-data-source` names, or else the same pool.
 * *A RESOURCE_LOCAL unit* uses the pool its `non-jta-data-source` names, or else the default pool, or else, without a pool, the JDBC properties of the unit.
+* *A factory the application creates itself* [.tag-new]#NEW#, with `Persistence.createEntityManagerFactory("orders")`, finds the pool its unit names by a JNDI lookup (Vidocq/vidocq#676): the name as written, then `java:comp/env/<name>`, which the <<naming,naming extension>> answers for each pool, through the application's transactions. So the application needs the naming extension. A `DataSource` object the application passes wins, and a unit that names no data source keeps its JDBC properties. Two differences with a factory the container creates: a JTA unit with a `TABLE` identifier generator must name a `non-jta-data-source` that does not enlist (a `vidocq.naming.*` key bound to the pool bean), and a RESOURCE_LOCAL unit used within a JTA transaction gets that transaction's connection, which it cannot commit.
 
 *A unit of another provider* [.tag-new]#NEW#. A unit whose `<provider>` names another provider than Noether is handed to that provider's `createContainerEntityManagerFactory`, with the pool of its `jta-data-source` or `non-jta-data-source` as above (Jakarta Persistence 3.2, §9.6). The application declares the provider as a service: `provides jakarta.persistence.spi.PersistenceProvider with ...;` in its `module-info.java`, or its jar's `META-INF/services/jakarta.persistence.spi.PersistenceProvider`. The startup report and the dev console list Noether's units only. See xref:dev@noether::usage.adoc[Noether's usage page], "With CDI".
 

@@ -79,7 +79,7 @@ public class PlatformNames implements JndiBindings {
     }
 
     /** The default bean of {@code type}, or empty when the application does not have that type. */
-    private static Optional<JndiTarget.Bean> bean(String type, ClassLoader loader) {
+    static Optional<JndiTarget.Bean> bean(String type, ClassLoader loader) {
         try {
             return Optional.of((JndiTarget.Bean) JndiTarget.bean(type, loader));
         } catch (IllegalArgumentException _) {

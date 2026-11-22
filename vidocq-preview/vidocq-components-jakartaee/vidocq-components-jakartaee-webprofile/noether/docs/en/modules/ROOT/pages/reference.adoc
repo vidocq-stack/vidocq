@@ -93,7 +93,12 @@ prefixes whose classes may be deserialized from a column mapped to a `Serializab
 
 | `jakarta.persistence.nonJtaDataSource`, `jakarta.persistence.jtaDataSource`, `jakarta.persistence.dataSource`
 |
-| A `DataSource` *object*. A name needs JNDI, which Java SE does not have: it is refused.
+| A `DataSource` *object*. A name, given here or by the unit's `jta-data-source` or `non-jta-data-source`, is looked
+up through JNDI when the application creates the factory itself: as written, then under `java:comp/env` when it is
+not an absolute `java:` name. An application server binds its data sources there, and so does the Vidocq runtime for
+its Mansart pools. A JTA unit with a `TABLE` generator names a `non-jta-data-source` too, one that does not enlist
+in the transaction. Without a naming context, or without `java.naming` in the runtime image (`requires static`), the
+unit is refused.
 
 | `jakarta.persistence.transactionType`
 | `RESOURCE_LOCAL`

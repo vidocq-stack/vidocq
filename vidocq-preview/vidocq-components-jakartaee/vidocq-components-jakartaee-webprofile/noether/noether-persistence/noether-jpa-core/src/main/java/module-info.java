@@ -30,6 +30,9 @@ module io.vidocq.noether.jpa.core {
     requires jakarta.persistence;
     requires static jakarta.validation;
     requires java.sql;
+    // JNDI answers the data source a unit names, for a factory the application creates itself (Vidocq/vidocq#676):
+    // optional, an image without java.naming finds no name
+    requires static java.naming;
     requires java.xml;
     requires io.vidocq.noether.jpa.dialect.spi;
 
