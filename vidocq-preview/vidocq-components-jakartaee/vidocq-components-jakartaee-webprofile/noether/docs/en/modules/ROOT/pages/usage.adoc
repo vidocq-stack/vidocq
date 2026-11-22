@@ -343,7 +343,8 @@ between tests).
   loads, `REFRESH` replaces the cached state with the database's.
 * *Bean Validation.* With a Jakarta Validation provider on the path, entities are validated before persist and
   update (`<validation-mode>` `AUTO`, the default). `CALLBACK` makes a missing provider an error, `NONE` turns
-  validation off. Noether's own `noether-validation` is a test stopgap, not published: bring a provider.
+  validation off. Noether's own `noether-validation-core` is a test stopgap, published for Noether's tests but not a
+  conformant provider: bring a provider.
 
 [#cdi]
 == With CDI

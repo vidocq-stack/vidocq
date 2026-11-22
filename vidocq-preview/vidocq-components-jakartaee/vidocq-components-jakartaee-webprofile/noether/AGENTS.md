@@ -5,8 +5,10 @@ The same guidance applies to human and AI contributors; `CLAUDE.md` mirrors it.
 
 Noether owns Jakarta Persistence 3.2 and the provisional Validation provider.
 Mansart owns Data, Pool and Transactions; keep their external coordinates and
-packages unchanged. Validation and integration vehicles are not release artifacts.
-Do not remove their Maven deploy/Central skip flags or release workflow exclusions.
+packages unchanged. Integration vehicles are not release artifacts: do not remove
+their Maven deploy/Central skip flags. `noether-validation-core` (and its aggregator)
+is released since 0.4.0, by the maintainer's decision of 2026-11-22: the tests of
+`noether-jpa-core` use it, and the release builds only what it publishes.
 
 Use Java 25, Maven 3.9.16, strict Java Modules and virtual threads for I/O.
 Entity access uses APT and the JDK Class-File API; no reflection-based entity

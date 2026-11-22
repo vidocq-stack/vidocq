@@ -6,6 +6,8 @@ and the local TCK harness. It is not a complete Jakarta Validation 3.1
 implementation. See
 link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-validation/ROADMAP.md[the roadmap].
 
-`maven.deploy.skip=true`, Central `skipPublishing=true` and release workflow
-exclusions prevent publishing the aggregator, core and integration vehicle.
-The standalone Validation runner remains outside the reactor.
+Since 0.4.0 the aggregator and `noether-validation-core` are published with each
+release (the tests of `noether-jpa-core` use it, and a release builds only what it
+publishes), and `vidocq-runtime-bom` manages its version. Published does not mean
+supported: it is a stopgap, not a conformant Validation provider. The integration
+vehicle is never published; the standalone Validation runner remains outside the reactor.

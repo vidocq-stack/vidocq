@@ -1070,6 +1070,12 @@
                 <artifactId>noether-jpa-cdi</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
             </dependency>
+            <!-- A stopgap, not a conformant Validation provider: published because noether-jpa-core's tests use it. -->
+            <dependency>
+                <groupId>io.vidocq.noether</groupId>
+                <artifactId>noether-validation-core</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

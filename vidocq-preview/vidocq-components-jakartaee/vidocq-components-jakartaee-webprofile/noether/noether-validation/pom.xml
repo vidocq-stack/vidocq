@@ -62,8 +62,9 @@
     </licenses>
 
     <properties>
-        <!-- Local test/TCK stopgap: never publish this aggregator or its children. -->
-        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Published since 0.4.0, with noether-validation-core: the tests of noether-jpa-core depend on it, and a
+             release builds only what it publishes (release.sh of Vidocq/ci). Still a stopgap, not a conformant
+             Validation implementation. noether-validation-core-module-it is never published. -->
         <jakarta.validation.version>3.1.1</jakarta.validation.version>
     </properties>
 
@@ -92,16 +93,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.sonatype.central</groupId>
-                <artifactId>central-publishing-maven-plugin</artifactId>
-                <configuration>
-                    <skipPublishing>true</skipPublishing>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

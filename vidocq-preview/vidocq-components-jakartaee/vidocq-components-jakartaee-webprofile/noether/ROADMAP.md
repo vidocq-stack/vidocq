@@ -5,7 +5,7 @@ Noether owns the implementations extracted from Mansart on 2026-10-11.
 | Building block | Status | Detailed roadmap |
 | --- | --- | --- |
 | Jakarta Persistence 3.2 | P0–P12 delivered under the historical scope-based engineering gate, plus dated bounded follow-ups (D5, D9–D43); backlog below; Jakarta Persistence 3.2 certification is a target (Vidocq 1.0.0), not yet claimed | [Persistence](noether-persistence/ROADMAP.md) |
-| Jakarta Validation 3.1 | V0–V2 provisional local test/TCK stopgap; not published | [Validation](noether-validation/ROADMAP.md) |
+| Jakarta Validation 3.1 | V0–V2 provisional test/TCK stopgap; published since 0.4.0, not conformant | [Validation](noether-validation/ROADMAP.md) |
 
 The extraction changes repository, artifact, package and provider names, not
 persistence semantics or the documented conformance scope. Pool, Transactions
@@ -24,7 +24,7 @@ it is empty. No D44 mapping extension is part of this closure lot.
 The intended first Noether release is a bounded **JVM/Java Modules Persistence
 provider**, with APT-generated access for application sources and documented
 bootstrap generation/`opens` for opaque entities. H2 and PostgreSQL are the
-supported dialects. Validation is a non-published local test/TCK stopgap.
+supported dialects. Validation is a test/TCK stopgap, published since 0.4.0 but not a conformant provider.
 Persistence 3.2 certification is a stated target (Vidocq targets Web Profile 11
 certification since 2026-11-09; first certified release planned in Vidocq 1.0.0),
 but this closure lot claims no untouched-TCK result and no certification, nor full

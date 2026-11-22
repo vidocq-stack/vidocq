@@ -9,8 +9,9 @@
 
 This implementation exists so that `noether-persistence` can run its TCK (Jakarta Persistence section 3.7 and the
 validation tests of its TCK). It only has to **work**: it is not meant to be polished, not meant to pass the whole
-Jakarta Validation TCK, and **it is not published to Maven Central**. Another member of the team is writing the
-real Jakarta Validation implementation; this one is dropped when that one is usable.
+Jakarta Validation TCK. Since 0.4.0 `noether-validation-core` is published to Maven Central with the release, as
+the stopgap it is: the tests of `noether-jpa-core` depend on it, and a release builds only what it publishes. Another
+member of the team is writing the real Jakarta Validation implementation; this one is dropped when that one is usable.
 
 Consequences:
 
@@ -19,12 +20,11 @@ Consequences:
   The official TCK is used as a test bed (308 of 981 pass), not as a certification target.
 - V3 to V6 are **not planned**. They are kept below as a description of what a complete implementation would
   need, and are picked up only if the persistence TCK is found to need one of them.
-- No release, no `BENCH.md`, no documentation site page, no APT or Maven plugin.
-- Publication is blocked by inherited `maven.deploy.skip=true` (snapshot deployment) and
-  `central-publishing-maven-plugin` / `skipPublishing=true` (Maven Central releases). The release
-  workflow excludes the aggregator, core and module-path test vehicle from its deploy step.
-  They remain in the local build/install reactor for JPA tests and TCK runs; Persistence references
-  the implementation only in test scope, never as a production dependency.
+- No `BENCH.md`, no APT or Maven plugin. Released with Noether, not certified, not a conformant implementation.
+- The aggregator and `noether-validation-core` are published, SNAPSHOTs and releases (managed by
+  `vidocq-runtime-bom`). The module-path test vehicle (`noether-validation-core-module-it`) and the standalone TCK
+  runner keep `maven.deploy.skip=true`, so the release leaves them out. Persistence references the implementation
+  only in test scope, never as a production dependency.
 
 ## Why this brick exists
 
