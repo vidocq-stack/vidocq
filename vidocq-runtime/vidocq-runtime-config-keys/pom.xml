@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-build</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-config-keys</artifactId>
+    <name>Vidocq :: Runtime :: Config Keys</name>
+    <description>
+        Reads the descriptions of configuration keys a jar ships under META-INF/vidocq: the file its author
+        writes (config-user-keys.properties) and the generated one (config-keys.properties). Parses a file,
+        reports what is wrong in it, merges the files of several jars and finds the description of a key.
+        One reader for the runtime and for the tools. Zero dependency.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- No CDI bean: nothing for the Vauban indexer to process. -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
