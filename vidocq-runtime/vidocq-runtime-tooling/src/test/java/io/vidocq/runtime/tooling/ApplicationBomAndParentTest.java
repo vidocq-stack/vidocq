@@ -50,7 +50,7 @@ class ApplicationBomAndParentTest {
 
     /** The folders of the monorepo that hold the bricks, one level each: stable, then preview. */
     private static final List<Path> BRICK_LEVELS = List.of(
-            ROOT.resolve("../vidocq-components"), ROOT.resolve("../preview"));
+            ROOT.resolve("../vidocq-components"), ROOT.resolve("../vidocq-preview"));
 
     /** Published modules an application never declares as a dependency. */
     private static final Set<String> NOT_A_DEPENDENCY = Set.of(
@@ -288,10 +288,23 @@ class ApplicationBomAndParentTest {
         }
     }
 
-    /** The modules of the pom in {@code dir}, outside its profiles. */
+    /**
+     * The profile that holds the repackaged API modules of a brick ({@code ravel-mp-config-api}, ...): every Maven
+     * build has it, only the IntelliJ import leaves it out, so its modules are published like the others.
+     */
+    private static final String REPACKAGED_API_PROFILE = "repackaged-api";
+
+    /** The modules of the pom in {@code dir}: outside its profiles, and of {@link #REPACKAGED_API_PROFILE}. */
     private static List<String> modules(Path dir) throws Exception {
+        Element project = pom(dir).getDocumentElement();
+        List<Element> declared = new ArrayList<>(elements(project, "modules", "module"));
+        for (Element profile : elements(project, "profiles", "profile")) {
+            if (REPACKAGED_API_PROFILE.equals(child(profile, "id"))) {
+                declared.addAll(elements(profile, "modules", "module"));
+            }
+        }
         List<String> modules = new ArrayList<>();
-        for (Element module : elements(pom(dir).getDocumentElement(), "modules", "module")) {
+        for (Element module : declared) {
             modules.add(module.getTextContent().strip());
         }
         return modules;

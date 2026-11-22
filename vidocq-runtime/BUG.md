@@ -4487,3 +4487,30 @@ where this whole bug class is invisible.
   demand only (`-Pdist`, `vidocq-runtime-examples/build-images.sh`): no test reads them.
 - **Related**: the same command also fails, about one run in five, in Vauban's weaving of another module
   (BUG-20261121-05, in Vauban's `BUG.md`).
+
+## BUG-20261122-01 — The nightly build of `main` is red: `ApplicationBomAndParentTest` reads the folder `preview/`, renamed `vidocq-preview/`
+
+- **Date**: 2026-11-22
+- **Status**: FIXED on `fix/tooling-bom-test-preview-folder`
+- **Affected module**: vidocq-runtime-tooling (`ApplicationBomAndParentTest`, test code only)
+- **Symptom**: the nightly build of `main` fails in `Vidocq :: Runtime :: Tooling` (run 5645, commit `5c4f2e641`):
+  `ApplicationBomAndParentTest.theBomManagesEveryPublishedBrickModuleAtTheReactorVersion` and
+  `theBomManagesNothingButThePublishedArtifacts` end with `NoSuchFile ../../preview/pom.xml`.
+- **Minimal reproduction**: on `main`,
+  `./mvnw -pl vidocq-runtime/vidocq-runtime-tooling -Dgib.disable=true -Dtest=ApplicationBomAndParentTest verify`.
+- **Cause**: two changes of 2026-11-21 that the test did not follow, as it reads the poms of the bricks from paths
+  and rules written in its source.
+  - `b0999b3df` renamed `preview/` and `incubator/` to `vidocq-preview/` and `vidocq-incubator/`; `BRICK_LEVELS`
+    still named `../preview`.
+  - `cb876d648` moved the repackaged API modules of seven bricks (`ravel-mp-config-api`, `knock-mp-health-api`,
+    the three `humboldt-otel-*`, ...) into a `repackaged-api` profile, which every Maven build has and the IntelliJ
+    import leaves out. The test read the modules outside the profiles only. The first error hid this one: with the
+    path fixed, `theBomManagesNothingButThePublishedArtifacts` fails with "the BOM manages artifacts this reactor
+    does not publish" and names the nine modules.
+- **Hypothesis on why both passed**: a pull request tests the modules downstream of what it changed, and the
+  tooling module depends on no brick: only a build of every module runs this test after such a change.
+- **Fix**: `BRICK_LEVELS` names `../vidocq-preview`, and the modules of a pom include those of its
+  `repackaged-api` profile. No other source names the old folders (`git grep` for `preview"`, `preview/pom`,
+  `incubator"`, `incubator/pom` outside the documentation). The module's 367 tests pass.
+- **Not checked**: the nightly build stops at this module, so what comes after it in the reactor has not run on
+  `main` since 2026-11-21. Dispatch the nightly build on the branch to see the rest.
