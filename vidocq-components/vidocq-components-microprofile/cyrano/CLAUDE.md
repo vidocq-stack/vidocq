@@ -192,8 +192,9 @@ Cyrano is a client: the TCK deploys no server-side resource, and its HTTP backen
   container would.
 - No Weld, Undertow or any third-party container is started, and the runner does not
   depend on `cassini-tck`, which is published nowhere: since `be73623` every artefact
-  resolves from Maven Central, so pull requests are gated on the full suite. It
-  only Cassini artefact it needs is `cassini-chappe`, for the Jakarta REST
+  resolves from Maven Central, so CI runs the full suite: the `TCK nightly` workflow of the
+  monorepo (`ci.tck.command` in the root `pom.xml`), once a day, on demand on a branch and
+  before a release. A pull request runs no TCK. The only Cassini artefact it needs is `cassini-chappe`, for the Jakarta REST
   `RuntimeDelegate` the TCK resolves through `ServiceLoader`; no Cassini or Chappe
   server is started.
 

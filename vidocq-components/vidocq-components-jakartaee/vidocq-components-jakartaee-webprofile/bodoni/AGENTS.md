@@ -24,7 +24,7 @@ repository; the summary below is self-contained, the **full text lives in
 of local divergence, the brick-specific sections further down take precedence.
 
 - **Branch + pull request.** `main` is protected: it requires signed commits and green
-  `pr-validate` / `governance-checks` checks (in Bodoni, `official-tags-tck-smoke` too). Work on a branch, open a PR, never push to
+  `pr-validate` / `governance-checks` checks of the monorepo. Work on a branch, open a PR, never push to
   `main`.
 - **Signed and signed-off commits** — `git commit -S -s`: GPG signature (key registered in
   `Vidocq/governance`, CLA signed) and DCO `Signed-off-by` trailer (see `CONTRIBUTING.md`).
@@ -199,9 +199,11 @@ run: **452/541 (83.5 %)**; the TCK fixes (the `_rt` TLDs, BOD-006 to BOD-011, Pe
 bring it to **541/541**, both runs recorded in [bodoni-tck/BASELINE.md](bodoni-tck/BASELINE.md). The suite is `jakarta.tck:tags-tck:11.0.3`
 (Tags tests of the Jakarta EE 11 Platform TCK); the formal `jakarta-tags-tck-3.0.0.zip` is the
 reference only and is not run. A result is a compatibility measurement on Bodoni + Ibarra +
-Foy + Peano: **never claim certification** from it, nor from a partial or local run. The
-`official-tags-tck-smoke` CI check runs the smoke set; it is a required check of `main`
-(maintainer, 2026-10-24). Update `BASELINE.md` when a fix
+Foy + Peano: **never claim certification** from it, nor from a partial or local run. A pull
+request runs no TCK. The `official-tags-tck-smoke` check of the former repository (a required
+check of its `main` since 2026-10-24) did not move into the monorepo, and Bodoni's root POM
+declares no `ci.tck.*` yet, so `TCK nightly` does not run it either: run
+`./run-official-tck-tags-3.0.sh smoke` (or `all`) by hand. Update `BASELINE.md` when a fix
 changes the result. 100 % PASS of the full run is a merge gate; any challenge goes in a
 `TCK.md` with spec citation — created only if one is actually filed.
 

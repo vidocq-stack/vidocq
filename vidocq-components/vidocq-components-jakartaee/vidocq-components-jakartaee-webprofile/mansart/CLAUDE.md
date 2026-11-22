@@ -15,7 +15,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 ## Prerequisites
 
 - **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`).
-- For TCKs: the Jakarta Data TCK resolves from Maven Central, and every pull request runs it (`ci.tck.command` in the root `pom.xml`). The full Jakarta Transactions suite is an Eclipse zip run with Ant (`mansart-transactions/install-tck.sh`), run by hand, never in CI.
+- For TCKs: the Jakarta Data TCK resolves from Maven Central, and the `TCK nightly` workflow of the monorepo runs it (`ci.tck.command` in the root `pom.xml`): once a day, on demand on a branch, and before a release. A pull request runs no TCK. The full Jakarta Transactions suite is an Eclipse zip run with Ant (`mansart-transactions/install-tck.sh`), run by hand, never in CI.
 
 ## Architecture Constraints to Respect
 
