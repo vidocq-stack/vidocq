@@ -36,9 +36,9 @@ import java.util.Map;
  * alone; one that does and that the goal no longer writes is removed. {@code -Dvidocq.eclipse.check=true} writes
  * nothing and fails when a file is missing or out of date.</p>
  *
- * <p>Eclipse keeps "Build automatically" per workspace, not per project, and no file of the goal sets it. It need
- * not be off: read through m2e, an application compiles into a folder of its own ({@link IdeOutput}), and the goal
- * says so.</p>
+ * <p>Eclipse keeps "Build automatically" per workspace, not per project, and no file of the goal sets it. Read
+ * through m2e, an application compiles into a folder of its own ({@link IdeOutput}), not where {@code vidocq:dev}
+ * writes: the goal says so.</p>
  */
 @Mojo(name = "eclipse",
       aggregator = true,

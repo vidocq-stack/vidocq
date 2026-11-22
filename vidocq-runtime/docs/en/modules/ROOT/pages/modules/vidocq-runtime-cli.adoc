@@ -505,9 +505,10 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 [#vscode]
 === `vidocq vscode`
 
-Runs `mvn vidocq:vscode`: `.vscode/settings.json` runs the Java extension's language server on Java 25 and turns its
-automatic build off, `tasks.json` runs `vidocq dev`, `run` and `test`, `launch.json` attaches the debugger to
-`vidocq dev`. A file it did not write is left alone.
+Runs `mvn vidocq:vscode`: `.vscode/settings.json` runs the Java extension's language server on Java 25, `tasks.json`
+runs `vidocq dev`, `run` and `test`, `launch.json` attaches the debugger to `vidocq dev`. A file it did not write is
+left alone. The extension compiles an application into `target-ide/`, not `target/`
+(xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]).
 
 [source,bash]
 ----
@@ -523,7 +524,8 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
 
 Runs `mvn vidocq:eclipse`: `.eclipse/` gets, per application, Maven builds of `vidocq dev`, `run` and `test` and a
 debug configuration that attaches to `vidocq dev`, listed under Run Configurations once the project is imported. A
-file it did not write is left alone. Turn Project > Build Automatically off while `vidocq dev` runs.
+file it did not write is left alone. Read through m2e, an application compiles into `target-ide/` and `target/` stays
+Maven's (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]).
 
 [source,bash]
 ----

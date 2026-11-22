@@ -147,13 +147,15 @@ included), one of `vidocq:run` suffixed ` (run)`, and a Remote JVM Debug one suf
 `artifactId`, `todo (dev)` and so on. See xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 
 In VS Code, `mvn vidocq:vscode`(`vidocq vscode`) writes `.vscode/`: the Java extension's language
-server on Java 25, which Vauban's annotation processors need, with its automatic build off so that `vidocq dev`
-alone writes `target/classes`; tasks for `vidocq dev`, `run` and `test`; and a debug configuration that attaches to
-`vidocq dev`. See xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
+server on Java 25, which Vauban's annotation processors need; tasks for `vidocq dev`, `run` and `test`; and a debug
+configuration that attaches to `vidocq dev`. The extension compiles the application into `target-ide/`, and
+`target/` stays Maven's
+(xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]). See
+xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
 
 In Eclipse, `mvn vidocq:eclipse`(`vidocq eclipse`) writes `.eclipse/`: Maven builds of `vidocq dev`,
 `run` and `test` and a debug configuration that attaches to `vidocq dev`, under Run Configurations once the project is
-imported. Turn Project > Build Automatically off while `vidocq dev` runs. See
+imported. Read through m2e, the application compiles into `target-ide/` there too, and `target/` stays Maven's. See
 xref:modules/vidocq-runtime-maven-plugin.adoc#eclipse[the `vidocq:eclipse` goal].
 
 NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goal) boot the runtime from the CLI's own module path and therefore do not see the extensions declared in your pom. Prefer `mvn vidocq:dev` and the packaged launcher for extension-based apps.
