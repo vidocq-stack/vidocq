@@ -275,6 +275,154 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | 100 | `PropertiesFileConfigSource` | Classpath `vidocq.properties`
 |===
 
+[#configuration-key-descriptions]
+== Configuration key descriptions [.tag-new]#NEW#
+
+A jar that reads configuration says which keys it reads, in two files under `META-INF/vidocq/`. A tool then knows
+the keys of an application from the jars it uses, without running it.
+
+[cols="2,2,3"]
+|===
+| File | Written by | Holds
+
+| `config-user-keys.properties`
+| the author of the jar, in `src/main/resources`
+| the keys the jar's code reads by program, and what an annotation cannot say about a key
+
+| `config-keys.properties`
+| a build, from the MicroProfile Config annotations
+| the keys `@ConfigProperty` and `@ConfigProperties` declare
+|===
+
+A jar has one, both or neither. Both files have the same format.
+
+NOTE: The reader of the format is in place, in the module `vidocq-runtime-config-keys`
+(`io.vidocq.runtime.config.keys`, no dependency). In this version nothing reads the files yet and nothing generates
+`config-keys.properties`: `vidocq:doctor`, the startup audit and the generation come next.
+
+=== A file
+
+One fact per line, the key, a bar, the attribute: `<key>|<attribute>=<value>`. The first fact is the version of the
+format.
+
+[source,properties]
+----
+format=1
+vidocq.devconsole.port|type=int
+vidocq.devconsole.port|default=8888
+vidocq.devconsole.port|doc=Port the dev console listens on.
+----
+
+The file is UTF-8. Blank lines and lines that start with `#` or `!` are skipped; a fact is split at its first `=`
+and the white space around each side is dropped. There is no escape and no continuation line: a line that ends with
+a backslash is refused. It is the part of the `.properties` syntax every tool reads the same way.
+
+[cols="1,4"]
+|===
+| Attribute | Value
+
+| `type`
+| `string` (when absent), `boolean`, `int`, `long`, `double`, `duration`, `list:<type>`, or a qualified Java type
+name such as `java.net.URI`
+
+| `default`
+| the value the key takes when the application gives none
+
+| `required`
+| `true` when the application must give the key
+
+| `values`
+| the allowed values, separated by commas; a value is compared with them without regard to case
+
+| `doc`
+| one line of documentation
+
+| `when`
+| `<sibling>=<value>[,<value>]`: the key exists only when the key next to it, the same key with its last segment
+replaced by `<sibling>`, has one of these values
+
+| `ref`
+| a family: the value, or each item of a list, is a name of that family
+
+| `deprecated`
+| `true` when the key should no longer be used
+
+| `source`
+| the class and the member that declare the key, in a generated file
+|===
+
+=== Patterns
+
+A key is often not one key: the application chooses a name in the middle of it.
+
+[cols="2,3,3"]
+|===
+| In a key | Meaning | Example
+
+| `<family>`
+| one segment the application chooses, a name of that family
+| `vidocq.chappe.listener.<listener>.port`
+
+| `[<family>]`
+| the same, and the segment may be absent
+| `vidocq.pool.[<datasource>].url` is `vidocq.pool.url` and `vidocq.pool.audit.url`
+
+| a final `+*+`
+| one segment or more, whatever they are
+| `+vidocq.persistence.<unit>.properties.*+`
+|===
+
+A key starts with a literal segment. When several patterns match the key an application writes, a literal segment
+wins over a name, and a pattern that describes the key wins over one that covers it with a final `+*+`. A name that
+holds a dot is written between double quotes in the application's configuration:
+`vidocq.persistence."my.unit".datasource`.
+
+=== Families
+
+A family is named by what its names are: `datasource`, `listener`, `mount`, `unit`. It is shared by every jar: one
+jar describes `vidocq.pool.[<datasource>].url`, another refers to the same family with `ref=datasource`. A line on
+the family itself gives the names that exist without being written in the application's configuration, and its
+documentation:
+
+[source,properties]
+----
+<listener>|names=default
+<listener>|doc=A listener of the web server.
+----
+
+=== Several files
+
+In a jar, the file its author wrote is read before the generated one. Jars are read one after the other.
+
+* `values`, and the `names` of a family, add up. A jar adds a value to a key another jar describes by writing that
+key's `values` with the value it adds.
+* For every other attribute the first fact read is kept: what an author writes wins over what a build generates.
+* Two jars must agree on the `type` and the `default` of a key they both describe.
+
+[source,properties]
+----
+# one jar
+vidocq.http.mount.<mount>.type|values=static,websocket
+vidocq.http.mount.<mount>.classpath|when=type=static
+
+# another jar, which adds a kind of mount and its key
+vidocq.http.mount.<mount>.type|values=restful
+vidocq.http.mount.<mount>.include-packages|when=type=restful
+----
+
+=== What a reader reports
+
+A reader never fails on what a file holds: it reports what is wrong and reads the rest.
+
+* In a file: a line that is not a fact, a pattern it cannot read, a fact written twice (the first is kept), a value
+an attribute cannot have, a file whose first fact is not `format=1`.
+* Between files: a `type` or a `default` two jars disagree on, a written `default` that contradicts the generated
+one, a `default` outside the `values`, a `when` on a sibling or on a value no file describes, a `ref` to a family no
+file describes and no key names.
+* An attribute it does not know is reported apart and skipped, and a file whose `format` is above the one it knows is
+not read: both are expected from a jar built with a later version. A new attribute does not change `format`; a change
+of meaning does.
+
 == Maven plugin goals
 
 [cols="1,3"]

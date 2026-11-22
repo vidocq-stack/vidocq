@@ -51,6 +51,7 @@ application's parent):
 - `vidocq-runtime-core` — lifecycle orchestrator, `ServiceLoader` discovery, bean scan.
 - `vidocq-runtime-core-codegen` — Vauban indexer APT bundle (wired globally via root `pluginManagement`).
 - `vidocq-runtime-extensions/` — delivered extensions, grouped by domain: `*-essentials` (Chappe HTTP), `*-jakartaee-core` (Cassini REST), `*-jakartaee-web` (Mansart data/pool/transactions), `*-microprofile` (config, rest-client, jwt, telemetry, health, metrics, openapi), `*-jpms-repackaged` (third-party JPMS repackages).
+- `vidocq-runtime-config-keys` — the one reader of the descriptions of configuration keys a jar ships under `META-INF/vidocq/` (`config-user-keys.properties`, written by the jar's author, and `config-keys.properties`, generated): patterns, problems of a file, merge across jars. For the runtime and for the tools; no dependency. The format is in `reference.adoc#configuration-key-descriptions`.
 - `vidocq-runtime-tooling` — project editing shared by the CLI and the plugin (extension catalog, pom and `module-info.java` editors, doctor checks, `vidocq.properties`), `java.xml` only.
 - `vidocq-runtime-maven-plugin`, `vidocq-runtime-cli`, `vidocq-runtime-integration-tests` (Arquillian ITs), `vidocq-runtime-examples`.
 
