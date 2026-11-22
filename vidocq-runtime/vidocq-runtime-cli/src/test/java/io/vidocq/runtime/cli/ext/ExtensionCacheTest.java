@@ -79,8 +79,11 @@ class ExtensionCacheTest {
     /** A cache written before the jars were recorded says nothing of them: the project is resolved again, once. */
     @Test
     void aCacheOfAnEarlierVersionIsAMiss() {
-        String earlier = "pomHash=abc\nsnapshot=10|1000|/m2/a-1.0-SNAPSHOT.jar\n"
-                + "extension=cassini-rest|true|g|a|0.4.0|/m2/cassini-0.4.0.jar\n";
+        String earlier = """
+                pomHash=abc
+                snapshot=10|1000|/m2/a-1.0-SNAPSHOT.jar
+                extension=cassini-rest|true|g|a|0.4.0|/m2/cassini-0.4.0.jar
+                """;
 
         assertTrue(ExtensionCache.read(earlier).isEmpty());
         assertTrue(ExtensionCache.read(earlier + "keyFiles=0\n").isPresent());

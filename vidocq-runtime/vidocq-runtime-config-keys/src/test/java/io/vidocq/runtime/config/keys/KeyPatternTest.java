@@ -161,9 +161,10 @@ class KeyPatternTest {
     void a_pattern_has_eight_optional_names_at_most() {
         String eight = "a" + ".[<n>]".repeat(8) + ".b";
 
+        String nine = "a.[<n>]" + eight.substring(1);
+
         assertTrue(KeyPattern.parse(eight).match("a.b").isPresent());
-        IllegalArgumentException refused =
-                assertThrows(IllegalArgumentException.class, () -> KeyPattern.parse("a.[<n>]" + eight.substring(1)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> KeyPattern.parse(nine));
         assertTrue(refused.getMessage().endsWith("it has 9 optional names, and a key pattern has 8 at most"),
                 refused.getMessage());
     }

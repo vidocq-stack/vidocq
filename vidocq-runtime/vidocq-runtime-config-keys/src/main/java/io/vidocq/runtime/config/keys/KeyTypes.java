@@ -38,7 +38,7 @@ import java.util.function.Function;
 final class KeyTypes {
 
     /** What starts the type of a list: {@code list:int}. */
-    static final String LIST = "list:";
+    static final String LIST_OF = "list:";
 
     private static final String BOOLEAN = "boolean";
     private static final String INT = "int";
@@ -62,12 +62,12 @@ final class KeyTypes {
 
     /** Whether a type is a list. */
     static boolean list(String type) {
-        return type.startsWith(LIST);
+        return type.startsWith(LIST_OF);
     }
 
     /** The type of the items of a list; the type itself when it is not a list. */
     static String item(String type) {
-        return list(type) ? type.substring(LIST.length()) : type;
+        return list(type) ? type.substring(LIST_OF.length()) : type;
     }
 
     /**

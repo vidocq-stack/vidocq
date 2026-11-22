@@ -133,7 +133,7 @@ public final class KeyCatalog {
             return List.of();
         }
         KeyDescription description = described.get();
-        List<ValueProblem> problems = new ArrayList<>();
+        List<ValueProblem> found = new ArrayList<>();
         // White space around a value is not the value, an empty value is no value, and an expression is the
         // runtime's to expand: a finding on any of them could be wrong.
         String text = value == null ? "" : value.strip();
@@ -142,21 +142,21 @@ public final class KeyCatalog {
             List<String> items = list ? KeyTypes.items(text) : List.of(text);
             for (String item : items) {
                 KeyTypes.refusal(KeyTypes.item(description.type()), item)
-                        .ifPresent(why -> problems.add(new ValueProblem(ValueProblem.Kind.NOT_OF_TYPE, key, value,
+                        .ifPresent(why -> found.add(new ValueProblem(ValueProblem.Kind.NOT_OF_TYPE, key, value,
                                 description, said(list, item, why))));
             }
             List<String> allowed = description.values();
             for (String item : items) {
                 if (!allowed.isEmpty() && allowed.stream().noneMatch(item::equalsIgnoreCase)) {
-                    problems.add(new ValueProblem(ValueProblem.Kind.NOT_ALLOWED, key, value, description,
+                    found.add(new ValueProblem(ValueProblem.Kind.NOT_ALLOWED, key, value, description,
                             said(list, item, "is not one of " + String.join(", ", allowed))));
                 }
             }
         }
         if (description.deprecated()) {
-            problems.add(new ValueProblem(ValueProblem.Kind.DEPRECATED, key, value, description, "is deprecated"));
+            found.add(new ValueProblem(ValueProblem.Kind.DEPRECATED, key, value, description, "is deprecated"));
         }
-        return List.copyOf(problems);
+        return List.copyOf(found);
     }
 
     /** What is said of a value, or of one item of a list, which is then named by its start: it can be long. */

@@ -190,7 +190,7 @@ public final class CommandRunner {
                 }
                 yield 1;
             }
-            case ProjectExtensions.Resolution.Resolved(var extensions, var _, var cached) -> {
+            case ProjectExtensions.Resolution.Resolved(var extensions, _, var cached) -> {
                 if (extensions.isEmpty()) {
                     CliOutput.println(CliOutput.dim(
                             "  (none — add one with 'vidocq extension add <id>')"));
