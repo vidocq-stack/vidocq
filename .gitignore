@@ -2,6 +2,8 @@
 *.class
 
 target
+# What an IDE compiles (profile ide-output of vidocq-parent, and the Maven plugin for an application)
+target-ide
 # flatten-maven-plugin output (vidocq-runtime-bom, vidocq-runtime-parent)
 .flattened-pom.xml
 

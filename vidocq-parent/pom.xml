@@ -697,5 +697,24 @@
                 </pluginManagement>
             </build>
         </profile>
+        <profile>
+            <!-- An IDE that reads the project through m2e (VS Code, Eclipse) compiles into a folder of its own:
+                 its classes are not the build's (not woven, nothing of vidocq:generate), and a later package
+                 without clean would ship them. m2e sets the property when it reads a project; a Maven build,
+                 also one started from the IDE, does not carry it. The annotation processors run in the IDE as
+                 they do in the build: Eclipse leaves them off unless the project asks. -->
+            <id>ide-output</id>
+            <activation>
+                <property>
+                    <name>m2e.version</name>
+                </property>
+            </activation>
+            <properties>
+                <m2e.apt.activation>jdt_apt</m2e.apt.activation>
+            </properties>
+            <build>
+                <directory>${project.basedir}/target-ide</directory>
+            </build>
+        </profile>
     </profiles>
 </project>

@@ -23,6 +23,8 @@ and tested, never released), `vidocq-runtime/` (the runtime, its extensions, Mav
   release. A pull request runs no TCK.
 - Never install into `~/.m2` from a branch build: `-Dmaven.repo.local=<scratch>/m2
   -Dmaven.repo.local.tail=$HOME/.m2/repository`.
+- An IDE that reads the project through m2e (VS Code, Eclipse) compiles into `target-ide/`, never into `target/`:
+  profile `ide-output` of `vidocq-parent`. `target/` holds what Maven built, and nothing else.
 
 ## Working rules
 
