@@ -8,7 +8,7 @@
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - The MicroProfile Health 4.0 TCK is a **public Maven Central** artifact:
   `org.eclipse.microprofile.health:microprofile-health-tck:4.0`
   (unlike Jakarta TCKs, no need to install manually).

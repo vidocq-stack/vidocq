@@ -20,7 +20,7 @@ JSON serialisation via Champollion.
 ## Prerequisites
 
 ```bash
-sdk env   # java=25-tem, maven=3.9.16
+sdk env   # java=25-tem, maven=3.10.0
 ```
 
 ## Commands

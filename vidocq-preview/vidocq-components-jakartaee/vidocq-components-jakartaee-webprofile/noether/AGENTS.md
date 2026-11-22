@@ -10,7 +10,7 @@ their Maven deploy/Central skip flags. `noether-validation-core` (and its aggreg
 is released since 0.4.0, by the maintainer's decision of 2026-11-22: the tests of
 `noether-jpa-core` use it, and the release builds only what it publishes.
 
-Use Java 25, Maven 3.9.16, strict Java Modules and virtual threads for I/O.
+Use Java 25, Maven 3.10.0, strict Java Modules and virtual threads for I/O.
 Entity access uses APT and the JDK Class-File API; no reflection-based entity
 access, dynamic proxies or bytecode libraries. Write failing tests before
 behavioral changes. Use the wrapper from the root for the unit reactor; invoke

@@ -34,7 +34,7 @@ The `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` artefact
 
 [source,bash]
 ----
-sdk env                              # Java 25 + Maven 3.9.16
+sdk env                              # Java 25 + Maven 3.10.0
 ./mvnw -ntp install -DskipTests     # installs grimm-core and grimm-cdi-vauban
 ----
 

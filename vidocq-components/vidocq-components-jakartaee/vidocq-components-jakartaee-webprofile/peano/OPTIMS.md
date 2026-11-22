@@ -354,7 +354,7 @@ on a useful measured benefit with acceptable semantics/lifecycle tradeoffs.
   before beginning a production-code experiment.
 
 The long corpus protocol below has run; exact selection and raw data are in BENCH.md.
-Run from the checkout with the pinned Java 25 and Maven 3.9.16 environment:
+Run from the checkout with the pinned Java 25 and Maven 3.10.0 environment:
 
 ```bash
 rtk ./mvnw -ntp -Pbench,beans-compat clean package

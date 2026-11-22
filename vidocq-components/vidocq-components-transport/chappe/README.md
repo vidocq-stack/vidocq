@@ -418,7 +418,7 @@ Chappe's goal is a transport that holds under load and over time; no ranking aga
 
 ```bash
 sdk use java 25-tem
-sdk use maven 3.9.16
+sdk use maven 3.10.0
 ```
 
 ## Build & Test

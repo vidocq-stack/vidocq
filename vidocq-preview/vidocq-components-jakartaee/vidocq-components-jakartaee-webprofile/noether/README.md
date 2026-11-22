@@ -41,7 +41,7 @@ of `<scope>` (Vidocq/noether#72). The Persistence TCK does not cover this; the g
 
 ## Build
 
-Java 25 (Temurin) and Maven 3.9.16 are pinned in `.sdkmanrc`. From this repository:
+Java 25 (Temurin) and Maven 3.10.0 are pinned in `.sdkmanrc`. From this repository:
 
 ```sh
 sdk env

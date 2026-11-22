@@ -7,7 +7,7 @@
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) — the version is pinned in the
   parent `pom.xml` via `<junit.version>` and in `ravel-tck/pom.xml`.
   No downgrade to JUnit 5: all new tests target `org.junit.jupiter.api.*` /

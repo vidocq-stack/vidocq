@@ -18,7 +18,7 @@
 ## Prerequisites
 
 ```bash
-sdk env          # Java 25-tem + Maven 3.9.16
+sdk env          # Java 25-tem + Maven 3.10.0
 ```
 
 ## Build

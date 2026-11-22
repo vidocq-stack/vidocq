@@ -25,7 +25,7 @@ via [Vauban](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-component
 
 ## Prerequisites
 
-**Java 25** (Temurin) + **Maven 3.9.16** — pinned via `.sdkmanrc`: `sdk env`.
+**Java 25** (Temurin) + **Maven 3.10.0** — pinned via `.sdkmanrc`: `sdk env`.
 
 ## Build
 

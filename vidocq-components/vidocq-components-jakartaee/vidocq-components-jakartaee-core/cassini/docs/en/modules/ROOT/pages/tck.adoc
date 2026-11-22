@@ -103,7 +103,7 @@ Historical note: the module used to be **excluded** from the parent `<modules>` 
 # from the root of the monorepo
 cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini
 
-# 1. Prerequisites: Java 25 + Maven 3.9.16 (via .sdkmanrc)
+# 1. Prerequisites: Java 25 + Maven 3.10.0 (via .sdkmanrc)
 sdk env
 
 # 2. Install the official TCK JAR (non-public, fetch once).

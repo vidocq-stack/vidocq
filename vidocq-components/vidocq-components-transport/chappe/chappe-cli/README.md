@@ -12,7 +12,7 @@ mini-YAML or CLI flags.
 From the root of the `chappe/` sub-project:
 
 ```bash
-sdk env                                # Java 25 + Maven 3.9.16
+sdk env                                # Java 25 + Maven 3.10.0
 mvn -ntp -pl chappe-cli -am package    # produces the fat jar
 ```
 

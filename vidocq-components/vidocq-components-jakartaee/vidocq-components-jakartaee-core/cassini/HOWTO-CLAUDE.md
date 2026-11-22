@@ -52,7 +52,7 @@ mvn test
 
 ## Conventions
 
-- **Java 25** + **Maven 3.9.16** (see `.sdkmanrc`)
+- **Java 25** + **Maven 3.10.0** (see `.sdkmanrc`)
 - **Explicit Java modules**: all modules have a `module-info.java`
 - **Packages**:
   - `io.vidocq.cassini.spi.*` — public SPI (semantic stability)

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - The official TCK artifacts are on **public Maven Central** (no manual install needed):
   `microprofile-telemetry-tracing-tck:2.2-RC3`, `microprofile-telemetry-metrics-tck:2.2-RC3`, `microprofile-telemetry-logs-tck:2.2-RC3`
 - **TCK status: 85/85 PASS on TCK 2.2-RC3 (2026-10-04; 2.1: 85/85 on 2026-06-24)** — see [`TCK.md`](TCK.md)

@@ -128,7 +128,7 @@ the milestone that needs them. JSTL is out of scope.
 ## Build
 
 ```bash
-sdk env          # Java 25 (Temurin) + Maven 3.9.16, pinned by .sdkmanrc
+sdk env          # Java 25 (Temurin) + Maven 3.10.0, pinned by .sdkmanrc
 ./mvnw -ntp install
 ./mvnw -ntp -f examples/precompiled-pages/pom.xml clean package
 ./mvnw -pl ibarra-arquillian test                # adapter regression tests

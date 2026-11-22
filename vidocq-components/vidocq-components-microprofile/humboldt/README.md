@@ -35,7 +35,7 @@ See [`PLAN.md`](PLAN.md) for the detailed M0 → M9 roadmap, and [`tasks/todo.md
 ## Startup
 
 ```bash
-# Prerequisite: sdkman with Java 25 + Maven 3.9.16
+# Prerequisite: sdkman with Java 25 + Maven 3.10.0
 sdk env
 ./mvnw -ntp install -DskipTests
 ```

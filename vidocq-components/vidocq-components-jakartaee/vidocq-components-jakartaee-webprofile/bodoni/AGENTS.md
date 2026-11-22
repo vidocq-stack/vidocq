@@ -86,7 +86,7 @@ Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspac
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - `jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:3.0.2` is already modular
   upstream (module `jakarta.servlet.jsp.jstl`; it `requires transitive`
   `jakarta.servlet.jsp`, `jakarta.servlet`, `jakarta.el`, `java.sql` and `java.desktop`)

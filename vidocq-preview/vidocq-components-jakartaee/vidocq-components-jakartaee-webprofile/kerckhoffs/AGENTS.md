@@ -60,7 +60,7 @@ session id on login, fail closed, write the negative test before the positive on
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - `jakarta.security.enterprise:jakarta.security.enterprise-api:4.0.0` is already modular
   upstream (module `jakarta.security`; it `requires transitive jakarta.security.auth.message`,
   `jakarta.servlet` and `jakarta.json`) — no Vidocq fork needed.

@@ -18,7 +18,7 @@ The official Jakarta Tags tests pass **541 of 541 (100 %)** on Bodoni + Ibarra +
 
 == Running it
 
-Prerequisites: Java 25 and Maven 3.9.16 (`sdk env`), and network access for the first download of the distribution zip, unless `TAGS_TCK_ZIP` names a local copy (a relative path is resolved against the current directory). The script checks the zip against a pinned SHA-256 and extracts the Derby DDL only, into `bodoni-tck/target/tags-tck-distribution/`. It never copies a TCK file into the repository (EFTL).
+Prerequisites: Java 25 and Maven 3.10.0 (`sdk env`), and network access for the first download of the distribution zip, unless `TAGS_TCK_ZIP` names a local copy (a relative path is resolved against the current directory). The script checks the zip against a pinned SHA-256 and extracts the Derby DDL only, into `bodoni-tck/target/tags-tck-distribution/`. It never copies a TCK file into the repository (EFTL).
 
 [source,bash]
 ----

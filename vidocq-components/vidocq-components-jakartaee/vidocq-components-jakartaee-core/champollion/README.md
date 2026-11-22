@@ -73,7 +73,7 @@ Reproducible bugs: [`BUG.md`](./BUG.md). Performance measurements: [`BENCH.md`](
 ## Quick Start
 
 ```bash
-sdk env                           # JDK 25 + Maven 3.9.16 (cf. .sdkmanrc)
+sdk env                           # JDK 25 + Maven 3.10.0 (cf. .sdkmanrc)
 mvn -ntp install -DskipTests      # reactor build (8 modules)
 mvn test                          # unit tests
 ```

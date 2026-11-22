@@ -12,7 +12,7 @@ documented there; this file keeps what is specific to the Pages TCK.
 
 ## Run
 
-Use Java 25, Maven 3.9.16 and Python 3 from the repository checkout:
+Use Java 25, Maven 3.10.0 and Python 3 from the repository checkout:
 
 ```bash
 ./run-official-tck-pages-4.0.sh smoke

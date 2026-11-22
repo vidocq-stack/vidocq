@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - The TCK runner (`dirac-tck`, in-reactor behind the `tck` Maven profile) consumes Dirac
   artifacts installed locally by the `run-official-tck-mp-metrics-5.1.sh` script
 

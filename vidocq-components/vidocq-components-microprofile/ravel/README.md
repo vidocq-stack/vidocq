@@ -33,7 +33,7 @@ implementation for the [Vidocq](https://codefloe.com/Vidocq) ecosystem.
 
 ```bash
 cd ravel
-sdk env                         # Java 25 + Maven 3.9.16
+sdk env                         # Java 25 + Maven 3.10.0
 mvn -ntp install -DskipTests    # reactor build
 mvn test                        # unit tests
 ```

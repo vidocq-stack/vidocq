@@ -29,7 +29,7 @@ open decisions and the milestones are in [PLAN.md](PLAN.md); the TCK state is in
 
 ## Prerequisites
 
-Java 25 (Temurin) and Maven 3.9.16, pinned in `.sdkmanrc`:
+Java 25 (Temurin) and Maven 3.10.0, pinned in `.sdkmanrc`:
 
 ```bash
 sdk env

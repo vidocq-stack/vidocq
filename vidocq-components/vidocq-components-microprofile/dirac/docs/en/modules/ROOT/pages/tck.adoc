@@ -27,7 +27,7 @@ The artefact `org.eclipse.microprofile.metrics:microprofile-metrics-api-tck:5.1.
 
 [source,bash]
 ----
-sdk env                                              # Java 25 + Maven 3.9.16
+sdk env                                              # Java 25 + Maven 3.10.0
 ./mvnw -ntp install -DskipTests                      # full reactor build
 ----
 

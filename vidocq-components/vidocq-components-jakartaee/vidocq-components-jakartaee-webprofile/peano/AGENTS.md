@@ -81,7 +81,7 @@ Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspac
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - `jakarta.el:jakarta.el-api:6.0.1` is already modular upstream (module `jakarta.el`) —
   no Vidocq fork needed.
 - The official EL 6.0.1 TCK is `jakarta.tck:jakarta-expression-language-tck:6.0.1`;

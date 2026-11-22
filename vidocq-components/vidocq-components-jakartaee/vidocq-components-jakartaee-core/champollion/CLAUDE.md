@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Prerequisites
 
-- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - Official TCKs must be installed in the local M2 (non-public artifacts):
   - `jakarta.json:jakarta.json-tck:2.1.x` (JSON-P 2.1)
   - `jakarta.json.bind:jakarta.json.bind-tck:3.0.x` (JSON-B 3.0)

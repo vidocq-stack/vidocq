@@ -122,7 +122,7 @@ classes: corrected text-literal identity uses a new serialization emission schem
 ## Build
 
 ```bash
-sdk env          # Java 25 (Temurin) + Maven 3.9.16, pinned by .sdkmanrc
+sdk env          # Java 25 (Temurin) + Maven 3.10.0, pinned by .sdkmanrc
 ./mvnw -ntp install
 ./run-official-tck-el-6.0.sh all               # full official TCK, downloads distribution if needed
 ./run-official-tck-el-6.0.sh smoke             # 25 selected tests, including signatures
