@@ -100,7 +100,10 @@ The file is the one the last Maven build wrote, and an IDE that compiles by itse
 `mvn process-test-classes` (or any later phase) once before the first test, and again after a change of dependencies.
 `mvn test-compile` is not enough: `vidocq:test-path` runs in the phase after it. Without the file, `@VidocqTest` stops
 before it starts the application and names that build. A property the IDE sets, as the Vidocq IntelliJ plugin does,
-wins over the file.
+wins over the file. Where VS Code's Java extension compiles into a folder of its own, `target-ide/`, a test it starts
+does not read the file, which that folder does not hold: the application starts on the module path the extension
+builds for the launch (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]).
+The same is expected of Eclipse.
 * [[dev-services]]**The dev services of the run**reach the application. `vidocq test`, `vidocq dev`
   and, under a plain `mvn test`, the `vidocq-runtime-devservices-junit` listener (see
   xref:dev-services.adoc[Dev services]) put the keys their containers publish, `vidocq.pool.url` or

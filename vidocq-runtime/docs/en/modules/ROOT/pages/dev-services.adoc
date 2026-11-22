@@ -257,7 +257,10 @@ JUnit Platform `LauncherSessionListener`, discovered through `META-INF/services`
 providers found on the test class path once, before any test class, injects their coordinates as
 system properties (`vidocq.pool.url`, `.username`, `.password`, …), and stops them once the whole
 test run ends — one set of containers for the whole suite. `-Dvidocq.dev.devServices=false`, or
-that same key in the application's own files, skips it entirely; without Docker or Podman, the
+that same key in the application's own files, skips it entirely. The listener reads those files
+where the test runs: `target/classes` under Maven, and the folder an IDE compiles into when it has
+one of its own (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[`target-ide/`],
+BUG-20261122-03); its state file stays under `target/` (<<test-run-files>>). Without Docker or Podman, the
 listener fails the run fast, naming the runtime it looked for and the key that switches it off, so
 a test that needed the database does not time out silently.
 
