@@ -701,14 +701,14 @@ return ActionResult.ofGraph("3 entities", nodes, edges);
 `ActionResult.rowsWithMenu(summary, columns, rows, more, menu)` gives a result of rows a menu on its ticked rows
 (xref:dev-console.adoc#rows-menu[A menu on the selected rows]). Each `MenuItem(label, action, arguments)` names an
 action of the same panel and a JSON object of its arguments, as a <<replay-column,replay cell>> does. Inside the
-strings of those arguments, `${column}`, for a column of the result, becomes that column's values for the ticked
+strings of those arguments, `+${column}+`, for a column of the result, becomes that column's values for the ticked
 rows, in the rows' order, joined with `", "`, and written as query literals:
 
 * a string as `'O''Brien'`;
 * a number with the exact digits of the body;
 * `TRUE`, `FALSE` or `NULL`.
 
-A `${name}` that names no column stays as it is.
+A `+${name}+` that names no column stays as it is.
 
 [source,java]
 ----

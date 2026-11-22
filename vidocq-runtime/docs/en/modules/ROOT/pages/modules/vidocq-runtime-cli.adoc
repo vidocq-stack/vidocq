@@ -599,27 +599,27 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 `add` also appends the settings an extension needs to `vidocq.properties`, as one block opened by
 `# <id>: settings written by the Vidocq CLI, yours to edit`, written once: a second `add` finds the block, and a key the
 application already sets, active or commented, is left out, so nothing is overwritten. `vidocq create -x` writes the
-same blocks. `{app}` below is the project's artifactId.
+same blocks. `\{app}` below is the project's artifactId.
 
 [cols="1,3"]
 |===
 | Extension | Block
 
 | `humboldt-telemetry`
-| `otel.sdk.disabled=false`, `otel.service.name={app}`, `otel.exporter.otlp.endpoint=http://localhost:4318` and
+| `otel.sdk.disabled=false`, `otel.service.name=\{app}`, `otel.exporter.otlp.endpoint=http://localhost:4318` and
   `otel.exporter.otlp.protocol=http/protobuf`: a local collector. Under `vidocq dev`, the OpenTelemetry dev service
   sets the endpoint and the protocol to its own, as system properties, which outrank the file.
 
 | `cervantes-jwt`
 | Comments only. The Keycloak dev service sets `mp.jwt.verify.issuer` and `mp.jwt.verify.publickey.location` under
-  `vidocq dev`, `vidocq test` and `mvn test`; the block shows them, commented, for a realm named `{app}` on your
+  `vidocq dev`, `vidocq test` and `mvn test`; the block shows them, commented, for a realm named `\{app}` on your
   identity provider, and `vidocq.dev.keycloak.realm-import` / `vidocq.dev.keycloak.realm`, commented too: a realm
   import naming a file not there yet would stop the dev service. `vidocq doctor` warns until a verification key is
   set (<<doctor-project>>).
 
 | `mansart-pool`
-| Comments only: `vidocq.pool.url=jdbc:postgresql://localhost:5432/{app}`, `vidocq.pool.username={app}` and
-  `vidocq.pool.password={app}`. The PostgreSQL dev service sets the three keys under `vidocq dev`, `vidocq test`
+| Comments only: `vidocq.pool.url=jdbc:postgresql://localhost:5432/\{app}`, `vidocq.pool.username=\{app}` and
+  `vidocq.pool.password=\{app}`. The PostgreSQL dev service sets the three keys under `vidocq dev`, `vidocq test`
   and `mvn test`; uncommented, they are the database of `vidocq run` and of the packaged application. A
   `jdbc:postgresql:` URL in the file never switches the dev service off (xref:dev-services.adoc#postgres-only-for-postgres[A PostgreSQL container only for a PostgreSQL application]).
 |===
@@ -695,7 +695,7 @@ devservice.in-tests = true
 ----
 
 Its settings are lines, in key order, which `add` appends as a block to `vidocq.properties`
-(<<extension-settings>>); `{app}` is the project's artifactId:
+(<<extension-settings>>); `\{app}` is the project's artifactId:
 
 [source,properties]
 ----
