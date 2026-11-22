@@ -23,7 +23,9 @@ import io.vidocq.runtime.tooling.Diagnostic;
 import io.vidocq.runtime.tooling.Diagnostics;
 import io.vidocq.runtime.tooling.DoctorContext;
 import io.vidocq.runtime.tooling.DoctorFacts;
+import io.vidocq.runtime.tooling.KeyDoctor;
 import io.vidocq.runtime.tooling.ProjectDoctor;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
@@ -32,10 +34,12 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
@@ -47,7 +51,9 @@ import java.util.function.Consumer;
  *
  * <p>Has no default phase. The extensions are those of the project's runtime dependencies, which Maven resolves
  * before the goal runs. The project checks of {@link ProjectDoctor} read its sources, and {@code -Dvidocq.doctor.fix}
- * first repairs what they report as fixable (Vidocq/vidocq#339).</p>
+ * first repairs what they report as fixable (Vidocq/vidocq#339). The checks of {@link KeyDoctor} come last: the
+ * descriptions of the configuration keys those dependencies and the project ship, and the values of
+ * {@code vidocq.properties} against them, as warnings.</p>
  */
 @Mojo(name = "doctor",
       requiresDependencyResolution = ResolutionScope.RUNTIME,
@@ -75,7 +81,19 @@ public class VidocqDoctorMojo extends AbstractMojo {
     // package-private: a test feeds its own facts.
     DoctorContext context() {
         return DoctorFacts.gather(project.getBasedir().toPath(), System.getenv("JAVA_HOME"),
-                () -> DoctorFacts.Extensions.found(ProjectExtensionArtifacts.of(project).size()));
+                () -> DoctorFacts.Extensions.found(ProjectExtensionArtifacts.of(project).size(), classPath()));
+    }
+
+    /**
+     * The file of each resolved artifact that has one, in resolution order: where {@link KeyDoctor} looks for the
+     * descriptions of the configuration keys. A module of the reactor resolves to its directory of classes.
+     */
+    private List<Path> classPath() {
+        return project.getArtifacts().stream()
+                .map(Artifact::getFile)
+                .filter(Objects::nonNull)
+                .map(File::toPath)
+                .toList();
     }
 
     @Override
@@ -92,6 +110,7 @@ public class VidocqDoctorMojo extends AbstractMojo {
         }
         List<Diagnostic> diagnostics = new ArrayList<>(Diagnostics.run(context()));
         diagnostics.addAll(ProjectDoctor.check(ProjectDoctor.read(basedir, DoctorFacts::portFree)));
+        diagnostics.addAll(KeyDoctor.check(KeyDoctor.read(basedir, classPath())));
         for (Diagnostic d : diagnostics) {
             Consumer<CharSequence> log = level(getLog(), d.status());
             log.accept(String.format("%s %-17s %s", symbol(d.status()), d.name(), d.detail()));

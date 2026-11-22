@@ -193,6 +193,67 @@ class VidocqProjectReportMojoTest {
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("error:     ↳ Install a JDK 25+")), lines.toString());
     }
 
+    /** The descriptions of the configuration keys the project's jars ship are checked, as a warning. */
+    @Test
+    void doctorWarnsOfAValueThatIsNotOfTheTypeOfItsKeyAndDoesNotFail() throws Exception {
+        MavenProject project = describedProject("vidocq.sample.port=eighty\n");
+
+        mojo(new VidocqDoctorMojo(), project).execute();
+
+        assertTrue(lines.contains("warn: ⚠ Config values     vidocq.sample.port=eighty — is not an int"),
+                lines.toString());
+        assertTrue(lines.contains("info: ✔ Key descriptions  1 file, 1 key described"), lines.toString());
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith("warn:     ↳ ") && l.endsWith(
+                "sample.jar!/META-INF/vidocq/config-user-keys.properties:2")), lines.toString());
+        assertTrue(lines.getLast().matches("info:   \\d+ checks — \\d+ ok, \\d+ warning\\(s\\), 0 failed"),
+                lines.getLast());
+    }
+
+    @Test
+    void doctorSaysThatTheValuesOfTheDescribedKeysFit() throws Exception {
+        MavenProject project = describedProject("vidocq.sample.port=80\n");
+
+        mojo(new VidocqDoctorMojo(), project).execute();
+
+        assertTrue(lines.contains("info: ✔ Config values     1 described key, every value fits"), lines.toString());
+        assertTrue(lines.stream().noneMatch(l -> l.startsWith("warn: ⚠ Config values")), lines.toString());
+    }
+
+    /** The two checks come last, after those of the project, and a project whose jars describe nothing passes. */
+    @Test
+    void doctorChecksTheKeyDescriptionsAfterTheProject() throws Exception {
+        MavenProject project = project();
+        Files.writeString(dir.resolve("pom.xml"),
+                "<project><parent><groupId>io.vidocq.runtime</groupId></parent></project>");
+
+        mojo(new VidocqDoctorMojo(), project).execute();
+
+        assertEquals(List.of("info: ✔ Key descriptions  no jar of the project describes its configuration keys",
+                        "info: ✔ Config values     no described key in vidocq.properties"),
+                lines.subList(lines.size() - 3, lines.size() - 1), lines.toString());
+    }
+
+    /** The project of {@link #project()}, one of whose jars describes a key, with this {@code vidocq.properties}. */
+    private MavenProject describedProject(String config) throws IOException {
+        MavenProject project = project();
+        Files.writeString(dir.resolve("pom.xml"),
+                "<project><parent><groupId>io.vidocq.runtime</groupId></parent></project>");
+        Files.writeString(dir.resolve("vidocq.properties"), config);
+        Path jar = dir.resolve("sample.jar");
+        try (OutputStream out = Files.newOutputStream(jar); var zip = new JarOutputStream(out)) {
+            zip.putNextEntry(new JarEntry("META-INF/vidocq/config-user-keys.properties"));
+            zip.write("format=1\nvidocq.sample.port|type=int\n".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        Set<Artifact> artifacts = new LinkedHashSet<>(project.getArtifacts());
+        artifacts.add(artifact("com.acme", "sample", jar));
+        Artifact unresolved = artifact("com.acme", "unresolved", jar);
+        unresolved.setFile(null);
+        artifacts.add(unresolved);
+        project.setArtifacts(artifacts);
+        return project;
+    }
+
     /** A project declaring Cassini, which brings Chappe; the core jar provides no extension. */
     private MavenProject project() throws IOException {
         Model model = new Model();
