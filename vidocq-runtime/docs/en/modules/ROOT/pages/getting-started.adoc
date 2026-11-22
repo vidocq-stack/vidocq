@@ -150,7 +150,8 @@ In VS Code, `mvn vidocq:vscode`(`vidocq vscode`) writes `.vscode/`: the Java ext
 server on Java 25, which Vauban's annotation processors need; tasks for `vidocq dev`, `run` and `test`; and a debug
 configuration that attaches to `vidocq dev`. The extension compiles an application of one module into
 `target-ide/`, a folder of its own next to `target/`; an application of several modules puts a profile in its parent
-pom for that (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]). See
+pom for that, and one that another project of the workspace depends on, in its own pom
+(xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]). See
 xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
 
 In Eclipse, `mvn vidocq:eclipse`(`vidocq eclipse`) writes `.eclipse/`: Maven builds of `vidocq dev`,

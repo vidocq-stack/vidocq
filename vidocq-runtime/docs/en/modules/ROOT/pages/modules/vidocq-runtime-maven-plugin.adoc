@@ -2079,9 +2079,10 @@ project gets it, and from where:
 
 * **An application of one module gets it from the plugin, with nothing in its pom.** The plugin moves a project
   that declares it as a build extension (<<codegen-wiring>>), that stands alone (no parent pom read from the disk,
-  no module of its own), and that no other project read with it depends on.
+  no module of its own), and that no project read in the same Maven session depends on.
 * **An application of several modules puts a profile in the parent pom its modules inherit**
-  (<<ide-output-profile>>). Until then the IDE compiles its modules into `target/classes`, as before.
+  (<<ide-output-profile>>). Until then the IDE compiles its modules into `target/classes` and rewrites that folder
+  on import, as before.
 
 The plugin leaves an application of several modules alone because m2e keeps Maven's folders in its own record for
 a project the plugin moves: when the plugin moved the library of an application of two modules, a test of the
@@ -2089,26 +2090,39 @@ application ran the library Maven built last, not the one the IDE had just compi
 `Module … not found` on a clone Maven never built (seen in the language server of VS Code's Java extension). A
 profile acts while Maven builds the model, and the test then runs what the IDE compiled.
 
+[#ide-output-dependents,reftext="a project of another folder that depends on the application"]
+**A project of another folder that depends on the application.** m2e does not read the other folders of the IDE's
+workspace in the session it reads the application with: the plugin does not see a project of another folder that
+depends on the application, and moves the application all the same. A test of that project then runs the
+application of `target/classes`, the last Maven build, which an edit in the IDE does not reach, or none on a clone
+Maven never built (`NoClassDefFoundError`). The goals, run in the application's folder, see only that folder:
+`vidocq:vscode` prints no warning there. Put the `ide-output` profile in the application's own pom then
+(<<ide-output-profile>>): m2e records `target-ide/` for it, and the test runs what the IDE compiled. Setting
+`vidocq.ide.output.skip` in the application's pom keeps it in `target/`, as before, instead; with such a project,
+only the profile was run.
+
 "Read by m2e" is the property `m2e.version`, which m2e sets on the Maven session it reads a project with. A Maven
 build on the command line or in CI does not carry it: it builds and runs from `target/` and creates no
 `target-ide/`. The tasks <<vscode,`vidocq:vscode`>> writes are shell commands that run Maven, and the Maven launches
 <<eclipse,`vidocq:eclipse`>> writes run in m2e's launcher, whose bundle does not name the property: the same is
-expected of both, and neither was run from an IDE. IntelliJ IDEA's Maven import runs the plugin too and does
-not set m2e's property (read in the jars of its Maven plugin, 2026.3; the import was not run): nothing is expected
-to change for it (<<idea>>).
+expected of both, and neither was run from an IDE. IntelliJ IDEA's Maven import does not set m2e's property: no jar
+of its Maven plugin, 2026.3, names it. Whether that import runs the plugin was not shown by those jars, and the
+import was not run; without the property the plugin moves nothing either way, so nothing is expected to change for
+IntelliJ IDEA (<<idea>>).
 
 What goes with the folder the plugin gives:
 
 * `mvn clean` leaves `target-ide/` alone: the folder is the IDE's.
 * The folder ignores itself: the plugin writes `target-ide/.gitignore`, which holds `*`, when it is missing, and
-  the project's own `.gitignore` needs no line for it. The file serves git only: a tool with ignore rules of its
-  own, a search or a container build, needs its own line.
+  the project's own `.gitignore` needs no line for it. The file is git's: a tool with ignore rules of its own, the
+  `.dockerignore` of a container build for instance, needs its own line.
 * `<vidocq.ide.output.skip>true</vidocq.ide.output.skip>` in the properties of the pom leaves the project in
   `target/`, for a tool that expects Maven's folders there.
 * A value the pom computes itself from `${project.build.directory}` stays under `target/`: Maven has resolved the
   pom's expressions before the plugin moves the folders. With the profile it follows.
 * `target/` is not Maven's alone: the dev services of a test run the IDE starts still write their state file
-  there (xref:dev-services.adoc#test-run-files[the files of a test run]).
+  there, and create the folder on a clone Maven never built
+  (xref:dev-services.adoc#test-run-files[the files of a test run]).
 
 Upgrading a clone an IDE has compiled: run `mvn clean` once, so that `target/classes` no longer holds the IDE's
 classes, and take `"java.autobuild.enabled": false` out of a `.vscode/settings.json` kept by hand
@@ -2144,6 +2158,11 @@ xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`].
 | The `vidocq.properties` the dev services of the run read
 | The one of `target/classes`.
 | The one of the classes the test runs on (xref:dev-services.adoc#in-tests[dev services in tests]).
+| An application of one module, in a test of a project of another folder of the workspace that depends on it
+| As Maven resolves it: its jar from the local repository, or its build in the same reactor.
+| Its `target/classes`, Maven's last build, not what the IDE compiled, and none on a clone Maven never built. With
+the `ide-output` profile in the application's pom, its `target-ide/classes`
+(<<ide-output-dependents,a project of another folder>>).
 |===
 
 The runtime supports that mode on purpose, and Maven stays the reference: CI runs what Maven built. A test that
@@ -2199,15 +2218,19 @@ application of one module:
 ----
 
 * Add `target-ide/` to the project's `.gitignore`: the plugin writes the ignore file only in a folder it moves
-  itself.
-* A module with no parent pom of the project, a library kept next to a standalone application for instance, takes
-  the profile in its own pom.
+  itself, and it does not move a module of an application of several modules. A standalone application that takes
+  the profile in its own pom gets the file: the plugin moves it too.
+* A project with no parent pom of the application takes the profile in its own pom: a standalone application that a
+  project of another folder of the workspace depends on (<<ide-output-dependents,see above>>), which was run, or a
+  library kept next to a standalone application, which was not.
 * `vidocq.ide.output.skip` is the plugin's, and a profile does not read it. Leaving one module in `target/` would
   take deactivating the profile for it in the Maven settings the IDE keeps; that was not tried.
 
 `vidocq:vscode` and `vidocq:eclipse` name the modules of the build the IDE compiles into `target/classes`, with what
 their pom lacks: the profile, or `<extensions>true</extensions>` on the plugin for a module that stands alone and
-declares it without the attribute. A module that sets `vidocq.ide.output.skip` is not named.
+declares it without the attribute. A module that sets `vidocq.ide.output.skip` is not named. A project of another
+folder of the workspace that depends on an application is not part of the build: the goals cannot see it
+(<<ide-output-dependents,a project of another folder>>).
 
 === What was checked
 
@@ -2218,21 +2241,34 @@ On 2026-11-22, with this plugin, in the language server of VS Code's Java extens
   `module-info.java`; the server on JDK 25, the automatic build on. The server's output folders are
   `target-ide/classes` and `target-ide/test-classes`. `target/` is unchanged after the import, after the tests and
   after the build the debugger asks for before a launch. The three tests of a `@VidocqTest` class pass, also when
-  they start as soon as the server is ready, and on a clone Maven never built. `git status` shows nothing new.
+  they start as soon as the server is ready, and on a clone Maven never built. `git status` shows nothing new. The
+  same application with `vidocq-runtime-parent` as its parent is moved the same way, its tests pass and `target/`
+  is unchanged: the installed parent is flattened and holds no profile, so the one of `vidocq-parent` does not
+  reach it.
 * **Maven after the IDE.** `mvn verify` without `clean` packages the jar of a clean build of an untouched copy: the
-  same entries, with the same checksums but for the file that holds the build time. `mvn clean` leaves
-  `target-ide/` alone.
+  same entries, with the same checksums but for `META-INF/vidocq/build-info/<artifactId>.properties`, which holds
+  the build time and the git identity and differs between any two builds. `mvn clean` leaves `target-ide/` alone.
 * **The way out.** With `vidocq.ide.output.skip` the output folders are `target/classes` and
   `target/test-classes`, and no `target-ide/` is created.
-* **The profile in the parent pom** of an application of two modules, a library and the application that depends
-  on it. Both compile into their own `target-ide/`, a test of the application runs the library of
-  `target-ide/classes`, and it sees an edit of the library.
+* **An application of two modules without the profile**, a library and the application that depends on it. Both
+  compile into `target/classes`, as before, and the import rewrites that folder; a test of the application runs the
+  library the IDE compiled and sees an edit of it; both goals name the two modules.
+* **The profile in the parent pom** of that application. Both compile into their own `target-ide/`, `target/` is
+  unchanged, the goals print no warning, a test of the application runs the library of `target-ide/classes` and
+  sees an edit of it, and on a clone Maven never built the test starts.
+* **A standalone application another folder of the workspace depends on.** The plugin moves it, and the other
+  project's test runs the application of `target/classes`, not the IDE's; with the profile in the application's
+  pom it runs the IDE's.
+* **The dev services of a test the IDE starts.** `vidocq.dev.devServices=false` saved in `src/main/resources`
+  reaches `target-ide/classes` only, and the listener opens no session; without it, the session writes its state
+  file into `target/`. No dev service was on the class path, so no container started.
 * **The Java 21 the extension embeds**, without `.vscode/`. The application compiles into `target-ide/` there too:
   what m2e runs of the plugin is compiled for Java 17. The processors do not load, and two of the three tests get a
   404.
 
-Not run: anything in a VS Code window; anything in Eclipse; IntelliJ IDEA's import; an application that inherits
-`vidocq-runtime-parent`; the profile deactivated for one module.
+Not run: anything in a VS Code window; anything in Eclipse; IntelliJ IDEA's import; the profile deactivated for one
+module; the profile in the pom of a library kept next to a standalone application; `vidocq.ide.output.skip` on an
+application a project of another folder depends on; a dev service's container started by a test the IDE runs.
 
 [#vscode]
 == `vidocq:vscode` goal

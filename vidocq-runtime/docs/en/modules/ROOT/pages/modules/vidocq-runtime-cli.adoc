@@ -508,8 +508,8 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 Runs `mvn vidocq:vscode`: `.vscode/settings.json` runs the Java extension's language server on Java 25, `tasks.json`
 runs `vidocq dev`, `run` and `test`, `launch.json` attaches the debugger to `vidocq dev`. A file it did not write is
 left alone. The extension compiles an application of one module into `target-ide/`, not `target/`; an application
-of several modules takes a profile in its parent pom
-(xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]).
+of several modules takes a profile in its parent pom, and one that another project of the workspace depends on, in
+its own pom (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]).
 
 [source,bash]
 ----

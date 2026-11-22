@@ -103,7 +103,8 @@ before it starts the application and names that build. A property the IDE sets, 
 wins over the file. Where VS Code's Java extension compiles into a folder of its own, `target-ide/`, a test it starts
 does not read the file, which that folder does not hold: the application starts on the module path the extension
 builds for the launch (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]).
-The same is expected of Eclipse.
+The same is expected of Eclipse. A project the extension compiles into `target/`, an application of several modules
+without the `ide-output` profile or one that sets `vidocq.ide.output.skip`, reads the file there, as before.
 * [[dev-services]]**The dev services of the run**reach the application. `vidocq test`, `vidocq dev`
   and, under a plain `mvn test`, the `vidocq-runtime-devservices-junit` listener (see
   xref:dev-services.adoc[Dev services]) put the keys their containers publish, `vidocq.pool.url` or
