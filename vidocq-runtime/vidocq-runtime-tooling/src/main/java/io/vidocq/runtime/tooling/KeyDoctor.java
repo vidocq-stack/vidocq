@@ -72,6 +72,11 @@ public final class KeyDoctor {
             + " known. A jar is damaged or was not downloaded whole: delete it from the local Maven repository and"
             + " build again, so that it is fetched again.";
 
+    private static final String JARS_UNREAD = "the jars of the project could not be read";
+
+    private static final String UNRESOLVED_HINT = "The dependencies of the project could not be resolved, see the"
+            + " Extensions check: only the project's own files were read. Run the doctor again once they resolve.";
+
     private KeyDoctor() {}
 
     /**
@@ -81,10 +86,13 @@ public final class KeyDoctor {
      *                them; empty without such a file
      * @param catalog the descriptions the project runs with: its own first, then those of its class path, in order
      * @param files   how many files of key descriptions were found
-     * @param own     the origins of the files of the project itself: there, a fact this reader does not know is
-     *                a mistake to report, where in a jar it may come from a later version
+     * @param own      the origins of the files of the project itself: there, a fact this reader does not know is
+     *                 a mistake to report, where in a jar it may come from a later version
+     * @param resolved whether the class path of the project is known. False when the tool could not resolve it:
+     *                 only the files of the project itself were read then, and the checks say so
      */
-    public record Facts(Map<String, String> config, KeyCatalog catalog, int files, Set<String> own) {
+    public record Facts(Map<String, String> config, KeyCatalog catalog, int files, Set<String> own,
+                        boolean resolved) {
 
         public Facts {
             config = Map.copyOf(config);
@@ -101,6 +109,18 @@ public final class KeyDoctor {
      * once, and the classes of the project itself are not read again there.
      */
     public static Facts read(Path projectDir, List<Path> classPath) {
+        return read(projectDir, classPath, true);
+    }
+
+    /**
+     * {@link #read(Path, List)} with what a tool found of the extensions of the project: their class path, or,
+     * when they could not be resolved, the files of the project alone, which {@link #check} then says.
+     */
+    public static Facts read(Path projectDir, DoctorFacts.Extensions extensions) {
+        return read(projectDir, extensions.classPath(), extensions.error() == null);
+    }
+
+    private static Facts read(Path projectDir, List<Path> classPath, boolean resolved) {
         KeyCatalog.Jar sources = KeyFiles.of(projectDir.resolve(RESOURCES));
         KeyCatalog.Jar classes = KeyFiles.of(projectDir.resolve(CLASSES));
         KeyCatalog.Jar project = new KeyCatalog.Jar(
@@ -117,7 +137,7 @@ public final class KeyDoctor {
         Set<String> own = new LinkedHashSet<>();
         files(project).map(KeyDescriptions::origin).forEach(own::add);
         int files = (int) jars.stream().flatMap(KeyDoctor::files).count();
-        return new Facts(config(projectDir), KeyCatalog.of(jars), files, own);
+        return new Facts(config(projectDir), KeyCatalog.of(jars), files, own, resolved);
     }
 
     private static Stream<KeyDescriptions> files(KeyCatalog.Jar jar) {
@@ -153,15 +173,33 @@ public final class KeyDoctor {
         return config;
     }
 
-    /** The two checks, {@code Key descriptions} then {@code Config values}, in display order; never a failure. */
+    /**
+     * The two checks, {@code Key descriptions} then {@code Config values}, in display order; never a failure.
+     * When the jars of the project could not be resolved, each check ends with a warning that says so, after
+     * what the project's own files give.
+     */
     public static List<Diagnostic> check(Facts facts) {
         List<Diagnostic> diagnostics = new ArrayList<>(descriptions(facts));
         diagnostics.addAll(values(facts));
         return diagnostics;
     }
 
-    /** What is wrong in the files, by file and line; when nothing is, how much they describe. */
+    /**
+     * What is wrong in the files, by file and line; when nothing is, how much they describe. A project whose jars
+     * could not be resolved is told so, last: nothing read is not nothing described.
+     */
     private static List<Diagnostic> descriptions(Facts facts) {
+        if (facts.resolved()) {
+            return filesRead(facts);
+        }
+        List<Diagnostic> diagnostics = new ArrayList<>(facts.files() == 0 ? List.of() : filesRead(facts));
+        diagnostics.add(Diagnostic.warn(DESCRIPTIONS_CHECK, JARS_UNREAD + ": the keys they describe are not known",
+                UNRESOLVED_HINT));
+        return diagnostics;
+    }
+
+    /** What the files that were read say of themselves. */
+    private static List<Diagnostic> filesRead(Facts facts) {
         if (facts.files() == 0) {
             return List.of(Diagnostic.ok(DESCRIPTIONS_CHECK, "no jar of the project describes its configuration keys"));
         }
@@ -195,13 +233,20 @@ public final class KeyDoctor {
                 findings.add(Diagnostic.warn(VALUES_CHECK, said(problem), described(problem)));
             }
         }
-        if (described == 0) {
-            return List.of(Diagnostic.ok(VALUES_CHECK, "no described key in vidocq.properties"));
+        List<Diagnostic> diagnostics = new ArrayList<>();
+        if (!findings.isEmpty()) {
+            diagnostics.addAll(shown(VALUES_CHECK, findings));
+        } else if (described > 0) {
+            diagnostics.add(Diagnostic.ok(VALUES_CHECK, counted(described, "described key") + ", every value fits"));
+        } else if (facts.resolved()) {
+            diagnostics.add(Diagnostic.ok(VALUES_CHECK, "no described key in vidocq.properties"));
         }
-        if (findings.isEmpty()) {
-            return List.of(Diagnostic.ok(VALUES_CHECK, counted(described, "described key") + ", every value fits"));
+        if (!facts.resolved()) {
+            // The keys the jars describe are not known: their values passed no check.
+            diagnostics.add(Diagnostic.warn(VALUES_CHECK, "the values were not checked against the jars of the"
+                    + " project, which could not be read", UNRESOLVED_HINT));
         }
-        return shown(VALUES_CHECK, findings);
+        return diagnostics;
     }
 
     /** A finding on a value: the key and the start of its value, or the key alone when the key is the finding. */

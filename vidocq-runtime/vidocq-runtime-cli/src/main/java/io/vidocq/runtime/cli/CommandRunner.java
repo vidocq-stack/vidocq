@@ -257,8 +257,11 @@ public final class CommandRunner {
                     return resolved.get();
                 })));
         diagnostics.addAll(ProjectDoctor.check(ProjectDoctor.read(dir, DoctorFacts::portFree)));
-        List<Path> classPath = resolved.get() == null ? List.of() : resolved.get().classPath();
-        diagnostics.addAll(KeyDoctor.check(KeyDoctor.read(dir, classPath)));
+        // Not asked: the directory is no Vidocq project, and has no jar to read. Asked and failed: the checks
+        // say that the jars were not read, rather than that none describes a key.
+        DoctorFacts.Extensions asked = resolved.get();
+        diagnostics.addAll(KeyDoctor.check(
+                asked == null ? KeyDoctor.read(dir, List.of()) : KeyDoctor.read(dir, asked)));
         diagnostics.forEach(d -> printDiagnostic(d, doctor.verbose()));
 
         int exit = Diagnostics.exitCode(diagnostics);

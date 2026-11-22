@@ -161,14 +161,20 @@ class CommandRunnerDoctorTest {
         assertTrue(out.toString().contains("Config values     1 described key, every value fits"), out.toString());
     }
 
+    /** Maven failed, offline for one: no jar was read, and the two checks must not pass as if none described a key. */
     @Test
-    void aProjectWhoseExtensionsCouldNotBeResolvedHasNoDescriptionToCheck(@TempDir Path dir) throws IOException {
+    void aProjectWhoseExtensionsCouldNotBeResolvedSaysItsJarsWereNotRead(@TempDir Path dir) throws IOException {
         Path project = sampleProject(dir, "eighty");
         StringBuilder out = new StringBuilder();
 
         doctor(project, out, () -> DoctorFacts.Extensions.failed("Maven exited with code 1"));
 
-        assertTrue(out.toString().contains("no jar of the project describes its configuration keys"), out.toString());
+        assertTrue(out.toString().contains("Key descriptions  the jars of the project could not be read"),
+                out.toString());
+        assertTrue(out.toString().contains("Config values     the values were not checked against the jars"),
+                out.toString());
+        assertFalse(out.toString().contains("no jar of the project describes its configuration keys"), out.toString());
+        assertFalse(out.toString().contains("no described key in vidocq.properties"), out.toString());
         assertFalse(out.toString().contains("is not an int"), out.toString());
     }
 

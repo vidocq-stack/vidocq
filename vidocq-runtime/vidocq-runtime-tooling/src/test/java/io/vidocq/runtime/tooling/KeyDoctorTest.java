@@ -30,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,11 +65,25 @@ class KeyDoctorTest {
     }
 
     private static KeyDoctor.Facts facts(Map<String, String> config, Set<String> own, KeyDescriptions... written) {
+        return facts(true, config, own, written);
+    }
+
+    /** The facts of a project whose jars could not be resolved: these files are its own. */
+    private static KeyDoctor.Facts unresolved(Map<String, String> config, KeyDescriptions... own) {
+        Set<String> origins = new HashSet<>();
+        for (KeyDescriptions file : own) {
+            origins.add(file.origin());
+        }
+        return facts(false, config, origins, own);
+    }
+
+    private static KeyDoctor.Facts facts(boolean resolved, Map<String, String> config, Set<String> own,
+                                         KeyDescriptions... written) {
         List<KeyCatalog.Jar> jars = new ArrayList<>();
         for (KeyDescriptions file : written) {
             jars.add(new KeyCatalog.Jar(file, KeyDescriptions.none()));
         }
-        return new KeyDoctor.Facts(config, KeyCatalog.of(jars), written.length, own);
+        return new KeyDoctor.Facts(config, KeyCatalog.of(jars), written.length, own, resolved);
     }
 
     /** The diagnostics of one check; none of the doctor's is ever a failure. */
@@ -166,6 +181,66 @@ class KeyDoctorTest {
         assertFalse(unopened.hint().contains("config-user-keys.properties"), unopened.hint());
         assertTrue(line.hint().contains("config-user-keys.properties"), line.hint());
         assertFalse(line.hint().contains("damaged"), line.hint());
+    }
+
+    // ---- check: a project whose jars could not be resolved ---------------------------------------------------
+
+    private static final String JARS_UNREAD = "the jars of the project could not be read: the keys they describe"
+            + " are not known";
+    private static final String VALUES_UNCHECKED = "the values were not checked against the jars of the project,"
+            + " which could not be read";
+
+    @Test
+    void aProjectWhoseJarsCouldNotBeReadSaysSoInBothChecksAndNotThatNothingIsDescribed() {
+        List<Diagnostic> all = KeyDoctor.check(unresolved(Map.of("vidocq.sample.port", "eighty")));
+
+        assertEquals(List.of(JARS_UNREAD, VALUES_UNCHECKED), details(all));
+        assertTrue(all.stream().allMatch(d -> d.status() == Diagnostic.Status.WARN), all.toString());
+        assertTrue(all.stream().allMatch(d -> d.hint().contains("Extensions")), all.toString());
+        assertEquals(List.of(KEYS, VALUES), all.stream().map(Diagnostic::name).toList());
+    }
+
+    @Test
+    void theFilesOfTheProjectAreStillReadAndCheckedWhenItsJarsCouldNotBe() {
+        KeyDescriptions own = file("src/keys", "shop.port|type=int", "shop.mode|values=fast,safe");
+
+        List<Diagnostic> fits = KeyDoctor.check(unresolved(Map.of("shop.port", "80", "other", "x"), own));
+        List<Diagnostic> refused = KeyDoctor.check(unresolved(Map.of("shop.port", "eighty"), own));
+
+        assertEquals(List.of("1 file, 2 keys described", JARS_UNREAD, "1 described key, every value fits",
+                VALUES_UNCHECKED), details(fits));
+        assertEquals(List.of(Diagnostic.Status.OK, Diagnostic.Status.WARN, Diagnostic.Status.OK,
+                Diagnostic.Status.WARN), fits.stream().map(Diagnostic::status).toList());
+        assertEquals(List.of("1 file, 2 keys described", JARS_UNREAD, "shop.port=eighty — is not an int",
+                VALUES_UNCHECKED), details(refused));
+    }
+
+    @Test
+    void aWrongFileOfTheProjectIsStillReportedWhenItsJarsCouldNotBeRead() {
+        KeyDescriptions own = file("src/keys", "shop.port|type=itn");
+
+        List<String> details = details(check(unresolved(Map.of(), own), KEYS));
+
+        assertEquals(2, details.size(), details.toString());
+        assertTrue(details.get(0).startsWith("src/keys:2 — "), details.toString());
+        assertEquals(JARS_UNREAD, details.get(1));
+    }
+
+    @Test
+    void theExtensionsAToolFoundSayWhetherTheJarsWereRead() throws IOException {
+        Path project = Files.createDirectories(dir.resolve("app"));
+        write(project, "src/main/resources/" + WRITTEN, "format=1\nshop.mine|type=int\n");
+        Path jar = jar("lib.jar", WRITTEN, "format=1\nlib.port|type=int\n");
+
+        KeyDoctor.Facts found = KeyDoctor.read(project, DoctorFacts.Extensions.found(1, List.of(jar)));
+        KeyDoctor.Facts failed = KeyDoctor.read(project, DoctorFacts.Extensions.failed("Maven exited with code 1"));
+
+        assertTrue(found.resolved());
+        assertEquals(List.of("lib.port", "shop.mine"), keys(found));
+        assertFalse(failed.resolved());
+        assertEquals(List.of("shop.mine"), keys(failed));
+        assertEquals(1, failed.files());
+        assertTrue(KeyDoctor.read(project, List.of(jar)).resolved());
     }
 
     @Test
