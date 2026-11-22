@@ -42,10 +42,37 @@
             <version>2.0.1</version>
             <scope>provided</scope>
         </dependency>
+        <!--
+            PoolNamesContainerTest: the names of the pools in a running container (vauban-core, which the runtime
+            SPI brings), with and without the transaction beans of Mansart.
+        -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-cdi</artifactId>
+            <version>${mansart.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!--
+                        PoolNamesContainerTest starts a container with the transaction beans of Mansart, which this
+                        module only reads when an application has them (`requires static`): the test adds the module
+                        and reads it. @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent).
+                    -->
+                    <argLine>@{argLine} --add-modules io.vidocq.mansart.transactions.cdi --add-reads io.vidocq.runtime.extensions.jakartaee.web.naming=io.vidocq.mansart.transactions.cdi</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

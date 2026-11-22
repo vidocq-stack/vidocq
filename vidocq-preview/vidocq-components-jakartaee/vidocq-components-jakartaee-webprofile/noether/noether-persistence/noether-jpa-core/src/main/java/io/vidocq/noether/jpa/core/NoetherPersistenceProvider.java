@@ -104,8 +104,8 @@ public final class NoetherPersistenceProvider implements PersistenceProvider {
         return true;
     }
 
-    private static void generateSchema(UnitSettings settings, ClassLoader loader) {
-        settings = NamedDataSources.resolve(settings);
+    private static void generateSchema(UnitSettings declared, ClassLoader loader) {
+        UnitSettings settings = NamedDataSources.resolve(declared);
         MappedUnit mapping = mapping(settings, loader);
         var connections = ConnectionSources.of(settings, loader);
         try {

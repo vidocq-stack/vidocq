@@ -92,17 +92,26 @@ public final class ConnectionSources {
         if (url != null && !url.isBlank()) {
             return jdbc(settings, url, loader, pools);
         }
+        return refused(settings, dataSource == null ? null : dataSource.toString());
+    }
+
+    /**
+     * A unit without a connection: every acquisition fails, saying what to do.
+     *
+     * @param named the data source name a property gives, or {@code null}: the descriptor's is then used
+     */
+    private static ConnectionSource refused(UnitSettings settings, String named) {
         boolean jta = settings.transactionType() == jakarta.persistence.PersistenceUnitTransactionType.JTA;
         String key = jta ? Definitions.JTA_DATA_SOURCE : Definitions.NON_JTA_DATA_SOURCE;
-        String name = dataSource != null ? dataSource.toString()
-            : jta ? settings.definition().jtaDataSourceName() : settings.definition().nonJtaDataSourceName();
+        String declared = jta ? settings.definition().jtaDataSourceName() : settings.definition().nonJtaDataSourceName();
+        String name = named != null ? named : declared;
+        String unit = "Persistence unit " + settings.unitName();
+        String message = name == null
+            ? unit + " has no connection: set jakarta.persistence.jdbc.url, or pass a javax.sql.DataSource as " + key
+            : unit + " names the data source '" + name + "', which JNDI binds to no javax.sql.DataSource, as written or "
+                + "under java:comp/env: bind it, or pass the javax.sql.DataSource object as " + key;
         return () -> {
-            throw new SQLException(name == null
-                ? "Persistence unit " + settings.unitName() + " has no connection: set jakarta.persistence.jdbc.url, "
-                    + "or pass a javax.sql.DataSource as " + key
-                : "Persistence unit " + settings.unitName() + " names the data source '" + name + "', which JNDI binds to "
-                    + "no javax.sql.DataSource, as written or under java:comp/env: bind it, or pass the "
-                    + "javax.sql.DataSource object as " + key);
+            throw new SQLException(message);
         };
     }
 

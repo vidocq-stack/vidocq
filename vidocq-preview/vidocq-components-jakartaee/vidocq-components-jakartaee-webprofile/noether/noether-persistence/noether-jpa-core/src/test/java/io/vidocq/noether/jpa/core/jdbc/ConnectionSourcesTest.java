@@ -30,6 +30,7 @@ import io.vidocq.noether.jpa.core.spi.ConnectionPoolFactory;
 import io.vidocq.noether.jpa.core.spi.ConnectionPoolSettings;
 import jakarta.persistence.PersistenceConfiguration;
 import jakarta.persistence.PersistenceException;
+import jakarta.persistence.PersistenceUnitTransactionType;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -156,6 +157,57 @@ class ConnectionSourcesTest {
         try (Connection connection = source.acquire()) {
             assertThat(connection.isValid(1)).isTrue();
         }
+    }
+
+    /** A unit without a JDBC URL, which names the data sources given, and gets {@code overrides}. */
+    private static UnitSettings named(PersistenceUnitTransactionType type, String jtaName, String nonJtaName,
+            Map<String, Object> overrides) {
+        PersistenceConfiguration configuration = new PersistenceConfiguration("orders").transactionType(type);
+        if (jtaName != null) {
+            configuration.jtaDataSource(jtaName);
+        }
+        if (nonJtaName != null) {
+            configuration.nonJtaDataSource(nonJtaName);
+        }
+        return UnitSettings.of(Definitions.from(configuration, loader()), Map.of(), overrides);
+    }
+
+    @Test
+    void aJtaUnitWhoseDataSourceNameWasNotResolvedIsRefusedNamingItAndTheJtaKey() { // Vidocq/vidocq#676
+        ConnectionSource source = ConnectionSources.of(
+            named(PersistenceUnitTransactionType.JTA, "jdbc/orders", "jdbc/raw", Map.of()), loader(), NOT_LOOKED_UP);
+
+        assertThatThrownBy(source::acquire).isInstanceOf(SQLException.class)
+            .hasMessage("Persistence unit orders names the data source 'jdbc/orders', which JNDI binds to no "
+                + "javax.sql.DataSource, as written or under java:comp/env: bind it, or pass the javax.sql.DataSource "
+                + "object as jakarta.persistence.jtaDataSource");
+    }
+
+    @Test
+    void aResourceLocalUnitWhoseDataSourceNameWasNotResolvedIsRefusedNamingItAndTheNonJtaKey() {
+        ConnectionSource declared = ConnectionSources.of(
+            named(PersistenceUnitTransactionType.RESOURCE_LOCAL, null, "jdbc/orders", Map.of()), loader(), NOT_LOOKED_UP);
+        ConnectionSource property = ConnectionSources.of(named(PersistenceUnitTransactionType.RESOURCE_LOCAL, null,
+            "jdbc/orders", Map.of(Definitions.NON_JTA_DATA_SOURCE, "jdbc/elsewhere")), loader(), NOT_LOOKED_UP);
+
+        assertThatThrownBy(declared::acquire).isInstanceOf(SQLException.class)
+            .hasMessageContaining("names the data source 'jdbc/orders'")
+            .hasMessageEndingWith("as jakarta.persistence.nonJtaDataSource");
+        assertThatThrownBy(property::acquire).hasMessageContaining("names the data source 'jdbc/elsewhere'");
+    }
+
+    @Test
+    void aUnitWithoutAnyConnectionSettingIsRefusedSayingWhatToSet() {
+        ConnectionSource jta = ConnectionSources.of(
+            named(PersistenceUnitTransactionType.JTA, null, null, Map.of()), loader(), NOT_LOOKED_UP);
+        ConnectionSource resourceLocal = ConnectionSources.of(
+            named(PersistenceUnitTransactionType.RESOURCE_LOCAL, null, null, Map.of()), loader(), NOT_LOOKED_UP);
+
+        assertThatThrownBy(jta::acquire).isInstanceOf(SQLException.class)
+            .hasMessage("Persistence unit orders has no connection: set jakarta.persistence.jdbc.url, or pass a "
+                + "javax.sql.DataSource as jakarta.persistence.jtaDataSource");
+        assertThatThrownBy(resourceLocal::acquire)
+            .hasMessageEndingWith("or pass a javax.sql.DataSource as jakarta.persistence.nonJtaDataSource");
     }
 
     @Test
