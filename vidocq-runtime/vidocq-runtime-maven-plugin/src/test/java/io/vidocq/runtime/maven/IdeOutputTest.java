@@ -20,7 +20,9 @@
 package io.vidocq.runtime.maven;
 
 import org.apache.maven.model.Build;
+import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
+import org.apache.maven.model.Plugin;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -28,15 +30,15 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** When a project is read by an IDE, and where its classes then go ({@link IdeOutput}). */
+/** When a project is read by an IDE, which project then moves, and where its classes go ({@link IdeOutput}). */
 class IdeOutputTest {
 
     @TempDir
@@ -72,100 +74,174 @@ class IdeOutputTest {
         assertFalse(IdeOutput.readByAnIde(idea, idea));
     }
 
+    /** An application of one module: the plugin in its pom, no parent pom next to it, nothing that reads it. */
+    @Test
+    void aStandaloneApplicationMoves() {
+        MavenProject application = project("todo", "jar", true);
+
+        assertTrue(IdeOutput.moves(application, List.of(application)));
+    }
+
+    /** The plugin moves what declares it: a library is not its own to move. */
+    @Test
+    void aProjectThatDoesNotDeclareThePluginDoesNot() {
+        MavenProject library = project("todo-model", "jar", false);
+
+        assertFalse(IdeOutput.moves(library, List.of(library)));
+    }
+
+    @Test
+    void aProjectWithoutABuildDoesNot() {
+        Model model = new Model();
+        model.setPackaging("jar");
+        MavenProject project = new MavenProject(model);
+        project.setFile(dir.resolve("pom.xml").toFile());
+
+        assertFalse(assertDoesNotThrow(() -> IdeOutput.moves(project, List.of(project))));
+    }
+
+    /** A model that was never read from a file has no place for the folder. */
+    @Test
+    void aProjectWithoutAFileDoesNot() {
+        MavenProject project = project("todo", "jar", true);
+        project.setFile(null);
+
+        assertFalse(assertDoesNotThrow(() -> IdeOutput.moves(project, List.of(project))));
+    }
+
+    @Test
+    void anAggregatorDoesNot() {
+        MavenProject aggregator = project("todo", "pom", true);
+
+        assertFalse(IdeOutput.moves(aggregator, List.of(aggregator)));
+    }
+
+    @Test
+    void theWayOut() {
+        MavenProject out = project("todo", "jar", true);
+        out.getProperties().setProperty("vidocq.ide.output.skip", " TRUE ");
+
+        assertFalse(IdeOutput.moves(out, List.of(out)));
+        assertTrue(IdeOutput.takesTheWayOut(out));
+
+        MavenProject in = project("todo", "jar", true);
+        in.getProperties().setProperty("vidocq.ide.output.skip", "no");
+
+        assertTrue(IdeOutput.moves(in, List.of(in)));
+        assertFalse(IdeOutput.takesTheWayOut(in));
+    }
+
+    /**
+     * A module of a build of several modules is read by the others: m2e keeps Maven's folders in its own record for
+     * a project the participant moves, and a test of the application would run the library Maven built last. Its
+     * parent pom, read from the disk, is what says it is such a module.
+     */
+    @Test
+    void aModuleWhoseParentPomIsOnDiskDoesNot() {
+        MavenProject module = project("todo", "jar", true);
+        module.setParentFile(dir.resolve("pom.xml").toFile());
+
+        assertFalse(IdeOutput.moves(module, List.of(module)));
+    }
+
+    @Test
+    void aProjectThatListsModulesDoesNot() {
+        MavenProject project = project("todo", "jar", true);
+        project.getModel().addModule("todo-model");
+
+        assertFalse(IdeOutput.moves(project, List.of(project)));
+    }
+
+    @Test
+    void aProjectAnotherOneOfTheSessionDependsOnDoesNot() {
+        MavenProject application = project("todo", "jar", true);
+        MavenProject tests = project("todo-it", "jar", false);
+        tests.getModel().addDependency(dependency("com.example", "todo"));
+
+        assertFalse(IdeOutput.moves(application, List.of(application, tests)));
+        assertTrue(IdeOutput.moves(application, List.of(application)), "read without it, the application moves");
+    }
+
+    /** Both the groupId and the artifactId name a project. */
+    @Test
+    void aDependencyOnAnotherArtifactDoesNotCount() {
+        MavenProject application = project("todo", "jar", true);
+        MavenProject other = project("billing", "jar", true);
+        other.getModel().addDependency(dependency("com.example", "todo-model"));
+        other.getModel().addDependency(dependency("org.other", "todo"));
+
+        assertTrue(IdeOutput.moves(application, List.of(application, other)));
+        assertTrue(IdeOutput.moves(other, List.of(application, other)));
+    }
+
+    /** m2e reads a project again and again: the answer does not depend on where the project already is. */
+    @Test
+    void askedAgainOnceTheProjectIsMovedTheAnswerIsTheSame() {
+        MavenProject application = project("todo", "jar", true);
+        List<MavenProject> session = List.of(application);
+        assertTrue(IdeOutput.moves(application, session));
+        IdeOutput.move(application);
+
+        assertTrue(IdeOutput.moves(application, session));
+        IdeOutput.move(application);
+
+        assertMoved(application, "todo");
+    }
+
     @Test
     void theThreeDirectoriesMoveUnderTargetIde() {
-        MavenProject project = project("jar");
+        MavenProject project = project("todo", "jar", true);
 
-        assertTrue(IdeOutput.move(project));
+        IdeOutput.move(project);
 
-        assertMoved(project);
+        assertMoved(project, "todo");
     }
 
     /** Under an IDE the rule wins over the pom: what the IDE compiles never lands where the build packages from. */
     @Test
     void aPomThatSetsItsOwnDirectoriesIsMovedToo() {
-        MavenProject project = project("jar");
+        MavenProject project = project("todo", "jar", true);
         project.getBuild().setDirectory(dir.resolve("build").toString());
         project.getBuild().setOutputDirectory(dir.resolve("out").toString());
         project.getBuild().setTestOutputDirectory(dir.resolve("out-test").toString());
 
-        assertTrue(IdeOutput.move(project));
+        IdeOutput.move(project);
 
-        assertMoved(project);
+        assertMoved(project, "todo");
     }
 
     @Test
     void theFolderIgnoresItself() throws IOException {
-        IdeOutput.move(project("jar"));
+        IdeOutput.move(project("todo", "jar", true));
 
-        assertEquals("*\n", Files.readString(dir.resolve("target-ide/.gitignore")));
+        assertEquals("*\n", Files.readString(dir.resolve("todo/target-ide/.gitignore")));
     }
 
     /** m2e reads a project again and again: the file is the developer's once it is there. */
     @Test
     void theIgnoreFileIsWrittenOnce() throws IOException {
-        MavenProject project = project("jar");
+        MavenProject project = project("todo", "jar", true);
         IdeOutput.move(project);
-        Path ignore = dir.resolve("target-ide/.gitignore");
+        Path ignore = dir.resolve("todo/target-ide/.gitignore");
         Files.writeString(ignore, "# mine\n");
 
-        assertTrue(IdeOutput.move(project));
+        IdeOutput.move(project);
 
         assertEquals("# mine\n", Files.readString(ignore));
-        assertMoved(project);
-    }
-
-    /** A model that was never read from a file has no place for the folder. */
-    @Test
-    void aProjectWithoutAFileIsLeftAlone() {
-        Model model = new Model();
-        model.setPackaging("jar");
-        MavenProject project = new MavenProject(model);
-
-        assertFalse(assertDoesNotThrow(() -> IdeOutput.move(project)));
-
-        assertNull(model.getBuild(), "the model had no build and has none");
-    }
-
-    @Test
-    void anAggregatorIsLeftAlone() {
-        MavenProject project = project("pom");
-
-        assertFalse(IdeOutput.move(project));
-
-        assertNull(project.getBuild().getOutputDirectory());
-        assertFalse(Files.exists(dir.resolve("target-ide")));
-    }
-
-    @Test
-    void theWayOut() {
-        MavenProject out = project("jar");
-        out.getProperties().setProperty("vidocq.ide.output.skip", " TRUE ");
-
-        assertFalse(IdeOutput.move(out));
-
-        assertNull(out.getBuild().getDirectory());
-        assertNull(out.getBuild().getOutputDirectory());
-        assertFalse(Files.exists(dir.resolve("target-ide")));
-
-        MavenProject in = project("jar");
-        in.getProperties().setProperty("vidocq.ide.output.skip", "no");
-
-        assertTrue(IdeOutput.move(in));
-
-        assertMoved(in);
+        assertMoved(project, "todo");
     }
 
     /** The folder is the IDE's: a file of the same name in its place fails the IDE's build, not the Maven import. */
     @Test
     void anIgnoreFileThatCannotBeWrittenDoesNotFailTheImport() throws IOException {
-        Files.writeString(dir.resolve("target-ide"), "a file, where the folder would be");
-        MavenProject project = project("jar");
+        Files.createDirectories(dir.resolve("todo"));
+        Files.writeString(dir.resolve("todo/target-ide"), "a file, where the folder would be");
+        MavenProject project = project("todo", "jar", true);
 
-        assertTrue(assertDoesNotThrow(() -> IdeOutput.move(project)));
+        assertDoesNotThrow(() -> IdeOutput.move(project));
 
-        assertMoved(project);
-        assertTrue(Files.isRegularFile(dir.resolve("target-ide")), "the file is left as it was");
+        assertMoved(project, "todo");
+        assertTrue(Files.isRegularFile(dir.resolve("todo/target-ide")), "the file is left as it was");
     }
 
     @Test
@@ -177,22 +253,40 @@ class IdeOutputTest {
         assertFalse(Files.exists(file.resolve("target-ide")));
     }
 
-    private void assertMoved(MavenProject project) {
+    private void assertMoved(MavenProject project, String folder) {
         Build build = project.getBuild();
-        assertEquals(dir.resolve("target-ide").toString(), build.getDirectory());
-        assertEquals(dir.resolve("target-ide/classes").toString(), build.getOutputDirectory());
-        assertEquals(dir.resolve("target-ide/test-classes").toString(), build.getTestOutputDirectory());
+        assertEquals(dir.resolve(folder + "/target-ide").toString(), build.getDirectory());
+        assertEquals(dir.resolve(folder + "/target-ide/classes").toString(), build.getOutputDirectory());
+        assertEquals(dir.resolve(folder + "/target-ide/test-classes").toString(), build.getTestOutputDirectory());
     }
 
-    /** A project read from {@code dir/pom.xml}, with an empty build. */
-    private MavenProject project(String packaging) {
+    /**
+     * A project read from {@code dir/<artifactId>/pom.xml}, with no parent pom on disk and no module, and with the
+     * plugin in its build or without it.
+     */
+    private MavenProject project(String artifactId, String packaging, boolean withThePlugin) {
         Model model = new Model();
-        model.setArtifactId("todo");
+        model.setGroupId("com.example");
+        model.setArtifactId(artifactId);
         model.setPackaging(packaging);
         model.setBuild(new Build());
+        if (withThePlugin) {
+            Plugin vidocq = new Plugin();
+            vidocq.setGroupId("io.vidocq.runtime");
+            vidocq.setArtifactId("vidocq-runtime-maven-plugin");
+            model.getBuild().addPlugin(vidocq);
+        }
         MavenProject project = new MavenProject(model);
-        project.setFile(dir.resolve("pom.xml").toFile());
+        project.setFile(dir.resolve(artifactId).resolve("pom.xml").toFile());
         return project;
+    }
+
+    private static Dependency dependency(String groupId, String artifactId) {
+        Dependency dependency = new Dependency();
+        dependency.setGroupId(groupId);
+        dependency.setArtifactId(artifactId);
+        dependency.setVersion("1.0");
+        return dependency;
     }
 
     private static Properties properties(String name, String value) {

@@ -39,8 +39,9 @@ import java.util.List;
  * import runs it too, so the IDE's processor path is the build's.
  *
  * <p>m2e runs it as well, for the Java extension of VS Code and for Eclipse, which compile with their own compiler
- * into the directories the project gives them: read by m2e, a project gets a build directory of its own
- * ({@link IdeOutput}), and {@code target/} stays the build's.</p>
+ * into the directories the project gives them: read by m2e, an application of one module gets a build directory of
+ * its own, and {@code target/} stays the build's ({@link IdeOutput}, which says why a build of several modules is
+ * left to its poms).</p>
  *
  * <p>Declared in {@code META-INF/plexus/components.xml}, not with {@code @Named}: Maven 3.9.9 reads a Sisu index
  * with an ASM too old for Java 25 class files and skips the component without a word.</p>
@@ -68,7 +69,8 @@ public final class CodegenPathsParticipant extends AbstractMavenLifecyclePartici
             }
             skipBuildIdentityWithoutCommit(project);
             // Last: what is added above is evaluated when a goal runs, and follows the directory.
-            if (readByAnIde && IdeOutput.move(project)) {
+            if (readByAnIde && IdeOutput.moves(project, session.getProjects())) {
+                IdeOutput.move(project);
                 LOG.debug("[vidocq] {}: read by an IDE, compiled into {}", project.getArtifactId(),
                         project.getBuild().getDirectory());
             }

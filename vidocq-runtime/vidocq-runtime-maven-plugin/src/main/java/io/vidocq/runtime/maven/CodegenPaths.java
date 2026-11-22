@@ -66,7 +66,7 @@ final class CodegenPaths {
 
     /** Wires the paths {@code model} lacks and returns their artifactIds, in the order added. */
     static List<String> wire(Model model) {
-        if (model.getBuild() == null || !declaresThePlugin(model)) {
+        if (!declaresThePlugin(model)) {
             return List.of();
         }
         Plugin compiler = model.getBuild().getPluginsAsMap().get(COMPILER);
@@ -82,8 +82,9 @@ final class CodegenPaths {
         return added;
     }
 
-    private static boolean declaresThePlugin(Model model) {
-        return model.getBuild().getPlugins().stream()
+    /** Whether the build of {@code model} holds this plugin, as a build extension or not. */
+    static boolean declaresThePlugin(Model model) {
+        return model.getBuild() != null && model.getBuild().getPlugins().stream()
                 .anyMatch(p -> RUNTIME_GROUP.equals(p.getGroupId()) && PLUGIN.equals(p.getArtifactId()));
     }
 
