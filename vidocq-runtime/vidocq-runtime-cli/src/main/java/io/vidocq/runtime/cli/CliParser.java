@@ -594,15 +594,14 @@ public final class CliParser {
                         "Runs 'mvn vidocq:vscode' in the project (./mvnw when present): .vscode/settings.json",
                         "runs the Java extension's language server on Java 25, tasks.json runs vidocq dev, run",
                         "and test, launch.json attaches the debugger to vidocq dev. A file it did not write is",
-                        "left alone. The extension compiles an application into target-ide/, not target/.");
+                        "left alone. The extension compiles an application of one module into target-ide/.");
                 options(CHECK, "Only check that .vscode/ is up to date (for CI)");
             }
             case ECLIPSE -> {
                 topic(ECLIPSE, "Eclipse run and debug configurations",
                         "Runs 'mvn vidocq:eclipse' in the project (./mvnw when present): .eclipse/ gets, per",
                         "application, Maven builds of vidocq dev, run and test and a debug attach to vidocq dev,",
-                        "listed under Run Configurations. A file it did not write is left alone. Eclipse compiles",
-                        "an application into target-ide/ and leaves target/ to Maven.");
+                        "listed under Run Configurations. A file it did not write is left alone.");
                 options(CHECK, "Only check that .eclipse/ is up to date (for CI)");
             }
             case DOCTOR -> {

@@ -72,8 +72,11 @@ class VidocqEclipseMojoTest {
                 "vidocq:generate", null, 0);
         EclipseFiles.launches(List.of(todo)).forEach((name, content) -> assertEquals(content, read(name), name));
         assertTrue(log.has("INFO", "Vidocq eclipse: created .eclipse/todo (dev).launch"), log.toString());
-        assertTrue(log.hasContaining("INFO", "Eclipse compiles an application into target-ide/ and leaves target/ to"
-                + " Maven."), log.toString());
+        assertTrue(log.has("INFO", "Vidocq eclipse: the configurations are under Run > Run Configurations once the"
+                + " project is imported (File > Import > Existing Maven Projects). Where Eclipse compiles the project:"
+                + " documentation, \"What an IDE compiles, and where\"."), log.toString());
+        // Nothing was run in Eclipse: the goal says where to read, not what Eclipse does.
+        assertFalse(log.toString().contains("Eclipse compiles an application"), log.toString());
         assertFalse(log.toString().contains("Build Automatically"), log.toString());
 
         mojo(true).run(projects, projects, new Properties(), root);
@@ -143,7 +146,7 @@ class VidocqEclipseMojoTest {
         mojo(false).run(projects, projects, new Properties(), root);
 
         assertFalse(log.lines.stream().anyMatch(line -> line.startsWith("WARN ")), log.toString());
-        assertTrue(log.hasContaining("INFO", "target-ide/"), log.toString());
+        assertTrue(log.hasContaining("INFO", "Where Eclipse compiles the project"), log.toString());
     }
 
     private MavenProject library(String artifactId) {

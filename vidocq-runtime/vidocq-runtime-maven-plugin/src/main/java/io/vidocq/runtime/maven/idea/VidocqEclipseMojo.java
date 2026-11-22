@@ -19,7 +19,6 @@
  */
 package io.vidocq.runtime.maven.idea;
 
-import io.vidocq.runtime.maven.IdeOutput;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 
@@ -36,9 +35,9 @@ import java.util.Map;
  * alone; one that does and that the goal no longer writes is removed. {@code -Dvidocq.eclipse.check=true} writes
  * nothing and fails when a file is missing or out of date.</p>
  *
- * <p>Eclipse keeps "Build automatically" per workspace, not per project, and no file of the goal sets it. Read
- * through m2e, an application compiles into a folder of its own ({@link IdeOutput}), not where {@code vidocq:dev}
- * writes: the goal says so.</p>
+ * <p>Eclipse keeps "Build automatically" per workspace, not per project, and no file of the goal sets it. Where
+ * Eclipse compiles a project is the rule of {@code IdeOutput}, which was run in the language server of VS Code's Java
+ * extension and not in Eclipse: the goal says where to read it, not what Eclipse does.</p>
  */
 @Mojo(name = "eclipse",
       aggregator = true,
@@ -74,7 +73,7 @@ public class VidocqEclipseMojo extends IdeFilesMojo {
     @Override
     void after() {
         getLog().info(prefix() + "the configurations are under Run > Run Configurations once the project is imported"
-                + " (File > Import > Existing Maven Projects). Eclipse compiles an application into "
-                + IdeOutput.DIRECTORY + "/ and leaves target/ to Maven.");
+                + " (File > Import > Existing Maven Projects). Where Eclipse compiles the project: documentation,"
+                + " \"What an IDE compiles, and where\".");
     }
 }
