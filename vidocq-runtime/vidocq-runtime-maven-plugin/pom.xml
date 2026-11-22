@@ -242,6 +242,9 @@
                             <preBuildHookScript>prebuild</preBuildHookScript>
                             <postBuildHookScript>verify</postBuildHookScript>
                             <showErrors>true</showErrors>
+                            <!-- The build.log of a failed test, in the log of the job: a runner keeps nothing else
+                                 of it (peano-accessors failed on main on 2026-11-22 and passed in every local run). -->
+                            <streamLogsOnFailures>true</streamLogsOnFailures>
                             <filterProperties><peano.version>${peano.version}</peano.version></filterProperties>
                         </configuration>
                         <executions>
