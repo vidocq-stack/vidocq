@@ -23,9 +23,12 @@
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
         </dependency>
+        <!-- requires static: foy-core reads @DeclareRoles and @RunAs by their descriptors, never by their classes.
+             A platform API Foy does not implement, provided (BUG-20261123-56). -->
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <!-- CDI en provided : foy-core délègue à BeanManager via WebAppDiscovery
              pour résoudre @WebServlet/@WebFilter/@WebListener. À abstraire via

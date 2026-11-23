@@ -43,6 +43,35 @@ class CliArgsTest {
         assertTrue(CliArgs.parse(new String[] {"help"}).help());
     }
 
+    /** The help is in English, the project's language, and names every flag (BUG-20261123-54: it was in French). */
+    @Test
+    void helpTextIsInEnglishAndNamesEveryFlag() {
+        String help = CliArgs.helpText();
+        assertTrue(help.startsWith("chappe serve — serves a static directory over HTTP/1.1 and HTTP/2"), help);
+        for (String french : new String[] {"Chemin", "Répertoire", "défaut", "Affiche", "Active", "Ajoute"}) {
+            assertFalse(help.contains(french), "French word in the help: " + french);
+        }
+        for (String flag : new String[] {
+            "--config",
+            "--root",
+            "--port",
+            "--bind",
+            "--fallback",
+            "--spa-fallback",
+            "--cache-control",
+            "--gzip",
+            "--no-gzip",
+            "--access-log",
+            "--no-access-log",
+            "--header",
+            "--expose-build-info",
+            "--no-expose-build-info",
+            "--help"
+        }) {
+            assertTrue(help.contains(flag), "flag missing from the help: " + flag);
+        }
+    }
+
     @Test
     void unknownCommandRejected() {
         assertThrows(IllegalArgumentException.class, () -> CliArgs.parse(new String[] {"oops"}));
