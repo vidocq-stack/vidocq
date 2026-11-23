@@ -131,7 +131,7 @@ vidocq/
 │   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0, Peano EL 6.0
 │   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / pool / transactions, Noether Persistence
 │   ├── vidocq-runtime-extensions-microprofile/     Config, Rest Client, JWT, Metrics, OpenAPI, Telemetry, Health, Fault Tolerance
-│   └── vidocq-runtime-extensions-module-repackaged/  Third-party Java Modules repackages (H2)
+│   └── vidocq-runtime-extensions-javamodule-repackaged/  Third-party Java Modules repackages (H2)
 └── vidocq-runtime-examples/             Examples
     └── vidocq-runtime-cassini-rest-example      Sample REST application
 ```
