@@ -17,5 +17,5 @@ cd "$(dirname "$0")/../.."
 EXAMPLES=vidocq-runtime/vidocq-runtime-examples
 
 exec ./mvnw -Pdist -Dgib.disable=true package -am \
-    -pl "$EXAMPLES/vidocq-runtime-cassini-rest-example,$EXAMPLES/vidocq-runtime-cyrano-rest-client-example,$EXAMPLES/vidocq-runtime-cervantes-jwt-example,$EXAMPLES/vidocq-runtime-knock-health-example,$EXAMPLES/vidocq-runtime-petstore-example" \
+    -pl "$EXAMPLES/vidocq-runtime-cassini-rest-example,$EXAMPLES/vidocq-runtime-cyrano-rest-client-example,$EXAMPLES/vidocq-runtime-cervantes-jwt-example,$EXAMPLES/vidocq-runtime-knock-health-example,$EXAMPLES/vidocq-runtime-petstore-example,$EXAMPLES/vidocq-runtime-noether-persistence-example" \
     "$@"

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <!--
+        One JTA unit. It names no jta-data-source, so it takes the application's default Mansart pool
+        (vidocq.pool.url), and no class: it manages every entity of the module. Noether creates the tables at the
+        start, and drops them first: the database is in memory, a restart begins with an empty notebook.
+    -->
+    <persistence-unit name="library" transaction-type="JTA">
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+</persistence>

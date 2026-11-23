@@ -51,6 +51,9 @@ xref:usage.adoc[the `@VidocqMain` trampoline].
 | `vidocq-runtime-petstore-example`
 | The largest example — Cassini + Mansart + Champollion + H2 petstore combining REST, persistence and JSON binding.
 
+| [[noether-persistence-example]]`vidocq-runtime-noether-persistence-example` [.tag-new]#NEW#
+| Jakarta Persistence 3.2 via `vidocq-runtime-noether-persistence-extension` — a reading notebook: books, their authors and reading notes, kept by xref:noether::index.adoc[Noether] in one JTA unit on the default Mansart pool (H2 in memory), and served by Cassini. See <<noether-persistence-example-quick-start>>.
+
 | `vidocq-runtime-external-rest-lib`
 | External library consumed by the examples — illustrates the case where a Java Modules-named dependency provides its own CDI beans. Useful for validating multi-module APT composition.
 |===
@@ -108,6 +111,37 @@ The example demonstrates the `@TransactionScoped` scope and the xref:mansart::in
 **JSP pages, with Ibarra and Peano.** `ReceiptServlet` builds a `Receipt` from the basket and forwards to `WEB-INF/views/receipt.jsp`, which a client cannot request; `about.jsp`, under `META-INF/resources`, is requested directly. `vidocq:generate` compiles both into the application module with Ibarra (xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages]). The receipt reads `${line.dish}` on `@ELAccessible` records, whose accessors Peano generates at build time; `BistroPagesTest` runs the pages with `-Dpeano.reflection=deny` to prove no expression falls back to reflection. Ibarra has no JSTL: the example writes its own `<bistro:each>` tag and two functions in `WEB-INF/tlds/bistro.tld`. The module requires `io.vidocq.runtime.extensions.jakartaee.web.ibarra`, `io.vidocq.ibarra.api` and `io.vidocq.peano.api`, and the pom adds the Peano codegen bundle.
 
 The other pages are written by servlets. `TicketFilter` and the servlet of one request inject the same `@RequestScoped` `RequestTicket`: its id is both the `X-Request-Id` header and the one in the page footer, and the next request gets a new one. The `@SessionScoped` `Basket` lives in the HTTP session, and `SessionCounter`, a `@WebListener`, counts the open sessions for the kitchen page. `KitchenServlet` carries `@ServletSecurity(@HttpConstraint(rolesAllowed = "chef"))`, and `META-INF/web.xml` holds only a FORM `login-config`: Foy forwards a visitor to `LoginServlet`'s form, which posts to `j_security_check`, and checks the user that `vidocq.servlet.users.chef.*` declares in `vidocq.properties`. The identity lives in the HTTP session, so it ends at *Sign out*, a POST to `LogoutServlet`, or after `vidocq.servlet.session-timeout` without a request; BASIC authentication, Foy's default without a `login-config`, would leave the credentials in the browser until it closes. The `module-info.java` has no exports, no opens and no hand-written `provides`. Under `vidocq:dev`, the dev console plots the active sessions.
+
+[[noether-persistence-example-quick-start]]
+== `vidocq-runtime-noether-persistence-example` — quick start [.tag-new]#NEW#
+
+[source,bash]
+----
+# from the root of the monorepo, after ./mvnw -ntp install -DskipTests
+./mvnw -pl vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-noether-persistence-example \
+    io.vidocq.runtime:vidocq-runtime-maven-plugin:dev
+
+curl -X POST http://localhost:8080/api/books \
+     -H 'Content-Type: application/json' \
+     -d '{"title":"Invisible Cities","isbn":"978-0-15-645380-6","author":"Italo Calvino"}'
+
+curl http://localhost:8080/api/books
+curl http://localhost:8080/api/authors/Italo%20Calvino/books
+
+# the notebook's page on http://localhost:8080/
+----
+
+*The model.* Three entities: a `Book` has an `Author` (`@ManyToOne`) and its `ReadingNote`s (`@OneToMany`, the inverse side of the note's `@ManyToOne`). Named queries find a book by ISBN, an author by name, and an author's books sorted by title. The identifiers are `@GeneratedValue`, which Noether draws from a generator table at `persist()`; an `IDENTITY` key would be known only at the flush.
+
+*The unit.* `META-INF/persistence.xml` declares one JTA unit, `library`, with no data source and no class: it takes the default Mansart pool (`vidocq.pool.url`) and manages every entity of the module. Noether creates the tables at the start (`drop-and-create`), without Flyway, so a restart begins with an empty notebook.
+
+*The work.* `Library` is an `@ApplicationScoped` bean with a `@PersistenceContext EntityManager` and `@Transactional` methods. They return records, built inside the transaction: the API never writes an entity, whose relations point back to each other. Cataloguing a book finds or creates its author, then refuses an ISBN already catalogued by throwing: the transaction rolls back, and the author created for the refused book goes with it (the API answers 409).
+
+*The module.* `module-info.java` requires the three extensions and `io.vidocq.noether.jpa.core`, which the entity accessor of Noether's processor implements: the entity package has no `opens`, and no hand-written `provides` (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence[Jakarta Persistence (Noether)]). The pom adds the Noether and Mansart Transactions `-codegen` bundles to the processor path.
+
+*Tests.* `ReadingNotebookTest` starts the application with `@VidocqTest` and checks the `noether-persistence` section of the startup report (`1 persistence unit, 3 entities`), a book and its notes read back, an author kept once for all their books, and the rollback of a refused book.
+
+*Dev console.* Under `vidocq:dev`, the *Noether Persistence* tab shows the unit: its counts, a graph of the three entities and their relations, JPQL queries on the notebook, its rows and the create and drop scripts (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-dev[the Persistence panel]).
 
 == Next steps
 

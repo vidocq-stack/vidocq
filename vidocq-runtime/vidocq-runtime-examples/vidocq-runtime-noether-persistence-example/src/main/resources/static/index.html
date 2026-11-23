@@ -1,0 +1,131 @@
+<!--
+
+    Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+
+    This program and the accompanying materials are made available under the
+    terms of the Eclipse Public License 2.0 which is available at
+    https://www.eclipse.org/legal/epl-2.0/
+
+    This Source Code may also be made available under the following Secondary
+    Licenses when the conditions for such availability set forth in the Eclipse
+    Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+    or any later version, which is available at
+    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+    It is also made available under the European Union Public Licence v. 1.2,
+    which is available at
+    https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+
+    SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+
+-->
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Vidocq · Reading notebook</title>
+    <style>
+        :root { color-scheme: light dark; --accent: #8a5a2b; --muted: #888; --line: #8884; }
+        body { font: 16px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+        h1 { margin-bottom: 0; }
+        .subtitle { color: var(--muted); margin-top: .25rem; }
+        form { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+        input, textarea { flex: 1 1 10rem; padding: .4rem .6rem; font: inherit; }
+        button { padding: .4rem .9rem; font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+        .book { border-top: 1px solid var(--line); padding: .75rem 0; }
+        .book h2 { font-size: 1.1rem; margin: 0; }
+        .meta { color: var(--muted); font-size: .9rem; }
+        .notes { margin: .5rem 0 0 1rem; padding: 0; }
+        .notes li { font-style: italic; }
+        .error { color: #c33; min-height: 1.5em; }
+    </style>
+</head>
+<body>
+<h1>Reading notebook</h1>
+<p class="subtitle">Vidocq · Jakarta Persistence 3.2 on Noether · Mansart pool on H2 · Cassini REST</p>
+
+<form id="catalogue">
+    <input name="title" placeholder="Title" required autocomplete="off">
+    <input name="author" placeholder="Author" required autocomplete="off">
+    <input name="isbn" placeholder="ISBN" required autocomplete="off">
+    <button>Catalogue</button>
+</form>
+<p id="error" class="error"></p>
+
+<section id="books"></section>
+
+<script>
+    const books = document.getElementById('books');
+    const error = document.getElementById('error');
+
+    async function call(method, path, body) {
+        const response = await fetch('/api' + path, {
+            method,
+            headers: body ? {'Content-Type': 'application/json'} : {},
+            body: body ? JSON.stringify(body) : undefined
+        });
+        if (!response.ok) {
+            throw new Error(await response.text() || response.status + ' ' + response.statusText);
+        }
+        return response.status === 204 ? null : response.json();
+    }
+
+    function element(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+    }
+
+    async function render() {
+        const list = await call('GET', '/books');
+        books.replaceChildren();
+        for (const book of list) {
+            const card = element('article', 'book');
+            card.append(element('h2', null, book.title));
+            card.append(element('div', 'meta', book.author + ' · ISBN ' + book.isbn + ' · ' + book.notes + ' note(s)'));
+            const notes = element('ul', 'notes');
+            for (const note of await call('GET', '/books/' + book.id + '/notes')) {
+                notes.append(element('li', null, note.text));
+            }
+            card.append(notes);
+            const form = element('form');
+            const text = element('input');
+            text.placeholder = 'A note while reading…';
+            text.required = true;
+            form.append(text, element('button', null, 'Add the note'));
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                await guarded(() => call('POST', '/books/' + book.id + '/notes', {text: text.value}));
+            });
+            card.append(form);
+            books.append(card);
+        }
+    }
+
+    async function guarded(work) {
+        error.textContent = '';
+        try {
+            await work();
+        } catch (failure) {
+            error.textContent = failure.message;
+        }
+        await render();
+    }
+
+    document.getElementById('catalogue').addEventListener('submit', async event => {
+        event.preventDefault();
+        const form = event.target;
+        // form.elements, not form.title: a form element has a `title` property of its own.
+        const field = name => form.elements.namedItem(name).value;
+        await guarded(async () => {
+            await call('POST', '/books', {title: field('title'), isbn: field('isbn'), author: field('author')});
+            form.reset();
+        });
+    });
+
+    render();
+</script>
+</body>
+</html>
