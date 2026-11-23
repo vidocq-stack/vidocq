@@ -685,9 +685,10 @@ The `vidocq-runtime-grimm-openapi-extension` extension serves the OpenAPI docume
 
 While you develop, run `mvn vidocq:dev`: it adds the console itself when the application has `vidocq-runtime-chappe-webserver-extension`, and never packages it. The application logs `Vidocq dev console: http://127.0.0.1:8888/`, a read-only page with the startup report of the running boot and the live values of the extensions — the connections of each Mansart pool, the heap, the threads, the garbage collectors. It is on in a dev launch only, on the loopback address. See xref:dev-console.adoc[Dev console]; an extension adds its own panel as xref:dev-console-panels.adoc[Writing a dev console panel] describes.
 
-== Profiles
+[#profiles]
+== Profiles [.tag-new]#NEW#
 
-MicroProfile convention: prefix a key with `%<profile>.` to scope it.
+A key prefixed with `%<profile>.` applies only while that profile is active, the {spec-mp-config} "Config Profile" rule, with or without Ravel:
 
 [source,properties]
 ----
@@ -696,7 +697,11 @@ vidocq.http.port=8080
 %prod.vidocq.http.port=80
 ----
 
-Activate via the `-Dvidocq.profile=dev` system property (there is no environment-variable equivalent).
+* *Activating a profile.* `vidocq.profile` names the active profile, from any source: `-Dvidocq.profile=dev`, the environment variable `VIDOCQ_PROFILE=dev`, or `vidocq.profile=dev` in `vidocq.properties`. `vidocq:dev` sets `dev` unless its `-Dvidocq.profile` names another. Without `vidocq.profile`, the MicroProfile key `mp.config.profile` (`MP_CONFIG_PROFILE`) names it; when both are set, `vidocq.profile` wins.
+* *Which value wins.* Each source is asked for `%dev.<key>` before `<key>`: a profiled key wins over the plain key of its own source, and the ordinals still order the sources. A `-Dvidocq.http.port=9000` therefore wins over `%dev.vidocq.http.port` in `vidocq.properties`; an environment variable `_DEV_VIDOCQ_HTTP_PORT` sets the profiled key.
+* *Expressions.* A `+${host}+` expression reads the profiled value of `host`.
+* *With Ravel.* The runtime hands `vidocq.profile` to Ravel as `mp.config.profile`, so `@ConfigProperty`, `ConfigProvider.getConfig()` and `VidocqConfig` read the same `%dev.` keys, those of `META-INF/microprofile-config.properties` included. Ravel also reads `META-INF/microprofile-config-<profile>.properties` under the active profile.
+* One profile at a time: `vidocq.profile=dev,test` is the profile named `dev,test`.
 
 [#property-expressions]
 == Property expressions [.tag-new]#NEW#

@@ -195,7 +195,7 @@ the one backend
 
 | `vidocq.profile`
 | (empty)
-| Active profile (`dev`, `prod`, …) — `%<profile>.` prefix recognised.
+| Active profile (`dev`, `prod`, …): a key prefixed with `%<profile>.` wins over the plain key of its source. Environment variable `VIDOCQ_PROFILE`; without it, `mp.config.profile` names the profile. `vidocq:dev` sets `dev`. See xref:usage.adoc#profiles[Profiles].
 
 | `vidocq.config.dir`
 | (empty)

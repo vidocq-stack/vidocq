@@ -82,6 +82,40 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   on the abbreviation. The class `JpmsPatches` and the module `vidocq-runtime-it-cyrano-jpms` keep their names: a
   rename is left to the maintainer.
 
+---
+
+## BUG-20261123-46 — Configuration profiles do not work: `%dev.` keys are never applied
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit), on `fix/runtime-config-profiles`.
+- **Module**: `vidocq-runtime-core` (`VidocqConfigImpl`), `vidocq-runtime-ravel-config-extension`
+- **Symptom**: `usage.adoc#profiles` promised that `%dev.vidocq.http.port=8081` applies under `-Dvidocq.profile=dev`,
+  and `dev-console.adoc` told the user to write `%dev.vidocq.devconsole.enabled=true`. Without Ravel, a `%dev.` key
+  was a key of its own and never applied. With Ravel, the `%dev.` keys of `vidocq.properties` and
+  `microprofile-config.properties` applied only under `mp.config.profile`, which `vidocq:dev` and the CLI never set:
+  under `vidocq:dev`, `@ConfigProperty` and `VidocqConfig` read the plain keys.
+- **Repro**:
+  1. `VidocqConfigImpl` over a source `vidocq.profile=dev` (ordinal 400) and a source with `vidocq.http.port=8080`
+     and `%dev.vidocq.http.port=8081` (ordinal 100): `getValue("vidocq.http.port", Integer.class)` gave `8080`
+     (`VidocqConfigImplTest`, six tests red).
+  2. `vidocq-runtime-it-ravel-config`, `-Dvidocq.profile=dev`, `%dev.shop.name=GaufreStack Dev` in
+     `vidocq.properties`: the `@ConfigProperty` field read `GaufreStack` (`ConfigProfileTest`).
+- **Cause**: `VidocqConfigImpl` had no profile handling at all; `vidocq.profile` was read only for the launch mode
+  (`LaunchModeResolver`). Ravel implements MicroProfile Config 3.1 profiles under `mp.config.profile` alone
+  (`RavelConfigBuilder`), and nothing handed it `vidocq.profile`.
+- **Fix**: `VidocqConfigImpl` takes the active profile from `vidocq.profile`, else `mp.config.profile` (any source,
+  so `VIDOCQ_PROFILE` and `MP_CONFIG_PROFILE` too), and asks each source for `%<profile>.<key>` before `<key>`, Ravel's
+  rule: a profiled key wins over the plain key of its source, the ordinals still order the sources; expressions and
+  `getPropertyNames` follow. The Ravel extension adds a discovered MicroProfile `ConfigSource`,
+  `VidocqProfileConfigSource` (ordinal 1000), which holds `mp.config.profile` = `vidocq.profile` when the latter is
+  set (system property, `VIDOCQ_PROFILE`, `vidocq.properties`, `application.properties`): Ravel applies the same
+  profile, and `vidocq.profile` wins over an `mp.config.profile` set elsewhere, in both. Ravel itself is unchanged.
+  Tests: `VidocqConfigImplTest` (7 new), `EnvConfigSourceTest`, `VidocqProfileConfigSourceTest`, `ConfigProfileTest`.
+- **Not done**: the dev console's configuration table (`ConfigInventory`) still finds a key's source without the
+  profile when Ravel is absent; documented in `dev-console.adoc`.
+
+---
+
 ## BUG-20261121-03 — `vidocq-runtime-cassini-rest-example` does not start from its own folder: Maven cannot read its library
 
 - **Date**: 2026-11-21
