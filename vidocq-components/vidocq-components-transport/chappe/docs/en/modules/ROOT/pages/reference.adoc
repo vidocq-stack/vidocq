@@ -439,9 +439,11 @@ headers:
     X-Robots-Tag: "noindex, nofollow"
 
 logging:
-  level: INFO
   access-log: false
 ----
+
+[#cli-log-levels]
+The levels of the server's own loggers (`io.vidocq.chappe.*`) come from the JDK logging configuration, not from the YAML file: `JAVA_OPTS="--enable-preview -Djava.util.logging.config.file=/etc/chappe/logging.properties" chappe serve ...`. A `logging.level` key is accepted and ignored, like any key the CLI does not know [.tag-new]#NEW#; up to 0.4.0-RC2 the schema listed it, and the CLI read it and never applied it.
 
 Documented subset: nested maps, inline lists `[a, b]` and block `- item`, string/int/bool scalars, `#` comments. No anchors, no `!!` tags, no multilines.
 
@@ -482,7 +484,7 @@ Idempotency: if the application has already set either header on the `Response`,
 
 Enabled via `--access-log` (CLI), `CHAPPE_ACCESS_LOG=true` (env), or `logging.access-log: true` (YAML). CLI overrides env, env overrides YAML.
 
-Format: extended Apache Combined Log Format on `System.out` (captured by Docker/Portainer):
+Format: extended Apache Combined Log Format, one line per request on `System.out` (captured by Docker/Portainer) [.tag-new]#NEW#. Up to 0.4.0-RC2 the CLI wrote it to the `io.vidocq.chappe.access` system logger, which the JDK prints on `System.err` with a header line before each entry:
 
 [source]
 ----
@@ -499,7 +501,7 @@ Field resolution:
 
 A handler that throws is logged with status `500` and size `-`, and its exception goes on unchanged, a checked exception included, to the filters around it and to the server. Until 0.3.0 a checked exception came out wrapped in a `RuntimeException`.
 
-Available as a public API filter via `Filter.accessLog()` / `Filter.accessLog(Consumer<String>)`; the CLI launcher applies it as the outermost wrapper.
+Available as a public API filter via `Filter.accessLog()` (the `io.vidocq.chappe.access` system logger, for an application that configures its logging) / `Filter.accessLog(Consumer<String>)`; the CLI launcher applies `Filter.accessLog(System.out::println)` as the outermost wrapper.
 
 == Maven plugin: pre-compression
 

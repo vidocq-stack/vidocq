@@ -71,6 +71,9 @@ public final class ChappeRuntimeDelegate extends CassiniRuntimeDelegate {
     }
 
     private static final class ChappeSeBootstrapInstance implements SeBootstrap.Instance {
+        private static final String LOCALHOST = "localhost";
+        private static final String LOOPBACK = "127.0.0.1";
+
         private final SeBootstrap.Configuration config;
         private final java.util.concurrent.atomic.AtomicReference<Server> server =
                 new java.util.concurrent.atomic.AtomicReference<>();
@@ -116,11 +119,12 @@ public final class ChappeRuntimeDelegate extends CassiniRuntimeDelegate {
                     return bridge.handle(remapped);
                 };
 
+                String host = hostOf(requested);
                 Server s = Server.builder()
-                        .host("127.0.0.1").port(portOf(requested)).handler(handler).build();
+                        .host(bindAddressOf(host)).port(portOf(requested)).handler(handler).build();
                 s.start();
                 this.server.set(s);
-                this.config = effectiveConfig(requested, s.port());
+                this.config = effectiveConfig(requested, host, s.port());
             } catch (RuntimeException e) {
                 this.server.set(null);
                 throw e;
@@ -138,8 +142,25 @@ public final class ChappeRuntimeDelegate extends CassiniRuntimeDelegate {
             return reqPort > 0 ? reqPort : SeBootstrap.Configuration.FREE_PORT;
         }
 
-        /** The requested properties, with the port the server listens on and the {@code localhost} host. */
-        private static SeBootstrap.Configuration effectiveConfig(SeBootstrap.Configuration requested, int port) {
+        /** The requested host, or {@code localhost} (the default of Jakarta REST §5.2) when none is requested. */
+        private static String hostOf(SeBootstrap.Configuration requested) {
+            return requested.property(SeBootstrap.Configuration.HOST) instanceof String h && !h.isBlank()
+                    ? h : LOCALHOST;
+        }
+
+        /**
+         * The address the server binds for {@code host}: {@code localhost} is the loopback address of
+         * {@code 127.0.0.1}, where the clients of {@code localhost} and {@code 127.0.0.1} reach it whatever the
+         * name resolves to first; any other host is bound as given, {@code 0.0.0.0} listening on every address
+         * (BUG-20261123-52: the server listened on {@code 127.0.0.1} whatever the host).
+         */
+        private static String bindAddressOf(String host) {
+            return LOCALHOST.equalsIgnoreCase(host) ? LOOPBACK : host;
+        }
+
+        /** The requested properties, with the port the server listens on and the host it was asked to bind. */
+        private static SeBootstrap.Configuration effectiveConfig(SeBootstrap.Configuration requested, String host,
+                                                                 int port) {
             java.util.Map<String, Object> effective = new java.util.HashMap<>();
             for (String k : new String[]{
                     SeBootstrap.Configuration.PROTOCOL,
@@ -152,7 +173,7 @@ public final class ChappeRuntimeDelegate extends CassiniRuntimeDelegate {
                 if (v != null) effective.put(k, v);
             }
             effective.put(SeBootstrap.Configuration.PORT, port);
-            effective.put(SeBootstrap.Configuration.HOST, "localhost");
+            effective.put(SeBootstrap.Configuration.HOST, host);
             return new EffectiveConfig(java.util.Map.copyOf(effective));
         }
 

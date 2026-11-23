@@ -70,8 +70,22 @@ class ChappeConfigTest {
         assertTrue(c.staticCfg().gzip());
         assertEquals("nosniff", c.headers().always().get("X-Content-Type-Options"));
         assertEquals("noindex, nofollow", c.headers().staging().get("X-Robots-Tag"));
-        assertEquals("INFO", c.logging().level());
         assertFalse(c.logging().accessLog());
+    }
+
+    /**
+     * {@code logging.level} is not a setting of the CLI (BUG-20261123-55: it was parsed and never applied): a file
+     * that still carries it, as the documentation site's {@code chappe-config.yml} does, loads, and the key is
+     * ignored like any other key the CLI does not know.
+     */
+    @Test
+    void aLoggingLevelKeyIsAcceptedAndIgnored() {
+        var c = ChappeConfig.from(YamlReader.parse("""
+                logging:
+                  level: DEBUG
+                  access-log: true
+                """));
+        assertEquals(new ChappeConfig.Logging(Boolean.TRUE), c.logging());
     }
 
     @Test

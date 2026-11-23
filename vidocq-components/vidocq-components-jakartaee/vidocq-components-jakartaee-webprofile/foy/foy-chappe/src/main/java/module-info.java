@@ -22,7 +22,9 @@ module io.vidocq.foy.chappe {
     requires io.vidocq.foy.core;
     requires io.vidocq.chappe.api;
     requires jakarta.servlet;
-    requires jakarta.cdi;
+    // FoyChappeBoot.Builder.beanManager is optional: without it Foy deploys without CDI, and the CDI API stays
+    // provided in the POM (BUG-20261123-56).
+    requires static jakarta.cdi;
 
     exports io.vidocq.foy.chappe;
 

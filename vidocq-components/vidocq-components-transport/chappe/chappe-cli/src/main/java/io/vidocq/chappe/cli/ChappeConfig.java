@@ -56,8 +56,13 @@ public record ChappeConfig(Server server, Static staticCfg, Headers headers, Log
         public static final Headers EMPTY = new Headers(Map.of(), Map.of());
     }
 
-    public record Logging(String level, Boolean accessLog) {
-        public static final Logging EMPTY = new Logging(null, null);
+    /**
+     * The {@code logging} section: {@code access-log} only. A {@code level} key is accepted and ignored, like any
+     * other key the CLI does not know: the levels of the server's loggers come from the JDK logging configuration
+     * ({@code JAVA_OPTS=-Djava.util.logging.config.file=...}). It was parsed and never applied (BUG-20261123-55).
+     */
+    public record Logging(Boolean accessLog) {
+        public static final Logging EMPTY = new Logging(null);
     }
 
     public static final ChappeConfig EMPTY = new ChappeConfig(Server.EMPTY, Static.EMPTY, Headers.EMPTY, Logging.EMPTY);
@@ -100,7 +105,7 @@ public record ChappeConfig(Server server, Static staticCfg, Headers headers, Log
 
     private static Logging parseLogging(YamlNode.Map m) {
         if (m == null) return Logging.EMPTY;
-        return new Logging(m.string("level").orElse(null), m.bool("access-log").orElse(null));
+        return new Logging(m.bool("access-log").orElse(null));
     }
 
     private static Map<String, String> flatStringMap(YamlNode.Map m) {

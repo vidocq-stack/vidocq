@@ -5,6 +5,54 @@ cause hypothesis, and status.
 
 ---
 
+## BUG-20261123-55 — `logging.level` of the CLI's YAML was read and never applied
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `chappe-cli` (`ChappeConfig.Logging`)
+- **Symptom**: `logging.level: DEBUG` (or `WARNING`, `OFF`) in the file given to `chappe serve --config` changes
+  nothing: the server's loggers keep the JDK's levels. The CLI README and the reference page list the key in the
+  YAML schema; the documentation site's `chappe-config.yml` sets `level: INFO`.
+- **Minimal repro**: `ChappeConfig.from(YamlReader.parse("logging:\n  level: DEBUG\n"))` keeps `"DEBUG"` in
+  `logging().level()`, and no code reads `level()` (`grep -rn "level()" chappe-cli/src/main` finds nothing).
+- **Cause**: `ChappeConfig.parseLogging` read the key into `Logging.level`; neither `ServeCommand` nor `Main` used it.
+- **Fix**: removed from the parsing and the documented schema. `System.Logger` has no API to set a level: applying
+  one would bind the CLI to `java.util.logging` (a new `requires java.logging`) and replace the console handler the
+  JDK configures, which `JAVA_OPTS=-Djava.util.logging.config.file=...` already does through the wrapper script. A
+  file that still carries `level` loads, the key ignored like any key the CLI does not know
+  (`ChappeConfigTest.aLoggingLevelKeyIsAcceptedAndIgnored`). No behaviour of the CLI changed, so no test was red
+  at runtime: the new test did not compile against the old `Logging(String, Boolean)`.
+
+## BUG-20261123-54 — `chappe serve --help` printed its text in French
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `chappe-cli` (`CliArgs.HELP_TEXT`)
+- **Symptom**: `chappe serve --help` (and the help printed after a wrong flag) describes every flag in French
+  ("sert un répertoire statique", "Chemin du fichier YAML", ...), one line in English. English is the project's
+  language.
+- **Minimal repro**: `CliArgsTest.helpTextIsInEnglishAndNamesEveryFlag`, red before the fix.
+- **Cause**: the help text predates the English-only rule and no test read it.
+- **Fix**: translated; the test checks the first line, the absence of the French words and every flag.
+
+## BUG-20261123-53 — `chappe serve --access-log` did not write on standard output
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `chappe-cli` (`ServeCommand.buildHandler`)
+- **Symptom**: the CLI help, its README and the reference page say `--access-log` writes one Apache CLF line per
+  request on stdout, for Docker or Portainer to collect. The lines went to the `io.vidocq.chappe.access`
+  `System.Logger`: with the JDK's default configuration, on stderr, each one after a header line naming the date
+  and the class; nothing on stdout.
+- **Minimal repro**: `ServeCommandTest.accessLogLinesGoToStandardOutput` (`--access-log`, one `GET`, `System.out`
+  captured): standard output empty before the fix.
+- **Cause**: `Filter.accessLog()` moved its default sink from stdout to the system logger, so that an embedding
+  application configures it (its Javadoc names `accessLog(System.out::println)` for the stdout convention); the CLI
+  kept calling `Filter.accessLog()`.
+- **Fix**: the CLI, a standalone static file server whose output a container runtime collects, calls
+  `Filter.accessLog(System.out::println)`. The library default (`Filter.accessLog()` on the system logger) is
+  unchanged; the reference page says which sink each one uses.
+
 ## CHAPPE-061 — a class loader that served a class path file is kept for the life of the JVM
 
 - **Date**: 2026-11-16

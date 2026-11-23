@@ -55,26 +55,26 @@ public record CliArgs(
     private static final String UNKNOWN_FLAG = "unknown flag: ";
 
     private static final String HELP_TEXT = """
-            chappe serve — sert un répertoire statique en HTTP/1.1+H2
+            chappe serve — serves a static directory over HTTP/1.1 and HTTP/2
 
             Usage:
               chappe serve [--config FILE] [flags...]
 
             Flags:
-              --config FILE        Chemin du fichier YAML de configuration
-              --root DIR           Répertoire racine (override static.root)
-              --port N             Port d'écoute (défaut 8080)
-              --bind ADDR          Adresse de bind (défaut 0.0.0.0)
-              --fallback PATH      Fichier servi en 404 (override static.fallback)
-              --spa-fallback PATH  Fichier servi en 200 si non trouvé (SPA mode)
-              --cache-control STR  Header Cache-Control sur chaque ressource
-              --gzip / --no-gzip   Active/désactive la compression à la volée
-              --access-log         Active l'access log Apache CLF sur stdout
-              --no-access-log      Désactive l'access log
-              --header KEY=VALUE   Ajoute un header (répétable, merge dans headers.always)
+              --config FILE        Path of the YAML configuration file
+              --root DIR           Root directory (overrides static.root)
+              --port N             Listening port (default 8080)
+              --bind ADDR          Address to bind (default 0.0.0.0)
+              --fallback PATH      File served with a 404 (overrides static.fallback)
+              --spa-fallback PATH  File served with a 200 when nothing matches (SPA mode)
+              --cache-control STR  Cache-Control header on every resource
+              --gzip / --no-gzip   Enables/disables on-the-fly compression
+              --access-log         Writes an Apache CLF access log line per request on stdout
+              --no-access-log      Disables the access log
+              --header KEY=VALUE   Adds a header (repeatable, merged into headers.always)
               --expose-build-info  Puts Chappe's version and build in Server and X-Chappe-Build
                                    (off by default: Server: Chappe; --no-expose-build-info)
-              -h, --help           Affiche ce message
+              -h, --help           Displays this message
             """;
 
     /** Parses arguments. {@code argv[0]} must be {@code "serve"} (otherwise {@code --help}). */

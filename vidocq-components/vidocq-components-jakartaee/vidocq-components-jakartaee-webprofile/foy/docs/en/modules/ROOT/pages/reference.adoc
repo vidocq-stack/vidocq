@@ -86,7 +86,7 @@ module io.vidocq.foy.chappe {
     requires io.vidocq.foy.core;
     requires io.vidocq.chappe.api;
     requires jakarta.servlet;
-    requires jakarta.cdi;
+    requires static jakarta.cdi;          // only with Builder.beanManager(...)
 
     exports io.vidocq.foy.chappe;         // FoyChappeBoot
     uses io.vidocq.foy.spi.cdi.CdiContextListeners;

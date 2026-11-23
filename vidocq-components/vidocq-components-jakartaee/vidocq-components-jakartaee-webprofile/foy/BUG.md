@@ -1,5 +1,28 @@
 # BUG.md — foy
 
+## BUG-20261123-56 — `foy-chappe` requires CDI on the module path, and Foy ships the annotation API
+
+- Date: 2026-11-23 (found by a review of the bricks' scopes against the workspace rule "a brick depends on APIs").
+- Symptom: an application that boots Foy with `FoyChappeBoot` and no CDI API (no `beanManager(...)`, which is
+  optional) fails to start on the module path with `FindException: Module jakarta.cdi not found, required by
+  io.vidocq.foy.chappe`, although the POM of `foy-chappe` leaves the CDI API `provided`. And `foy-api` and `foy-core`
+  bring `jakarta.annotation-api` at `compile` scope to every application, a platform API Foy does not implement.
+- Repro: `FoyChappeWithoutCdiTest` (`foy-chappe`): resolves the modular entries of the test class path but the CDI
+  API in a layer of its own, then deploys a `web.xml` and reads its context parameter. Red before the fix (the
+  `FindException` above), green after.
+- Cause: `module io.vidocq.foy.chappe` had `requires jakarta.cdi`, where `foy-api` and `foy-core` already had
+  `requires static`; `FoyChappeBoot` only touches `BeanManager` when one is given. `foy-api` and `foy-core` declare
+  the annotation API without a scope, though they only read it with `requires static`: `foy-core` reads
+  `@DeclareRoles` and `@RunAs` by their descriptors, never by their classes, and `foy-api` not at all.
+- Status: FIXED (pending commit). `requires static jakarta.cdi` in `foy-chappe`; `jakarta.annotation-api` is
+  `provided` in `foy-api` and `foy-core`. Downstream nothing relied on Foy for it: the Vidocq Servlet extension, Ibarra,
+  Kerckhoffs and the examples get it from `jakarta.enterprise.cdi-api` (a `compile` dependency of the CDI API 4.1).
+  Limit: compiled callers link `FoyChappeBoot` without CDI, but `Class.getMethod` on `FoyChappeBoot` or its
+  `Builder` loads the types of all their methods and throws `NoClassDefFoundError: BeanManager`; the test links its
+  calls with method handles, as compiled code does.
+  Verification: the reactor of `foy-api`, `cassini-chappe` and `chappe-cli` with every dependent (`-am -amd`),
+  green.
+
 ## BUG-20261118-62 — A servlet of `web.xml` whose class is a bean gets no injection
 
 - Date: 2026-11-18 (found by the Jakarta EE 11 Platform TCK for Persistence on the Vidocq runtime, Foy 412ca8b).

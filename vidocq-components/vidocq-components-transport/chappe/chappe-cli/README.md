@@ -67,9 +67,12 @@ headers:
     X-Robots-Tag: "noindex, nofollow"
 
 logging:
-  level: INFO
   access-log: false
 ```
+
+The levels of the server's own loggers (`io.vidocq.chappe.*`) come from the JDK logging configuration, not from
+this file: `JAVA_OPTS="--enable-preview -Djava.util.logging.config.file=/etc/chappe/logging.properties"`. A
+`logging.level` key is accepted and ignored, like any key the CLI does not know (BUG-20261123-55).
 
 ## CLI flags (override YAML)
 

@@ -24,10 +24,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -162,6 +165,32 @@ class ServeCommandTest {
 
         HttpResponse<String> r = get("/");
         assertEquals("bar", r.headers().firstValue("X-Foo").orElse(null));
+    }
+
+    /**
+     * {@code --access-log} writes one Apache CLF line per request on standard output, as the CLI documents for a
+     * container runtime to collect (BUG-20261123-53): it went to the {@code io.vidocq.chappe.access} system logger,
+     * which the JDK prints on standard error, with a header line, when it prints it at all.
+     */
+    @Test
+    void accessLogLinesGoToStandardOutput(@TempDir Path tmp) throws Exception {
+        Path docroot = Files.createDirectory(tmp.resolve("site"));
+        Files.writeString(docroot.resolve("index.html"), "home");
+        CliArgs args =
+                CliArgs.parse(new String[] {"serve", "--root", docroot.toString(), "--port", "0", "--access-log"});
+        ServeCommand.Effective eff = ServeCommand.Effective.resolve(args, ChappeConfig.EMPTY);
+
+        PrintStream stdout = System.out;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try {
+            server = ServeCommand.start(eff);
+            assertEquals(200, get("/index.html").statusCode());
+        } finally {
+            System.setOut(stdout);
+        }
+        String out = captured.toString(StandardCharsets.UTF_8);
+        assertTrue(out.contains("\"GET /index.html HTTP/1.1\" 200 "), "standard output: " + out);
     }
 
     @Test

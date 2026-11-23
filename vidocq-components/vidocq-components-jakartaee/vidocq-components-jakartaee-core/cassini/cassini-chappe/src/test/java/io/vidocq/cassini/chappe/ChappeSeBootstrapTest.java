@@ -207,6 +207,36 @@ class ChappeSeBootstrapTest {
         }
     }
 
+    /**
+     * The configured host reaches the server (BUG-20261123-52): {@code host("0.0.0.0")} listens on every address,
+     * and the instance reports that host. The server listened on {@code 127.0.0.1} whatever the host.
+     */
+    @Test
+    void the_configured_host_is_the_address_the_server_listens_on() throws Exception {
+        SeBootstrap.Configuration config = SeBootstrap.Configuration.builder().host("0.0.0.0").port(0).build();
+        SeBootstrap.Instance instance = start(new PlainApplication(), config);
+        try {
+            assertTrue(instance.unwrap(Server.class).localAddress().getAddress().isAnyLocalAddress(),
+                    "listens on " + instance.unwrap(Server.class).localAddress());
+            assertEquals("0.0.0.0", instance.configuration().host());
+            assertEquals(HELLO, get(instance, "/hello").body());
+        } finally {
+            instance.stop().toCompletableFuture().get(30, TimeUnit.SECONDS);
+        }
+    }
+
+    /** The default host, {@code localhost}, keeps the server on the loopback address of {@code 127.0.0.1}. */
+    @Test
+    void the_default_host_listens_on_the_loopback_address() throws Exception {
+        SeBootstrap.Instance instance = start(new PlainApplication(), SeBootstrap.Configuration.builder().port(0).build());
+        try {
+            assertEquals(LOOPBACK, instance.unwrap(Server.class).localAddress().getAddress().getHostAddress());
+            assertEquals("localhost", instance.configuration().host());
+        } finally {
+            instance.stop().toCompletableFuture().get(30, TimeUnit.SECONDS);
+        }
+    }
+
     @Test
     void a_started_instance_unwraps_to_its_chappe_server_and_stops() throws Exception {
         SeBootstrap.Configuration config = SeBootstrap.Configuration.builder().port(0).build();

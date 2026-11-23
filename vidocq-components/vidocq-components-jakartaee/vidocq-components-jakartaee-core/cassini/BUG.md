@@ -1164,3 +1164,21 @@ The 500 is empty, and the log line names the exception's class only, with a mess
   (cassini-cdi-vauban, 21 tests), "Dev run 4" and "Dev run 5" (cassini-core 706, cassini-cdi, cassini-it-weld 15).
   Review round 8: "Red run 4" (both providers returned the proxy on an inactive scope), "Dev run 6" (17 tests); then
   "Red run 5", every CASSINI-066 test against the final commit's tests with the main sources of its parent.
+
+## BUG-20261123-52 — `SeBootstrap` on the Chappe transport listens on `127.0.0.1` whatever the configured host
+- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Severity**: medium. An application started with `SeBootstrap.Configuration.builder().host("0.0.0.0")`, as the
+  getting started page, the usage page and the README show, cannot be reached from another machine or a container.
+- **Symptom**: with the Chappe transport (`ChappeRuntimeDelegate`), `host("0.0.0.0")` (or any other host) has no
+  effect: the server listens on `127.0.0.1`, and the instance's configuration reports `localhost`.
+- **Minimal repro**: `ChappeSeBootstrapTest.the_configured_host_is_the_address_the_server_listens_on`:
+  `host("0.0.0.0").port(0)`, then `instance.unwrap(Server.class).localAddress()` is `/127.0.0.1:<port>`. Red before
+  the fix.
+- **Cause**: `ChappeSeBootstrapInstance` built its server with `.host("127.0.0.1")` and never read
+  `SeBootstrap.Configuration.HOST`; `effectiveConfig` put `localhost` in place of the requested host.
+- **Fix**: the server binds the requested host; `localhost`, the default of Jakarta REST §5.2, stays the loopback
+  address `127.0.0.1` (the clients of `localhost` and `127.0.0.1` reach it whatever the name resolves to first, as
+  CASSINI-049 requires for a free port). The instance's configuration reports the requested host.
+  `ChappeSeBootstrapTest.the_default_host_listens_on_the_loopback_address` keeps the default. The JDK transport
+  (`JdkHttpRuntimeDelegate`) is unchanged: it still listens on `127.0.0.1` for a free port and on every address for a
+  given port, as the reference page states.
