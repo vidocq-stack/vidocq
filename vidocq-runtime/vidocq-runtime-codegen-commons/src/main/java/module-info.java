@@ -20,7 +20,7 @@
 /**
  * Shared build-time helpers for Vidocq APT processors. {@link
  * io.vidocq.runtime.codegen.commons.ModuleInfoRequirements} verifies, at annotation-processing time,
- * that the {@code module-info.java} of the module under compilation declares the JPMS directives an
+ * that the {@code module-info.java} of the module under compilation declares the module directives an
  * extension needs at runtime ({@code requires} / {@code opens}), failing the build with an actionable
  * diagnostic when one is missing.
  */

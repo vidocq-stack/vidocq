@@ -5,6 +5,83 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261123-45 — `DevHandover` links a `VidocqExtension#id()` that does not exist; a stub README left in a removed folder
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `vidocq-runtime-spi` (`DevHandover`), `vidocq-runtime-h2-module-repackaged`
+- **Symptom**: the Javadoc of `DevHandover` says a key starts with the extension's `{@link VidocqExtension#id() id}`;
+  the method is `name()`, and the example key `servlet:sessions:/` does not start with the Servlet extension's name
+  (`servlet-foy`) either. Separately, `src/stub/README.txt` sits in
+  `vidocq-runtime-extensions-jpms-repackaged/vidocq-runtime-h2-jpms-repackaged/`, a folder with no pom, while the
+  module, renamed `vidocq-runtime-h2-module-repackaged`, attaches its sources and javadoc stub jars from its own
+  `src/stub`, which did not exist: the jars carried no README.
+- **Repro**: `git grep -n "VidocqExtension#id"`; `ls vidocq-runtime-extensions/vidocq-runtime-extensions-module-repackaged/vidocq-runtime-h2-module-repackaged/src`.
+- **Cause**: the method was named `name()`; when the module folders were renamed (`…-jpms-repackaged` to
+  `…-module-repackaged`), the README stayed in the old one, which the move into the monorepo (cc9c56aa0) carried as
+  it was.
+- **Fix**: the Javadoc links `VidocqExtension#name()` and says the key starts with a prefix the extension owns; the
+  README moves to the module's `src/stub`, the folder its pom reads.
+
+## BUG-20261123-44 — `vidocq:run` and `vidocq:dev` forward the settings of the plugin's other goals to the application
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `vidocq-runtime-maven-plugin` (`VidocqRunMojo.forwarded`, used by `vidocq:dev` too)
+- **Symptom**: `mvn vidocq:run -Dvidocq.generate.skip=true` (or `-Dvidocq.test.once`, `-Dvidocq.doctor.fix`,
+  `-Dvidocq.vscode.*`, `-Dvidocq.eclipse.*`, `-Dvidocq.buildInfo.skip`, `-Dvidocq.extensions.available`,
+  `-Dvidocq.freezeExtensions`, `-Dvidocq.includeResources`, `-Dvidocq.startExtensions`) hands the property to the
+  application as a system property, where it is configuration nobody reads. The documented rule
+  (`vidocq-runtime-maven-plugin.adoc#run-properties`) forwards "every `-Dvidocq.*` that is not a setting of this
+  plugin".
+- **Repro**: `VidocqRunMojoTest.noSettingOfThePluginIsForwarded`: every `${vidocq.*}` expression of the plugin
+  descriptor as a user property; `forwarded` returned 14 of them besides `vidocq.profile`.
+- **Cause**: the forwarding is a deny list (`BUILD_PREFIXES`, `BUILD_KEYS`) written for the goals of the time; the
+  goals added later (`generate` settings, `test`, `doctor`, `vscode`, `eclipse`, ...) were never added to it.
+- **Fix**: the lists name every setting of the plugin; the test reads the descriptor, so a new goal's setting fails it
+  until the list keeps it. `vidocq.profile` stays forwarded: the application reads it.
+
+## BUG-20261123-43 — The pool's block of `vidocq.properties` tells the user to run `vidocq run`, a command the CLI does not have
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `vidocq-runtime-tooling` (`extension-catalog.properties`), `vidocq-runtime-mansart-pool-extension`
+  (`META-INF/vidocq/extension.properties`)
+- **Symptom**: `vidocq extension add mansart-pool` writes `# mvn test. Everywhere else (vidocq run, the packaged
+  application), the pool needs them`; the CLI runs the application with `vidocq start`.
+- **Repro**: `ExtensionConfigTest.thePoolCommentNamesACommandTheCliHas`.
+- **Cause**: the comment named the goal (`vidocq:run`) as if it were the command.
+- **Fix**: both files say `vidocq start`.
+
+## BUG-20261123-42 — `vidocq help test` says it runs `mvn vidocq:test`; it runs `mvn process-classes vidocq:test`
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `vidocq-runtime-cli` (`CliParser`)
+- **Symptom**: the help page of `vidocq test` names `mvn vidocq:test`, while `RunGoals.test` runs `process-classes
+  vidocq:test` (BUG-20261030-28); the reference page already said so.
+- **Repro**: `CliParserTestIdeaTest.theHelpListsBothCommandsAndTheirPages`.
+- **Cause**: the help text was not updated when `process-classes` was added in front of the goal.
+- **Fix**: the help page says `Runs 'mvn process-classes vidocq:test'`, as the page of `vidocq dev` does.
+
+## BUG-20261123-41 — Log lines of the plugin say "JPMS"
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `vidocq-runtime-maven-plugin`, `vidocq-runtime-codegen-commons`, `vidocq-runtime-migration-extension`
+- **Symptom**: `vidocq:generate` logs `JPMS: parked N generated class(es) of '…'`, `vidocq:run` and `vidocq:dev` log
+  `JPMS: N --patch-module option(s) added for generated classes`, `vidocq:package` and `vidocq:jlink` end their
+  enrichment lines with `(JPMS cross-module)`, and the descriptor of `check-module-info` says "the JPMS directives".
+  The project says "Java Modules", never the abbreviation.
+- **Repro**: `TerminologyTest.noMainSourceUsesTheAbbreviation` (`vidocq-runtime-architecture-tests`): it listed 13
+  main sources.
+- **Cause**: wording older than the terminology rule.
+- **Fix**: the log lines drop the prefix (`Parked N generated class(es) …`, `N --patch-module option(s) added …`), the
+  enrichment lines say `with the classes generated for its module`, and the Javadoc, comments and descriptors say
+  "module directives" or "split package". `TerminologyTest` reads every file under a `src/main` of the runtime and fails
+  on the abbreviation. The class `JpmsPatches` and the module `vidocq-runtime-it-cyrano-jpms` keep their names: a
+  rename is left to the maintainer.
+
 ## BUG-20261121-03 — `vidocq-runtime-cassini-rest-example` does not start from its own folder: Maven cannot read its library
 
 - **Date**: 2026-11-21

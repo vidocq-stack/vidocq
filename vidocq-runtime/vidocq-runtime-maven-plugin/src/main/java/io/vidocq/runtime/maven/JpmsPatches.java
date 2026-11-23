@@ -41,7 +41,7 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * Keeps the classes that {@code vidocq:generate} produces for <em>scanned dependencies</em>
- * out of the consumer module, so the module path never sees a JPMS split package.
+ * out of the consumer module, so the module path never sees a split package.
  *
  * <p>{@code VaubanGenerator} writes proxies/interceptors for a scanned bean into the
  * consumer's {@code target/classes}, in the <em>package of the bean</em> — a package owned

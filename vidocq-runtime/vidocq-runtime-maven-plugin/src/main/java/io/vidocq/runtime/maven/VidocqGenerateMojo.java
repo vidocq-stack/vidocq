@@ -384,8 +384,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
 
         // Classes generated for a scanned dependency live in packages owned by that
-        // dependency's module: leaving them in target/classes would create a JPMS
-        // split package. Park them in target/vidocq-patches/<artifactId>/; the
+        // dependency's module: leaving them in target/classes would split a
+        // package across two modules. Park them in target/vidocq-patches/<artifactId>/; the
         // packaging goals re-attach them by enriching the dependency jar copies.
         List<String> generated = new ArrayList<>();
         generated.addAll(result.generatedProxies());
@@ -394,7 +394,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
         var relocated = JpmsPatches.relocate(
                 classesDir, buildDirectory.toPath(), scannedByArtifactId, generated);
         for (var e : relocated.entrySet()) {
-            getLog().info("JPMS: parked " + e.getValue() + " generated class(es) of '" + e.getKey()
+            getLog().info("Parked " + e.getValue() + " generated class(es) of '" + e.getKey()
                     + "' in target/" + JpmsPatches.DIR_NAME + "/" + e.getKey()
                     + " — packaging goals will enrich that jar");
         }

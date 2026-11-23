@@ -575,7 +575,7 @@ interceptors) live in packages *owned by those dependencies*. Since 0.3.0 the pl
 out of the main module automatically:
 
 * `vidocq:generate` parks them in `target/vidocq-patches/<artifactId>/`
-  (log line: `JPMS: parked N generated class(es) of '…'`);
+  (log line: `Parked N generated class(es) of '…'`);
 * `vidocq:generate` then writes an *enriched* copy of each such jar in `target/vidocq-enriched/`,
   carrying its own generated classes, with a module descriptor that declares its providers — the
   packages already exist in those jars, so the module path never sees a split package;

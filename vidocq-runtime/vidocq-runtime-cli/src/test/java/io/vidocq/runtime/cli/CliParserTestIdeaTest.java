@@ -71,6 +71,8 @@ class CliParserTestIdeaTest {
         assertTrue(all.contains("mvn vidocq:test") && all.contains("mvn vidocq:idea"), all);
         assertTrue(help("test").contains("Keys: r runs every test"), help("test"));
         assertTrue(help("test").contains("--once"), help("test"));
+        // BUG-20261123-42: the page names what RunGoals.test runs.
+        assertTrue(help("test").contains("Runs 'mvn process-classes vidocq:test'"), help("test"));
         assertTrue(CommandRunner.testBanner(true).contains("once"));
         assertTrue(CommandRunner.testBanner(false).contains("continuous testing"));
         String idea = help("idea");

@@ -526,7 +526,7 @@ public class VidocqDevMojo extends AbstractMojo {
             }
             List<String> args = new ArrayList<>(jvmArgs);
             args.addAll(patchArgs);
-            getLog().info("JPMS: " + patchArgs.size() / 2
+            getLog().info(patchArgs.size() / 2
                     + " --patch-module option(s) added for generated classes");
             return args;
         } catch (IOException e) {

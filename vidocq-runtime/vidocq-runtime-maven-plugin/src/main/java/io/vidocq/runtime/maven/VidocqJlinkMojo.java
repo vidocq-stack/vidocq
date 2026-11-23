@@ -310,7 +310,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         if (!EnrichedJars.isEnriched(buildDir.toPath(), f.toPath()) && Files.isDirectory(patchDir)) {
             JpmsPatches.enrich(src, patchDir, stage.resolve(f.getName()));
             getLog().info("Staging enriched copy of " + artifact.getArtifactId()
-                    + " (carries its generated classes, JPMS cross-module)");
+                    + " (carries the classes generated for its module)");
         } else {
             Files.copy(src, stage.resolve(f.getName()), StandardCopyOption.REPLACE_EXISTING);
         }

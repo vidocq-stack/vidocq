@@ -32,8 +32,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,6 +48,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -247,6 +251,26 @@ class VidocqRunMojoTest {
         Map<String, String> forwarded = VidocqRunMojo.forwarded(userProperties);
 
         assertEquals(Map.of("vidocq.chappe.listener.default.port", "18092", "vidocq.profile", "prod"), forwarded);
+    }
+
+    /**
+     * BUG-20261123-44: no setting of a goal of this plugin reaches the application, whichever goal it belongs to
+     * ({@code vidocq.generate.*}, {@code vidocq.test.*}, {@code vidocq.doctor.*}, ...). {@code vidocq.profile} is the
+     * one property of the plugin the application reads too: it picks the configuration profile.
+     */
+    @Test
+    void noSettingOfThePluginIsForwarded() throws IOException {
+        String xml = Files.readString(Path.of("target", "classes", "META-INF", "maven", "plugin.xml"));
+        Properties userProperties = new Properties();
+        Matcher m = Pattern.compile("\\$\\{(vidocq\\.[A-Za-z.]+)}").matcher(xml);
+        while (m.find()) {
+            userProperties.setProperty(m.group(1), "x");
+        }
+        assertTrue(userProperties.size() > 50, "the descriptor's settings were not read: " + userProperties);
+
+        Map<String, String> forwarded = VidocqRunMojo.forwarded(userProperties);
+
+        assertEquals(Map.of("vidocq.profile", "x"), forwarded);
     }
 
     @Test

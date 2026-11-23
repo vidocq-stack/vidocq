@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * A single JPMS directive a Vidocq extension needs its consumer module to declare, plus a short
+ * A single module directive a Vidocq extension needs its consumer module to declare, plus a short
  * human reason used in diagnostics. Either a {@code requires <module>;} or an
  * {@code opens <package>[ to <modules>];}, where a {@code requires} may be plain or {@code static}.
  *

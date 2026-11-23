@@ -166,7 +166,7 @@ public class VidocqPackageMojo extends AbstractMojo {
 
             // Copy dependency JARs. A dependency for which vidocq:generate parked
             // cross-module classes (target/vidocq-patches/<artifactId>) is copied as an
-            // enriched jar carrying its own generated classes — no JPMS split package,
+            // enriched jar carrying its own generated classes — no split package,
             // no --patch-module needed at launch. A dependency patched with a generated
             // module-info by vauban:modularize (target/vauban-modularized/) ships as that
             // copy, under the original file name.
@@ -248,7 +248,7 @@ public class VidocqPackageMojo extends AbstractMojo {
         if (!p.enriched() && Files.isDirectory(p.patchDir())) {
             JpmsPatches.enrich(p.src(), p.patchDir(), destDir.resolve(p.src().getFileName().toString()));
             getLog().info("Enriched " + p.src().getFileName()
-                    + " with its generated classes (JPMS cross-module)");
+                    + " with the classes generated for its module");
         } else {
             Files.copy(p.src(), destDir.resolve(p.src().getFileName()),
                     StandardCopyOption.REPLACE_EXISTING);
