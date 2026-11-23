@@ -47,4 +47,11 @@ class EnvConfigSourceTest {
         assertEquals("KEY_NAME", EnvConfigSource.sanitize("KEY.NAME"));
         assertEquals("simple", EnvConfigSource.sanitize("simple"));
     }
+
+    @Test
+    void aProfileAndAProfiledKeyMapToTheMicroProfileEnvironmentNames() {
+        // VIDOCQ_PROFILE activates a profile; _DEV_VIDOCQ_HTTP_PORT is %dev.vidocq.http.port (BUG-20261123-46)
+        assertEquals("vidocq_profile", EnvConfigSource.sanitize("vidocq.profile"));
+        assertEquals("_dev_vidocq_http_port", EnvConfigSource.sanitize("%dev.vidocq.http.port"));
+    }
 }

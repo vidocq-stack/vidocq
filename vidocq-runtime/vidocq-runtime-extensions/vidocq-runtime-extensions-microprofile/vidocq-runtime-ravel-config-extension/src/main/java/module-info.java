@@ -20,6 +20,7 @@
 import io.vidocq.runtime.extensions.microprofile.ravel.ApplicationPropertiesConfigSource;
 import io.vidocq.runtime.extensions.microprofile.ravel.RavelConfigExtension;
 import io.vidocq.runtime.extensions.microprofile.ravel.RavelConfigSourceProvider;
+import io.vidocq.runtime.extensions.microprofile.ravel.VidocqProfileConfigSource;
 import io.vidocq.runtime.extensions.microprofile.ravel.VidocqPropertiesConfigSource;
 
 /**
@@ -54,7 +55,8 @@ module io.vidocq.runtime.extensions.microprofile.ravel {
 
     // MP Config SPI: backwards-compatibility for the historical Vidocq files
     // (vidocq.properties, application.properties) — Ravel doesn't read them
-    // by default, this restores the legacy behavior at the MP ordinal level.
+    // by default, this restores the legacy behavior at the MP ordinal level. VidocqProfileConfigSource hands
+    // vidocq.profile to Ravel as mp.config.profile, so vidocq:dev applies the %dev. keys of every source.
     provides org.eclipse.microprofile.config.spi.ConfigSource
-            with VidocqPropertiesConfigSource, ApplicationPropertiesConfigSource;
+            with VidocqPropertiesConfigSource, ApplicationPropertiesConfigSource, VidocqProfileConfigSource;
 }

@@ -166,6 +166,70 @@ class VidocqConfigImplTest {
         assertEquals("${other}", new VidocqConfigImpl(List.of(s)).getValue("k").orElseThrow());
     }
 
+    // ---------- configuration profiles (BUG-20261123-46, MicroProfile Config 3.1 "Config Profile") ----------
+
+    @Test
+    void theVidocqProfileMakesAProfiledKeyOverrideThePlainOne() {
+        ConfigSource sys = source("sys", 400, Map.of("vidocq.profile", "dev"));
+        ConfigSource file = source("vidocq.properties", 100,
+                Map.of("vidocq.http.port", "8080", "%dev.vidocq.http.port", "8081"));
+        VidocqConfig cfg = new VidocqConfigImpl(List.of(sys, file));
+        assertEquals(8081, cfg.getValue("vidocq.http.port", Integer.class).orElseThrow());
+    }
+
+    @Test
+    void aProfiledKeyIsIgnoredWithoutAProfileOrUnderAnotherOne() {
+        Map<String, String> data = Map.of("vidocq.http.port", "8080", "%dev.vidocq.http.port", "8081");
+        assertEquals("8080", new VidocqConfigImpl(List.of(source("file", 100, data)))
+                .getValue("vidocq.http.port").orElseThrow());
+
+        ConfigSource prod = source("sys", 400, Map.of("vidocq.profile", "prod"));
+        assertEquals("8080", new VidocqConfigImpl(List.of(prod, source("file", 100, data)))
+                .getValue("vidocq.http.port").orElseThrow());
+    }
+
+    @Test
+    void theMicroProfileProfileKeyActivatesAProfileWhenVidocqNamesNone() {
+        ConfigSource file = source("file", 100,
+                Map.of("mp.config.profile", "dev", "k", "plain", "%dev.k", "dev"));
+        assertEquals("dev", new VidocqConfigImpl(List.of(file)).getValue("k").orElseThrow());
+    }
+
+    @Test
+    void theVidocqProfileWinsOverTheMicroProfileOne() {
+        ConfigSource file = source("file", 100, Map.of("mp.config.profile", "prod", "vidocq.profile", "dev",
+                "k", "plain", "%dev.k", "dev", "%prod.k", "prod"));
+        assertEquals("dev", new VidocqConfigImpl(List.of(file)).getValue("k").orElseThrow());
+    }
+
+    @Test
+    void aPlainKeyOfAHigherOrdinalSourceStillWinsOverAProfiledKeyOfALowerOne() {
+        ConfigSource sys = source("sys", 400, Map.of("vidocq.profile", "dev", "k", "sys"));
+        ConfigSource file = source("file", 100, Map.of("%dev.k", "dev"));
+        ConfigSource env = source("env", 300, Map.of("%dev.other", "env-dev"));
+        ConfigSource low = source("low", 50, Map.of("other", "low"));
+        VidocqConfig cfg = new VidocqConfigImpl(List.of(sys, file, env, low));
+        assertEquals("sys", cfg.getValue("k").orElseThrow());
+        assertEquals("env-dev", cfg.getValue("other").orElseThrow());
+    }
+
+    @Test
+    void anExpressionResolvesTheProfiledValueOfTheKeyItNames() {
+        ConfigSource file = source("file", 100, Map.of("vidocq.profile", "dev",
+                "url", "http://${host}:8080", "host", "example.com", "%dev.host", "localhost"));
+        assertEquals("http://localhost:8080", new VidocqConfigImpl(List.of(file)).getValue("url").orElseThrow());
+    }
+
+    @Test
+    void theActiveProfileExposesItsKeysUnderTheirPlainNames() {
+        ConfigSource file = source("file", 100,
+                Map.of("vidocq.profile", "dev", "%dev.only.in.dev", "x", "%prod.only.in.prod", "y"));
+        List<String> names = new ArrayList<>();
+        new VidocqConfigImpl(List.of(file)).getPropertyNames().forEach(names::add);
+        assertTrue(names.contains("only.in.dev"), names::toString);
+        assertFalse(names.contains("only.in.prod"), names::toString);
+    }
+
     private static ConfigSource source(String name, int ordinal, Map<String, String> data) {
         return new ConfigSource() {
             @Override public String getName() { return name; }

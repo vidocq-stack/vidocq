@@ -57,14 +57,31 @@ import java.util.ServiceLoader;
  * ({@code ${key}}, {@code ${key:default}}) expanded, as Ravel expands them
  * ({@link PropertyExpressions}).</p>
  *
+ * <p>Configuration profiles follow MicroProfile Config 3.1 "Config Profile", as Ravel applies them. The active
+ * profile is {@value #PROFILE_KEY}, else {@value #MP_PROFILE_KEY}, read raw from the sources (an environment
+ * variable {@code VIDOCQ_PROFILE} or {@code MP_CONFIG_PROFILE} among them). Under a profile {@code dev}, each source
+ * is asked for {@code %dev.<key>} before {@code <key>}: a profiled key wins over the plain key of its own source, and
+ * the ordinals still order the sources.</p>
+ *
  * <p>The constructor {@link #VidocqConfigImpl(List)} forces a list of sources
  * explicit (used by unit tests).</p>
  */
 public final class VidocqConfigImpl implements VidocqConfig {
 
+    /** The key that names the active profile; it wins over {@value #MP_PROFILE_KEY}. */
+    public static final String PROFILE_KEY = "vidocq.profile";
+    /** The MicroProfile Config key that names the active profile when {@value #PROFILE_KEY} has no value. */
+    public static final String MP_PROFILE_KEY = "mp.config.profile";
+
     private final List<ConfigSource> sources;
     /** The class names of the providers whose sources replaced the native ones; empty for the native sources. */
     private final List<String> sourceProviders;
+    /**
+     * {@code %<profile>.} of the active profile, {@code ""} when no profile is active; {@code null} until the first
+     * read, so that a source that fails fails a read, never the construction. Two threads that both read it first
+     * find the same value.
+     */
+    private volatile String profilePrefix;
     private final PropertyExpressions expressions;
 
     /**
@@ -87,7 +104,7 @@ public final class VidocqConfigImpl implements VidocqConfig {
         copy.sort(Comparator.comparingInt(ConfigSource::getOrdinal).reversed());
         this.sources = Collections.unmodifiableList(copy);
         this.sourceProviders = List.copyOf(discovery.providers());
-        this.expressions = new PropertyExpressions(key -> rawValue(this.sources, key));
+        this.expressions = new PropertyExpressions(this::rawValue);
     }
 
     /**
@@ -101,14 +118,14 @@ public final class VidocqConfigImpl implements VidocqConfig {
     /**
      * {@inheritDoc}
      *
-     * <p>The value of the first source that has the key, its property expressions expanded; empty as well when
-     * an expression without a default names a key that has no value.</p>
+     * <p>The value of the first source that has the key, under the active profile first; its property
+     * expressions expanded; empty as well when an expression without a default names a key that has no value.</p>
      *
      * @throws IllegalArgumentException when an expression is circular or has no closing brace
      */
     @Override
     public Optional<String> getValue(String key) {
-        String raw = rawValue(sources, key);
+        String raw = rawValue(key);
         return raw == null ? Optional.empty() : expressions.expand(key, raw);
     }
 
@@ -136,9 +153,16 @@ public final class VidocqConfigImpl implements VidocqConfig {
 
     @Override
     public Iterable<String> getPropertyNames() {
+        String prefix = profilePrefix();
         LinkedHashSet<String> all = new LinkedHashSet<>();
         for (ConfigSource s : sources) {
-            all.addAll(s.getPropertyNames());
+            for (String name : s.getPropertyNames()) {
+                all.add(name);
+                // The keys of the active profile also answer under their plain name, as in Ravel.
+                if (!prefix.isEmpty() && name != null && name.startsWith(prefix)) {
+                    all.add(name.substring(prefix.length()));
+                }
+            }
         }
         return all;
     }
@@ -149,6 +173,45 @@ public final class VidocqConfigImpl implements VidocqConfig {
     }
 
     // ---------- helpers ----------
+
+    /**
+     * The value of the first source that has {@code key}, as that source holds it; {@code null} when none has it.
+     * Under a profile, each source is asked for the profiled key before the plain one (MicroProfile Config 3.1).
+     */
+    private String rawValue(String key) {
+        String prefix = profilePrefix();
+        if (prefix.isEmpty()) {
+            return rawValue(sources, key);
+        }
+        String profiled = prefix + key;
+        for (ConfigSource s : sources) {
+            String v = s.getValue(profiled);
+            if (v == null) v = s.getValue(key);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
+    /**
+     * {@code %<profile>.} of the profile {@value #PROFILE_KEY} names, else {@value #MP_PROFILE_KEY}; {@code ""} for
+     * none. Read from the sources once, at the first lookup.
+     */
+    private String profilePrefix() {
+        String prefix = profilePrefix;
+        if (prefix == null) {
+            String profile = trimToNull(rawValue(sources, PROFILE_KEY));
+            if (profile == null) profile = trimToNull(rawValue(sources, MP_PROFILE_KEY));
+            prefix = profile == null ? "" : "%" + profile + ".";
+            profilePrefix = prefix;
+        }
+        return prefix;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.strip();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 
     /** The value of the first source that has {@code key}, as that source holds it; {@code null} when none has it. */
     private static String rawValue(List<ConfigSource> sources, String key) {
