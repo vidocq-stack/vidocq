@@ -9,7 +9,9 @@
 # A component's TCK is what its root pom declares (ci.tck.modules, each run with -Ptck; ci.tck.command, run in
 # its folder). The runtime adds three slow runners (humboldt-telemetry ~256 s, heisenberg-faulttolerance and
 # cyrano-restclient ~183 s each). Left out, as before the monorepo: vidocq-runtime-tck-annotations (its TCK is not
-# on Maven Central) and vidocq-runtime-tck-coreprofile (red on JDK 25 in the TCK's own code, GestionProjet#9).
+# on Maven Central) and vidocq-runtime-tck-coreprofile (red on JDK 25 in the TCK's own code, GestionProjet#9). Left
+# out of the install too: vidocq-runtime-tck-foy-servlet, whose Servlet 6.1 TCK jars are not public
+# (BUG-20261123-65).
 name: TCK nightly
 
 on:
@@ -52,7 +54,8 @@ jobs:
                           "vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry"]
           # Left out of the install as well (header): a module of the tck profile whose TCK jar Maven cannot resolve
           # fails the whole install of its component (the runtime's, every night since the monorepo).
-          LEFT_OUT = {"vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations"}
+          LEFT_OUT = {"vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations",
+                      "vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet"}
           def reactor(path):
               """The module at path and every module below it: <modules>, and those of its tck profile and of its
               repackaged-api profile, which holds modules of every Maven build that the IntelliJ import leaves out."""

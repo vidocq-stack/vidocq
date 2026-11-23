@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261123-65 — The `tck / RUNTIME` job of the TCK nightly runs no TCK: its install fails on the Servlet TCK jars
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending merge)
+- **Module**: `.forgejo/workflows/tck-nightly.yml` (job `plan`), `vidocq-runtime-tck-foy-servlet`
+- **Symptom**: `tck / RUNTIME` is red every night (runs 5557, 5646 and 5759, 2026-11-21 to 2026-11-23). The step
+  "Build & install the component and its upstream" stops on `vidocq-runtime-tck-foy-servlet`: `Could not find
+  artifact jakarta.tck:servlet-tck-runtime:jar:6.1.0` (and `servlet-tck-util`). No runtime TCK runs (Config,
+  OpenAPI, Metrics, JWT, Health and the three slow runners). The release requires a green run of every component.
+- **Repro**: run the `plan` script of `tck-nightly.yml` with `COMPONENTS=RUNTIME`: its `modules` list holds
+  `vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet`, which the install builds under
+  `-Ptck`.
+- **Cause**: the Servlet 6.1 TCK jars are not public (Foy's README installs them by hand), and `LEFT_OUT` named only
+  `vidocq-runtime-tck-annotations`. The module is not in the runtime's `ci.tck.modules`: it was never run, only
+  built.
+- **Fix**: `LEFT_OUT` names `vidocq-runtime-tck-foy-servlet` as well. The plan no longer lists it (checked locally,
+  before 1, after 0). The Servlet TCK still runs in no nightly, for Foy as for the runtime: it needs the jars on a
+  repository the runners read.
+
 ## BUG-20261123-45 — `DevHandover` links a `VidocqExtension#id()` that does not exist; a stub README left in a removed folder
 
 - **Date**: 2026-11-23
