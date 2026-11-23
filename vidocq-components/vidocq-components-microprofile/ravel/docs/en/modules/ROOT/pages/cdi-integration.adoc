@@ -201,8 +201,9 @@ the application, which may already read the configuration. It loads the types by
 | Vauban
 | When the container fires `Startup`, whether the extension ran in that start or in the compiler
   (<<extension-in-the-compiler,below>>): the observer and its parameters are part of what Vauban keeps from a
-  build. Vauban does not start, and throws its own `DeploymentException` (`Observer … of Startup threw …; the
-  container does not start`) whose cause is the one above.
+  build. Vauban does not start, and throws the `DeploymentException` above as it is, without a warning: a
+  `DeploymentException` or a `DefinitionException` thrown by a `Startup` observer is the failure of the start
+  itself.
 
 | A full CDI container (Weld, Open Liberty)
 | At `AfterDeploymentValidation`: Ravel's portable extension takes the observer over, runs it there, and reports
