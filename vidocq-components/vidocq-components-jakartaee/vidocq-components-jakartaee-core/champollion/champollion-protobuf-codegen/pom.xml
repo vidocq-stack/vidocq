@@ -12,7 +12,7 @@
 
     <artifactId>champollion-protobuf-codegen</artifactId>
     <name>Champollion :: Protobuf Codegen (APT + .proto parser)</name>
-    <description>Annotation Processor @ProtobufStatic + parseur .proto + emitter Class-File API — squelette M1, implémentation M2/M3</description>
+    <description>Annotation processor for @ProtobufStatic, .proto parser and Class-File API emitter</description>
 
     <dependencies>
         <!--

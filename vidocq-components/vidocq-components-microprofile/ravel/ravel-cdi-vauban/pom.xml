@@ -12,7 +12,7 @@
 
     <artifactId>ravel-cdi-vauban</artifactId>
     <name>Ravel :: CDI Vauban Integration</name>
-    <description>Intégration CDI 4.1 (Vauban) — @ConfigProperty injection, BCE, support Optional</description>
+    <description>CDI 4.1 integration (Vauban): @ConfigProperty injection, build compatible extension, Optional support</description>
 
     <dependencies>
         <dependency>

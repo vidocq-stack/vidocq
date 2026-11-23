@@ -15,8 +15,8 @@
 
     <name>Chappe Static Index Maven Plugin</name>
     <description>
-        Génère META-INF/chappe-static-index.properties au build pour accélérer
-        StaticFileHandler (lookup O(1) vs URLConnection.openConnection()).
+        Generates META-INF/chappe-static-index.properties at build to speed up
+        StaticFileHandler (an O(1) lookup instead of URLConnection.openConnection()).
     </description>
 
     <properties>

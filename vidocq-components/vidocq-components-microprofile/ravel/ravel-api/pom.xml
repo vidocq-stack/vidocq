@@ -12,7 +12,7 @@
 
     <artifactId>ravel-api</artifactId>
     <name>Ravel :: API</name>
-    <description>Re-exposition contrôlée de la spec MicroProfile Config 3.1 + SPI Ravel</description>
+    <description>Controlled re-export of the MicroProfile Config 3.1 spec, plus the Ravel SPI</description>
 
     <dependencies>
         <!--

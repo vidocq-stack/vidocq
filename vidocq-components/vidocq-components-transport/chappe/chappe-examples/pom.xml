@@ -28,7 +28,7 @@
     </properties>
 
     <name>Chappe Examples</name>
-    <description>Exemples d'utilisation du serveur HTTP Chappe</description>
+    <description>Examples of the Chappe HTTP server</description>
 
     <dependencies>
         <dependency>

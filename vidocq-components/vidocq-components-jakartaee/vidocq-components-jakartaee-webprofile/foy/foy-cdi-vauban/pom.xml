@@ -12,7 +12,7 @@
 
     <artifactId>foy-cdi-vauban</artifactId>
     <name>Foy :: CDI Vauban Adapter</name>
-    <description>Adapter Vauban CDI pour Foy : implémente la SPI BeanProvider et expose les beans @WebServlet/@WebFilter/@WebListener du container Vauban.</description>
+    <description>Vauban CDI adapter for Foy: implements the BeanProvider SPI and exposes the @WebServlet, @WebFilter and @WebListener beans of the Vauban container.</description>
 
     <properties>
         <japicmp.skip>false</japicmp.skip>

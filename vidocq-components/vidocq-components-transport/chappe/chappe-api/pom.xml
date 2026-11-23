@@ -13,7 +13,7 @@
     <artifactId>chappe-api</artifactId>
 
     <name>Chappe API</name>
-    <description>API publique du serveur HTTP Chappe</description>
+    <description>Public API of the Chappe HTTP server</description>
 
     <properties>
         <build.timestamp>${maven.build.timestamp}</build.timestamp>

@@ -12,7 +12,7 @@
 
     <artifactId>knock-core</artifactId>
     <name>Knock :: Core</name>
-    <description>Implémentation MicroProfile Health 4.0 standalone — registry, agrégation, sérialisation JSON</description>
+    <description>Standalone MicroProfile Health 4.0 implementation: registry, aggregation, JSON serialization</description>
 
     <dependencies>
         <dependency>

@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-propagator-w3c</artifactId>
     <name>Humboldt :: Propagator W3C</name>
-    <description>Composite W3C TraceContext + Baggage. S'appuie sur les impls de l'API publique OpenTelemetry.</description>
+    <description>Composite W3C TraceContext and Baggage propagator, built on the implementations of the public OpenTelemetry API.</description>
 
     <dependencies>
         <dependency>

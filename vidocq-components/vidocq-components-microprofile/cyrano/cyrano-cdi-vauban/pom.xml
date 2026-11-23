@@ -10,7 +10,7 @@
 
     <artifactId>cyrano-cdi-vauban</artifactId>
     <name>Cyrano :: CDI Vauban Integration</name>
-    <description>Intégration CDI 4.1 (Vauban) — découverte auto des interfaces @RegisterRestClient via BCE, injection @Inject @RestClient</description>
+    <description>CDI 4.1 integration (Vauban): discovers the @RegisterRestClient interfaces through a build compatible extension, @Inject @RestClient injection</description>
 
     <dependencies>
         <dependency>

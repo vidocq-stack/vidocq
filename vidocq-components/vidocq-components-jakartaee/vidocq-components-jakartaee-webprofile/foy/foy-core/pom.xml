@@ -12,7 +12,7 @@
 
     <artifactId>foy-core</artifactId>
     <name>Foy :: Core</name>
-    <description>Moteur Servlet 6.1 — dispatcher, filter chain, session, error pages, listeners, security, web.xml. Implémente la SPI foy-api.</description>
+    <description>Servlet 6.1 engine: dispatcher, filter chain, session, error pages, listeners, security, web.xml. Implements the foy-api SPI.</description>
 
     <dependencies>
         <dependency>

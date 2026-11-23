@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Chappe</name>
-    <description>Serveur HTTP haute performance en Java 25 pur — zéro dépendance, virtual threads</description>
+    <description>High-performance HTTP server in pure Java 25: no dependency, virtual threads</description>
     <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-transport/chappe</url>
 
     <developers>

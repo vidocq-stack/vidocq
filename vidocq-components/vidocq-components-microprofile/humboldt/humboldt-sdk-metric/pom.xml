@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-sdk-metric</artifactId>
     <name>Humboldt :: SDK Metric</name>
-    <description>SDK Metrics OpenTelemetry pour Humboldt — Counter, Histogram, PeriodicMetricReader VT, aggregations Sum + ExplicitBucketHistogram (CUMULATIVE).</description>
+    <description>OpenTelemetry Metrics SDK of Humboldt: Counter, Histogram, PeriodicMetricReader on virtual threads, Sum and ExplicitBucketHistogram aggregations (CUMULATIVE).</description>
 
     <dependencies>
         <dependency>

@@ -12,7 +12,7 @@
 
 	<artifactId>humboldt-otel-api</artifactId>
 	<name>Humboldt :: OTel API (Java Modules)</name>
-	<description>Repackage io.opentelemetry:opentelemetry-api avec module-info explicite io.opentelemetry.api pour jlink.</description>
+	<description>io.opentelemetry:opentelemetry-api repackaged with an explicit module-info (io.opentelemetry.api), for jlink.</description>
 
 	<properties>
 		<!-- This module ships its own empty javadoc jar (below), as a repackaging of upstream code. Its

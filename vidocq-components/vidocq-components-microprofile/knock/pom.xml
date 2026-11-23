@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Knock</name>
-    <description>Implémentation MicroProfile Health 4.0 — zéro librairie tierce, virtual threads, Java Modules strict</description>
+    <description>MicroProfile Health 4.0 implementation: no third-party library, virtual threads, strict Java Modules</description>
     <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/knock</url>
 
     <!--

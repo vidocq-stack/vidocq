@@ -19,7 +19,7 @@
              (empty) javadoc jar for the release train instead of failing the build. -->
         <maven.javadoc.failOnError>false</maven.javadoc.failOnError>
     </properties>
-    <description>Intégration CDI 4.1 (Vauban) — découverte auto des @Liveness/@Readiness/@Startup via BCE</description>
+    <description>CDI 4.1 integration (Vauban): discovers the @Liveness, @Readiness and @Startup checks through a build compatible extension</description>
 
     <dependencies>
         <dependency>

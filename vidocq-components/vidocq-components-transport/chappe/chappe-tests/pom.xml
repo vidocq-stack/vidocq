@@ -28,7 +28,7 @@
     </properties>
 
     <name>Chappe Tests</name>
-    <description>Tests d'intégration du serveur HTTP Chappe</description>
+    <description>Integration tests of the Chappe HTTP server</description>
 
     <dependencies>
         <dependency>

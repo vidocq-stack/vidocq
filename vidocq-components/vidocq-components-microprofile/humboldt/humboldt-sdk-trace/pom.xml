@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-sdk-trace</artifactId>
     <name>Humboldt :: SDK Trace</name>
-    <description>SDK Tracing OpenTelemetry pour Humboldt — SdkTracerProvider, Samplers, SpanProcessors (Simple + Batch sur virtual threads), exporters utilitaires (in-memory, logging).</description>
+    <description>OpenTelemetry Tracing SDK of Humboldt: SdkTracerProvider, samplers, span processors (Simple, and Batch on virtual threads), utility exporters (in-memory, logging).</description>
 
     <dependencies>
         <dependency>

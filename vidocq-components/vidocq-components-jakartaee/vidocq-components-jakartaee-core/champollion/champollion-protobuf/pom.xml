@@ -12,7 +12,7 @@
 
     <artifactId>champollion-protobuf</artifactId>
     <name>Champollion :: Protobuf</name>
-    <description>Implémentation Protocol Buffers (wire binaire proto3 + canonical JSON mapping) — zéro dépendance hors JDK, prête pour gRPC via chappe</description>
+    <description>Protocol Buffers implementation (proto3 binary wire format and canonical JSON mapping), no dependency beyond the JDK, ready for gRPC over Chappe</description>
 
     <dependencies>
         <!--

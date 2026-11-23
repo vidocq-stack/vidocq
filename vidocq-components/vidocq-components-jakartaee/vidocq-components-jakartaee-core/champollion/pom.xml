@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Champollion</name>
-    <description>Implémentation Jakarta JSON Processing 2.1 + Jakarta JSON Binding 3.0 — zéro dépendance, virtual threads, compilation statique (APT + plugin Maven)</description>
+    <description>Jakarta JSON Processing 2.1 and Jakarta JSON Binding 3.0 implementation: no dependency, virtual threads, static compilation (annotation processor and Maven plugin)</description>
     <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion</url>
 
     <developers>

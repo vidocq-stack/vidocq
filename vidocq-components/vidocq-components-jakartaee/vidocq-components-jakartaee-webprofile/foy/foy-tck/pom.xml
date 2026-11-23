@@ -36,7 +36,7 @@
     <packaging>jar</packaging>
 
     <name>Foy :: TCK Runner</name>
-    <description>Harness de conformance Jakarta Servlet 6.1 et point d'entrée pour le TCK officiel</description>
+    <description>Jakarta Servlet 6.1 conformance harness and entry point of the official TCK</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

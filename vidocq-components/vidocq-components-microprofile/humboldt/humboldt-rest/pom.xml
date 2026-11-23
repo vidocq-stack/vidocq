@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-rest</artifactId>
     <name>Humboldt :: REST</name>
-    <description>Filters JAX-RS pour instrumentation HTTP serveur : extract W3C TraceContext, span SERVER, conventions OTel HTTP semantic.</description>
+    <description>Jakarta REST filters for server-side HTTP instrumentation: extract the W3C TraceContext, open a SERVER span, follow the OpenTelemetry HTTP semantic conventions.</description>
 
     <dependencies>
         <!-- Compile-only: the generated $$CassiniAdapter classes of the server filters implement a cassini-api type.

@@ -10,7 +10,7 @@
 
     <artifactId>cyrano-core</artifactId>
     <name>Cyrano :: Core</name>
-    <description>Implémentation MicroProfile Rest Client 4.0 standalone — scanning d'interface, proxy Class-File API, transport JDK HttpClient, mapping JSON-B</description>
+    <description>Standalone MicroProfile Rest Client 4.0 implementation: interface scanning, Class-File API proxies, JDK HttpClient transport, JSON-B mapping</description>
 
     <dependencies>
         <dependency>

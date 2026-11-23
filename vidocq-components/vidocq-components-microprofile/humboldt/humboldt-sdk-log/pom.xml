@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-sdk-log</artifactId>
     <name>Humboldt :: SDK Log</name>
-    <description>SDK Logs OpenTelemetry pour Humboldt — Logger, LogRecord, Simple/BatchLogRecordProcessor (VT). Bridges JUL/SLF4J en M5b.</description>
+    <description>OpenTelemetry Logs SDK of Humboldt: Logger, LogRecord, Simple and Batch LogRecordProcessor on virtual threads.</description>
 
     <dependencies>
         <dependency>

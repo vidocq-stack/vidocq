@@ -10,7 +10,7 @@
 
     <artifactId>cyrano-api</artifactId>
     <name>Cyrano :: API</name>
-    <description>Re-exposition contrôlée de la spec MicroProfile Rest Client 4.0 + SPI Cyrano</description>
+    <description>Controlled re-export of the MicroProfile Rest Client 4.0 spec, plus the Cyrano SPI</description>
 
     <dependencies>
         <dependency>

@@ -13,7 +13,7 @@
     <artifactId>chappe-core</artifactId>
 
     <name>Chappe Core</name>
-    <description>Moteur serveur HTTP avec virtual threads et lifecycle</description>
+    <description>HTTP server engine on virtual threads, with its lifecycle</description>
 
     <properties>
         <japicmp.skip>false</japicmp.skip>

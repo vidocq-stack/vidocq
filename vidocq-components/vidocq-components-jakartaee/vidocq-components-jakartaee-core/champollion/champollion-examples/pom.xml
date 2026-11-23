@@ -12,7 +12,7 @@
 
     <artifactId>champollion-examples</artifactId>
     <name>Champollion :: Examples</name>
-    <description>Exemples d'utilisation JSON-P et JSON-B avec et sans codegen statique</description>
+    <description>Examples of JSON-P and JSON-B, with and without static code generation</description>
 
     <properties>
         <!--

@@ -13,7 +13,7 @@
     <artifactId>chappe-cli</artifactId>
 
     <name>Chappe CLI</name>
-    <description>Launcher CLI standalone — `chappe serve` (zéro dépendance hors JDK)</description>
+    <description>Standalone command-line launcher, `chappe serve` (no dependency beyond the JDK)</description>
 
     <dependencies>
         <dependency>

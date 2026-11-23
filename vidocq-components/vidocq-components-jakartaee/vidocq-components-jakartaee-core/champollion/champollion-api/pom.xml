@@ -12,7 +12,7 @@
 
     <artifactId>champollion-api</artifactId>
     <name>Champollion :: API</name>
-    <description>Re-exposition contrôlée des specs Jakarta JSON-P 2.1 + JSON-B 3.0 + SPI Champollion</description>
+    <description>Controlled re-export of the Jakarta JSON-P 2.1 and JSON-B 3.0 specs, plus the Champollion SPI</description>
 
     <dependencies>
         <dependency>

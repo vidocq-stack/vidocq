@@ -13,7 +13,7 @@
     <artifactId>champollion-protobuf-maven-plugin</artifactId>
     <packaging>maven-plugin</packaging>
     <name>Champollion :: Protobuf Maven Plugin</name>
-    <description>Plugin Maven : scanne src/main/proto et délègue à champollion-protobuf-codegen pour générer les bindings — squelette M1, Mojo réel en M2</description>
+    <description>Maven plugin: scans src/main/proto and has champollion-protobuf-codegen generate the bindings</description>
 
     <prerequisites>
         <maven>3.9.16</maven>

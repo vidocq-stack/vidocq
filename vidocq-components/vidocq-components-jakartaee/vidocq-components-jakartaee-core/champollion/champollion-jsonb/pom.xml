@@ -12,7 +12,7 @@
 
     <artifactId>champollion-jsonb</artifactId>
     <name>Champollion :: JSON-B 3.0</name>
-    <description>Implémentation Jakarta JSON Binding 3.0 — runtime reflectif (fallback) et résolution AOT via factories statiques</description>
+    <description>Jakarta JSON Binding 3.0 implementation: reflective runtime (fallback) and ahead-of-time resolution through static factories</description>
 
     <dependencies>
         <dependency>

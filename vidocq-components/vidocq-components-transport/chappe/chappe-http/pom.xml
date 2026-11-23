@@ -13,7 +13,7 @@
     <artifactId>chappe-http</artifactId>
 
     <name>Chappe HTTP</name>
-    <description>Implémentation des protocoles HTTP/1.1 et HTTP/2</description>
+    <description>HTTP/1.1 and HTTP/2 protocol implementation</description>
 
     <properties>
         <japicmp.skip>false</japicmp.skip>

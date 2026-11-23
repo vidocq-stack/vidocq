@@ -12,7 +12,7 @@
 
     <artifactId>champollion-jsonp</artifactId>
     <name>Champollion :: JSON-P 2.1</name>
-    <description>Implémentation Jakarta JSON Processing 2.1 — zéro dépendance hors jakarta.json</description>
+    <description>Jakarta JSON Processing 2.1 implementation, no dependency beyond jakarta.json</description>
 
     <dependencies>
         <dependency>

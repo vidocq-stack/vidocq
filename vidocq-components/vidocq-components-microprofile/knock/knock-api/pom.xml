@@ -12,7 +12,7 @@
 
     <artifactId>knock-api</artifactId>
     <name>Knock :: API</name>
-    <description>Re-exposition contrôlée de la spec MicroProfile Health 4.0 + SPI Knock</description>
+    <description>Controlled re-export of the MicroProfile Health 4.0 spec, plus the Knock SPI</description>
 
     <dependencies>
         <dependency>

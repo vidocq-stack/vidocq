@@ -12,7 +12,7 @@
 
     <artifactId>knock-jaxrs</artifactId>
     <name>Knock :: Jakarta REST endpoints</name>
-    <description>Endpoints Jakarta REST /health* — ressources JAX-RS standard uniquement, indépendantes de toute implémentation (Cassini, RESTEasy, Jersey…). L'adapter Cassini est tissé à part par le runtime Vidocq (cassini-maven-plugin repackaging).</description>
+    <description>Jakarta REST /health* endpoints: standard JAX-RS resources only, independent of any implementation (Cassini, RESTEasy, Jersey...). The Vidocq runtime adds the Cassini adapter separately (cassini-maven-plugin repackaging).</description>
 
     <dependencies>
         <dependency>

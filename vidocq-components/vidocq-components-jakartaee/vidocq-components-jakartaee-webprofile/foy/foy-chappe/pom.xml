@@ -12,7 +12,7 @@
 
     <artifactId>foy-chappe</artifactId>
     <name>Foy :: Chappe Adapter</name>
-    <description>Adapter HTTP Chappe → Foy : pont Request/Response Chappe vers FoyHttpExchange et délégation au moteur Servlet via la SPI foy-api.</description>
+    <description>Chappe HTTP adapter for Foy: bridges Chappe's request and response to FoyHttpExchange and hands them to the Servlet engine through the foy-api SPI.</description>
 
     <properties>
         <japicmp.skip>false</japicmp.skip>

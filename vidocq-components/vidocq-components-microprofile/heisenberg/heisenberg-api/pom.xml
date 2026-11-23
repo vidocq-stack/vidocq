@@ -12,7 +12,7 @@
 
     <artifactId>heisenberg-api</artifactId>
     <name>Heisenberg :: API</name>
-    <description>Re-exposition contrôlée de la spec MicroProfile Fault Tolerance 4.1 + SPI Heisenberg</description>
+    <description>Controlled re-export of the MicroProfile Fault Tolerance 4.1 spec, plus the Heisenberg SPI</description>
 
     <dependencies>
         <!-- Spec MP FT 4.1 — version modularisée, re-exposée transitivement -->

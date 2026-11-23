@@ -13,7 +13,7 @@
     <artifactId>chappe-bench</artifactId>
 
     <name>Chappe Bench</name>
-    <description>Benchmarks JMH et validation de performance du serveur HTTP</description>
+    <description>JMH benchmarks and performance checks of the HTTP server</description>
 
     <properties>
         <!--

@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-otel-instrumentation-annotations</artifactId>
     <name>Humboldt :: OTel Instrumentation Annotations (Java Modules)</name>
-    <description>Repackage io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations avec module-info explicite io.opentelemetry.instrumentation_annotations.</description>
+    <description>io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations repackaged with an explicit module-info (io.opentelemetry.instrumentation_annotations).</description>
 
     <dependencies>
         <dependency>

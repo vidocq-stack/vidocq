@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Foy</name>
-    <description>Implémentation Jakarta Servlet 6.1 standalone — moteur Servlet pur, transport HTTP via SPI, CDI optionnel</description>
+    <description>Standalone Jakarta Servlet 6.1 implementation: a pure Servlet engine, HTTP transport through an SPI, optional CDI</description>
     <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy</url>
 
     <developers>

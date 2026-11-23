@@ -12,7 +12,7 @@
 
     <artifactId>ravel-core</artifactId>
     <name>Ravel :: Core</name>
-    <description>Implémentation MicroProfile Config 3.1 standalone — sources, converters, profiles, expressions</description>
+    <description>Standalone MicroProfile Config 3.1 implementation: sources, converters, profiles, expressions</description>
 
     <dependencies>
         <dependency>
