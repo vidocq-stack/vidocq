@@ -27,6 +27,7 @@ import java.lang.classfile.Annotation;
 import java.lang.classfile.AnnotationElement;
 import java.lang.classfile.ClassBuilder;
 import java.lang.classfile.ClassFile;
+import java.lang.classfile.CodeBuilder;
 import java.lang.classfile.MethodSignature;
 import java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute;
 import java.lang.classfile.attribute.SignatureAttribute;
@@ -163,6 +164,21 @@ class ReflectedPackagesTest {
         assertEquals(Set.of("com.acme.shop.book", "com.acme.shop.people"), reached.keySet());
         assertEquals("com.acme.shop.book.Book, reached through com.acme.shop.rest.BookResource",
                 reached.get("com.acme.shop.book"));
+    }
+
+    /**
+     * The public {@code @Inject} constructor of a resource takes beans, which the container hands over: no JSON-B
+     * payload, so the package of a bean it takes is not reached.
+     */
+    @Test
+    void theBeansARestResourceConstructorTakesAreNotReached() throws IOException {
+        ClassDesc catalogue = ClassDesc.of("com.acme.shop.service.Catalogue");
+        write(catalogue, cb -> cb.withField("size", ConstantDescs.CD_int, ClassFile.ACC_PRIVATE));
+        write(ClassDesc.of("com.acme.shop.rest.BookResource"), annotated("jakarta.ws.rs.Path", cb ->
+                cb.withMethodBody(ConstantDescs.INIT_NAME, MethodTypeDesc.of(ConstantDescs.CD_void, catalogue),
+                        ClassFile.ACC_PUBLIC, CodeBuilder::return_)));
+
+        assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
     }
 
     /** A generated JSON-B binding, as champollion-codegen-apt writes it, listed in the services file. */

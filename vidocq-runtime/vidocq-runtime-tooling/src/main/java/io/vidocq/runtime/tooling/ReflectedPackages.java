@@ -28,6 +28,7 @@ import java.lang.classfile.MethodModel;
 import java.lang.classfile.constantpool.ClassEntry;
 import java.lang.classfile.constantpool.PoolEntry;
 import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
 import java.lang.module.ModuleDescriptor;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -313,7 +314,9 @@ public final class ReflectedPackages {
 
     /**
      * The starting points {@code model} gives, as {@code {class, how it is reached}}: itself when it is an
-     * entity, and the types its public methods take or return when it is a REST resource or provider.
+     * entity, and the types its public methods take or return when it is a REST resource or provider. Not those of
+     * its constructors: an {@code @Inject} constructor takes beans, which the container hands over, and no JSON-B
+     * payload.
      */
     private static List<String[]> roots(ClassModel model) {
         String name = model.thisClass().asInternalName();
@@ -325,6 +328,7 @@ public final class ReflectedPackages {
         if (annotations.stream().anyMatch(RESOURCE_ANNOTATIONS::contains)) {
             model.methods().stream()
                     .filter(method -> (method.flags().flagsMask() & ClassFile.ACC_PUBLIC) != 0)
+                    .filter(method -> !method.methodName().equalsString(ConstantDescs.INIT_NAME))
                     .flatMap(method -> referenced(signature(method)).stream())
                     .forEach(type -> roots.add(new String[] {type, "reached through " + dotted(name)}));
         }
