@@ -111,10 +111,11 @@
         <sonar.issue.ignore.multicriteria.examples.resourceKey>**/vauban-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
 
         <!--
-            The TCK this repository's pull requests are gated on (vauban#85). Read by the shared
-            pr-validate workflow, which runs `mvn -pl <module> -Ptck test` for each and skips the
-            step entirely when this property is absent. Both suites are a certification claim, and
-            both fail the build on a red run — neither carries surefire's testFailureIgnore.
+            Vauban's TCK (vauban#85). Read by the monorepo's `TCK nightly` workflow
+            (.forgejo/workflows/tck-nightly.yml), which runs `mvn -pl <module> -Ptck test` for each:
+            once a day, on demand on a branch (tag VAUBAN) and for a release. A pull request runs no
+            TCK. Both suites are a certification claim, and both fail the build on a red run —
+            neither carries surefire's testFailureIgnore.
         -->
         <ci.tck.modules>vauban-tck-runner,vauban-atinject-tck-runner</ci.tck.modules>
     </properties>

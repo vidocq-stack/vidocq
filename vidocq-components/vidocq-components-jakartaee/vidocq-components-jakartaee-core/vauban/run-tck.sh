@@ -16,7 +16,9 @@ cd "$(dirname "$0")"
 # tree: without it the runners resolve them from ~/.m2, so a run before `install` tested
 # the last installed core, not the change at hand. Their unit tests run too; with
 # -Dtest=…, failIfNoSpecifiedTests=false keeps the modules that have no such test green.
-# CI installs the reactor before the TCK step, so `-am` is not needed there: the pull-request
-# workflow's `-pl <runner> -Ptck test` resolves the modules it tests from that install.
+# The TCK nightly workflow installs the component and its upstream before the TCK step, so
+# `-am` is not needed there: its `-pl <runner> -Ptck test` resolves them from that install.
+# `verify` installs nothing: the script only reads ~/.m2, so a run from a branch never
+# replaces the published Vauban snapshot there.
 ./mvnw verify -Ptck -pl vauban-tck-runner,vauban-atinject-tck-runner -am --fail-at-end \
     -Dsurefire.failIfNoSpecifiedTests=false "$@"

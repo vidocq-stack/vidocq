@@ -8,7 +8,7 @@ suspected cause, status. Updated on every investigation.
 ## BUG-20261123-40 — javac reports `-Avauban.mainOutput` as recognised by no processor
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `18bdaa49c`
 - **Module**: `vauban-processor` (`VaubanProcessor`)
 - **Symptom**: a compilation that passes `-Avauban.mainOutput=<dir>`, the option of a test compilation in a layout the
   processor does not recognise (vauban#101), prints `warning: The following options were not recognized by any
