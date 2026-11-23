@@ -8,7 +8,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-65 — The `tck / RUNTIME` job of the TCK nightly runs no TCK: its install fails on the Servlet TCK jars
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending merge)
+- **Status**: FIXED in `9dac7a224` (TCK nightly run 5885 on that commit: every component green, the runtime's 8 suites ran)
 - **Module**: `.forgejo/workflows/tck-nightly.yml` (job `plan`), `vidocq-runtime-tck-foy-servlet`
 - **Symptom**: `tck / RUNTIME` is red every night (runs 5557, 5646 and 5759, 2026-11-21 to 2026-11-23). The step
   "Build & install the component and its upstream" stops on `vidocq-runtime-tck-foy-servlet`: `Could not find

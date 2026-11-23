@@ -6,6 +6,9 @@
 #   - the whole reactor built with -P release,crac,!incubator and without tests, then deployed: signed jars,
 #     sources, javadoc and one CycloneDX SBOM per artifact (vidocq-parent's release profile);
 #   - the tag v<version>, then main at <next>-SNAPSHOT, committed and pushed by vidocq-ci-bot, signed with its key.
+# Then the same signed files go to the Maven package registry of Codefloe (codefloe.com/api/packages/Vidocq/maven),
+# from the bundle release.sh uploaded to Central (.forgejo/scripts/publish-codefloe-maven.py). A probe upload before
+# the build checks that vidocq-ci-bot can write there, so a refused token stops the release before Central.
 # A module whose maven.deploy.skip is true (its own, or its parent's in the reactor) is left out of the build and of
 # the deployment; one that must be built but not published sets skipPublishing (vidocq-runtime-integration-tests).
 #
@@ -78,6 +81,23 @@ jobs:
             exit 1
           fi
 
+      - name: The Codefloe package registry accepts the bot's uploads
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          CODEFLOE_URL: ${{ github.server_url }}
+          CODEFLOE_OWNER: Vidocq
+          CODEFLOE_USER: vidocq-ci-bot
+          CODEFLOE_TOKEN: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+        run: |
+          set -uo pipefail
+          if python3 -I -B .forgejo/scripts/publish-codefloe-maven.py probe --stamp "${{ github.run_number }}"; then
+            exit 0
+          elif [ "$DRY_RUN" = "true" ]; then
+            echo "::warning::a real release would stop here: the bot cannot write to the Codefloe package registry"
+          else
+            exit 1
+          fi
+
       - name: Install Azul Zulu CRaC
         run: |
           set -euo pipefail
@@ -103,6 +123,26 @@ jobs:
           git-signing-private-key: ${{ secrets.CI_BOT_GPG_PRIVATE_KEY }}
           git-signing-passphrase: ${{ secrets.CI_BOT_GPG_PASSPHRASE }}
           git-signing-key-id: ${{ secrets.CI_BOT_GPG_KEY_ID }}
+
+      # The bundle release.sh uploaded to Central is still in target/central-publishing: the same files, unchanged.
+      # A file the registry already holds is skipped, so this step can be run again; if the job is gone, the files
+      # of the release are on Central.
+      - name: Publish to the Codefloe package registry
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          CODEFLOE_URL: ${{ github.server_url }}
+          CODEFLOE_OWNER: Vidocq
+          CODEFLOE_USER: vidocq-ci-bot
+          CODEFLOE_TOKEN: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" != "true" ]; then
+            python3 -I -B .forgejo/scripts/publish-codefloe-maven.py publish --root . --version "$RELEASE_VERSION"
+          # A dry run stops at verify: central-publishing makes its bundle in the deploy phase only.
+          elif ! python3 -I -B .forgejo/scripts/publish-codefloe-maven.py publish --root . --version "$RELEASE_VERSION" --dry-run; then
+            echo "::warning::no bundle to check in a dry run; the real release uploads the one it sends to Central"
+          fi
 
       - name: Notify Slack, release success
         if: success() && inputs.dry_run != 'true'
