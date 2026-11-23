@@ -39,7 +39,7 @@ public class FormMechanismCreator implements SyntheticBeanCreator<HttpAuthentica
         String loginPage = params.get("loginPage", String.class);
         boolean forwardToLogin = params.get("forwardToLogin", Boolean.class);
         Supplier<IdentityStoreHandler> handler = () -> lookup.select(IdentityStoreHandler.class).get();
-        if (params.get("custom", Boolean.class, false)) {
+        if (Boolean.TRUE.equals(params.get("custom", Boolean.class, false))) {
             return FormAuthenticationMechanism.customForm(loginPage, forwardToLogin, handler);
         }
         return new FormAuthenticationMechanism(loginPage, params.get("errorPage", String.class), forwardToLogin, handler);

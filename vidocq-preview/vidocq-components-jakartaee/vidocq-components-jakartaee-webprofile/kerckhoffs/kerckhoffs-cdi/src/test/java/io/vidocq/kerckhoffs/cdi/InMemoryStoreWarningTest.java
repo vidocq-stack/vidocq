@@ -83,14 +83,14 @@ class InMemoryStoreWarningTest {
 
     @Test
     void an_application_without_in_memory_store_is_not_warned() {
-        try (var container = start(BasicApplication.class)) {
+        try (var _ = start(BasicApplication.class)) {
             assertTrue(warnings().isEmpty(), warnings().toString());
         }
     }
 
     @Test
     void the_start_warns_once_of_each_in_memory_store_and_names_its_declaration() {
-        try (var container = start(MemoryApplication.class)) {
+        try (var _ = start(MemoryApplication.class)) {
             var warnings = warnings();
 
             assertEquals(1, warnings.size(), warnings.toString());
