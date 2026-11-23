@@ -26,9 +26,6 @@ import io.vidocq.vauban.example.cdi1015.lib.ReceiptPrinter;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Produces the CDI-agnostic library types as normal-scoped beans — the jakartaee/cdi#1015 case:
  * the produced types belong to a module that knows nothing about CDI and opens nothing.
@@ -47,11 +44,7 @@ public class Integrations {
     @Produces
     @ApplicationScoped
     public AuditLog auditLog() {
-        List<String> events = new ArrayList<>();
-        return event -> {
-            events.add(event);
-            System.out.println("[audit] " + event);
-        };
+        return event -> System.out.println("[audit] " + event);
     }
 
     /**
