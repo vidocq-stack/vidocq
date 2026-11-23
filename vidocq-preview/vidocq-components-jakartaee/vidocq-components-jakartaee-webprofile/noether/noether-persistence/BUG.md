@@ -2162,3 +2162,27 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
   - 2026-11-19: fixed. Outside a transaction, both reach the provider's entity manager the context keeps for work
     outside transactions (the one its queries and settings are prepared on). Within a transaction, they still reach
     the context of that transaction.
+
+## BUG-20261123-01 — A unit declared in a module of a jlink image cannot look for its mapping files
+
+- **Date**: 2026-11-23
+- **Status**: FIXED on `fix/noether-jrt-mapping-files`: `MappingFiles` looks for an entry of a `jrt:` root in the
+  image's file system, as `ManagedClasses` scans it since BUG-20261113-02.
+- **Affected module**: `noether-jpa-core`, `MappingFiles.in`
+- **Symptom**: the start of a jlink image fails for every unit of the application module, mapping file or not:
+  `PersistenceException: Persistence unit library (JTA, on the default pool) could not start: Unable to look for
+  META-INF/orm.xml in jrt:/<module>/`, caused by `IOException: <module>/ not found`.
+- **Minimal reproduction**: `MappingFilesTest`, 3 errors before the fix:
+  ```sh
+  ./mvnw -ntp -pl vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-core \
+    -Dtest=MappingFilesTest -Dsurefire.failIfNoSpecifiedTests=false test
+  ```
+- **Confirmed cause**: the unit root of a linked module is `jrt:/<module>/`. `MappingFiles.in` read every root that was
+  not a `file:` directory as an archive and asked for `jar:jrt:/<module>/!/META-INF/orm.xml`; the `jrt:` handler then
+  opens `jrt:/<module>/` as a stream, which is a directory of the image. BUG-20261113-02 fixed the same reading in
+  `ManagedClasses` only: its investigation noted that no real jlink image of an application had been run.
+- **Investigations**:
+  - 2026-11-23: found by building the jlink image of the new Vidocq example `vidocq-runtime-noether-persistence-example`
+    (`-Pdist`) and starting it. The tests of the example pass, since `@VidocqTest` runs the application from jars.
+    With the fix installed in a private repository, the same image starts, catalogues a book over its REST API and
+    reads it back.

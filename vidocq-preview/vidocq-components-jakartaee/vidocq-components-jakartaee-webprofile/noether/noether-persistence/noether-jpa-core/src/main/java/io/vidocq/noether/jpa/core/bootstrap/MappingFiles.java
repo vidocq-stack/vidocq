@@ -75,10 +75,16 @@ public final class MappingFiles {
         return List.copyOf(files.values());
     }
 
-    /** The entry {@code path} of the directory or jar {@code root}, {@code null} when it has none. */
+    /**
+     * The entry {@code path} of the directory or jar {@code root}, {@code null} when it has none. A directory is a
+     * {@code file:} directory, or a module of the runtime image: the root of a unit declared in a module that jlink
+     * linked into the image is {@code jrt:/<module>/}, a directory of the image's file system and not an archive
+     * (BUG-20261123-01, as for the managed classes in BUG-20261113-02).
+     */
     private static URL in(URL root, String path) {
         try {
-            if ("file".equals(root.getProtocol()) && Files.isDirectory(Path.of(root.toURI()))) {
+            if ("jrt".equals(root.getProtocol())
+                || "file".equals(root.getProtocol()) && Files.isDirectory(Path.of(root.toURI()))) {
                 Path file = Path.of(root.toURI()).resolve(path);
                 return Files.isRegularFile(file) ? file.toUri().toURL() : null;
             }
