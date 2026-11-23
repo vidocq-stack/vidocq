@@ -135,12 +135,17 @@ jobs:
 
       - name: Build and test what the pull request changes
         if: steps.changes.outputs.docs-only != 'true'
-        # -am: the upstream of a changed module is built from this tree, its tests skipped
-        # (gib.skipTestsForUpstreamModules); every downstream module runs its tests (gib.buildDownstream=always).
+        # -am: the upstream of every impacted module, changed or downstream, is built from this tree, its tests
+        # skipped (gib.skipTestsForUpstreamModules); every downstream module runs its tests
+        # (gib.buildDownstream=always). buildUpstreamMode=impacted: with the default (changed), the upstream of a
+        # downstream module came from main's SNAPSHOT, older than main itself until main's deploy ends, and a pull
+        # request pushed after a merge compiled against the code before it (vidocq#766: the dev console against
+        # a vidocq-runtime-spi without VidocqConfig.activeProfile()).
         # -Pquality: the JaCoCo reports the SonarQube analysis below reads; the build is not run a second time.
         run: >-
           mvn -B -ntp -U install -am -Pquality -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist
           -Dgib.referenceBranch=refs/remotes/origin/main
+          -Dgib.buildUpstreamMode=impacted
           -Dgib.skipTestsForUpstreamModules=true
           -Dgib.uncommitted=false -Dgib.untracked=false
           -Dgib.logImpactedTo=${{ runner.temp }}/gib-impacted.txt
@@ -183,7 +188,9 @@ jobs:
           bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
           # No build here: validate only, for the SBOM the dependency scan reads, over the modules analysed.
           maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dcyclonedx.skipNotDeployed=false -pl ${{ steps.sonar-scope.outputs.pl }} validate
-          analysis-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -pl ${{ steps.sonar-scope.outputs.pl }}
+          # skipJreProvisioning: the scanner runs on the runner's Java 25 instead of downloading a JRE from the
+          # server at each analysis; that download hung for ten minutes on 2026-11-23 and the job was cut (#765).
+          analysis-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dsonar.scanner.skipJreProvisioning=true -pl ${{ steps.sonar-scope.outputs.pl }}
           blocking: 'true'
           targeted-tests: false
 

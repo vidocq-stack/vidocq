@@ -1,8 +1,12 @@
 name: CI
 
 # Post-merge flow of the monorepo (push on main): an incremental build. gitflow-incremental-builder builds the modules
-# changed since the last deployed commit of main (refs/deployed/main), and every module depending on them, with
-# their tests, then deploys them as SNAPSHOTs. The modules it leaves out keep their SNAPSHOT of an earlier push.
+# changed since the last deployed commit of main (refs/deployed/main), and every module depending on them, then
+# deploys them as SNAPSHOTs. The modules it leaves out keep their SNAPSHOT of an earlier push.
+# Tests run unless pr-validate already ran them on this very commit, over this very scope: main only fast-forwards,
+# so the pushed commit is the head a green pr-validate built, and when the deployed commit is the one main pointed
+# to before the push, both runs compare with the same base. A red earlier deploy, a forced push or a commit that
+# no pull request validated run the tests here.
 # The whole reactor is built, tested and deployed every night (nightly.yml), and on a push the incremental builder
 # cannot compare (no deployed commit yet, a forced push).
 # No sources or javadoc jar on a SNAPSHOT (Yann, 2026-11-19): the release builds them.
@@ -33,10 +37,15 @@ jobs:
       # deployAtEnd) this run also builds what the failed push changed.
       - name: What to build
         id: scope
+        env:
+          BEFORE: ${{ github.event.before }}
+          TOKEN: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
         run: |
           set -euo pipefail
           # Detached at the pushed commit: gib.disableIfBranchMatches=main is for a developer's local main only.
           git checkout -q --detach
+          base=""
           if git fetch -q --no-tags origin +refs/deployed/main:refs/remotes/origin/gib-base 2>/dev/null \
               && git merge-base --is-ancestor refs/remotes/origin/gib-base HEAD; then
             base=$(git rev-parse refs/remotes/origin/gib-base)
@@ -45,6 +54,28 @@ jobs:
           else
             echo "args=-Dgib.disable=true" >> "$GITHUB_OUTPUT"
             echo "Full build: no deployed commit of main to compare with"
+          fi
+          # The tests already ran when pr-validate is green on this commit and the deployed commit is main before
+          # the push (see the comment at the top). Any doubt, an unreadable status included, runs them.
+          verdict=$(python3 - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(f"{os.environ['API']}/commits/{os.environ['GITHUB_SHA']}/status",
+                                       headers={"Authorization": "token " + os.environ["TOKEN"]})
+          try:
+              statuses = json.load(urllib.request.urlopen(req, timeout=30)).get("statuses") or []
+          except Exception as e:
+              print("unknown (" + type(e).__name__ + ")")
+          else:
+              print(next((s["status"] for s in statuses
+                          if s.get("context") == "pr-validate / pr-validate (pull_request)"), "none"))
+          PY
+          )
+          if [ -n "$base" ] && [ "$base" = "$BEFORE" ] && [ "$verdict" = "success" ]; then
+            echo "skip-tests=true" >> "$GITHUB_OUTPUT"
+            echo "Tests skipped: pr-validate is green on ${GITHUB_SHA:0:10}, against the same base"
+          else
+            echo "skip-tests=false" >> "$GITHUB_OUTPUT"
+            echo "Tests run: pr-validate verdict '${verdict}', deployed base ${base:0:10}, main before the push ${BEFORE:0:10}"
           fi
 
       - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
@@ -75,7 +106,7 @@ jobs:
         uses: ./.ci-action/deploy-maven
         with:
           maven-args: -B -ntp -U -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist ${{ steps.scope.outputs.args }}
-          skip-tests: "false"
+          skip-tests: ${{ steps.scope.outputs.skip-tests }}
           snapshot-also-central: "false"
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
