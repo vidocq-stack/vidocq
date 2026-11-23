@@ -17,7 +17,7 @@ sure no binary ever contains the console, its SPI, a `-dev` module or the dev se
   module path.
 - **Every other goal:** drops any jar whose manifest says `Vidocq-Dev-Only: true`.
 
-**Tech Stack:** Java 25, JPMS, Maven 3.9, a hand-written `plugin.xml`, Maven Resolver (Aether), the Vidocq dev
+**Tech Stack:** Java 25, Java Modules, Maven 3.9, a hand-written `plugin.xml`, Maven Resolver (Aether), the Vidocq dev
 console SPI, JUnit 5.
 
 **Spec:** `docs/superpowers/specs/2026-09-26-dev-only-tooling-design.md`. Read it first; section numbers below refer
@@ -36,7 +36,7 @@ to it.
   - the descriptor `META-INF/vidocq/dev-module`, one line holding the companion's `artifactId`;
   - the manifest entry `Vidocq-Dev-Only: true`;
   - companion artifactIds `<runtime artifactId>-dev`, same groupId and version;
-  - JPMS module and package `<runtime module>.dev`, with the runtime's shared package `<runtime module>.live`,
+  - Java module and package `<runtime module>.dev`, with the runtime's shared package `<runtime module>.live`,
     exported `to <runtime module>.dev` only;
   - anomaly codes `VIDOCQ-DEVC-007` (two live panels for one id), `VIDOCQ-DEVC-008` (a live panel without its
     section) and `VIDOCQ-DEVC-009` (a section's contributor that is also a panel, with a live panel for the same id).
@@ -2045,7 +2045,7 @@ contains `Dev tools:`.
 Add `Fixture.addDependency(project, groupId, artifactId, scope)`, which inserts a `<dependency>` before
 `</dependencies>` of the copied `pom.xml`. Add `Fixture.distZip(project)`, which finds `target/*-dist.zip`.
 
-In the unit tests of the plugin and extensions, add the JPMS check of the spec (§10): a module-path boot of a runtime
+In the unit tests of the plugin and extensions, add the Java Modules check of the spec (§10): a module-path boot of a runtime
 extension alone, with no companion, starts cleanly. `KnockSectionWithoutPanelTest` already loads the runtime module
 with no `-dev` module. Confirm that its module-path test run passes with the qualified export to an absent module.
 If `javac` rejects `exports … to <absent module>` under this build's lint flags, record a ruling and add

@@ -143,7 +143,7 @@ class EnrichedJarsBrickTest {
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
                 "org/dep/api/Marker.class", emptyClass("org.dep.api.Marker")),
                 Map.of("Automatic-Module-Name", "org.flow"));
-        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "flow"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
 
@@ -176,7 +176,7 @@ class EnrichedJarsBrickTest {
         entries.put(INDEX, text("org.dep.Old\n"));
         entries.put("META-INF/notes.txt", text("the jar's\n"));
         Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), entries, Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Old\norg.dep.Servlet$$FoyComponent\n"),
                 INDEX, text("org.dep.Servlet\n"),
@@ -197,7 +197,7 @@ class EnrichedJarsBrickTest {
                 "module-info.class", descriptor("org.dep"),
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
                 "org/dep/api/Marker.class", emptyClass("org.dep.api.Marker")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
 
@@ -226,7 +226,7 @@ class EnrichedJarsBrickTest {
         Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
                 "module-info.class", withPackages,
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/gen/Servlet$$FoyComponent.class", foyComponent("org.dep.gen.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.gen.Servlet$$FoyComponent\n")));
 
@@ -250,7 +250,7 @@ class EnrichedJarsBrickTest {
     void aMultiReleaseJarWithAVersionedDescriptorIsAnExplicitModule() throws Exception {
         Path build = tmp.resolve("target");
         Path lib = versionedDescriptorJar();
-        patch(JpmsPatches.patchDirFor(build, "mr-lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "mr-lib"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
 
@@ -274,7 +274,7 @@ class EnrichedJarsBrickTest {
         Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
                 "module-info.class", descriptor("org.dep"),
                 "org/dep/Service.class", emptyClass("org.dep.Service")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/_VaubanComponents.class", foyComponent("org.dep._VaubanComponents")));
 
         EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")),
@@ -291,7 +291,7 @@ class EnrichedJarsBrickTest {
         Path auto = jar(tmp.resolve("m2/flow-1.0.jar"), Map.of(
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
                 "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "flow"), Map.of(
                 "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
         // vauban:modularize of an earlier build left a copy with a synthesized descriptor: not the source here.
         jar(build.resolve("vauban-modularized/flow-1.0.jar"), Map.of(
@@ -319,7 +319,7 @@ class EnrichedJarsBrickTest {
         Path auto = jar(tmp.resolve("m2/auto-lib-1.0.jar"), Map.of(
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
                 "org/dep/api/Marker.class", emptyClass("org.dep.api.Marker")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "auto-lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "auto-lib"), Map.of(
                 "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents"),
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
@@ -347,7 +347,7 @@ class EnrichedJarsBrickTest {
         Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
                 "module-info.class", descriptor("org.dep"),
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent")));
         enrich(build, foy(lib, "lib", FOY_INPUTS), List.of());
         String before = manifestOf(EnrichedJars.resolve(build, lib)).getValue("Vidocq-Enriched-Inputs");
@@ -364,7 +364,7 @@ class EnrichedJarsBrickTest {
         Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
                 "module-info.class", descriptor("org.dep"),
                 "org/dep/Service.class", emptyClass("org.dep.Service")), Map.of());
-        Path patchDir = patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        Path patchDir = patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
         List<String> providers = List.of("org.dep._VaubanComponents");
         EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")), providers,
@@ -385,7 +385,7 @@ class EnrichedJarsBrickTest {
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
                 "org/dep/api/Marker.class", emptyClass("org.dep.api.Marker"),
                 WEB_FILE, text("org.dep.Old\n")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "flow"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
         EnrichedJars.Scanned dep = foy(auto, "flow", FOY_INPUTS);
@@ -414,7 +414,7 @@ class EnrichedJarsBrickTest {
         Path build = tmp.resolve("target");
         Path auto = jar(tmp.resolve("m2/flow-1.0.jar"), Map.of(
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "flow"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
         enrich(build, foy(auto, "flow", FOY_INPUTS), List.of());

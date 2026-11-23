@@ -165,7 +165,7 @@ class VidocqGenerateDependencyCodegenTest {
 
         var result = run(buildDir, List.of(alpha), DependencyCodegenPass.JAVAC, lib);
 
-        Path patch = JpmsPatches.patchDirFor(buildDir, "lib");
+        Path patch = JavaModulePatches.patchDirFor(buildDir, "lib");
         assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")));
         assertEquals("com.acme.Foo\n", Files.readString(patch.resolve("META-INF/fixture/a.list")));
         assertEquals(List.of(new EnrichedJars.Scanned(lib, "lib", "com.acme:lib:1.0", List.of("Alpha"),
@@ -183,7 +183,7 @@ class VidocqGenerateDependencyCodegenTest {
 
         run(dir.resolve("first"), List.of(alpha), generator, lib);
         Path second = dir.resolve("second");
-        Path vauban = JpmsPatches.patchDirFor(second, "lib").resolve("com/acme/Foo$$VaubanProxy.class");
+        Path vauban = JavaModulePatches.patchDirFor(second, "lib").resolve("com/acme/Foo$$VaubanProxy.class");
         Files.createDirectories(vauban.getParent());
         Files.write(vauban, classBytes("com.acme.Foo$$VaubanProxy"));
         var result = run(second, List.of(alpha), generator, lib);
@@ -191,7 +191,7 @@ class VidocqGenerateDependencyCodegenTest {
         assertEquals(1, generated.get(), "the second run is a cache hit");
         assertEquals(List.of("vidocq:generate: lib-1.0.jar — Alpha (1 class, generated)",
                 "vidocq:generate: lib-1.0.jar — Alpha (1 class, cached)"), info);
-        Path patch = JpmsPatches.patchDirFor(second, "lib");
+        Path patch = JavaModulePatches.patchDirFor(second, "lib");
         assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")));
         assertEquals("com.acme.Foo\n", Files.readString(patch.resolve("META-INF/fixture/a.list")));
         assertTrue(Files.isRegularFile(vauban), "what Vauban parked stays");
@@ -204,7 +204,7 @@ class VidocqGenerateDependencyCodegenTest {
         Brick alpha = fakeBrick("Alpha");
         var generator = fake(Map.of("META-INF/fixture/a.list", "com.acme.Foo\n"), List.of());
         Path buildDir = dir.resolve("target");
-        Path patch = JpmsPatches.patchDirFor(buildDir, "lib");
+        Path patch = JavaModulePatches.patchDirFor(buildDir, "lib");
         // What the mojo does on each run: forget the bricks' last output, then run the pass.
         DependencyCodegenPass.forgetWritten(buildDir);
         run(buildDir, List.of(alpha), generator, lib);
@@ -214,7 +214,7 @@ class VidocqGenerateDependencyCodegenTest {
         run(buildDir, List.of(alpha), generator, List.of(lib), List.of(), List.of("com.acme:lib"));
 
         assertFalse(Files.exists(patch), "the brick files and their emptied patch directory are gone");
-        assertEquals(List.of(), JpmsPatches.patchModuleArgs(buildDir, Map.of("lib", lib)),
+        assertEquals(List.of(), JavaModulePatches.patchModuleArgs(buildDir, Map.of("lib", lib)),
                 "run and dev no longer patch the jar");
 
         // A jar Vauban also parked classes for keeps them.
@@ -234,7 +234,7 @@ class VidocqGenerateDependencyCodegenTest {
     void aJarProcessedAgainGetsOnlyItsNewOutput() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
         Path buildDir = dir.resolve("target");
-        Path patch = JpmsPatches.patchDirFor(buildDir, "lib");
+        Path patch = JavaModulePatches.patchDirFor(buildDir, "lib");
         DependencyCodegenPass.forgetWritten(buildDir);
         run(buildDir, List.of(fakeBrick("Alpha")), fake(Map.of("META-INF/fixture/old.list", "x\n"), List.of()), lib);
 
@@ -289,7 +289,7 @@ class VidocqGenerateDependencyCodegenTest {
                 List.of(lib, annotations), RELEASE, List.of(), List.of());
 
         assertEquals(List.of(), error);
-        Path patch = JpmsPatches.patchDirFor(buildDir, "lib");
+        Path patch = JavaModulePatches.patchDirFor(buildDir, "lib");
         assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")));
         assertEquals("com.acme.Foo\n", Files.readString(patch.resolve("META-INF/fixture/a.list")));
     }
@@ -338,7 +338,7 @@ class VidocqGenerateDependencyCodegenTest {
         run(dir.resolve("second"), List.of(alpha), generator, lib);
 
         for (String build : List.of("first", "second")) {
-            Path patch = JpmsPatches.patchDirFor(dir.resolve(build), "lib");
+            Path patch = JavaModulePatches.patchDirFor(dir.resolve(build), "lib");
             assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")), build);
             assertFalse(Files.exists(patch.resolve("META-INF/fixture/whole.list")),
                     build + ": it would describe only the hinted classes");
@@ -369,7 +369,7 @@ class VidocqGenerateDependencyCodegenTest {
                         + " Fix the library, or leave the jar out with <scanExcludes>com.acme:other</scanExcludes>."
                         + " Full javac output: " + Path.of("target", "vidocq-depgen", "other.log")), error);
         assertEquals(String.join("\n", error), failure.getMessage());
-        assertFalse(Files.exists(JpmsPatches.patchDirFor(buildDir, "lib")));
+        assertFalse(Files.exists(JavaModulePatches.patchDirFor(buildDir, "lib")));
     }
 
     /** A signed jar left alone is a warning that says what it costs: the brick's output is missing at run time. */
@@ -428,7 +428,7 @@ class VidocqGenerateDependencyCodegenTest {
                 + " <scanExcludes>com.acme:lib</scanExcludes>.";
         assertEquals(List.of(line), error);
         assertEquals(line, failure.getMessage());
-        assertFalse(Files.exists(JpmsPatches.patchDirFor(buildDir, "lib")), "nothing is written for that jar");
+        assertFalse(Files.exists(JavaModulePatches.patchDirFor(buildDir, "lib")), "nothing is written for that jar");
     }
 
     @Test
@@ -451,7 +451,7 @@ class VidocqGenerateDependencyCodegenTest {
         var result = run(buildDir, List.of(fakeBrick("Alpha")), nothing, lib);
 
         assertEquals(List.of(), result.processed());
-        assertFalse(Files.exists(JpmsPatches.patchDirFor(buildDir, "lib")));
+        assertFalse(Files.exists(JavaModulePatches.patchDirFor(buildDir, "lib")));
         assertEquals(List.of("vidocq:generate: lib-1.0.jar — Alpha (0 classes, generated)"), info);
     }
 

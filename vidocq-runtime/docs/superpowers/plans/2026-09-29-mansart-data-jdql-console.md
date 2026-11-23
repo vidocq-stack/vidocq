@@ -23,7 +23,7 @@ committed — with the result as JSON and the last 20 statements replayable.
   transactions `TransactionRunner`.
 - **Database test:** the mansart-h2 example's `DevConsoleSnapshotTest` posts the two actions.
 
-**Tech Stack:** Java 25, JPMS, Maven 3.9, Jakarta Data 1.0.1, Mansart Data 0.4.0-SNAPSHOT (`mansart-data-core`, H2
+**Tech Stack:** Java 25, Java Modules, Maven 3.9, Jakarta Data 1.0.1, Mansart Data 0.4.0-SNAPSHOT (`mansart-data-core`, H2
 dialect), Jakarta CDI 4.1, Jakarta Transactions 2.0.1 (optional), the Vidocq dev console SPI and page (vanilla JS),
 JUnit 5, AssertJ (Mansart tests).
 

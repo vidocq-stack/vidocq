@@ -199,11 +199,11 @@ final class DependencyCodegenPass {
         if (!Files.isDirectory(records)) {
             return;
         }
-        Path patchRoot = JpmsPatches.root(buildDir);
+        Path patchRoot = JavaModulePatches.root(buildDir);
         try (var lists = Files.list(records)) {
             for (Path list : lists.filter(p -> p.getFileName().toString().endsWith(WRITTEN_SUFFIX)).toList()) {
                 String name = list.getFileName().toString();
-                Path patchDir = JpmsPatches.patchDirFor(buildDir,
+                Path patchDir = JavaModulePatches.patchDirFor(buildDir,
                         name.substring(0, name.length() - WRITTEN_SUFFIX.length())).normalize();
                 if (patchDir.startsWith(patchRoot) && !patchDir.equals(patchRoot)) {
                     for (String line : Files.readAllLines(list)) {
@@ -374,7 +374,7 @@ final class DependencyCodegenPass {
      */
     private List<String> writePatch(String artifactId, String file, DependencyCodegen.Output output)
             throws IOException {
-        Path patchDir = JpmsPatches.patchDirFor(buildDir, artifactId);
+        Path patchDir = JavaModulePatches.patchDirFor(buildDir, artifactId);
         List<String> written = new ArrayList<>();
         for (var e : output.files().entrySet()) {
             Path target = patchDir.resolve(e.getKey()).normalize();

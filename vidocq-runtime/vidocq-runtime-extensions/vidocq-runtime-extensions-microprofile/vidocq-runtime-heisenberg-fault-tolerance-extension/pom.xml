@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Fault Tolerance (Heisenberg)</name>
-    <description>Maven/JPMS wrapper activating Heisenberg (MicroProfile Fault Tolerance 4.1) in a
+    <description>Maven/Java module wrapper activating Heisenberg (MicroProfile Fault Tolerance 4.1) in a
         vidocq deployment. No own Java class — the integration relies entirely on
         heisenberg-cdi-vauban's BuildCompatibleExtension (discovery of @Retry/@Timeout/
         @CircuitBreaker/@Bulkhead/@Fallback/@Asynchronous and registration of the fault-tolerance

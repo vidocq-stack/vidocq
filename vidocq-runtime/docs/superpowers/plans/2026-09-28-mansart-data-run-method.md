@@ -21,7 +21,7 @@ back (the default) or committed — with the result as JSON and the last 20 call
 - **Database test:** the mansart-h2 example's `DevConsoleSnapshotTest`, which already boots the real application
   in a dev launch on in-memory H2 with JTA and drives console actions over HTTP.
 
-**Tech Stack:** Java 25, JPMS, Maven 3.9, Jakarta Data 1.0.1, Mansart Data (`mansart-data-core`, dialect SPI),
+**Tech Stack:** Java 25, Java Modules, Maven 3.9, Jakarta Data 1.0.1, Mansart Data (`mansart-data-core`, dialect SPI),
 Jakarta CDI 4.1, Jakarta Transactions 2.0.1 (optional), the Vidocq dev console SPI, JUnit 5.
 
 **Spec:** `docs/superpowers/specs/2026-09-28-mansart-data-run-method-design.md` (binding). Section numbers below

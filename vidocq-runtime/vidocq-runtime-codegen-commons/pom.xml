@@ -14,7 +14,7 @@
     <name>Vidocq :: Runtime :: Codegen Commons</name>
     <description>
         Shared build-time helpers for Vidocq APT processors. Hosts ModuleInfoRequirements, which lets a
-        processor verify that the module-info.java of the module it is processing declares the JPMS
+        processor verify that the module-info.java of the module it is processing declares the module
         directives (requires / opens) an extension needs at runtime, emitting an actionable compile
         error when one is missing. Zero runtime dependency — requires only java.compiler.
     </description>

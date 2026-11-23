@@ -25,7 +25,7 @@
         <servlet.tck.version>6.1.0</servlet.tck.version>
     </properties>
 
-    <!-- No module-info.java (unnamed module): the TCK deployment classes carry no JPMS descriptor,
+    <!-- No module-info.java (unnamed module): the TCK deployment classes carry no module descriptor,
          same approach as the other vidocq-runtime-tck-* modules. -->
 
     <dependencies>

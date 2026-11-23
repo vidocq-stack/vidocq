@@ -8,7 +8,7 @@ Vidocq is a **modular Java SE MicroProfile 7.2 runtime** built on **Vauban** (CD
 Lite). Each MicroProfile/Jakarta spec ships as an independent **extension** discovered via
 `ServiceLoader` (Quarkus-inspired). Non-negotiable constraints:
 
-- **JDK 25** with **native JPMS**: every module has a `module-info.java`.
+- **JDK 25** with **native Java Modules**: every module has a `module-info.java`.
 - **Zero runtime dependencies** in the core; functionality is added through extensions.
 - **Virtual-thread native**: use `ScopedValue` (JEP 487) for `@RequestScoped` context — never `ThreadLocal` (pinning).
 - **Compile-time over reflection**: Vauban generates proxies/interceptors via the JDK 25 Class-File API; extensions use APT codegen, not runtime reflection (GraalVM-friendly).

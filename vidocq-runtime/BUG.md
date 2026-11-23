@@ -1532,7 +1532,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 - **Date**: 2026-11-16
 - **Status**: FIXED on `fix/dist-file-modes`
-- **Module**: `vidocq-runtime-maven-plugin` (`EnrichedJars.writeJar`, `JpmsPatches.enrich`, `SharedResources.rewrite`,
+- **Module**: `vidocq-runtime-maven-plugin` (`EnrichedJars.writeJar`, `JavaModulePatches.enrich`, `SharedResources.rewrite`,
   `VidocqPackageMojo` launcher)
 - **Symptom**: after BUG-20261116-02, the VAADIN session checked the `-dist.zip` of vaadin-on-vidocq with `zipinfo`:
   the two jars Foy enriches (`atmosphere-runtime-3.0.5.slf4jvaadin1.jar`, `flow-server-25.3.3.jar`) are `rw-------`, in
@@ -3499,7 +3499,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   resource URLs instead; that change removes Vaadin's `PinnedNpmVersions` error but the copy works without it.
 - **Fix**: the copy keeps the source jar's folder entries, empty ones included, and writes an entry for every other
   folder before its first file, as the jar tool does, the folders of generated packages included.
-  `JpmsPatches.enrich`, used at packaging, gives a generated package its folder entry too. The inputs digest gains a
+  `JavaModulePatches.enrich`, used at packaging, gives a generated package its folder entry too. The inputs digest gains a
   `layout folders` line, so a copy written before is rewritten once; on Windows, that one rewrite fails while a
   running `vidocq:dev` holds the copy open, and passes once it stops. Tests `theCopyHasAnEntryForEveryFolder`,
   `enrichAddsPatchClassesWithoutTouchingExistingEntries`.
@@ -3749,7 +3749,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   extension, `cyrano-processor` for compile-time proxies), known to the CLI (`KnownExtensions.codegenBundle
   ("cyrano-rest-client")`) and therefore required by `checkpom` (seen failing the example's build without it, with the
   entry to add); added to the IT and the two TCK runners that declare the extension. With the cyrano and vauban fixes,
-  `vidocq-runtime-it-cyrano-jpms` (`RestClientInjectionTest`) injects the client and calls through it on the module
+  `vidocq-runtime-it-cyrano-javamodule` (`RestClientInjectionTest`) injects the client and calls through it on the module
   path — it failed to compile against the published cyrano; the new `vidocq-runtime-cyrano-rest-client-example` answers
   `/api/relay` through `@Inject @RestClient` on a plain module path and from its `vidocq:jlink` image, which no longer
   holds `org.reactivestreams`. The example's module opens nothing.
@@ -3928,7 +3928,7 @@ io.vidocq.vauban.core` — the compile-graph concern recorded earlier did not ma
 `io.vidocq.vauban.core` is reachable transitively through `io.vidocq.cyrano.cdi.vauban`, exactly as
 in the cervantes wrapper, and the opens compiles as-is.
 
-**Verified end-to-end this time**: new reactor module `vidocq-runtime-it-cyrano-jpms` boots the
+**Verified end-to-end this time**: new reactor module `vidocq-runtime-it-cyrano-javamodule` boots the
 Vidocq runtime with the wrapper ON THE MODULE PATH (main module-info → surefire module path, plus a
 named-module sentinel against silent class-path degradation). The vehicle was proven by mutation:
 without the opens the boot test fails with the exact VID-001 symptom; with it, green. This also

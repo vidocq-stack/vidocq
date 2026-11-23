@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.it.cyranojpms;
+package io.vidocq.runtime.it.cyranojavamodule;
 
 import com.sun.net.httpserver.HttpServer;
 import io.vidocq.runtime.core.VidocqBootstrap;

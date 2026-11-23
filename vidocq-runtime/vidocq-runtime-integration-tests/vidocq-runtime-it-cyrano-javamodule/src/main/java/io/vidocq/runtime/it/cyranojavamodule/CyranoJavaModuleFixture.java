@@ -17,10 +17,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.it.cyranojpms;
+package io.vidocq.runtime.it.cyranojavamodule;
 
 /** Anchor class of the test module (the test sources are patched into it). */
-public final class CyranoJpmsFixture {
-    private CyranoJpmsFixture() {
+public final class CyranoJavaModuleFixture {
+    private CyranoJavaModuleFixture() {
     }
 }

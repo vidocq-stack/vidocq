@@ -193,7 +193,7 @@ class ApplicationLaunchLayerTest {
         MavenProject project = project();
         project.setArtifacts(Set.of(artifact("lib", lib)));
         Path build = dir.resolve("target");
-        Files.createDirectories(JpmsPatches.patchDirFor(build, "lib"));
+        Files.createDirectories(JavaModulePatches.patchDirFor(build, "lib"));
 
         var layered = ApplicationLaunch.layered(project, build, build.resolve("classes"), jar -> { }, true,
                 id -> { }, List.of());

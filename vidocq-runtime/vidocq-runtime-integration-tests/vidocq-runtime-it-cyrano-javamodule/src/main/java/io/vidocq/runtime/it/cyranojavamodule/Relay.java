@@ -17,23 +17,21 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.it.cyranojpms;
+package io.vidocq.runtime.it.cyranojavamodule;
 
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
-import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
-/** A Rest Client interface compiled with the application, as an application declares one. */
-@RegisterRestClient(baseUri = "http://localhost:" + GreetingClient.PORT)
-@Path("/greeting")
-public interface GreetingClient {
+/** A bean of the application that calls through an injected Rest Client. */
+@ApplicationScoped
+public class Relay {
 
-    /** The port the test serves {@code /greeting} on. */
-    int PORT = 18093;
+    @Inject
+    @RestClient
+    GreetingClient greetings;
 
-    @GET
-    @Produces(MediaType.TEXT_PLAIN)
-    String greeting();
+    public String relay() {
+        return "relayed: " + greetings.greeting();
+    }
 }

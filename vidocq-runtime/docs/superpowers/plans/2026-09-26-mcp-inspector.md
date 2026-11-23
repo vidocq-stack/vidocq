@@ -19,7 +19,7 @@ JSON-RPC exchange and the last 20 calls, each replayable.
   with a small stateless `java.net.http` client in protocol 2026-07-28, maps the answer to an `ActionResult`, masks
   secrets, and keeps a history of 20 calls in its sample.
 
-**Tech Stack:** Java 25, JPMS, Maven 3.9, `java.net.http`, `jakarta.json` (JSON-P, already on the `-dev` module's
+**Tech Stack:** Java 25, Java Modules, Maven 3.9, `java.net.http`, `jakarta.json` (JSON-P, already on the `-dev` module's
 path through langchain4j-cdi), langchain4j-cdi MCP server 1.4.0-SNAPSHOT, vanilla JavaScript, JUnit 5,
 `com.sun.net.httpserver` (JDK, tests only).
 

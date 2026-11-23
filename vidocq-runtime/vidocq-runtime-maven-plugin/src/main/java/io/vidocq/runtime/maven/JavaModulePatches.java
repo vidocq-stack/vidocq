@@ -61,14 +61,14 @@ import java.util.zip.ZipOutputStream;
  *       child JVM with {@code --patch-module} (the dev module path uses the original jars).</li>
  * </ol>
  */
-public final class JpmsPatches {
+public final class JavaModulePatches {
 
     /** Directory under {@code target/} where cross-module generated classes are parked. */
     public static final String DIR_NAME = "vidocq-patches";
 
     private static final String CLASS_SUFFIX = ".class";
 
-    private JpmsPatches() {}
+    private JavaModulePatches() {}
 
     /** Root of the patches tree for the given build directory ({@code target/vidocq-patches}). */
     public static Path root(Path buildDir) {

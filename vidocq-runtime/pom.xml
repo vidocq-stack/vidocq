@@ -1033,7 +1033,7 @@
                             </goals>
                         </execution>
                         <execution>
-                            <!-- Fail fast if module-info.java drops a JPMS directive an extension needs
+                            <!-- Fail fast if module-info.java drops a module directive an extension needs
                                  at runtime (e.g. opens db.migration). Inherited by every module that
                                  declares the plugin; a module with no extension requirements is a no-op. -->
                             <id>vidocq-check-module-info</id>

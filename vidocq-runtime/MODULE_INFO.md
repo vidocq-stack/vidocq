@@ -1,7 +1,7 @@
 # Vidocq Module-Info Check
 
-Vidocq is JPMS-strict: every application is a named module with a hand-curated `module-info.java`.
-Some extensions need the **consumer** module to declare a JPMS directive that nothing forces at
+Vidocq is strict about Java Modules: every application is a named module with a hand-curated `module-info.java`.
+Some extensions need the **consumer** module to declare a module directive that nothing forces at
 compile time — it compiles fine on the classpath and in the TCK, and only breaks on the module path
 (a real `docker compose up` / `jlink` boot). The canonical example is schema migration: Flyway and
 Liquibase scan the `db.migration` package for SQL/XML scripts, so a named module must
@@ -75,7 +75,7 @@ compares `requires` too.
 ## Design notes
 
 **Only `opens` is enforced.** A `requires` is frequently satisfied *transitively* (e.g. the H2
-jpms-repackaged module declares `requires transitive java.sql`), but `ModuleElement.getDirectives()`
+module-repackaged module declares `requires transitive java.sql`), but `ModuleElement.getDirectives()`
 and `ModuleDescriptor.requires()` expose only the *direct* requires — so checking a `requires` would
 be a false positive that breaks correct apps. `opens` is never inherited, so it is the
 false-positive-free thing to enforce. (The requirement model still carries `requires` for a future

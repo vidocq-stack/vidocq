@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class JpmsPatchesTest {
+class JavaModulePatchesTest {
 
     @TempDir
     Path tmp;
@@ -52,12 +52,12 @@ class JpmsPatchesTest {
         write(classesDir.resolve("com/acme/app/Own_ClientProxy.class"));
         Path buildDir = tmp.resolve("target");
 
-        Map<String, Integer> relocated = JpmsPatches.relocate(classesDir, buildDir,
+        Map<String, Integer> relocated = JavaModulePatches.relocate(classesDir, buildDir,
                 Map.of(depJar, "my-lib"),
                 List.of("com.acme.lib.Bean_ClientProxy", "com.acme.app.Own_ClientProxy"));
 
         assertEquals(Map.of("my-lib", 2), relocated);
-        Path patchDir = JpmsPatches.patchDirFor(buildDir, "my-lib");
+        Path patchDir = JavaModulePatches.patchDirFor(buildDir, "my-lib");
         assertTrue(Files.isRegularFile(patchDir.resolve("com/acme/lib/Bean_ClientProxy.class")));
         assertTrue(Files.isRegularFile(patchDir.resolve("com/acme/lib/Bean_ClientProxy$1.class")));
         // project-owned class untouched, foreign package pruned from classes
@@ -74,7 +74,7 @@ class JpmsPatchesTest {
         write(patchDir.resolve("com/acme/lib/generated/Components.class"));
         Path outJar = tmp.resolve("out/lib.jar");
 
-        JpmsPatches.enrich(srcJar, patchDir, outJar);
+        JavaModulePatches.enrich(srcJar, patchDir, outJar);
 
         // A generated package gets its folder entry, which a class loader needs to find the folder
         Set<String> entries = entriesOf(outJar);
@@ -86,7 +86,7 @@ class JpmsPatchesTest {
     @Test
     void packagesOfReadsJarPackages() throws IOException {
         Path depJar = jar("dep.jar", "com/acme/lib/Bean.class", "com/acme/lib/sub/Other.class");
-        assertEquals(Set.of("com.acme.lib", "com.acme.lib.sub"), JpmsPatches.packagesOf(depJar));
+        assertEquals(Set.of("com.acme.lib", "com.acme.lib.sub"), JavaModulePatches.packagesOf(depJar));
     }
 
     private Path jar(String name, String... entries) throws IOException {

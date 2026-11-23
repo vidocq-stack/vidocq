@@ -151,7 +151,7 @@ The 1PC single-resource path is already correct and stays unchanged.
   - `routedRepositoryJoinsCallerTransaction` — `@Repository(dataStore = "…")` inside the
     caller's TX, rollback → 0 rows;
   - `outsideTransactionUnchanged` — save without TX → visible immediately.
-- Non-regression: full mansart reactor, `mansart-transactions-cdi-jpms-it`, e2e
+- Non-regression: full mansart reactor, `mansart-transactions-cdi-module-it`, e2e
   `vidocq-runtime-mansart-h2-example` (module path), Jakarta Data TCK smoke if runnable.
 
 ## Files touched

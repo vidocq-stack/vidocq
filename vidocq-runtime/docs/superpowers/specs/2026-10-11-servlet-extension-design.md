@@ -116,7 +116,7 @@ Unit tests (extension module):
   second mount on the same prefix of the same listener fails with the message above.
 
 IT `vidocq-runtime-it-foy-servlet` in `vidocq-runtime-integration-tests`, modelled on
-`vidocq-runtime-it-cyrano-jpms`: the application is a named module (`src/main` with a
+`vidocq-runtime-it-cyrano-javamodule`: the application is a named module (`src/main` with a
 `module-info`), the test boots the assembled runtime with `VidocqBootstrap` on the module
 path and talks HTTP to the bound port. Test
 application: a `@WebServlet`, a filter, a listener, a `@SessionScoped` cart, a

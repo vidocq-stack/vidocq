@@ -29,11 +29,11 @@
         </dependency>
 
         <!--
-            The MP Rest Client spec types come from cyrano's JPMS repackage
+            The MP Rest Client spec types come from cyrano's Java module repackage
             (cyrano-mp-rest-client-api, transitive through cyrano-core) — the
             sole modular source of the spec (workspace jlink-ready rule). The
             plain spec jar must NOT be declared here: both jars carry the same
-            packages, a JPMS split that stayed latent until an automatic module
+            packages, a split package that stayed latent until an automatic module
             (org.reactivestreams, cyrano SSE) joined the module path and
             started reading every observable module.
         -->

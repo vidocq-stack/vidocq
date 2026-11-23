@@ -26,7 +26,7 @@
 
     <!--
         No module-info.java (unnamed module) to keep the TCK deployment classes,
-        which carry no JPMS descriptor, readable by Vauban/Cassini/Knock — same
+        which carry no module descriptor, readable by Vauban/Cassini/Knock — same
         approach as the other vidocq-runtime-it-* modules.
     -->
 

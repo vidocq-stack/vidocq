@@ -36,7 +36,7 @@
     </properties>
 
     <!--
-        No module-info.java (unnamed module): the TCK archive classes carry no JPMS
+        No module-info.java (unnamed module): the TCK archive classes carry no module
         descriptor and must stay readable by Vauban/Humboldt — same approach as the
         other vidocq-runtime-tck-* modules.
     -->

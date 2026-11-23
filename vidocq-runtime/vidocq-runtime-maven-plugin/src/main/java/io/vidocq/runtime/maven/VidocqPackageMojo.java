@@ -240,13 +240,13 @@ public class VidocqPackageMojo extends AbstractMojo {
                     + " (vauban:modularize generated its module descriptor)");
         }
         return new Packaged(artifact, src, enriched,
-                JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId()));
+                JavaModulePatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId()));
     }
 
     /** Copies {@code p} into {@code destDir}, enriched with its parked classes when it has some and no copy does. */
     private void ship(Packaged p, Path destDir) throws IOException {
         if (!p.enriched() && Files.isDirectory(p.patchDir())) {
-            JpmsPatches.enrich(p.src(), p.patchDir(), destDir.resolve(p.src().getFileName().toString()));
+            JavaModulePatches.enrich(p.src(), p.patchDir(), destDir.resolve(p.src().getFileName().toString()));
             getLog().info("Enriched " + p.src().getFileName()
                     + " with the classes generated for its module");
         } else {

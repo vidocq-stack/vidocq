@@ -40,7 +40,7 @@ Considered:
 
 - **(A) Plugin and test hosts, with a state channel to the application. Chosen.**
 - **(B) Providers as a runtime extension active in DEV and TEST, as Quarkus does.** Rejected: Testcontainers and
-  docker-java would enter the application's module graph as automatic modules, against strict JPMS and the "zero
+  docker-java would enter the application's module graph as automatic modules, against strict Java Modules and the "zero
   dependency for what ships" rule. A child respawn would also lose the containers unless they are reused.
 - **(C) A separate daemon owning containers for every client.** Rejected: the heaviest option, for sharing across
   sessions and applications that nobody asked for.
@@ -56,7 +56,7 @@ Under (A), the `DevService` SPI is unchanged for existing providers. Three **hos
 | **`DevServicesSession`** (new, extracted from `VidocqDevMojo`) | **`vidocq-runtime-devservices-host`** (new, class path, no Maven API) | host JVM | Resolve the context (§5), start/stop the providers through `DevServiceManager`, write the state file (§4.2) and the connection block |
 | `DevServiceManager`, `DefaultDevServiceContext`, `DevServicesReport` | moved to `vidocq-runtime-devservices-host` | host JVM | As today; the context gains the configuration sources of §5 |
 | `VidocqDevMojo`, `VidocqRunMojo` | `vidocq-runtime-maven-plugin` | plugin JVM | Delegate to `DevServicesSession`; add the extension to the child's module path and pass the state file path (§4.3) |
-| **`DevServicesExtension`** (new) | **`vidocq-runtime-devservices-extension`** (new, JPMS, no Testcontainers, no plugin dependency) | application JVM | Read the state file once; write the `devservices` report section and dev console panel (§4.4) |
+| **`DevServicesExtension`** (new) | **`vidocq-runtime-devservices-extension`** (new Java module, no Testcontainers, no plugin dependency) | application JVM | Read the state file once; write the `devservices` report section and dev console panel (§4.4) |
 | **`DevServicesSessionListener`** (new) | **`vidocq-runtime-devservices-junit`** (new, test dependency) | test JVM | JUnit Platform `LauncherSessionListener` hosting a `DevServicesSession` for the whole test run (§7) |
 
 Each unit is testable alone. The session needs a `DevServiceContext` and a list of providers, with fakes in tests.
@@ -225,7 +225,7 @@ Effects:
   failing early says why.
 - **Launch mode.** Unchanged: `LaunchModeResolver` already reads a JUnit/Surefire stack as TEST.
 
-### 7.1 Risk: JPMS under Surefire, and the spike that settles it
+### 7.1 Risk: Java Modules under Surefire, and the spike that settles it
 
 A modular application's tests run on the module path under Surefire, which patches the test classes into the main
 module. Test dependencies that the `module-info` does not require go on the class path. The patched module reads
@@ -243,7 +243,7 @@ a misleading result:
   unmentioned-by-`module-info` `spike.listener` package. This **failed on the module path**: Surefire's default
   `--patch-module` folds the *entire* `target/test-classes` tree — including packages `module-info` never
   mentions — into the application's named module. The listener class landed inside that named module, not the
-  unnamed one, so the JPMS rule for named modules applied (`ServiceLoader` only honors an explicit
+  unnamed one, so the Java Modules rule for named modules applied (`ServiceLoader` only honors an explicit
   `provides … with …` module directive there, never a `META-INF/services` file), the entry was silently ignored,
   `launcherSessionOpened` never ran, and the test failed immediately (`SQLException: The url cannot be null`)
   with no Testcontainers/Docker activity at all. This setup doesn't match the design, though: the real

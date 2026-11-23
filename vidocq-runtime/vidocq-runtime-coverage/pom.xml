@@ -30,7 +30,7 @@
         report-aggregate reads these dependencies: in compile scope, their classes, sources and
         execution data make up the report; in test scope, only their execution data counts.
         vidocq-runtime-it-cassini-rest, -it-humboldt-cassini, -it-cervantes-jwt and
-        -it-grimm-openapi only hold tests of the other modules, and -it-cyrano-jpms,
+        -it-grimm-openapi only hold tests of the other modules, and -it-cyrano-javamodule,
         -it-foy-servlet, -it-ibarra-pages, -it-bodoni-jstl, -it-naming, -it-noether-persistence,
         -it-noether-mansart-data and -it-ravel-config
         only add the small application their tests run (SonarQube skips it): without this report, these
@@ -316,7 +316,7 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-it-cyrano-jpms</artifactId>
+            <artifactId>vidocq-runtime-it-cyrano-javamodule</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

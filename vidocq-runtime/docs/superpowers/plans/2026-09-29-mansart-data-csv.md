@@ -23,7 +23,7 @@ committed — two actions of the Mansart Data panel's *JDQL* tab.
   `EntitySaver.MANSART`.
 - **Database test:** the mansart-h2 example's `DevConsoleSnapshotTest` exports and re-imports the products.
 
-**Tech Stack:** Java 25, JPMS, Maven 3.9, Jakarta Data 1.0.1, Mansart Data 0.4.0-SNAPSHOT (`JdqlExecutor`,
+**Tech Stack:** Java 25, Java Modules, Maven 3.9, Jakarta Data 1.0.1, Mansart Data 0.4.0-SNAPSHOT (`JdqlExecutor`,
 `JdqlResult`, `RepositoryRuntime.save`, `EntityModels.of`; read only), Jakarta CDI 4.1, Jakarta Transactions 2.0.1
 (optional), the Vidocq dev console SPI and page (vanilla JS), JUnit 5.
 

@@ -628,8 +628,8 @@ Test command shape: `./mvnw -ntp -pl vidocq-runtime-maven-plugin clean test -Dte
 
 **Interfaces:**
 - Consumes: Task 2 `ModuleInfoRewriter.addComponentProvider(byte[], List, Set)`, `VaubanModuleReferences.of`;
-  Task 3 `Modularizer.synthesizeOne`; existing `ModularizedJars.resolve`, `JpmsPatches.patchDirFor`,
-  `JpmsPatches.packagesOf` (package-private, same package).
+  Task 3 `Modularizer.synthesizeOne`; existing `ModularizedJars.resolve`, `JavaModulePatches.patchDirFor`,
+  `JavaModulePatches.packagesOf` (package-private, same package).
 - Produces: `EnrichedJars.DIR_NAME`, `root(Path)`, `resolve(Path buildDir, Path jar)`, `isEnriched(Path, Path)`,
   `clear(Path buildDir)`, `write(Path source, byte[] moduleInfo, Path patchDir, List<String> providers,
   String coordinates, Path originalJar, Path out)`, `record Scanned(Path originalJar, String artifactId,
@@ -798,7 +798,7 @@ class EnrichedJarsTest {
         Path build = tmp.resolve("target");
         Path auto = jar(tmp.resolve("m2/auto-lib-1.0.jar"),
                 Map.of("org/auto/A.class", emptyClass("org.auto.A")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "auto-lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "auto-lib"), Map.of(
                 "org/auto/_VaubanComponents.class", emptyClass("org.auto._VaubanComponents")));
         List<String> warnings = new ArrayList<>();
 
@@ -820,7 +820,7 @@ class EnrichedJarsTest {
         Path mr = jar(tmp.resolve("m2/mr-lib-1.0.jar"), Map.of(
                 "META-INF/versions/11/module-info.class", descriptor("org.mr"),
                 "org/mr/A.class", emptyClass("org.mr.A")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "mr-lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "mr-lib"), Map.of(
                 "org/mr/_VaubanComponents.class", emptyClass("org.mr._VaubanComponents")));
         List<String> warnings = new ArrayList<>();
 
@@ -945,7 +945,7 @@ public final class EnrichedJars {
             throws IOException {
         List<Path> enriched = new ArrayList<>();
         for (Scanned dep : scanned) {
-            Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
+            Path patchDir = JavaModulePatches.patchDirFor(buildDir, dep.artifactId());
             if (!Files.isDirectory(patchDir)) {
                 continue;
             }
@@ -960,7 +960,7 @@ public final class EnrichedJars {
                 }
                 moduleInfo = synthesized.get();
             }
-            Set<String> packages = JpmsPatches.packagesOf(source);
+            Set<String> packages = JavaModulePatches.packagesOf(source);
             List<String> own = providers.stream().filter(p -> packages.contains(packageOf(p))).toList();
             Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
             write(source, moduleInfo, patchDir, own, dep.coordinates(), dep.originalJar(), out);
@@ -1127,7 +1127,7 @@ EOF
         MavenProject project = project();
         project.setArtifacts(Set.of(artifact("dep-lib", lib)));
         Path build = dir.resolve("target");
-        Files.createDirectories(JpmsPatches.patchDirFor(build, "dep-lib").resolve("a"));
+        Files.createDirectories(JavaModulePatches.patchDirFor(build, "dep-lib").resolve("a"));
         assertEquals("--patch-module", ApplicationLaunch.patchModuleArgs(project, build).getFirst(),
                 "without a copy, the parked classes are patched in");
 
@@ -1175,7 +1175,7 @@ Expected: all pass.
                         getLog().info("Packaging modularized copy of " + original.getFileName()
                                 + " (vauban:modularize generated its module descriptor)");
                     }
-                    Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
+                    Path patchDir = JavaModulePatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
                     if (Files.isDirectory(patchDir)) {
 ```
 
@@ -1191,7 +1191,7 @@ with
                         getLog().info("Packaging modularized copy of " + original.getFileName()
                                 + " (vauban:modularize generated its module descriptor)");
                     }
-                    Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
+                    Path patchDir = JavaModulePatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
                     if (!enriched && Files.isDirectory(patchDir)) {
 ```
 

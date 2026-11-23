@@ -42,7 +42,7 @@
             OTel SDK artifacts required at runtime by humboldt-otel-interop (provided
             scope there). io.opentelemetry:opentelemetry-api / -context are excluded:
             humboldt-otel-api / humboldt-otel-context (transitive via humboldt-runtime)
-            repackage the same classes under the same JPMS module names — keeping both
+            repackage the same classes under the same Java module names — keeping both
             would put two modules named io.opentelemetry.api on the module path.
         -->
         <dependency>

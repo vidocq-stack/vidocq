@@ -13,7 +13,7 @@
     <artifactId>vidocq-runtime-devservices-spi</artifactId>
     <name>Vidocq :: DevServices :: SPI</name>
     <description>Contract for dev-mode service providers (DevService) discovered by the vidocq:dev goal
-        via ServiceLoader on the plugin classpath. Zero runtime dependency, no JPMS module-info.</description>
+        via ServiceLoader on the plugin classpath. Zero runtime dependency, no module-info.</description>
 
     <dependencies>
         <dependency>

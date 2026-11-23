@@ -17,7 +17,7 @@ one-word request file, which the plugin polls.
 A small core change tells the plugin when a hot reload finished booting. The plugin needs this to start the tests
 after the reload, as spec §2.2 requires.
 
-**Tech Stack:** Java 25, Maven 3.9 (hand-written `plugin.xml`), JUnit 5, Surefire 3.x as a subprocess, JPMS,
+**Tech Stack:** Java 25, Maven 3.9 (hand-written `plugin.xml`), JUnit 5, Surefire 3.x as a subprocess, Java Modules,
 Vidocq dev console SPI (ADR 0001 actions), `vidocq-runtime-devservices-host` (#123). The integration test uses
 maven-invoker-plugin (`install` only) and Failsafe.
 
@@ -3320,7 +3320,7 @@ Expected: compilation FAILURE (`enabled(String, …)`, `continuousTestingEnabled
             if (!patchArgs.isEmpty()) {
                 jvmArgs = new ArrayList<>(jvmArgs);
                 jvmArgs.addAll(patchArgs);
-                getLog().info("JPMS: " + patchArgs.size() / 2
+                getLog().info("Java modules: " + patchArgs.size() / 2
                         + " --patch-module option(s) added for generated classes");
             }
         } catch (IOException e) {

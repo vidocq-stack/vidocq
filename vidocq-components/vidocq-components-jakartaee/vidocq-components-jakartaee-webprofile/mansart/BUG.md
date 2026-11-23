@@ -681,7 +681,7 @@ delegate then fell back to per-call `@Dependent` instances instead of throwing
 
 ### Fix / verification
 Vauban VAU-CTX-001 (public-constructor path for BCE contexts + loud failures). Mansart side:
-new regression coverage in `mansart-transactions-cdi-jpms-it`
+new regression coverage in `mansart-transactions-cdi-module-it`
 (`transaction_scoped_context_works_on_the_module_path`, red before / green after) with a
 `TxScopedCounter` fixture; the IT's processor path now includes `mansart-transactions-cdi` so
 the APT sees the BCE's `@Enhancement(withAnnotations = TransactionScoped.class)` trigger and

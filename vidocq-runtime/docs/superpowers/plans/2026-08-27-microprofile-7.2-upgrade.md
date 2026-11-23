@@ -8,7 +8,7 @@
 
 **Architecture:** MicroProfile 7.2 changes exactly three components; the other five (Config 3.1, Fault Tolerance 4.1, Health 4.0, Rest Client 4.0, Jakarta EE Core Profile) are unchanged, so ravel/heisenberg/knock/cyrano/vauban/cassini/champollion need **no code change**. Each affected brick gets a small, TDD-driven behavioural change plus a TCK-version bump; the vidocq runtime then bumps its in-reactor `-Ptck` runners and its docs. Everything is built against what Maven Central serves today — JWT `2.2` (final), OpenAPI `4.2-RC5`, Telemetry TCK `2.2-RC3` — which is the exact content of the finals under ballot (see STATUS); Phase E swaps the version strings once the finals reach Central.
 
-**Tech Stack:** Java 25 (Temurin), Maven 3.9.16, JPMS strict, Arquillian/TestNG TCK harnesses, OpenTelemetry Java API 1.66.0 (shaded into `humboldt-otel-api` via maven-shade + ModiTect), MicroProfile APIs from Maven Central.
+**Tech Stack:** Java 25 (Temurin), Maven 3.9.16, strict Java Modules, Arquillian/TestNG TCK harnesses, OpenTelemetry Java API 1.66.0 (shaded into `humboldt-otel-api` via maven-shade + ModiTect), MicroProfile APIs from Maven Central.
 
 **Spec:** this document is self-contained — the facts section below *is* the spec (verified against Eclipse/Maven Central/GitHub on 2026-08-27, refreshed 2026-10-04). Upstream references: MP 7.2 release record `https://projects.eclipse.org/projects/technology.microprofile/releases/microprofile-7.2`; OpenAPI 4.2 spec `https://download.eclipse.org/microprofile/microprofile-open-api-4.2-RC5/microprofile-openapi-spec-4.2-RC5.html` (§8.1 release notes); JWT 2.2 tag `microprofile/microprofile-jwt-auth@2.2` (`spec/src/main/asciidoc/configuration.asciidoc`); Telemetry 2.2 tag `microprofile/microprofile-telemetry@2.2` (`spec/src/main/asciidoc/{tracing,release-notes}.adoc`; issues #318, #321, PR #319).
 
@@ -75,7 +75,7 @@ Never commit the staging repositories into a pom: they disappear once the ballot
 - **Working copies:** each repo is worked in a dedicated git worktree already on branch `pr/ybl/mp-7.2` (cut from `origin/main` on 2026-10-04): `/Users/yblazart/projects/perso/vidocq/.worktrees/{cervantes,grimm,humboldt,vidocq}-mp-7.2`. Paths written below as `cervantes/…`, `grimm/…`, `humboldt/…`, `vidocq/…` mean these worktrees — never the main checkouts under `/Users/yblazart/projects/perso/vidocq/<repo>` (they sit on other branches). Do not run `git checkout -b`: the branch exists.
 - **Toolchain:** JDK 25 (Temurin) + Maven 3.9.16, pinned via `.sdkmanrc` in each sub-project — run `sdk env` in the sub-project before building (`sdk env` breaks under `set -u`; invoke `mvn`/`./mvnw` directly inside scripts). All POMs `modelVersion 4.0.0`; every artifact is `0.4.0-SNAPSHOT`.
 - **Build hygiene:** always `./mvnw clean install` / `clean test`, never bare `install` or an isolated `test` — codegen modules give false failures on stale `target/`. Never `-U`; `-o` only when you know the local M2 is complete. Bricks must be `clean install`ed into the local M2 **before** the vidocq runtime is built (it resolves `cervantes/grimm/humboldt:0.4.0-SNAPSHOT` from M2).
-- **JPMS strict:** every production module keeps its `module-info.java`; TCK runner modules carry no `module-info.java` (unnamed). No new `opens`. No new runtime dependency — the only dependency changes in this plan are version bumps of already-present Jakarta/MicroProfile/OpenTelemetry artifacts (`dependency-gatekeeper` agent must review every `pom.xml` diff anyway).
+- **Strict Java Modules:** every production module keeps its `module-info.java`; TCK runner modules carry no `module-info.java` (unnamed). No new `opens`. No new runtime dependency — the only dependency changes in this plan are version bumps of already-present Jakarta/MicroProfile/OpenTelemetry artifacts (`dependency-gatekeeper` agent must review every `pom.xml` diff anyway).
 - **TDD:** each behavioural change starts with a failing unit test in the brick, then the official TCK is the integration gate. Run every TCK **yourself** and read the surefire/TestNG summary — never trust an agent's "green" report (known false positives in both directions). Keep raw logs under a scratch directory (written `$LOGS` below).
 - **Language:** all code, comments, Javadoc, test names, commit messages, `.md`/`.adoc` files in **English**. Chat with the maintainer in French.
 - **Commits:** Conventional Commits, GPG-signed, DCO `Signed-off-by` (`git commit -S --signoff`), and — per the workspace `CLAUDE.md` AI-policy — the provenance trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` must be present (the `Signed-off-by` that the hook adds may follow it). Author/committer stay the human maintainer. Check with `git log -1 --format='%G? %(trailers)'` → `G` + `Signed-off-by` + `Co-Authored-By`.
@@ -486,7 +486,7 @@ The controller later opens the PR on Codefloe (`Vidocq/cervantes`), title `feat:
 Run: `cd grimm && sed -i '' 's#<version.mp.openapi>4.1</version.mp.openapi>#<version.mp.openapi>4.2-RC5</version.mp.openapi>#' pom.xml && sed -i '' 's#<microprofile.openapi.version>4.1</microprofile.openapi.version>#<microprofile.openapi.version>4.2-RC5</microprofile.openapi.version>#' grimm-tck/pom.xml && ./mvnw clean install`
 Expected: BUILD SUCCESS — the 4.2 API is purely additive (verified: 0 class-level diff, only new methods on `Schema`/`@Header`). `SchemaImpl` already inherits the `Extensible` implementations from `AbstractExtensibleRef`, so the new abstract overrides on `Schema` are satisfied.
 
-- [ ] **Step 2: Check the JPMS view of the new API jar**
+- [ ] **Step 2: Check the Java module view of the new API jar**
 
 Run: `jar --describe-module --file ~/.m2/repository/org/eclipse/microprofile/openapi/microprofile-openapi-api/4.2-RC5/microprofile-openapi-api-4.2-RC5.jar | head -3`
 Expected: the same module name grimm's `module-info.java` files `requires` today (`grep -rh "requires.*openapi" grimm-*/src/main/java/module-info.java`). If it changed, update the `requires` lines.
@@ -934,7 +934,7 @@ grep -n "2\.1" run-official-tck-telemetry-2.2.sh   # update every hard-coded 2.1
 ```
 Also `grep -rn "telemetry-2\.1\|run-official-tck-telemetry" --include=pom.xml --include=*.yml --include=*.md .` and update any reference to the old script name (keep historical entries in `TCK.md`/`PLAN.md` as they are).
 
-- [ ] **Step 2: Clean build, then inspect the shaded JPMS modules**
+- [ ] **Step 2: Clean build, then inspect the shaded Java modules**
 
 Run: `./mvnw clean install`
 Expected: BUILD SUCCESS (§0.3: no new abstract method on any implemented interface). If `humboldt-tck` fails to compile on a semconv symbol that moved to the incubating artifact, add `io.opentelemetry.semconv:opentelemetry-semconv-incubating:1.44.0-alpha` **test scope in `humboldt-tck` only**.
@@ -1209,7 +1209,7 @@ Found by FC3 and logged OPEN in humboldt's `BUG.md`.
 - [ ] BUG-20261004-03: `humboldt-otel-api` does not export `io.opentelemetry.api.internal`, so the OpenTelemetry OTLP exporters (and SDK modules) that use it fail with `IllegalAccessError` on the module path. Add a QUALIFIED export of `io.opentelemetry.api.internal` to exactly the OpenTelemetry modules that need it (find them with `jdeps` on the 1.66.0 SDK/exporter jars: their `Automatic-Module-Name`s), in the hand-written ModiTect descriptor, with a comment saying why; module-path test (ModuleLayer like FC1's) reproducing the `IllegalAccessError` first.
 - [ ] BUG-20261004-04: the exporter's `CompressorUtil` loads compressors through `ComponentLoader.forClassLoader(...)` → upstream `ServiceLoaderComponentLoader` (shaded into `humboldt-otel-context`), which calls `ServiceLoader.load` from a named module without the matching `uses` → `ServiceConfigurationError` as soon as compression is configured. Provide a humboldt-owned `io.opentelemetry.common.ServiceLoaderComponentLoader` (same FQN, replacing the shaded upstream class — exclude it from the shade) that adds `uses` for the requested service from inside its own module (`getClass().getModule().addUses(spi)`) before loading; keep upstream behaviour otherwise; module-path test with compression configured.
 - [ ] Log bodies: align with the OpenTelemetry 1.66 SDK — an explicitly set empty string body (`setBody("")` or `setBody(Value.of(""))`) is kept and exported as an empty `stringValue`; only "never set" means no body. Check the Logs TCK line patterns still match; TDD.
-- [ ] Run the `jpms-guardian` check yourself mentally: exports stay qualified and minimal; no `opens`. Close both BUG entries. `./mvnw -ntp clean install`; official TCK at the end of FC2.
+- [ ] Run the `java-modules-guardian` check yourself mentally: exports stay qualified and minimal; no `opens`. Close both BUG entries. `./mvnw -ntp clean install`; official TCK at the end of FC2.
 
 ### Task FC2: humboldt — documentation, French text, script
 

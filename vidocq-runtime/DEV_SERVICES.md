@@ -577,9 +577,9 @@ src/main/resources/
     V2__add_index.sql
 ```
 
-### JPMS — required `opens` in `module-info.java`
+### Java Modules — required `opens` in `module-info.java`
 
-Migration scripts are **resources inside a named module** and are subject to JPMS
+Migration scripts are **resources inside a named module** and are subject to the module's
 encapsulation. The extension cannot open your module for you. You must add an `opens`
 directive for every package that contains migration resources:
 

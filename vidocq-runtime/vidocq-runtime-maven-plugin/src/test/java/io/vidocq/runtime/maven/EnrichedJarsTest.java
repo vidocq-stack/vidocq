@@ -241,7 +241,7 @@ class EnrichedJarsTest {
         Path build = tmp.resolve("target");
         Path auto = jar(tmp.resolve("m2/auto-lib-1.0.jar"),
                 Map.of("org/auto/A.class", emptyClass("org.auto.A")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "auto-lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "auto-lib"), Map.of(
                 "org/auto/_VaubanComponents.class", emptyClass("org.auto._VaubanComponents")));
         List<String> warnings = new ArrayList<>();
 
@@ -267,7 +267,7 @@ class EnrichedJarsTest {
         Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
                 "module-info.class", descriptor("org.dep"),
                 "org/dep/Service.class", emptyClass("org.dep.Service")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
         var scanned = List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0"));
         EnrichedJars.enrichAll(build, scanned, List.of("org.dep._VaubanComponents"), List.of(lib), line -> { },
@@ -294,9 +294,9 @@ class EnrichedJarsTest {
         Path other = jar(tmp.resolve("m2/other-1.0.jar"), Map.of(
                 "module-info.class", descriptor("org.other"),
                 "org/other/O.class", emptyClass("org.other.O")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
-        patch(JpmsPatches.patchDirFor(build, "other"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "other"), Map.of(
                 "org/other/_VaubanComponents.class", emptyClass("org.other._VaubanComponents")));
         List<String> providers = List.of("org.dep._VaubanComponents", "org.other._VaubanComponents");
         EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0"),
@@ -304,7 +304,7 @@ class EnrichedJarsTest {
                 List.of(lib, other), line -> { }, line -> { });
         assertTrue(EnrichedJars.isEnriched(build, other));
 
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/Service_ClientProxy.class", emptyClass("org.dep.Service_ClientProxy")));
         EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")), providers,
                 List.of(lib, other), line -> { }, line -> { });
@@ -320,7 +320,7 @@ class EnrichedJarsTest {
         Path build = tmp.resolve("target");
         Path auto = jar(tmp.resolve("m2/auto-lib-1.0.jar"),
                 Map.of("org/auto/A.class", emptyClass("org.auto.A")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "auto-lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "auto-lib"), Map.of(
                 "org/auto/_VaubanComponents.class", emptyClass("org.auto._VaubanComponents")));
         var dep = new EnrichedJars.Scanned(auto, "auto-lib", "org.auto:auto-lib:1.0");
         // A clean build: generate runs before vauban:modularize, so it synthesizes its own descriptor.
@@ -353,7 +353,7 @@ class EnrichedJarsTest {
         Path mr = jar(tmp.resolve("m2/mr-lib-1.0.jar"), Map.of(
                 "META-INF/versions/11/module-info.class", descriptor("org.mr"),
                 "org/mr/A.class", emptyClass("org.mr.A")), Map.of(), true);
-        patch(JpmsPatches.patchDirFor(build, "mr-lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "mr-lib"), Map.of(
                 "org/mr/_VaubanComponents.class", emptyClass("org.mr._VaubanComponents")));
         List<String> warnings = new ArrayList<>();
 

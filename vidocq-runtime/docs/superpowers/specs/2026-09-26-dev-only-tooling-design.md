@@ -66,7 +66,7 @@ The maintainer's decisions (brainstorming):
 | Console SPI (not dev-only) | `vidocq-runtime-devconsole-spi` | Five API types | `vidocq-runtime-spi` |
 
 The six new `-dev` modules sit next to their runtime extension, in the same parent: `cassini-rest`, `mansart-pool`,
-`dirac-metrics`, `knock-health`, `migration`, `langchain4j-cdi-mcp`. Each `-dev` module is a JPMS module named after its
+`dirac-metrics`, `knock-health`, `migration`, `langchain4j-cdi-mcp`. Each `-dev` module is a Java module named after its
 extension with a `.dev` suffix, such as `io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev`.
 
 A runtime extension exposes what its panel reads through a qualified export only:
@@ -213,7 +213,7 @@ For each application, the Maven kind (the default) now generates three shared ru
     with the companion brought by the descriptor.
   - **Packaging:** a project that declares the console at compile scope produces a `vidocq:package` distribution
     without it, and the WARNING is logged.
-  - **JPMS:** a module-path boot of a runtime extension alone, with no companion, starts cleanly. This covers the
+  - **Java Modules:** a module-path boot of a runtime extension alone, with no companion, starts cleanly. This covers the
     qualified export to an absent module.
 
 ## 11. Documentation, and what follows

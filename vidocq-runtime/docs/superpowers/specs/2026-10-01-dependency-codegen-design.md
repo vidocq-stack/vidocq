@@ -20,7 +20,7 @@ causes (#186):
 
 What already exists and is reused:
 
-- `JpmsPatches` parks the classes generated for a scanned jar in `target/vidocq-patches/<artifactId>/`, wires them
+- `JavaModulePatches` parks the classes generated for a scanned jar in `target/vidocq-patches/<artifactId>/`, wires them
   with `--patch-module` in `dev`/`run`, and writes an enriched copy of the jar in `package`/`jlink`.
 - `vauban:modularize` (`Modularizer`) synthesizes a descriptor for an automatic jar — `requires` from jdeps, every
   package exported, `META-INF/services` promoted to `provides`, scanned `uses`, `open module` by default, a licence
@@ -74,7 +74,7 @@ What already exists and is reused:
      (`open module`) through the single-jar modularizer, or, if synthesis is refused (a `ServiceLoader` lookup no
      explicit module may declare), leave the jar to `--patch-module` with a warning naming the reason. The
      modularizer's optional licence gate is not applied: it is off by default and `modularize` keeps it;
-  2. add the parked classes (as `JpmsPatches.enrich` does: shipped entries win);
+  2. add the parked classes (as `JavaModulePatches.enrich` does: shipped entries win);
   3. rewrite the descriptor: `provides io.vidocq.vauban.api.VaubanComponentProvider with` the jar's providers,
      `requires io.vidocq.vauban.api`, and `requires io.vidocq.vauban.core` when a generated class references it;
   4. add `META-INF/services/io.vidocq.vauban.api.VaubanComponentProvider` for class-path launches;
@@ -83,7 +83,7 @@ What already exists and is reused:
 - The directory is emptied at the start of each `generate`, so a stale copy is never substituted.
 - **Substitution:** `EnrichedJars.resolve(build, jar)` returns the enriched copy, else
   `ModularizedJars.resolve(build, jar)`. `ApplicationLaunch.modulePath` and the `package`/`jlink` staging use it.
-  `--patch-module` and `JpmsPatches.enrich` remain only for a jar that has parked classes but no enriched copy.
+  `--patch-module` and `JavaModulePatches.enrich` remain only for a jar that has parked classes but no enriched copy.
 - The build log lists every enriched jar with its source, and the generated providers per jar.
 
 ### 3. vidocq — which jars are scanned

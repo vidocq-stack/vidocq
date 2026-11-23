@@ -5,7 +5,7 @@
     BuildCompatibleExtension lives in a non-exported package and is instantiated
     reflectively by vauban-core's BceProcessor — without the wrapper's
     `opens ... to io.vidocq.vauban.core`, this boot fails exactly like the
-    historical cervantes case (and like every JPMS bug, it is invisible on the
+    historical cervantes case (and like every Java Modules bug, it is invisible on the
     class path where the other integration tests run).
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -19,7 +19,7 @@
         <version>0.4.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>vidocq-runtime-it-cyrano-jpms</artifactId>
+    <artifactId>vidocq-runtime-it-cyrano-javamodule</artifactId>
     <name>Vidocq Runtime :: IT :: Cyrano on the module path (VID-001)</name>
 
     <properties>
@@ -71,7 +71,7 @@
                                 <arg>--add-modules</arg>
                                 <arg>jdk.httpserver</arg>
                                 <arg>--add-reads</arg>
-                                <arg>io.vidocq.runtime.it.cyranojpms=jdk.httpserver</arg>
+                                <arg>io.vidocq.runtime.it.cyranojavamodule=jdk.httpserver</arg>
                             </compilerArgs>
                         </configuration>
                     </execution>
@@ -85,7 +85,7 @@
                     <argLine>
                         @{argLine}
                         --add-modules jdk.httpserver
-                        --add-reads io.vidocq.runtime.it.cyranojpms=jdk.httpserver
+                        --add-reads io.vidocq.runtime.it.cyranojavamodule=jdk.httpserver
                     </argLine>
                 </configuration>
             </plugin>

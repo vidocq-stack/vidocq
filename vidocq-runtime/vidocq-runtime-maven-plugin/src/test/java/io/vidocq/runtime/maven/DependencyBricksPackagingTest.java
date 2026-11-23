@@ -62,7 +62,7 @@ class DependencyBricksPackagingTest {
     Path enrichedAndModularized(Path build) throws Exception {
         Path auto = jar(tmp.resolve("m2/flow-1.0.jar"), Map.of(
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "flow"), Map.of(
                 "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
                 WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
         EnrichedJars.enrichAll(build,
@@ -101,7 +101,7 @@ class DependencyBricksPackagingTest {
         Path build = tmp.resolve("target");
         Path auto = jar(tmp.resolve("m2/flow-1.0.jar"), Map.of(
                 "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "flow"), Map.of(
                 "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
         EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(auto, "flow", "org.dep:flow:1.0", true)),
                 List.of("org.dep._VaubanComponents"), List.of(auto), line -> { }, line -> { });
@@ -123,7 +123,7 @@ class DependencyBricksPackagingTest {
         Path build = tmp.resolve("target");
         Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
                 "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
-        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+        patch(JavaModulePatches.patchDirFor(build, "lib"), Map.of(
                 "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
         EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")),
                 List.of("org.dep._VaubanComponents"), List.of(lib), line -> { }, line -> { });

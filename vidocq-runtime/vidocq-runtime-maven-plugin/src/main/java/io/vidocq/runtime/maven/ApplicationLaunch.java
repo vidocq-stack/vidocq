@@ -314,7 +314,7 @@ public final class ApplicationLaunch {
             artifacts.add(a);
             moduleByCoordinates.put(a.getGroupId() + ":" + a.getArtifactId(), candidate.descriptor().name());
             if (!EnrichedJars.isEnriched(buildDir, a.getFile().toPath())
-                    && Files.isDirectory(JpmsPatches.patchDirFor(buildDir, a.getArtifactId()))) {
+                    && Files.isDirectory(JavaModulePatches.patchDirFor(buildDir, a.getArtifactId()))) {
                 forced.put(candidate.descriptor().name(), PATCHED_REASON);
             }
         }
@@ -434,6 +434,6 @@ public final class ApplicationLaunch {
                         ModularizedJars.resolve(buildDir, artifact.getFile().toPath()));
             }
         }
-        return JpmsPatches.patchModuleArgs(buildDir, jarsByArtifactId);
+        return JavaModulePatches.patchModuleArgs(buildDir, jarsByArtifactId);
     }
 }

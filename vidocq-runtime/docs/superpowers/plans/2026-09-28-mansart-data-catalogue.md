@@ -18,7 +18,7 @@ about the application: its entities with their table and columns, its repositori
 - **`vidocq-runtime-mansart-data-extension-dev`** (new): `CatalogueLivePanel`, a `LivePanel` with id `mansart-data`
   that reads `MansartDataLive` only. The runtime jar names it in `META-INF/vidocq/dev-module`.
 
-**Tech Stack:** Java 25, JPMS, Maven 3.9, Jakarta Data 1.0.1, Mansart Data (`mansart-data-core`,
+**Tech Stack:** Java 25, Java Modules, Maven 3.9, Jakarta Data 1.0.1, Mansart Data (`mansart-data-core`,
 `mansart-data-dialect-spi`), the Vidocq report SPI and dev console SPI, JUnit 5 (AssertJ on the Mansart side).
 
 **Spec:** `docs/superpowers/specs/2026-09-28-mansart-data-catalogue-design.md` (binding). Section numbers below

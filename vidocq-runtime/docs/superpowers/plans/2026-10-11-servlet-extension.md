@@ -6,7 +6,7 @@
 
 **Architecture:** `FoyExtension` (a `VidocqExtension`) deploys the application with `FoyChappeBoot` and mounts the returned handler on `ChappeMountPoint`; `FoyMountHandlerProvider` does the same for a declarative `type=servlet` mount. `ChappeMountPoint` is changed to route longest prefix first and to reject two mounts on one prefix, so a Foy mount on `/` never shadows the others. A pom-only `-codegen` bundle puts Foy's processor and build-compatible extensions on the processor path.
 
-**Tech Stack:** Java 25, JPMS, Maven 3.9.16 (`./mvnw`), JUnit 5, Foy 0.4.0-SNAPSHOT (`foy-chappe`, `foy-cdi-vauban`, `foy-processor`), Vauban 0.4.0-SNAPSHOT (`vauban-webcontexts`), Chappe.
+**Tech Stack:** Java 25, Java Modules, Maven 3.9.16 (`./mvnw`), JUnit 5, Foy 0.4.0-SNAPSHOT (`foy-chappe`, `foy-cdi-vauban`, `foy-processor`), Vauban 0.4.0-SNAPSHOT (`vauban-webcontexts`), Chappe.
 
 **Spec:** `docs/superpowers/specs/2026-10-11-servlet-extension-design.md`
 
@@ -16,7 +16,7 @@
 - Commits: Conventional Commits, `git commit -s -S`, trailers `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01RxAdNG7RnZkC5SjtbSvMwY`.
 - No change to the Foy repository.
 - Zero external dependency at runtime: only Vidocq bricks and Jakarta APIs. Run the `dependency-gatekeeper` agent on every pom change.
-- JPMS strict: each new module has a `module-info.java`, minimal `exports`, no `opens`.
+- Strict Java Modules: each new module has a `module-info.java`, minimal `exports`, no `opens`.
 - TDD: each test is written and seen failing before its code.
 - Version strings: never hard-code `0.4.0-SNAPSHOT` in a test (CI rewrites versions).
 - Configuration keys exactly: `vidocq.servlet.context-path`, `vidocq.servlet.listener`, `vidocq.servlet.session-timeout`; declarative type `servlet`.
@@ -1295,7 +1295,7 @@ Claude-Session: https://claude.ai/code/session_01RxAdNG7RnZkC5SjtbSvMwY"
 
 Copy any `<build>` section the Cassini codegen bundle has (for example a skipped deploy or publishing setting) so the two bundles are published the same way.
 
-- [ ] **Step 2: IT pom** — copy `vidocq-runtime-integration-tests/vidocq-runtime-it-cyrano-jpms/pom.xml`, then:
+- [ ] **Step 2: IT pom** — copy `vidocq-runtime-integration-tests/vidocq-runtime-it-cyrano-javamodule/pom.xml`, then:
   - artifactId `vidocq-runtime-it-foy-servlet`, name `Vidocq :: Integration Tests :: Servlet (Foy) on the module path`, a header comment explaining that the application is a named module and the runtime boots on the module path;
   - dependencies: `vidocq-runtime-core`, `vidocq-runtime-foy-servlet-extension`, `vidocq-runtime-cassini-rest-extension`, `jakarta.servlet-api`, `jakarta.ws.rs-api` (version `4.0.0` as in `it-cassini-rest`), `jakarta.enterprise.cdi-api`, `junit-jupiter` (test);
   - `annotationProcessorPaths` (append): `vidocq-runtime-foy-servlet-extension-codegen` and `vidocq-runtime-cassini-rest-extension-codegen`, both `<type>pom</type>`, version `${project.version}`;
@@ -1421,7 +1421,7 @@ module io.vidocq.runtime.it.foyservlet {
 }
 ```
 
-Build once (`./mvnw -o -ntp -pl vidocq-runtime-integration-tests/vidocq-runtime-it-foy-servlet -am install -DskipTests`), then list `target/classes/META-INF/services/*`. For every services file the processors wrote, add the matching `provides <service> with <implementations>;` to the module-info (the test boots without the application layer that synthesizes them, as in `it-cyrano-jpms`). Expect at least `io.vidocq.vauban.api.VaubanComponentProvider` (`_VaubanComponents`) and `io.vidocq.foy.spi.gen.WebComponent` (the `$$FoyComponent` classes), plus Cassini's generated providers. Comment the block as `it-cyrano-jpms` does. If the Vauban processor warns that a build-compatible extension is not on the processor path, fix the codegen bundle (Step 1), not the IT.
+Build once (`./mvnw -o -ntp -pl vidocq-runtime-integration-tests/vidocq-runtime-it-foy-servlet -am install -DskipTests`), then list `target/classes/META-INF/services/*`. For every services file the processors wrote, add the matching `provides <service> with <implementations>;` to the module-info (the test boots without the application layer that synthesizes them, as in `it-cyrano-javamodule`). Expect at least `io.vidocq.vauban.api.VaubanComponentProvider` (`_VaubanComponents`) and `io.vidocq.foy.spi.gen.WebComponent` (the `$$FoyComponent` classes), plus Cassini's generated providers. Comment the block as `it-cyrano-javamodule` does. If the Vauban processor warns that a build-compatible extension is not on the processor path, fix the codegen bundle (Step 1), not the IT.
 
 - [ ] **Step 5: Write the test** — `FoyServletModulePathTest.java`
 
@@ -1600,7 +1600,7 @@ Claude-Session: https://claude.ai/code/session_01RxAdNG7RnZkC5SjtbSvMwY"
 - [ ] **Step 1: Clean build of the repository with tests**
 
 Run: `./mvnw -o -ntp clean install` from the worktree.
-Expected: BUILD SUCCESS. The known pre-existing failure `vidocq-runtime-it-cyrano-jpms` `FindException` in a full reactor (see the memory note "Gate mvn test complet vidocq cassé") does not count: compare with `origin/main` in a separate worktree before blaming the branch.
+Expected: BUILD SUCCESS. The known pre-existing failure `vidocq-runtime-it-cyrano-javamodule` `FindException` in a full reactor (see the memory note "Gate mvn test complet vidocq cassé") does not count: compare with `origin/main` in a separate worktree before blaming the branch.
 
 - [ ] **Step 2: Existing ITs that mount on the web server** — `vidocq-runtime-it-cassini-rest`, `it-grimm-openapi`, `it-humboldt-cassini`, `it-cervantes-jwt` green (already in Step 1; read their surefire reports).
 

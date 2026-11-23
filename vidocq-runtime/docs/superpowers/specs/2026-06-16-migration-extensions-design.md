@@ -74,7 +74,7 @@ Chappe transport at 100, **before** the Mansart pool at 200, well before mansart
 ### 4.3 `vidocq-runtime-liquibase-migration-extension`
 
 `provides SchemaMigrator` via Liquibase (`target.locations().get(0)` = changelog path). Depends on the
-SPI module + `liquibase-core` (Apache 2.0). **A Liquibase + JPMS module-path POC is the very first
+SPI module + `liquibase-core` (Apache 2.0). **A Liquibase module-path POC is the very first
 implementation step** — Liquibase scans the classpath and uses ServiceLoader heavily and is the
 finicky one on the module path.
 
@@ -89,7 +89,7 @@ finicky one on the module path.
 
 JDBC coordinates are **reused** from `vidocq.pool[.<name>].url|username|password` — nothing to redeclare.
 
-## 6. JPMS
+## 6. Java Modules
 
 - `migration-extension/module-info`: `requires transitive io.vidocq.runtime.spi; requires java.sql;
   exports io.vidocq.runtime.extensions.essentials.migration; provides
@@ -127,8 +127,8 @@ editions; Postgres/H2/MySQL/MariaDB stay Apache 2.0.)
 - **migration-extension**: unit-test the runner's config → `MigrationTarget` list (default + named
   opt-in) and the backend selection (0/1/2 providers) with a fake `SchemaMigrator` — no database.
 - **flyway / liquibase**: migrate a sample script on **H2 in-memory** (fast, no Docker) and a
-  **Docker-gated Postgres IT**; for Liquibase, a **module-path smoke** (the POC) proving it runs as a
-  JPMS automatic module.
+  **Docker-gated Postgres IT**; for Liquibase, a **module-path smoke** (the POC) proving it runs as an
+  automatic module.
 - **example**: `mansart-h2-example` adopts the extension (drops `SchemaInitializer`), proving the E2E
   path (config → runner → backend → migrated H2) in a real Vidocq app.
 

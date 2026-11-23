@@ -6,11 +6,11 @@
 
 **Architecture:** Providers keep running outside the application's module graph. A new class-path module,
 `vidocq-runtime-devservices-host`, holds the session logic that `vidocq:dev`, `vidocq:run` and a JUnit
-`LauncherSessionListener` share. The session writes a JSON state file with no secret values. A new JPMS runtime
+`LauncherSessionListener` share. The session writes a JSON state file with no secret values. A new Java module runtime
 extension, `vidocq-runtime-devservices-extension`, reads that file for a `devservices` report section and dev
 console panel.
 
-**Tech Stack:** Java 25, Maven 3.9, JPMS, Testcontainers (providers only), JUnit Platform 1.x `LauncherSessionListener`, Vidocq report and dev console SPIs.
+**Tech Stack:** Java 25, Maven 3.9, Java Modules, Testcontainers (providers only), JUnit Platform 1.x `LauncherSessionListener`, Vidocq report and dev console SPIs.
 
 **Spec:** `docs/superpowers/specs/2026-09-24-devservices-visibility-run-tests-design.md` (read it first; section numbers below refer to it).
 
@@ -61,7 +61,7 @@ console panel.
 | `…/vidocq-runtime-devservice-keycloak/…/KeycloakDevService.java` | `describe`: image, issuer, admin URL |
 | `vidocq-runtime-devservices/vidocq-runtime-devservices-host/` (new module) | `DevServicesSession`, `DevServiceManager`, `DefaultDevServiceContext`, `DevServicesReport` (moved), `ApplicationFiles`, `SecretMasking`, `StateFile`, `DevServicesException` |
 | `vidocq-runtime-maven-plugin/…/dev/VidocqDevMojo.java`, `…/VidocqRunMojo.java` | Delegate to the session; add the extension jar and the state property |
-| `vidocq-runtime-devservices/vidocq-runtime-devservices-extension/` (new module, JPMS) | `DevServicesExtension`, `StateReader`, `DevServicesSnapshot`, `DevServicesSection` |
+| `vidocq-runtime-devservices/vidocq-runtime-devservices-extension/` (new Java module) | `DevServicesExtension`, `StateReader`, `DevServicesSnapshot`, `DevServicesSection` |
 | `vidocq-runtime-devservices/vidocq-runtime-devservices-junit/` (new module) | `DevServicesSessionListener` |
 | `vidocq-runtime-integration-tests/vidocq-runtime-it-devservices/` (new, profile `docker`) | End-to-end checks |
 | `DEV_SERVICES.md`, `docs/en/modules/ROOT/pages/dev-services.adoc` (new), `nav.adoc`, `dev-console.adoc`, `whats-new.adoc` | Docs |
@@ -148,7 +148,7 @@ public class SpikeListener implements LauncherSessionListener {
 
 ```bash
 git add docs/superpowers/specs/2026-09-24-devservices-visibility-run-tests-design.md
-git commit -S -F msg.txt   # "docs(spec): record the JPMS-under-Surefire spike result (#123)"
+git commit -S -F msg.txt   # "docs(spec): record the Java-Modules-under-Surefire spike result (#123)"
 ```
 
 ---

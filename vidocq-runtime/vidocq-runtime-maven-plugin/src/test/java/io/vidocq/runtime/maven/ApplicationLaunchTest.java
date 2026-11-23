@@ -129,7 +129,7 @@ class ApplicationLaunchTest {
         MavenProject project = project();
         project.setArtifacts(Set.of(artifact("dep-lib", lib)));
         Path build = dir.resolve("target");
-        Files.createDirectories(JpmsPatches.patchDirFor(build, "dep-lib").resolve("a"));
+        Files.createDirectories(JavaModulePatches.patchDirFor(build, "dep-lib").resolve("a"));
         assertEquals("--patch-module", ApplicationLaunch.patchModuleArgs(project, build).getFirst(),
                 "without a copy, the parked classes are patched in");
 

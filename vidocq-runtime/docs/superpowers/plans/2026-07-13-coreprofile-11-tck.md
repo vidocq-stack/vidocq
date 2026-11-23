@@ -12,7 +12,7 @@
 
 - **Toolchain:** JDK 25 (Temurin) + Maven 3.9.16, pinned via `.sdkmanrc`; run `sdk env` in each sub-project before building. `sdk env` breaks under `set -u` — invoke `mvn` directly in scripts.
 - **POMs:** `modelVersion 4.0.0` everywhere. Internal versions: vauban `0.3.0-SNAPSHOT`, vidocq runtime `0.3.0-SNAPSHOT`.
-- **JPMS:** strict elsewhere, but TCK runner modules carry **no `module-info.java`** (unnamed module) so the TCK deployment classes — which have no JPMS descriptor — stay readable by Vauban/Cassini. Follow the existing `vidocq-runtime-tck-*` and `vauban-tck-runner` modules.
+- **Java Modules:** strict elsewhere, but TCK runner modules carry **no `module-info.java`** (unnamed module) so the TCK deployment classes — which have no module descriptor — stay readable by Vauban/Cassini. Follow the existing `vidocq-runtime-tck-*` and `vauban-tck-runner` modules.
 - **Build hygiene:** always `clean test` / `clean install`, never bare `test` or `install` — stale `target/` from the IDE produces false failures (MDEP-187, Eclipse writing broken classes).
 - **Language:** all code, comments, Javadoc, commit messages, and `.md` files in **English**. Chat with maintainer in French.
 - **Commits:** DCO `Signed-off-by` **and** GPG-signed (`git commit -S --signoff`). **No `Co-Authored-By: Claude`, no AI mention.**

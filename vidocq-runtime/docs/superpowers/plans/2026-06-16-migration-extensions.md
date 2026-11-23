@@ -6,7 +6,7 @@
 
 **Architecture:** One runner `VidocqExtension` (priority 150, before the pool) reads `vidocq.pool[.<name>].url|username|password` from config, builds a `MigrationTarget` per datasource (`@Default` always, named ones opt-in via `vidocq.migration.<name>.locations`), resolves a single `SchemaMigrator` via `ServiceLoader`, and invokes it — fail-fast at boot. Flyway and Liquibase are separate opt-in modules each providing a `SchemaMigrator`. No runtime `DataSource` dependency.
 
-**Tech Stack:** Java 25, Maven 3.9.16, JPMS (module-path), `flyway-core` + `flyway-database-postgresql` (Apache 2.0), `liquibase-core` (Apache 2.0), H2 + Testcontainers (tests).
+**Tech Stack:** Java 25, Maven 3.9.16, Java Modules (module path), `flyway-core` + `flyway-database-postgresql` (Apache 2.0), `liquibase-core` (Apache 2.0), H2 + Testcontainers (tests).
 
 **Conventions:** Every `.java`/`.xml` starts with the standard EPL/EUPL/GPL license header used across the repo (copy it from `vidocq-runtime-chappe-webserver-extension/src/main/java/module-info.java`). All code/comments/Javadoc in English. Branch: `feat/migration-extensions` (already created). Commits: English, no AI mention; the global hook adds the DCO `Signed-off-by` + GPG signature.
 
@@ -702,7 +702,7 @@ git commit -m "test(migration): Docker-gated Postgres IT for the Flyway backend"
 
 ## Task 5: Liquibase backend module — POC first, then impl (TDD on H2)
 
-⚠️ **Liquibase + JPMS is the riskiest piece.** Step 5 is a module-path smoke check (the POC) before relying on it.
+⚠️ **Liquibase on the module path is the riskiest piece.** Step 5 is a module-path smoke check (the POC) before relying on it.
 
 **Files:** module dir with `pom.xml`, `module-info.java`, `LiquibaseSchemaMigrator.java`; test `LiquibaseSchemaMigratorTest.java`; resources `db/testchangelog/db.changelog-master.xml` + `db/testchangelog/V1.sql`.
 
@@ -828,7 +828,7 @@ public final class LiquibaseSchemaMigrator implements SchemaMigrator {
 - [ ] **Step 6: Run tests — expect PASS**
 
 Run: `./mvnw -ntp -q clean install -pl :vidocq-runtime-liquibase-migration-extension -am`
-Expected: `Tests run: 1, Failures: 0, Errors: 0`, `BUILD SUCCESS`. **If the build fails on module resolution** (`liquibase.core` not found / split package / reads), this is the JPMS POC surfacing: fix `requires`/the module name, document in `BUG.md`, and re-run before continuing.
+Expected: `Tests run: 1, Failures: 0, Errors: 0`, `BUILD SUCCESS`. **If the build fails on module resolution** (`liquibase.core` not found / split package / reads), this is the Java Modules POC surfacing: fix `requires`/the module name, document in `BUG.md`, and re-run before continuing.
 
 - [ ] **Step 7: Commit**
 
@@ -930,7 +930,7 @@ git commit -m "docs(devservices): document the schema-migration extensions"
 
 ## Self-Review
 
-**Spec coverage:** §4.1 SPI+runner → Tasks 1–2; §4.2 Flyway → Tasks 3–4; §4.3 Liquibase (POC-first) → Task 5; §5 config keys → Task 2 (`buildTargets`/`select`) + Task 8 docs; §6 JPMS (`opens db.migration`) → Tasks 5(note)/7; §7 fail-fast/absent-scripts → Task 2 (`migrate` throws) + Liquibase note; §8 licenses → poms (Apache 2.0 deps); §9 testing → Tasks 2/3/4/5/6/7; §10 staging order → task order. All covered.
+**Spec coverage:** §4.1 SPI+runner → Tasks 1–2; §4.2 Flyway → Tasks 3–4; §4.3 Liquibase (POC-first) → Task 5; §5 config keys → Task 2 (`buildTargets`/`select`) + Task 8 docs; §6 Java Modules (`opens db.migration`) → Tasks 5(note)/7; §7 fail-fast/absent-scripts → Task 2 (`migrate` throws) + Liquibase note; §8 licenses → poms (Apache 2.0 deps); §9 testing → Tasks 2/3/4/5/6/7; §10 staging order → task order. All covered.
 
 **Placeholder scan:** No "TBD/TODO". The "if liquibase API differs" / "if module name differs" notes are explicit fallbacks with the test as oracle, not placeholders. The Liquibase version `4.31.1` and Flyway `11.1.0` are concrete (Arago uses Flyway 11.1.0); the executing agent pins the nearest resolvable if absent.
 

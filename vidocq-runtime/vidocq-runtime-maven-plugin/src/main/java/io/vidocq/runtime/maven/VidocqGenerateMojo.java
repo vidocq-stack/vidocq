@@ -232,7 +232,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
             DependencyCodegenPass.forgetWritten(buildDirectory.toPath());
         } catch (IOException e) {
             throw new MojoExecutionException("Cannot delete the earlier dependency codegen output under target/"
-                    + JpmsPatches.DIR_NAME, e);
+                    + JavaModulePatches.DIR_NAME, e);
         }
 
         Path classesDir = outputDirectory.toPath();
@@ -391,7 +391,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
         generated.addAll(result.generatedProxies());
         generated.addAll(result.generatedInterceptors());
         generated.addAll(result.generatedProviders());
-        var relocated = JpmsPatches.relocate(
+        var relocated = JavaModulePatches.relocate(
                 classesDir, buildDirectory.toPath(), scannedByArtifactId, generated);
         for (var e : relocated.entrySet()) {
             getLog().info("Parked " + e.getValue() + " generated class(es) of '" + e.getKey()

@@ -36,7 +36,7 @@
 
     <!--
         No module-info.java (unnamed module) so the TCK deployment classes, which
-        carry no JPMS descriptor, stay readable by Vauban/Cassini/Grimm — same
+        carry no module descriptor, stay readable by Vauban/Cassini/Grimm — same
         approach as the other vidocq-runtime-it-* modules.
     -->
 
@@ -69,7 +69,7 @@
         <!--
             The TCK deployment classes (run in the test JVM) reference
             jakarta.ws.rs.* and jakarta.validation.* types; those APIs must be on
-            the test classpath (the runtime ships them as JPMS-repackaged jars
+            the test classpath (the runtime ships them as repackaged named-module jars
             that Maven does not expose under the spec coordinates).
         -->
         <dependency>

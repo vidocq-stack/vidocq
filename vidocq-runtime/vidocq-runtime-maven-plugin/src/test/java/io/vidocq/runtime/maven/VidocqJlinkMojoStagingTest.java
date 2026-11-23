@@ -87,7 +87,7 @@ class VidocqJlinkMojoStagingTest {
         Path enrichedOriginal = automaticJar(dir.resolve("rich.jar"), "org.rich");
         Path enrichedCopy = moduleJar(target().resolve(EnrichedJars.DIR_NAME + "/rich.jar"), "org.rich", Map.of());
         Path patched = moduleJar(dir.resolve("patched.jar"), "org.patched", Map.of());
-        Path parked = JpmsPatches.patchDirFor(target(), "patched").resolve("org/patched/Generated.class");
+        Path parked = JavaModulePatches.patchDirFor(target(), "patched").resolve("org/patched/Generated.class");
         Files.createDirectories(parked.getParent());
         Files.write(parked, ClassFile.of().build(ClassDesc.of("org.patched.Generated"),
                 cb -> cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)));

@@ -244,7 +244,7 @@ public final class EnrichedJars {
         List<Path> enriched = new ArrayList<>();
         Set<String> current = new HashSet<>();
         for (Scanned dep : scanned) {
-            Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
+            Path patchDir = JavaModulePatches.patchDirFor(buildDir, dep.artifactId());
             Path out = Files.isDirectory(patchDir) ? enrich(run, dep, patchDir) : null;
             if (out != null) {
                 current.add(out.getFileName().toString());
@@ -267,7 +267,7 @@ public final class EnrichedJars {
         // files. So its copy starts from the original jar, never from a vauban:modularize copy.
         boolean keepAutomatic = dep.selectedByBrick() && !hasDescriptor(dep.originalJar());
         Path source = keepAutomatic ? dep.originalJar() : ModularizedJars.resolve(run.buildDir(), dep.originalJar());
-        Set<String> packages = JpmsPatches.packagesOf(source);
+        Set<String> packages = JavaModulePatches.packagesOf(source);
         List<String> own = run.providers().stream().filter(p -> packages.contains(packageOf(p))).toList();
         // Only Vauban's providers need a descriptor on an automatic jar: the JDK derives an automatic module's
         // provides from its service files, which is all a brick's output asks.
@@ -325,7 +325,7 @@ public final class EnrichedJars {
                                            UnaryOperator<Set<String>> modulesOfPackages,
                                            Consumer<String> info) throws IOException {
         Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
-        Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
+        Path patchDir = JavaModulePatches.patchDirFor(buildDir, dep.artifactId());
         if (!Files.isRegularFile(out) || !Files.isDirectory(patchDir)
                 || !ModularizedJars.isModularized(buildDir, dep.originalJar())) {
             return;

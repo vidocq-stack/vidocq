@@ -29,7 +29,7 @@
 
     <!--
         No module-info.java (unnamed module) so the TCK deployment classes, which
-        carry no JPMS descriptor, stay readable by Vauban/Cassini/Champollion —
+        carry no module descriptor, stay readable by Vauban/Cassini/Champollion —
         same approach as the other vidocq-runtime-it-* / vidocq-runtime-tck-* modules.
     -->
 
