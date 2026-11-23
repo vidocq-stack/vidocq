@@ -589,3 +589,37 @@ Track reproducible bugs with:
   Supporting `@Tag` at build time stays a separate item: the tags of the class reach each operation and the
   document's `tags`, which the run-time scan already does.
 - **Regression test**: `SkippedClassesSummaryTest`.
+
+## BUG-20261123-49 — the document misses the `@ApplicationPath`: `/pets/{id}` for a resource served at `/api/pets/{id}`
+
+- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Symptom**: with `@ApplicationPath("/api")` on the `Application` subclass, Vidocq serves `@Path("/pets")` at
+  `/api/pets`, but `/openapi` listed `/pets/{id}` and no server: a client built from the document called a URL that
+  does not exist. The getting-started page already showed `/api/pets/{id}`, and the reference page listed
+  `@ApplicationPath` among the annotations the scanner reads; nothing read it.
+- **Minimal repro**: `ModelBuilderTest.theApplicationPathPrefixesThePathsOfTheAnnotations` (an `@ApplicationPath("api/")`
+  application, a scanned resource and a compile-time fragment): `/pets/{id}` and `/generated` before the fix.
+- **Root cause**: neither `JaxRsResourceScanner` nor `grimm-processor` looked at the application class. MicroProfile
+  OpenAPI 4.1 §5.4 asks that a server and a path resolve to the absolute URL of the path; the TCK applications all use
+  `@ApplicationPath("/")`, so the TCK never saw it.
+- **Fix**: `ApplicationPathPrefix` puts the normalized application path (first `Application` by class name, as the
+  Vidocq runtime mounts it) in front of every path of the annotation model, fragments included, before the merge; the
+  paths of a static file or a model reader are left as written. `grimm-processor` lists the `@ApplicationPath` classes
+  in `META-INF/grimm/openapi-definitions`, so an `Application` that is no bean in `annotated` discovery mode is seen.
+  Reference page and What's new updated.
+- **Regression tests**: `ModelBuilderTest` (two tests), `ApplicationPathPrefixTest`,
+  `GrimmModelProcessorOracleTest.theClassesCarryingTheApplicationPathAreListed`.
+
+## BUG-20261123-50 — `GrimmExtension` takes a monitor
+
+- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Symptom**: `GrimmExtension` kept the discovered class names in a `Collections.synchronizedSet` and copied them in a
+  `synchronized` block; the project rules forbid `synchronized` (virtual threads first; Grimm's `CLAUDE.md`,
+  constraint 2). Since JDK 24 (JEP 491) a monitor no longer pins a virtual thread, so this is a rule breach, not a
+  measured slowdown.
+- **Minimal repro**: `GrimmExtensionTest.extensionTakesNoMonitor` reads `GrimmExtension.class` with the Class-File API:
+  before the fix it found `Collections.synchronizedSet` in `<init>` and `monitorenter`/`monitorexit` in
+  `registerScannedTypes`.
+- **Root cause**: the set was made thread-safe with a monitor when the names moved from a static set to the extension
+  instance (grimm#22).
+- **Fix**: a `ReentrantLock` guards a `LinkedHashSet` (discovery order kept), in both phases.

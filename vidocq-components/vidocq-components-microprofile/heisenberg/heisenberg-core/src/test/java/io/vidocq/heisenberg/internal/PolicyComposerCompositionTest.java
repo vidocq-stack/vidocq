@@ -139,7 +139,7 @@ class PolicyComposerCompositionTest {
         assertEquals(3, calls.get()); // 1 initial call + 2 retries
     }
 
-    // Test 5: Full composition with @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry
+    // Test 5: Full composition with @Fallback → @Retry → @CircuitBreaker → @Timeout → @Bulkhead
     @Test
     void fullChainWithAllPolicies() throws Exception {
         // MP FT §2.5: full outside-to-inside order.

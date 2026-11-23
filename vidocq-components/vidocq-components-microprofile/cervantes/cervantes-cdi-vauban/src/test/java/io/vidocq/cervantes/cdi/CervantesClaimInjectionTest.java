@@ -21,6 +21,7 @@ package io.vidocq.cervantes.cdi;
 
 import io.vidocq.cervantes.internal.DefaultJsonWebToken;
 import io.vidocq.vauban.core.container.VaubanContainer;
+import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
@@ -30,7 +31,15 @@ import org.eclipse.microprofile.jwt.Claim;
 import org.eclipse.microprofile.jwt.ClaimValue;
 import org.eclipse.microprofile.jwt.Claims;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,6 +55,34 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class CervantesClaimInjectionTest {
 
+    /** How the start gets what {@link CervantesClaimExtension} did. */
+    enum ExtensionsAtStart {
+        /** It runs the extension. */
+        RUN,
+        /** It reads the record a build froze, and runs no extension (Vidocq/vauban#288). */
+        FROZEN
+    }
+
+    @TempDir
+    Path output;
+
+    private VaubanContainerBuilder deployment() {
+        return VaubanContainer.builder()
+                .classLoader(outputLoader())
+                .addBeanClass(CervantesClaimExtension.class)
+                .addBeanClass(JsonWebTokenContext.class)
+                .addBeanClass(ClaimConsumer.class);
+    }
+
+    /** The loader of a start: the build's output first, where a record is, then the classes of this test. */
+    private ClassLoader outputLoader() {
+        try {
+            return new URLClassLoader(new URL[] {output.toUri().toURL()}, getClass().getClassLoader());
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static JsonObject claims() {
         return Json.createObjectBuilder()
                 .add("iss", "https://issuer.vidocq.dev")
@@ -58,13 +95,22 @@ class CervantesClaimInjectionTest {
                 .build();
     }
 
-    @Test
-    void resolvesTypedClaimsFromTheRequestToken() {
-        try (var container = VaubanContainer.builder()
-                .addBeanClass(CervantesClaimExtension.class)
-                .addBeanClass(JsonWebTokenContext.class)
-                .addBeanClass(ClaimConsumer.class)
-                .build()) {
+    /**
+     * The claim types the extension collects at {@code @Registration} reach the {@code @Synthesis} of the same run,
+     * and the synthetic beans that phase registers are what a build freezes: a start from the record runs no
+     * extension and injects the same claims (BUG-20261123-48).
+     */
+    @ParameterizedTest
+    @EnumSource(ExtensionsAtStart.class)
+    void resolvesTypedClaimsFromTheRequestToken(ExtensionsAtStart extensions) {
+        if (extensions == ExtensionsAtStart.FROZEN) {
+            var outcome = deployment().freezeExtensions(output);
+            assertTrue(outcome.frozen(), outcome.reason());
+        }
+        try (var container = deployment().build()) {
+            assertEquals(extensions == ExtensionsAtStart.FROZEN, container.extensionsAtStart().frozen(), "frozen");
+            assertEquals(extensions == ExtensionsAtStart.FROZEN ? List.of() : List.of(CervantesClaimExtension.class.getName()),
+                    container.extensionsAtStart().ranAtStart(), "extensions run at start");
 
             container.requestContext().runInScope(() -> {
                 JsonWebTokenContext context = container.select(JsonWebTokenContext.class);

@@ -442,3 +442,32 @@ Cassini asks for a resource with `BeanProvider.getRequestBean`, which returns it
 ### Fix
 
 The harness's provider delegates `getRequestBean` too. Its delegate is typed `BeanProvider`, which the test fills.
+
+## BUG-20261123-48 — `CervantesClaimExtension` keeps the claim types in a field (reported, not reproduced)
+
+- **Opening date**: 2026-11-23
+- **Status**: NOT A BUG — closed 2026-11-23, regression test kept
+
+### Symptom (reported)
+
+A review found that `CervantesClaimExtension` collects the `@Claim` injection types in a field (`claimTypes`) at
+`@Registration` and reads it at `@Synthesis`, while the workspace rule says "carry data in parameters, never in fields
+of the extension": a frozen build would not replay the field.
+
+### Minimal repro
+
+`CervantesClaimInjectionTest.resolvesTypedClaimsFromTheRequestToken`, now run twice: the extension run at start, and a
+start from the record `VaubanContainerBuilder.freezeExtensions` wrote. Frozen, `extensionsAtStart().ranAtStart()` is
+empty and the eight claim injections (`String`, `Set<String>`, `Long`, `boolean`, `ClaimValue<String>`,
+`Optional<String>`, `JsonObject`, `Provider<String>`) resolve as when the extension runs. Green before any change.
+
+### Cause
+
+None. The field carries data between two phases of the same run of the extension, which a freeze runs whole. What
+must reach the start is the synthetic beans `@Synthesis` registers, which the record holds, and their creator,
+`ClaimSyntheticCreator`, which reads the claim name from the `InjectionPoint` at start and needs no parameter. The rule
+is about data the creator or a start observer needs: no extension instance exists at start to hold it.
+
+### Fix
+
+No code change. The parameterized test guards the frozen case.

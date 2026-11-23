@@ -770,4 +770,25 @@ class GrimmModelProcessorOracleTest {
         Path listed = compilation.outputDir().toPath().resolve("META-INF/grimm/openapi-definitions");
         assertEquals(List.of("t.LibraryApi"), Files.readAllLines(listed));
     }
+
+    /**
+     * A class carrying {@code @ApplicationPath} is listed too: the run time puts its path in front of the documented
+     * paths, and in {@code annotated} discovery mode an {@code Application} subclass with no definition is no bean
+     * either (BUG-20261123-49).
+     */
+    @Test
+    void theClassesCarryingTheApplicationPathAreListed() throws Exception {
+        var compilation = compile(writeSource("t/ShopApplication.java", """
+                package t;
+                import jakarta.ws.rs.ApplicationPath;
+                import jakarta.ws.rs.core.Application;
+                @ApplicationPath("/api")
+                public class ShopApplication extends Application {
+                }
+                """));
+
+        Path listed = compilation.outputDir().toPath().resolve("META-INF/grimm/openapi-definitions");
+        assertTrue(Files.exists(listed), "no list written");
+        assertEquals(List.of("t.ShopApplication"), Files.readAllLines(listed));
+    }
 }

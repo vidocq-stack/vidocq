@@ -34,7 +34,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code Thread.ofVirtual()}. The caller immediately gets a {@code CompletionStage<T>}
  * or {@code Future<T>} that completes asynchronously.</p>
  *
- * <p>The composition order remains strictly §2.5: @Fallback → @CB → @Bulkhead → @Timeout → @Retry → method,
+ * <p>The composition order stays the one of {@link PolicyComposer}: @Fallback → @Retry → @CircuitBreaker → @Timeout
+ * → @Bulkhead → method,
  * but the whole chain executes in the asynchronous virtual thread.</p>
  */
 public final class AsynchronousEngine {

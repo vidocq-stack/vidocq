@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * Unit tests for {@code PolicyComposer} with {@code @Asynchronous}.
  *
  * <p>Tests that the policy-composition order is respected with @Asynchronous:
- * @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → method,
+ * @Fallback → @Retry → @CircuitBreaker → @Timeout → @Bulkhead → method,
  * executed in a virtual thread.</p>
  */
 class PolicyComposerAsynchronousTest {

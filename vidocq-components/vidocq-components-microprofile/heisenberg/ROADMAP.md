@@ -267,7 +267,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 
 | Task | Notes | Status |
 |---|---|---|
-| `PolicyComposer` — full order | `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → method | ☑ |
+| `PolicyComposer` — full order | `@Fallback` → `@Retry` → `@CircuitBreaker` → `@Timeout` → `@Bulkhead` → method | ☑ |
 | Exception propagation between layers | Each policy sees the exception from the inner layer ; `@Fallback` sees the final exception | ☑ |
 | `@Asynchronous` + full policy set | All policies execute inside the async virtual thread | ☑ |
 | Unwrap `CompletionStage` in async mode (§8.2) | An exceptionally completed stage triggers retry/fallback/CB — unwrapped in `PolicyComposer` | ☑ |
@@ -376,7 +376,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 ## Ratified decisions
 
 - [x] Separation `heisenberg-core` (pure engines) / `heisenberg-cdi-vauban` (CDI interceptor)
-- [x] Composition order: `@Fallback → @CB → @Bulkhead → @Timeout → @Retry → method` (§2.5)
+- [x] Composition order: `@Fallback → @Retry → @CB → @Timeout → @Bulkhead → method`
 - [x] Virtual threads for `@Asynchronous` and `@Timeout`: M3 implementation via `Thread.ofVirtual() + join(Duration)` (Java 21+, finalized). `StructuredTaskScope` (JEP 505, finalized in Java 25) remains an optional alternative for future performance optimizations.
 - [x] `StateKey` = `beanClass.getName() + "#" + methodName`
 - [x] Count-based sliding window only for CircuitBreaker (time-based = optional spec)
