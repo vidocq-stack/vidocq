@@ -1,8 +1,8 @@
 = Performance
-:description: Ibarra performance — no measurements yet; the JMH harness is milestone I9.
+:description: Ibarra performance — one measurement recorded in BENCH.md; the JMH harness is milestone I9.
 
 [.lead]
-No numbers yet. Precompilation removes first-request translation latency entirely; what remains to measure is rendering.
+One measurement so far, in `BENCH.md`: the conversion path of the page resolver chain (2026-10-25), taken with a harness that is not committed. Precompilation removes first-request translation latency entirely; what remains to measure is rendering.
 
 == What will be measured
 

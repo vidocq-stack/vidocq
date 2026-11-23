@@ -75,7 +75,7 @@ Semantics:
 
 == Start the container
 
-No additional bootstrap. The Vauban BCE (`HeisenbergExtension`) discovers the interceptor at startup and registers it for all annotated beans. Launching the application through `Vauban.bootstrap()` or through xref:cassini::index.adoc[Cassini] / xref:foy::index.adoc[Foy] is enough.
+No additional bootstrap. The Build Compatible Extension `HeisenbergExtension` binds the interceptor to every annotated bean: while the application builds when `heisenberg-cdi-vauban` is on Vauban's processor path, at startup otherwise (xref:internals.adoc#generated-code[Internals]). Launching the application through a `VaubanContainer` (xref:vauban::getting-started.adoc[Vauban]) or through xref:cassini::index.adoc[Cassini] / xref:foy::index.adoc[Foy] is enough.
 
 [source,bash]
 ----
@@ -137,10 +137,10 @@ For integration tests where retry slowness is a nuisance:
 [source,properties]
 ----
 MP_Fault_Tolerance_NonFallback_Enabled=false
-mp.fault.tolerance.metrics.enabled=false
+MP_Fault_Tolerance_Metrics_Enabled=false
 ----
 
-`MP_Fault_Tolerance_NonFallback_Enabled=false` (dotted alias: `mp.fault.tolerance.nonFallback.enabled=false`) disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead` and `@Asynchronous`; `@Fallback` stays active per spec §11. `mp.fault.tolerance.metrics.enabled=false` silences the §9 / §10 recorders.
+`MP_Fault_Tolerance_NonFallback_Enabled=false` (dotted alias: `mp.fault.tolerance.nonFallback.enabled=false`) disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead` and `@Asynchronous`; `@Fallback` stays active per spec §11. `MP_Fault_Tolerance_Metrics_Enabled=false` silences the §9 / §10 recorders.
 
 == Next step
 

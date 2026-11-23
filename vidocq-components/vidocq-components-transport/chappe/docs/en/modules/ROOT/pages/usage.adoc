@@ -87,7 +87,7 @@ When the server rejects a handshake, it sends the TLS alert that says why, then 
 
 A `ClientAuth` other than `NONE` without an `SSLContext` fails at `build()` with an `IllegalArgumentException`.
 
-Client certificates work over TLS 1.2 and TLS 1.3. A TLS 1.2 client sends its certificate, its key exchange and its `Finished` together and then waits for the server: the handshake unwraps everything it has received before it reads the socket again (chappe#24).
+Client certificates work over TLS 1.2 and TLS 1.3. A TLS 1.2 client sends its certificate, its key exchange and its `Finished` together and then waits for the server: the handshake unwraps everything it has received before it reads the socket again (CHAPPE-036).
 
 [#request-tls]
 === Reading the TLS session in a handler
@@ -211,9 +211,9 @@ To serve a static site without an application launcher (typical Docker case):
 
 [source,bash]
 ----
-./mvnw -ntp -pl chappe-cli -am package
+./mvnw -ntp -pl vidocq-components/vidocq-components-transport/chappe/chappe-cli -am package
 java \
-     -jar chappe-cli/target/chappe-cli-*-shaded.jar \
+     -jar vidocq-components/vidocq-components-transport/chappe/chappe-cli/target/chappe-cli-*-shaded.jar \
      serve --root /var/www/site --port 8080 --gzip
 ----
 

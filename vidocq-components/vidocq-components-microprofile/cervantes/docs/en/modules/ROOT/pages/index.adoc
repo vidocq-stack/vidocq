@@ -50,7 +50,7 @@ A JWT is exactly that: a bearer token that presents a signed identity on every H
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.jaxrs`, `org.eclipse.microprofile.jwt` (repackaging)
 | Public packages | `io.vidocq.cervantes.api.*` (stable SPI), `io.vidocq.cervantes.cdi.*` (CDI integration), `io.vidocq.cervantes.jaxrs.*` (JAX-RS integration)
-| Runtime dependencies | `microprofile-jwt-auth-api` 2.2, `jakarta.json-api` (via Champollion), `jakarta.enterprise.cdi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
+| Runtime dependencies | `microprofile-jwt-auth-api` 2.2, `jakarta.json-api` (via Champollion), `jakarta.enterprise.cdi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`, `io.vidocq.vauban:vauban-api` (API types only)
 | Crypto | `java.security` (`Signature`, `KeyFactory`), `javax.crypto` (JWE) — *no* third-party library
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback
 | MP JWT 2.2 TCK | ✅ *208 / 208* (100 %) — see xref:tck.adoc[detailed status]
@@ -98,13 +98,13 @@ Cervantes consumes the ecosystem from the bottom up: xref:chappe::index.adoc[Cha
 
 == Quick links
 
-* xref:whats-new.adoc[What's new]— what changed since {release-version}: MicroProfile JWT 2.2, configuration checked at container start.
+* xref:whats-new.adoc[What's new] — what changed on this line.
 * xref:getting-started.adoc[Getting started] — first protected endpoint in under five minutes.
 * xref:concepts.adoc[Concepts] — JWT, standard and MP claims, signature, JWK Set, rotation.
 * xref:usage.adoc[Usage patterns] — `@RolesAllowed`, `@Claim`, JWKS, JWE, cookies, refresh.
 * xref:reference.adoc[Reference] — artefacts, annotations, `mp.jwt.*` keys, algorithms.
 * xref:internals.adoc[Internals] — pure engine, auth filter, JWKS cache, threading.
 * xref:tck.adoc[TCK] — execution, status *208 / 208*, exclusions.
-* xref:migration.adoc[Migration] — from SmallRye JWT, and from Cervantes {release-version}.
+* xref:migration.adoc[Migration] — from SmallRye JWT, and from Cervantes 0.3.0.
 
 Next: xref:getting-started.adoc[Getting started].

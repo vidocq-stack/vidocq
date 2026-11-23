@@ -103,7 +103,9 @@ It does not make arbitrary servlet attribute writes or bean methods thread-safe.
 Other requests may observe the published bean while its creator's body is still
 initializing it. A failed constructor publishes nothing and permits a later
 retry. A failed body leaves the published bean in its scope and is not retried
-automatically. `beanName` serialized-bean loading remains unsupported.
+automatically. `beanName` is supported: the generated page loads the class by name,
+or deserializes the `.ser` resource of that name when no such class exists
+(xref:internals.adoc#generated-code[what still reflects]).
 
 == Translation and encodings
 
@@ -125,7 +127,8 @@ deduplicated across the unit and conflicts carry source diagnostics. Generated
 order is declaration, DOCTYPE, then page body. Output actions emit no local content,
 even inside conditional bodies; tagdependent raw payloads remain opaque. Output
 identifiers are literals and never trigger DTD/resource lookup. Input DOCTYPE and
-external entities remain rejected. XML tag-file output is not yet implemented.
+external entities remain rejected. An XML tag file emits a UTF-8 XML declaration at
+each invocation when its `jsp:output` asks for one; its DOCTYPE output is not implemented.
 
 `pageEncoding` applies only to its source file and may occur once per file.
 Encoding aliases are compared using `Charset`; malformed or conflicting

@@ -465,7 +465,7 @@ reads it there. `all` requires the layer mode
 name cannot be derived stays in the parent layer with a warning by default, and fails the build when `all` was asked
 for, with a message that names the jar: add an `Automatic-Module-Name` to it, or use `vidocq.app.layer=classes`. See xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the settings of the application layer].
 
-[[app-layer-jdk-modules]]*JDK modules.*Only the boot layer can define a JDK module, so a JDK module that only an
+[[app-layer-jdk-modules]]*JDK modules.* Only the boot layer can define a JDK module, so a JDK module that only an
 application module requires, such as `java.sql` for Vaadin's `flow-data`, must be resolved there. `vidocq:run`,
 `vidocq:dev` and the `vidocq:package` launchers add these modules to `--add-modules`, read from the descriptors of
 the application path. A `java` command written by hand needs the same option; without it the runtime fails with
@@ -723,7 +723,7 @@ Minimal distroless image produced by `vidocq:docker`:
 
 [source,bash]
 ----
-./mvnw -ntp package -Dvidocq.docker.build=true
+./mvnw -ntp package vidocq:jlink vidocq:docker -Dvidocq.docker.build=true
 docker run --rm -p 8080:8080 \
     -e VIDOCQ_CONFIG_DIR=/etc/myapp \
     -v $(pwd)/conf:/etc/myapp:ro \
@@ -748,7 +748,7 @@ same option of `vidocq.jvmArgs`:
 | Binary | Where its JVM options go at start
 
 | `vidocq:package` distribution
-| The `JAVA_OPTS` variable, read by `bin/<app>.sh` and `bin/<app>.bat`.
+| The `JAVA_OPTS` variable, read by `bin/<app>.sh` and `bin/<app>.cmd`.
 
 | `vidocq:jlink` image
 | The `JDK_JAVA_OPTIONS` variable, read by the image's `java` launcher. `JAVA_OPTS` is not read.

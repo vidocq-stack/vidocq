@@ -43,7 +43,8 @@ handler/file scope is described in xref:modules/tag-handlers.adoc[the tag refere
 TLDs are read at build time. Classic and simple handler invocations use direct
 constructors/setters, with generated scriptless body fragments for SimpleTag.
 The independent precompiled-pages example includes a private application handler.
-Tag files under `WEB-INF/tags` remain planned.
+Tag files (`.tag`, `.tagx`) are compiled at build time too, within the limits the
+tag reference lists.
 
 == `jsp-config`
 
@@ -57,4 +58,4 @@ A page without a precompiled class can be translated on first request through `j
 
 == Out of scope
 
-JSTL (the Jakarta Standard Tag Library) is a separate specification and is not provided by Ibarra.
+JSTL (the Jakarta Standard Tag Library) is a separate specification and is not provided by Ibarra: xref:bodoni::index.adoc[Bodoni] implements it.

@@ -10,7 +10,7 @@
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
 | Java module | `io.vidocq.runtime.spi`
-| Source | `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`
+| Source | `vidocq-runtime/vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/` in the monorepo
 |===
 
 == Public surface
@@ -58,7 +58,7 @@ List indexed from the existing sources:
 | What a contributor reads — `verbosity()`, `launchMode()`, `hasBeanOfType(String)`, `lookup(Class)`, `routeUrls(String)`.
 
 | `report.StartupReportSection`
-| Where a contributor writes — `summary`, `row`, `list`, `secret`, `listener`, `route`, `anomaly`.
+| Where a contributor writes — `summary`, `row`, `list`, `secret`, `listener`, `route`, `link`, `anomaly`.
 
 | `report.Verbosity` / `report.LaunchMode`
 | The level of the report (`OFF`, `SUMMARY`, `DETAILED`) and the launch mode (`DEV`, `TEST`, `PROD`, with `label()` and `parse(String)`).
@@ -393,7 +393,7 @@ report.get().ifPresent(view -> render(view.sections(), view.anomalies()));
 | Every anomaly of the boot, the core's and the contributors', in the order they were logged, as `ReportAnomaly(code, message, hint, source)`. The detailed report recalls the first 50; this list has them all.
 
 | `sections()`
-| The sections in the order of the detailed report — the lines of its header (`launch`, `vidocq`, `phases`) as sections of their own, then the core's, then the contributors' — as `ReportSection(id, headline, summary, lines)`. A `ReportLine(key, values)` with a `null` key is a row of a table or a line of text. The anomalies are not a section here.
+| The sections in the order of the detailed report — the lines of its header (`launch`, `vidocq`, `phases`) as sections of their own, then the core's, then the contributors' — as `ReportSection(id, headline, summary, lines)`. A `ReportLine(key, values, href)` with a `null` key is a row of a table or a line of text. The anomalies are not a section here.
 
 | `detailedText()`
 | The whole report as the log prints it at `DETAILED`, whatever level this boot logged it at: the text a user copies into a bug report.
@@ -413,7 +413,7 @@ A startup report contributor that the dev console also shows live implements `De
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-devconsole-spi:{project-version}`
 | Java module | `io.vidocq.runtime.spi.devconsole`, one exported package of the same name, `requires transitive io.vidocq.runtime.spi`
-| Source | `vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devconsole/`
+| Source | `vidocq-runtime/vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devconsole/` in the monorepo
 |===
 
 The module name falls under the `io.vidocq.runtime.spi` prefix, which keeps a module in the boot layer across dev reloads: the console and every panel see the same `DevConsolePanel` type after any number of reloads.

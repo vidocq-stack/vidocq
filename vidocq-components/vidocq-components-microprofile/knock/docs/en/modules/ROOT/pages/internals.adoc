@@ -17,7 +17,7 @@ checks are ordinary CDI beans.
 | Generated | By, and when | Used at run time by | Without it
 
 | The `_VaubanComponents` and bean index of `knock-cdi-vauban` and `knock-jaxrs`
-| `vauban-processor`, at Knock's own build (<<_cdi_discovery>>)
+| `vauban-processor`, at Knock's own build (<<cdi-discovery>>)
 | Vauban (xref:vauban::internals.adoc#generated-code[Vauban])
 | Vauban's fallback.
 
@@ -80,8 +80,8 @@ sequenceDiagram
   Client->>REST: GET /health/live
   REST->>SVC: report(ProbeType.LIVENESS)
   SVC->>AGG: aggregate(registry, LIVENESS)
-  AGG->>REG: getChecks(LIVENESS)
-  REG-->>AGG: List<HealthCheck>
+  AGG->>REG: getNamedChecks(LIVENESS)
+  REG-->>AGG: Map<String, HealthCheck>
   Note right of AGG: each call() on a virtual thread
   AGG-->>SVC: HealthSnapshot
   SVC->>SER: serialize(snapshot)
@@ -90,10 +90,10 @@ sequenceDiagram
   REST-->>Client: 200/503 + JSON
 ....
 
-. `KnockAggregator.aggregate(HealthCheckRegistry, ProbeType)` pulls the checks for the requested probe via `HealthCheckRegistry.getChecks(ProbeType)`.
+. `KnockAggregator.aggregate(HealthCheckRegistry, ProbeType)` pulls the checks for the requested probe via `HealthCheckRegistry.getNamedChecks(ProbeType)`.
 . Each `HealthCheck.call()` runs on its own virtual thread; the responses are reduced to a `HealthSnapshot` (spec §3.2 rules).
+. After the run, `KnockAggregator` records each answer in the registry as a `CheckResult`, under the probe the check is registered for (a `/health` request records each check under its own probe), timestamped by an injectable `Clock`. Recording reuses the answer: no check is called twice. See xref:concepts.adoc#last-results[Last results].
 . `KnockJsonSerializer.serialize(HealthSnapshot)` renders the snapshot to a JSON `String` through Jakarta JSON-P; `httpStatus(HealthSnapshot)` maps UP/DOWN to 200/503.
-.After the run, `KnockAggregator` records each answer in the registry as a `CheckResult`, under the probe the check is registered for (a `/health` request records each check under its own probe), timestamped by an injectable `Clock`. Recording reuses the answer: no check is called twice. See xref:concepts.adoc#last-results[Last results].
 . `KnockHealthService.report(ProbeType)` wraps both in a `HealthReport(int httpStatus, String json)` record.
 
 == Core classes
@@ -137,7 +137,7 @@ sequenceDiagram
 * `HealthCheckRegistrar` — an `@ApplicationScoped` bean whose observer method `onApplicationStart(@Observes @Initialized(ApplicationScoped.class) Object)` registers each qualified `HealthCheck` into the registry by probe type, under the check's class name (spec §4.1). It injects `Instance<HealthCheck>` qualified with `@Liveness`, `@Readiness` and `@Startup`; a `HealthCheck` bean with none of those qualifiers is never selected and is silently ignored (spec §4.2).
 * `KnockCdiHealthCheckRegistry` — the `@ApplicationScoped` registry bean, injectable as `HealthCheckRegistry`, delegating to an instance obtained from `HealthCheckRegistries.newRegistry()`.
 
-There is no `BuildCompatibleExtension`: both beans are instantiated, field-injected and notified through the `_VaubanComponents` provider generated at compile time by the Vauban annotation processor and declared as `provides io.vidocq.vauban.api.VaubanComponentProvider` in `module-info.java` — no runtime classpath scanning, no `setAccessible(true)`, no `opens` to the container.
+There is no `BuildCompatibleExtension`: both beans are instantiated, injected and notified through the `_VaubanComponents` provider generated at compile time by the Vauban annotation processor and declared as `provides io.vidocq.vauban.api.VaubanComponentProvider` in `module-info.java` — no runtime classpath scanning, no `setAccessible(true)`, no `opens` to the container.
 
 == JAX-RS resource
 

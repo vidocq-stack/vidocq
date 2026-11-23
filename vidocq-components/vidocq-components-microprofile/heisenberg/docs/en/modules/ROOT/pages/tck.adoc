@@ -150,10 +150,10 @@ If a permanent exclusion had to be added, it would be listed in the TestNG suite
 
 == Quality contract
 
-Any structural change to `heisenberg-core` or `heisenberg-cdi-vauban` must preserve the 463/463 score before merge. A TCK regression is a CI blocker: the PR does not pass. This contract is explicitly listed in the repo `CLAUDE.md`.
+Any structural change to `heisenberg-core` or `heisenberg-cdi-vauban` must preserve the 463/463 score before merge. A pull request runs no TCK: the `TCK nightly` workflow of the monorepo runs the suite once a day, on demand on a branch, and for a release. This contract is explicitly listed in the repo `CLAUDE.md`.
 
 == Going further
 
 * xref:internals.adoc[Internals] — understand what the TCK validates (pipeline, engines, observability).
 * xref:reference.adoc[Reference] — annotations and keys covered by the tests.
-* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BUG.md[BUG.md] — tracked reproducible bugs.

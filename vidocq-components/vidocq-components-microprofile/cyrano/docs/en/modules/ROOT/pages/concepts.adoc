@@ -11,7 +11,7 @@ A **client interface** is a Java interface annotated with the same JAX-RS constr
 Three conditions are enough for an interface to become a Cyrano client:
 
 . The interface is annotated `@RegisterRestClient` (triggers the Vauban BCE).
-. The interface is reachable by Cyrano: either it is compiled with `cyrano-processor` (a strict Java module can then keep the client package fully encapsulated and only declare `provides ClientProxyFactory with ...`), or — for the runtime fallback — it is readable/exported to `io.vidocq.cyrano.core`.
+. The interface is reachable by Cyrano: either it is compiled with `cyrano-processor` (a strict Java module can then keep the client package fully encapsulated and only declare `provides ClientProxyFactory with ...`), or — for the runtime fallback — its package is opened to `io.vidocq.cyrano.core`.
 . At least one base URL is resolvable (`baseUri` attribute, `<configKey>/mp-rest/url` or `<fqn>/mp-rest/url` via MP Config).
 
 The proxy class is resolved by `ClientProxyRegistry` in three tiers: the APT-generated `<Interface>$$CyranoClient` (via `ServiceLoader` of `ClientProxyFactory`, then by naming convention), and only as a last resort a `Cyrano$<SimpleName>` class generated at runtime by the Class-File API and memoised by `CyranoProxyCache`.

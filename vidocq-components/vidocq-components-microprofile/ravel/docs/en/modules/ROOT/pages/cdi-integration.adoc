@@ -96,7 +96,7 @@ All types supported by xref:type-converters.adoc[type converters] can be injecte
 
 * Primitives: `int`, `long`, `boolean`, `float`, `double`, etc.
 * Boxes: `Integer`, `Long`, `Boolean`, `Float`, `Double`, etc.
-* Collections: `List<T>`, `Set<T>`, `Collection<T>`
+* Collections: `List<T>`, `Set<T>`
 * Temporal: `Duration`, `LocalDate`, `LocalDateTime`, `Instant`, etc.
 * Custom types with implicit or registered converters
 
@@ -184,7 +184,7 @@ Use `defaultValue` or `Optional<T>` to make injection optional. `Provider<T>`, `
 when the value is read.
 
 [#start-check]
-=== Where the check runs
+=== Where the check runs [.tag-new]#NEW#
 
 The Build Compatible Extension reads no configuration. It records, as plain text, what the start must check — for
 each required `@ConfigProperty`, the key, the name of the injected type, the `defaultValue` and the injection
@@ -375,7 +375,7 @@ Neither module is published. `ravel-cdi-vauban` ships no `beans.xml`, on purpose
 .Deploying on an application server
 ====
 * **Keep the server's own MicroProfile Config off** — `mpConfig` on Open Liberty. Ravel registers its `ConfigProviderResolver` through `META-INF/services`; with the server's implementation enabled, the two compete for `ConfigProvider` and for the `@ConfigProperty` injection points.
-* **Nothing to exclude** — the WAR carries `ravel-core`, `ravel-api` and the MicroProfile Config API (`ravel-mp-config-api`), and the Jakarta APIs are `provided`. `ravel-it-openliberty` builds its WAR with exactly these dependencies.
+* **Nothing to exclude** — the WAR carries `ravel-cdi-vauban` and what it brings, `ravel-core`, `ravel-api` and the MicroProfile Config API (`ravel-mp-config-api`), and the Jakarta APIs are `provided`. `ravel-it-openliberty` builds its WAR with exactly these dependencies.
 ====
 
 == Next

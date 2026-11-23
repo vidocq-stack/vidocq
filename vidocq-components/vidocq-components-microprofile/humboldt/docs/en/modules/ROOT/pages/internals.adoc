@@ -10,7 +10,7 @@ Humboldt runs on a simple principle: no runtime reflection on the hot path, no e
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. Humboldt has no generator of its own: its jars
 are built with Vauban's and Cassini's processors, and the rest is read once by reflection and cached
-(<<_build_time_wiring_and_one_deliberate_proxy_exception>>).
+(<<build-time-wiring-and-one-deliberate-proxy-exception>>).
 
 [cols="2,2,3,3"]
 |===
@@ -80,7 +80,7 @@ Each pillar is independent: one can enable `traces=otlp`, `metrics=none`, `logs=
 
 `BatchSpanProcessor` is the most delicate SDK component. Internal architecture:
 
-* **Bounded queue** (`ArrayBlockingQueue<SpanData>`). Default capacity: 2048. When the queue fills, spans are _dropped_ and a `System.Logger` WARNING is emitted.
+* **Bounded queue** (`LinkedBlockingQueue<SpanData>`). Default capacity: 2048. When the queue fills, spans are _dropped_ and a `System.Logger` WARNING is emitted.
 * **Dedicated worker** — a single virtual thread (`Thread.ofVirtual().name("humboldt-batch-span-processor")`) looping:
 +
 . `drainTo(batch, maxExportBatchSize)`

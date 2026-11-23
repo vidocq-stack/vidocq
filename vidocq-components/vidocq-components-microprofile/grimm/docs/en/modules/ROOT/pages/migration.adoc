@@ -12,7 +12,7 @@ On the application code side, migration is trivial: Grimm strictly consumes the 
 [#upgrading-from-0-3-0]
 == Upgrading from 0.3.0
 
-What an application built against Grimm {release-version} may need to change, or will see change, on this development line. The full list is in xref:whats-new.adoc[What's new].
+What an application built against Grimm 0.3.0 may need to change, or will see change, on this development line. The full list is in xref:whats-new.adoc[What's new].
 
 * **Module name.** Grimm's jars are named modules now (xref:reference.adoc#java-modules[Java modules]). A `module-info.java` that read Grimm by its automatic name changes `requires grimm.cdi.vauban;` to `requires io.vidocq.grimm.cdi.vauban;`. That module `requires transitive` the MicroProfile OpenAPI and JAX-RS APIs, so `jakarta.ws.rs-api` reaches your build at compile scope through it.
 * **MicroProfile OpenAPI API 4.2.** Grimm builds on `microprofile-openapi-api` `4.2-RC5` until the final reaches Maven Central; an application that declares the API itself moves to the same version (see xref:getting-started.adoc[Getting started]).
@@ -90,7 +90,7 @@ Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
 * **No `setAccessible(true)`** — if application code relied on non-public classes accessed by a permissive scanner, Grimm will not reach them. Open packages in the application's `module-info.java` or make the types `public`.
 * **Strict YAML** — the hand-written YAML serializer emits strict 1.2. Some lax YAML clients (legacy browsers) may want different indentation. When in doubt, prefer JSON.
 * **`mp.openapi.servers`** — the override _replaces_ the document's `servers` list entirely (spec behaviour). For a merge, go through an `OASFilter`.
-* **`summary` next to a `$ref` is dropped**— a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
+* **`summary` next to a `$ref` is dropped** — a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
 
 == Porting checklist
 

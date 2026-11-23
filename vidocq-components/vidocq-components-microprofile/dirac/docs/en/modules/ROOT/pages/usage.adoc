@@ -18,6 +18,7 @@ Monotonic counter, incremented on every invocation. Internal implementation: `Lo
 public class OrderService {
 
     @Counted(name = "orders_placed_total",
+             absolute = true,
              description = "Total number of orders placed",
              tags = "endpoint=orders")
     public void placeOrder(String id) {
@@ -38,6 +39,7 @@ Per-call duration measurement, aggregated in a `HistogramImpl`. Measured via `Sy
 public class CheckoutService {
 
     @Timed(name = "order_checkout",
+           absolute = true,
            description = "Duration of checkout flow",
            unit = MetricUnits.SECONDS)
     public Receipt checkout(Cart cart) {
@@ -46,7 +48,7 @@ public class CheckoutService {
 }
 ----
 
-`unit` is free (the formatter does no automatic conversion) — by convention, express durations as `MetricUnits.SECONDS` for Prometheus.
+`unit` is metadata only: whatever its value, the formatters expose a timer in seconds (`<name>_seconds`) — by convention, declare durations as `MetricUnits.SECONDS` for Prometheus.
 
 == Gauge — `@Gauge`
 
@@ -73,9 +75,9 @@ public class QueueService {
 The gauge method must return a numeric type (`int`, `long`, `double`, `Number`). An invalid signature fails the BCE at startup with an explicit message — no silent surprise at the first `/metrics` call.
 ====
 
-A gauge is read on the bean of its class, whatever its qualifiers. The bean of a normal scope (`@ApplicationScoped`, say) is read through its client proxy. A `@Dependent` bean is created once, at the first read of one of its gauges, and destroyed when the container stops: every read of its gauges reads that one instance.
+[[gauge-bean]]**The bean a gauge is read on** [.tag-new]#NEW# — a gauge is read on the bean of its class, whatever its qualifiers. The bean of a normal scope (`@ApplicationScoped`, say) is read through its client proxy. A `@Dependent` bean is created once, at the first read of one of its gauges, and destroyed when the container stops: every read of its gauges reads that one instance.
 
-A bean inherits the gauges of its superclasses, from a dependency jar too, and each one keeps the name the class that declares the method gives it. A gauge id has one value: when two beans inherit one gauge from the same base, it is read on one of them only, and the start logs a warning. Give the gauge an absolute name per bean, in each bean, to expose both.
+[[inherited-gauges]]**Inherited gauges** [.tag-new]#NEW# — a bean inherits the gauges of its superclasses, from a dependency jar too, and each one keeps the name the class that declares the method gives it. A gauge id has one value: when two beans inherit one gauge from the same base, it is read on one of them only, and the start logs a warning. Give the gauge an absolute name per bean, in each bean, to expose both.
 
 == Programmatic metrics
 
@@ -134,17 +136,16 @@ registry.counter("http_requests_total",
 
 == Percentiles and buckets — distribution
 
-Spec §4 exposes three `mp.metrics.distribution.*` keys read by `DistributionConfig`. They apply globally or per named metric.
+Spec §4 exposes three `mp.metrics.distribution.*` keys read by `DistributionConfig`. Each value is a list of `<name pattern>=<values>` entries separated by `;`: the pattern is a metric name, where `+*+` stands for any run of characters (`+*+` alone for every metric), and the most specific entry wins.
 
 [source,properties]
 ----
 # microprofile-config.properties
-mp.metrics.distribution.percentiles=0.5,0.75,0.95,0.99
-mp.metrics.distribution.percentiles=order_checkout=0.5,0.95,0.99
+mp.metrics.distribution.percentiles=order_checkout=0.5,0.95,0.99;*=0.5,0.75,0.95,0.99
 mp.metrics.distribution.timer.buckets=order_checkout=10ms,50ms,250ms,1s,5s
 ----
 
-An empty value (`mp.metrics.distribution.percentiles=`) disables percentiles globally and only emits `_count` and `_sum`.
+An entry without values (`+mp.metrics.distribution.percentiles=*=+`) disables percentiles for the metrics it matches, which then only emit `_count` and `_sum`.
 
 == Global application tags — not implemented
 

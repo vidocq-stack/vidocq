@@ -10,8 +10,8 @@ stores two books and queries them back. Every file below is complete; together t
 
 * **Java 25** — Temurin recommended.
 * **Maven 3.9** or later — the monorepo that builds Noether pins 3.10.0.
-* Noether has no release yet. Version `{project-version}` comes from the Vidocq snapshot repository,
-  `https://maven.vidocq.dev/snapshots/`, which the POM below declares.
+* Noether is a preview component, first released with 0.4.0: usable, not certified. The POM below takes
+  version `{project-version}` from Maven Central.
 
 The project has five files:
 
@@ -71,19 +71,6 @@ library/
             <scope>runtime</scope>
         </dependency>
     </dependencies>
-
-    <repositories>
-        <repository>
-            <id>vidocq-snapshots</id>
-            <url>https://maven.vidocq.dev/snapshots/</url>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <build>
         <plugins>
@@ -404,7 +391,7 @@ scanned. It is not in `persistence.xml`, so `noether-jpa-cdi` does not see it an
 * *Inject the entity manager.* With a CDI container, add `noether-jpa-cdi`: `@PersistenceContext`,
   `@PersistenceUnit` and `@Inject` reach the units of `persistence.xml`. See xref:usage.adoc#cdi[Usage].
 * *Run on Vidocq.* The Vidocq runtime assembles Noether, the connection pool and the transactions for you. See
-  xref:dev@vidocq::modules/vidocq-runtime-extensions.adoc#noether-persistence[the `noether-persistence` extension].
+  xref:{page-component-version}@vidocq::modules/vidocq-runtime-extensions.adoc#noether-persistence[the `noether-persistence` extension].
 * *Deploy on an application server or on Quarkus.* Noether runs unchanged in a WAR on Open Liberty and in a Quarkus
   application. See xref:usage.adoc#servers[Application servers].
 * *Understand the design.* xref:concepts.adoc[Concepts] explains the entity access, the persistence context and

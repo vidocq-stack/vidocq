@@ -37,7 +37,7 @@ Foy is at **{project-version}** and the official TCK passes **99.6 %** over the 
 
 | `Realm` / `AuthMethod`
 | `IdentityStore` (`foy-api`)
-| Declare users with `FoyChappeBoot.builder().user(...)`, or implement `io.vidocq.foy.spi.security.IdentityStore`. `login-config` BASIC and FORM; see xref:usage.adoc#application-security[Application security].
+| Declare users with `FoyChappeBoot.builder().user(...)`, or implement `io.vidocq.foy.spi.security.IdentityStore`. `login-config` BASIC, FORM and CLIENT-CERT; see xref:usage.adoc#application-security[Application security].
 
 | JNDI lookups (`@Resource`)
 | `@Inject` via `foy-cdi-vauban`
@@ -67,7 +67,7 @@ Foy is at **{project-version}** and the official TCK passes **99.6 %** over the 
 | Likewise.
 
 | `JettyWebSocketServletContainerInitializer`
-| ❌ Not implemented
+| ⚠️ Partial
 | Lot 1 of Jakarta WebSocket (programmatic `ServerContainer`, no annotated endpoints yet) in `foy-websocket`; see xref:usage.adoc#websocket[WebSocket].
 
 | Custom Jetty `Handler`

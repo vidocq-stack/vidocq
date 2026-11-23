@@ -64,8 +64,8 @@ the module that takes them; this is that page.
 The adapter's own tests also use `arquillian-container-impl-base` 1.8.0.Final, at `test`
 scope only. The Arquillian and ShrinkWrap versions are managed by the Ibarra parent
 POM (`arquillian.version`, `shrinkwrap.version`), and so are the Foy, Peano and Chappe
-versions (`foy.version`, `peano.version`, `chappe.version`), which a cross-repository
-pull request can override.
+versions (`foy.version`, `peano.version`, `chappe.version`), which are the project
+version in the monorepo.
 
 == Configuration
 

@@ -39,7 +39,7 @@ public class UserResource {
 
 The object a locator returns is a sub-resource, whatever its class carries (Jakarta REST §3.4.1, §3.7.2): its routes start where the locator's path ends, and a `@Path` on its class is ignored, so a root resource class can also serve as a sub-resource. Its class `@Produces` and `@Consumes` apply to its methods that declare none (§3.5). A locator that returns `Object` is resolved on the class of what it returns at run time, and reads that class the same way as a locator that declares it. An `OPTIONS` request to a sub-resource with no `@OPTIONS` method gets the xref:#automatic-options[automatic answer] (§3.3.5), whichever kind of locator leads to it.
 
-Behaviour change:: Up to {release-version}, a locator returning `Object` routed an object whose class carries `@Path` under that path too (`/users/7/admin` for a class `@Path("admin")`, instead of `/users/7`), and ignored the class `@Produces` and `@Consumes` of what it returned (CASSINI-055). An `OPTIONS` request to the class it returned answered `405`, not the automatic `200` with its `Allow` header (CASSINI-060).
+Behaviour change:: Up to 0.4.0-RC2, a locator returning `Object` routed an object whose class carries `@Path` under that path too (`/users/7/admin` for a class `@Path("admin")`, instead of `/users/7`), and ignored the class `@Produces` and `@Consumes` of what it returned (CASSINI-055). An `OPTIONS` request to the class it returned answered `405`, not the automatic `200` with its `Allow` header (CASSINI-060).
 
 == Providers — `MessageBodyReader` / `MessageBodyWriter`
 
@@ -73,6 +73,9 @@ public class JsonbContextResolver implements ContextResolver<Jsonb> {
 
 Inject `@Context Providers providers` into a resource to fetch an arbitrary `MessageBodyWriter` or `ContextResolver`.
 
+[[context-resolver-parameter]]
+*A `ContextResolver` is not a `@Context` type* [.tag-new]#NEW# — it is not among the types of §9.2: a resource method parameter `@Context ContextResolver<?> cr` fails with a `WebApplicationException`, `Unsupported @Context type: jakarta.ws.rs.ext.ContextResolver`, answered `500`, as any other type outside the list. Before 0.4.0 it received the request's `Providers`, and the call failed with a `ClassCastException` (CASSINI-008). Ask `Providers.getContextResolver` instead.
+
 == `ExceptionMapper`
 
 [source,java]
@@ -94,7 +97,7 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
 
 An exception that a sub-resource locator throws goes through the `ExceptionMapper`s as one that a resource method throws (Jakarta REST §3.3.4), whether the locator returns a typed sub-resource or `Object`. A `WebApplicationException` is answered with its own response, as from a resource method.
 
-Behaviour change:: Up to {release-version}, only a `WebApplicationException` thrown by a locator reached the mappers: any other exception skipped them and answered `500` (CASSINI-047).
+Behaviour change:: Up to 0.4.0-RC2, only a `WebApplicationException` thrown by a locator reached the mappers: any other exception skipped them and answered `500` (CASSINI-047).
 
 [#unmapped-exceptions]
 === Exceptions no mapper handles [.tag-new]#NEW#
@@ -103,7 +106,7 @@ An exception, or an error, that a resource method, a filter, a writer or an asyn
 
 A `WebApplicationException` is answered with its own response, and a mapper's response is sent as the mapper built it: to give the client a body, map the exception, or a superclass of it.
 
-Behaviour change:: Up to {release-version}, this `500` was `text/plain` and carried the exception's message (for an `Error`, its class and message): a duplicate insert sent the database's `duplicate key value violates unique constraint` text and the duplicated key to the client (CASSINI-046).
+Behaviour change:: Up to 0.4.0-RC2, this `500` was `text/plain` and carried the exception's message (for an `Error`, its class and message): a duplicate insert sent the database's `duplicate key value violates unique constraint` text and the duplicated key to the client (CASSINI-046).
 
 [#unreadable-entities]
 == Unreadable request entities
@@ -147,12 +150,12 @@ A mapper for the exception the reader threw — `ExceptionMapper<JsonbException>
 
 Logging:: No `400` in this table is logged above `DEBUG`. A malformed or mistyped entity that none of your mappers handles writes one line at `DEBUG` on the logger `io.vidocq.cassini.entity` — method, path, exception class and message — and its stack trace at `TRACE`. An empty entity (`NoContentException`) and an entity your own mapper handles write nothing. With `java.util.logging`, these are the levels `FINE` and `FINER`. Set `io.vidocq.cassini.entity.level = FINE` to enable the lines, and let the handler that prints them pass `FINE` too: the JDK's default `ConsoleHandler` stops at `INFO` (`java.util.logging.ConsoleHandler.level = FINE`).
 
-Behaviour change:: Up to {release-version}, these requests answered `500` with the parser's message as the body, and logged a full stack trace at `ERROR` each. To keep a `500` for a given exception, map that exception: your mapper runs before the `400`. An application that shaped empty-body errors by mapping the parser's exception now receives a `NoContentException` inside a `BadRequestException` instead, and should map `BadRequestException`.
+Behaviour change:: Up to 0.3.0, these requests answered `500` with the parser's message as the body, and logged a full stack trace at `ERROR` each. To keep a `500` for a given exception, map that exception: your mapper runs before the `400`. An application that shaped empty-body errors by mapping the parser's exception now receives a `NoContentException` inside a `BadRequestException` instead, and should map `BadRequestException`.
 
 [#non-latin1-headers]
 == Response headers with non-Latin-1 text
 
-An HTTP header value is ISO-8859-1 text: no CR, LF, NUL or other control character, and no character above `U+00FF`. A header name is an RFC 9110 token. Chappe refuses a response header that breaks these rules, or that has a `null` value, rather than send it mangled. On the Chappe transport, Cassini then answers `500` with an empty body and logs one line at `ERROR` on the logger `io.vidocq.cassini.chappe.ChappeHttpAdapter`. The line names the header and never contains its value.`cassini-jdk-http` applies the same rule before sending anything, although the JDK `HttpServer` itself only refuses CR and LF: it answers `500` with an empty body and logs the line on `io.vidocq.cassini.jdkhttp.JdkHttpAdapter`, or on `io.vidocq.cassini.jdkhttp.JdkHttpExchange` for a streamed response, which then falls back to a buffered one (cassini#58).
+An HTTP header value is ISO-8859-1 text: no CR, LF, NUL or other control character, and no character above `U+00FF`. A header name is an RFC 9110 token. Chappe refuses a response header that breaks these rules, or that has a `null` value, rather than send it mangled. On the Chappe transport, Cassini then answers `500` with an empty body and logs one line at `ERROR` on the logger `io.vidocq.cassini.chappe.ChappeHttpAdapter`. The line names the header and never contains its value. `cassini-jdk-http` applies the same rule before sending anything, although the JDK `HttpServer` itself only refuses CR and LF: it answers `500` with an empty body and logs the line on `io.vidocq.cassini.jdkhttp.JdkHttpAdapter`, or on `io.vidocq.cassini.jdkhttp.JdkHttpExchange` for a streamed response, which then falls back to a buffered one (cassini#58).
 
 The usual cause is a file name with accented, Cyrillic or CJK characters, or a `€` sign, written as raw text in `Content-Disposition`. Encode such text as RFC 8187 says, in the `filename*` parameter, and keep a plain ASCII `filename` as a fallback for old clients:
 
@@ -195,6 +198,12 @@ public class LoggingFilter implements ContainerRequestFilter, ContainerResponseF
 
 Ordering is resolved via `@Priority` at stack startup (not per request).
 
+[[header-names]]
+*Header names are case-insensitive* [.tag-new]#NEW# — `ContainerRequestContext.getHeaderString` and `getHeaders`, `HttpHeaders.getRequestHeaders` and the headers a `MessageBodyReader` gets find a request header whatever the case of its name (RFC 9110 §5.1), and so do `ContainerResponseContext.getHeaderString` and `getStringHeaders` for a response header. HTTP/2 sends every name in lower case. Before 0.4.0 these maps kept the spelling the client sent: a filter that read `Authorization` missed an `authorization` header, and a token sent that way got a `401` (CASSINI-045).
+
+[[response-filter-context]]
+*A response filter gets its `@Context` fields* [.tag-new]#NEW# — Cassini injects the `@Context` fields of a `ContainerResponseFilter` before it runs, as it does for the request filters and the message body providers (§9.2). Before 0.4.0 a response filter's `@Context UriInfo` was `null` in `filter(request, response)` (CASSINI-037).
+
 [#filter-changes]
 === What a request filter changes [.tag-new]#NEW#
 
@@ -202,7 +211,7 @@ A request filter may change the request before the resource method gets it (Jaka
 
 With `setRequestUri(URI)`, the base URI of the application stays the one of the request the client sent. With `setRequestUri(URI, URI)`, the application moves under the base URI the filter sets, as a filter behind a reverse proxy expects: the request is matched on the path of its new URI relative to that base, and `UriInfo` (`getBaseUri`, `getPath`, `resolve`) and the `Location` of `Response.created` with a relative URI resolve against it, in the resource method and in the filters that come after. A base without a trailing `/` gets one.
 
-Behaviour change:: Up to {release-version}, the resource method got the headers and the entity the client sent, whatever a filter changed; after a pre-matching filter's `setRequestUri` or `setMethod`, the request was routed with the new values, but `@QueryParam`, `UriInfo` and `Request` gave the old ones, and the resources that a locator returns as `Object` were routed on the old method. A post-matching filter that called `setEntityStream` or `setSecurityContext` failed the request with an `IllegalStateException` (`500`); both now throw only in a response filter (CASSINI-056). After a pre-matching filter's `setRequestUri(URI, URI)`, the request was matched relative to the context path of the transport, not to the new base, and `UriInfo.getBaseUri()` and a relative `Location` kept the base URI of the request the client sent (CASSINI-059).
+Behaviour change:: Up to 0.4.0-RC2, the resource method got the headers and the entity the client sent, whatever a filter changed; after a pre-matching filter's `setRequestUri` or `setMethod`, the request was routed with the new values, but `@QueryParam`, `UriInfo` and `Request` gave the old ones, and the resources that a locator returns as `Object` were routed on the old method. A post-matching filter that called `setEntityStream` or `setSecurityContext` failed the request with an `IllegalStateException` (`500`); both now throw only in a response filter (CASSINI-056). After a pre-matching filter's `setRequestUri(URI, URI)`, the request was matched relative to the context path of the transport, not to the new base, and `UriInfo.getBaseUri()` and a relative `Location` kept the base URI of the request the client sent (CASSINI-059).
 
 [#locator-filters]
 === Filters on sub-resources [.tag-new]#NEW#
@@ -211,7 +220,7 @@ A resource method that a sub-resource locator leads to is filtered as any resour
 
 A `DynamicFeature` (§6.5.3) runs once for each resource method: at startup for the methods the scan finds, and at the first request that reaches a method of a class a locator returns as `Object`, which no scan can know. A method that several locators lead to is configured once, so the filters a feature binds to it run once. A locator is not a resource method: no feature runs for it.
 
-Behaviour change:: Up to {release-version}, a resource method reached through a locator that returns `Object` ran neither the request filters nor the response filters, global or bound (CASSINI-050). With a locator that returns a typed sub-resource, the post-matching request filters ran before the locators, and the response to a locator's failure went through the filters bound to the method the locator would have led to (CASSINI-051). A `DynamicFeature` never ran for a class a locator returns as `Object`, ran once per locator for a method several typed locators lead to, binding its filters as many times, and ran for each locator that returns `Object`, with `Object` as the resource class (CASSINI-052).
+Behaviour change:: Up to 0.4.0-RC2, a resource method reached through a locator that returns `Object` ran neither the request filters nor the response filters, global or bound (CASSINI-050). With a locator that returns a typed sub-resource, the post-matching request filters ran before the locators, and the response to a locator's failure went through the filters bound to the method the locator would have led to (CASSINI-051). A `DynamicFeature` never ran for a class a locator returns as `Object`, ran once per locator for a method several typed locators lead to, binding its filters as many times, and ran for each locator that returns `Object`, with `Object` as the resource class (CASSINI-052).
 
 [#unmatched-filters]
 === Response filters on a rejected request [.tag-new]#NEW#
@@ -226,7 +235,7 @@ The `@Context` fields of a response filter describe the request it filters, whet
 [#argument-failures]
 A request whose resource method is matched but whose arguments fail, a parameter that does not convert (`404` for a query, path or matrix parameter, `400` for a header or a cookie, §3.2) or an entity that does not read (`400`), is answered after the matching: the global response filters and those bound to the method both process the answer (§6.7.1).
 
-Behaviour change:: Up to {release-version}, no response filter ran on a `404`, `405`, `415` or `406` of the matching, global ones included, even when an `ExceptionMapper` mapped it (CASSINI-053). A response filter that ran on a response with no matched resource method, after a pre-matching abort or a locator's failure, kept the `@Context` fields of the last matched request it had filtered: its headers, its URI and its resource method (CASSINI-054). No response filter ran on the answer to a parameter that did not convert, nor on the answer to an entity that did not read unless the application had a pre-matching filter (CASSINI-057). No response filter ran on the automatic answer to an `OPTIONS` request (CASSINI-058).
+Behaviour change:: Up to 0.4.0-RC2, no response filter ran on a `404`, `405`, `415` or `406` of the matching, global ones included, even when an `ExceptionMapper` mapped it (CASSINI-053). A response filter that ran on a response with no matched resource method, after a pre-matching abort or a locator's failure, kept the `@Context` fields of the last matched request it had filtered: its headers, its URI and its resource method (CASSINI-054). No response filter ran on the answer to a parameter that did not convert, nor on the answer to an entity that did not read unless the application had a pre-matching filter (CASSINI-057). No response filter ran on the automatic answer to an `OPTIONS` request (CASSINI-058).
 
 == Content negotiation
 
@@ -245,6 +254,9 @@ public Response negotiate(@Context Request request) {
 }
 ----
 
+[[if-match-strong]]
+*`If-Match` compares entity tags strongly* [.tag-new]#NEW# — `Request.evaluatePreconditions(EntityTag)` applies the strong comparison of RFC 9110 §13.1.1 to `If-Match`: a weak tag, on either side, never matches, and the method returns a `412` builder. `If-None-Match` keeps the weak comparison (§13.1.2). Before 0.4.0 `If-Match: W/"a"` met the precondition against the tag `"a"` or `W/"a"`, so a conditional update guarded by a weak tag went through (CASSINI-017).
+
 == Async — `@Suspended AsyncResponse`
 
 [source,java]
@@ -262,7 +274,7 @@ public void longRunning(@Suspended AsyncResponse async) {
 }
 ----
 
-Async execution leverages virtual threads (Java 25). The `CassiniAsyncContext` (public SPI in `cassini-api`, package `io.vidocq.cassini.spi.http`) drives `CompletionStage` propagation down to the transport. Real-time SSE chunked streaming shipped with milestone M2i; M2h (true non-blocking `CompletionStage` propagation) was dropped as a non-goal — blocking on a virtual thread already yields the carrier (see `ASYNC.md`). See xref:tck.adoc[TCK status].
+Async execution leverages virtual threads (Java 25). The virtual thread of the request waits for the `AsyncResponse` to be resumed, or for the `CompletionStage` a resource method returns; the `CassiniAsyncContext` contract (public SPI in `cassini-api`, package `io.vidocq.cassini.spi.http`) is not used by any transport. Real-time SSE chunked streaming shipped with milestone M2i; M2h (true non-blocking `CompletionStage` propagation) was dropped as a non-goal — blocking on a virtual thread already yields the carrier (see `ASYNC.md`). See xref:tck.adoc[TCK status].
 
 == Server-Sent Events
 
@@ -305,6 +317,21 @@ Response r = client.target(base).path("/orders")
     .get();
 ----
 
+[[client-rx-tls]]
+*Reactive invocations and TLS settings* [.tag-new]#NEW# — `Invocation.Builder.rx()` returns a `CompletionStageRxInvoker`, and `rx(Class)` returns it for `CompletionStageRxInvoker` or asks a registered `RxInvokerProvider` for another type (`IllegalStateException` when none is registered); both threw `UnsupportedOperationException`. The executor given to `ClientBuilder.executorService` runs the async and reactive invocations (virtual threads by default); the `HttpClient` runs on an internal virtual-thread executor, so a small pool cannot block a send. `ClientBuilder.keyStore` and `trustStore` build the SSL context (the last of `sslContext` and the stores wins), and a `hostnameVerifier` replaces the JDK's host name check: it is called right after the handshake, before any application byte, so a verifier that rejects lets no request through. The three were ignored, or stored and never applied (CASSINI-024).
+
+[[client-conformance]]
+*The client follows the Client API contracts* [.tag-new]#NEW# (CASSINI-024):
+
+* `WebTarget.register` and `property` change the target and the requests built from it, not the `Client`; `ClientBuilder.build()` and `withConfig` copy the configuration.
+* A registered `Feature` is configured when it is registered, and `Configuration.isEnabled` reports it; it was never configured.
+* After `Client.close()`, its targets, request builders, invocations and async invokers throw `IllegalStateException`; they kept sending.
+* `register(component, priority)` binds the contracts a class inherits from a superclass or a super-interface; such a provider got no contract.
+* In a `ClientRequestFilter`, the header names are case-insensitive, `getDate`, `getLanguage` and `getCookies` read their headers, and `getEntityStream` and `setEntityStream` give the stream the entity is written through, so a filter can wrap it; the two threw `UnsupportedOperationException`.
+* The client `Response` and `ClientResponseContext` derive `getCookies` (`Set-Cookie`), `getDate`, `getLastModified`, `getEntityTag`, `getAllowedMethods` and the link methods (`getLinks`, `hasLink`, `getLink`, `getLinkBuilder`) from the headers; they returned nothing.
+* Several cookies go in one `Cookie` header joined with `; ` (RFC 6265 §5.4), not `, `.
+* An `InputStream`, `Reader`, `File` or `StreamingOutput` entity is sent as its content whatever the media type, an `InputStream` or a `File` streamed (Jakarta REST §4.2.4). An `InputStream` was sent through its `toString()`, a `Reader` or a `StreamingOutput` as `{}`, and a `File` with a JSON media type failed with a `StackOverflowError`.
+
 == CDI / Vauban integration
 
 With `cassini-cdi-vauban` on the classpath (or `cassini-cdi` under another CDI container, see xref:reference.adoc#other-containers[Other CDI containers]), `VaubanBeanProvider.getResourceClasses()` walks the `BeanManager` and exposes all `@Path` / `@Provider` classes to the stack. No manual list of singletons is required.
@@ -314,7 +341,7 @@ With `cassini-cdi-vauban` on the classpath (or `cassini-cdi` under another CDI c
 // From cassini-examples-vauban (Main.java):
 var container = VaubanContainer.builder()
         .scanClasspath()                 // reads META-INF/vauban-beans.list
-        .build();                        // (generated by vauban-maven-plugin)
+        .build();                        // (generated by vauban-processor)
 
 var server = Server.builder()            // Chappe
         .host("0.0.0.0").port(8080)
@@ -388,7 +415,8 @@ A request is timed from the moment the transport hands it to Cassini to the mome
 
 Reading them takes no lock, does no I/O and creates no resource or provider instance, so they can be polled from any thread. Updating them allocates nothing and costs about 25 ns per request, the price of two clock reads, measured in `BENCH.md`. They are therefore on by default; `CassiniStack.builder().statistics(false)` builds a stack without them, whose `statistics()` is empty.
 
-== Running as a Servlet
+[#running-as-a-servlet]
+== Running as a Servlet [.tag-new]#NEW#
 
 `cassini-servlet` runs a Jakarta REST application as a Servlet of a Servlet container, as Jakarta REST 4.0 section 2 describes: the container's context path, filters, security constraints and authentication mechanism apply to the resources like to any servlet, and `SecurityContext` answers with the caller the container authenticated.
 

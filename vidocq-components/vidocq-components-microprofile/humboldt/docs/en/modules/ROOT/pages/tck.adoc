@@ -2,7 +2,7 @@
 :description: MicroProfile Telemetry 2.2 TCK status, in-reactor runner behind the tck profile, commands, Arquillian / ShrinkWrap constraints.
 
 [.lead]
-Humboldt implements **MicroProfile Telemetry 2.2** and passes the official TCK **2.2-RC3** (byte-identical to the 2.2 final under ballot) — **85/85 PASS** on 2026-10-04 across the three suites (tracing + metrics + logs), with W3C TraceContext + Baggage propagation and `OTEL_*` configuration. The `humboldt-tck` runner is part of the reactor but **gated behind the `tck` Maven profile** (TCK harmonisation — same pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot): a plain `mvn install` neither downloads nor runs anything TCK-related.
+Humboldt implements **MicroProfile Telemetry 2.2** and passes the official TCK **2.2-RC3** (byte-identical to the 2.2 final under ballot) — **85/85 PASS** on 2026-10-29 across the three suites (tracing + metrics + logs), with W3C TraceContext + Baggage propagation and `OTEL_*` configuration. The `humboldt-tck` runner is part of the reactor but **gated behind the `tck` Maven profile** (TCK harmonisation — same pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot): a plain `mvn install` neither downloads nor runs anything TCK-related.
 
 == Target
 
@@ -17,7 +17,7 @@ The three 2.2-RC3 artifacts are resolved from Maven Central; no manual install i
 == TCK stack
 
 * **TestNG + Arquillian + ShrinkWrap** (not JUnit).
-* Humboldt Arquillian adapter: `HumboldtDeployableContainer` (deploys through Vauban + Chappe + Cassini), `HumboldtCdiEnricher` (CDI bean injection into `@Test`), runtime hook `withExtraSpanExporter` to plug the TCK's `InMemorySpanExporter`.
+* Humboldt Arquillian adapter: `HumboldtDeployableContainer` (deploys through Vauban + Chappe + Cassini), `HumboldtCdiEnricher` (CDI bean injection into `@Test`), runtime hook `HumboldtAutoConfigure.configure(env, extraSpanExporters)` to plug the TCK's `InMemorySpanExporter`.
 * The TCK imports its own copy of `io.opentelemetry:opentelemetry-sdk` for its internal fixtures — that is OK on the profile-gated runner; it does not pollute the production classpath.
 
 [#current-status]
@@ -29,7 +29,7 @@ The three 2.2-RC3 artifacts are resolved from Maven Central; no manual install i
 Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
 ----
 
-On 2026-10-04 the TCK 2.2-RC3 ran 85/85 (`./run-official-tck-telemetry-2.2.sh all`, Temurin 25, Maven 3.9.16), including `code.function.name` on `@WithSpan` spans and `@WithSpan(inheritContext = false)`. History with the 2.1 TCK: first 85/85 on 2026-05-24, re-verified on 2026-06-01 and 2026-06-24 (`run-official-tck-telemetry-2.1.sh`, since renamed). Every run is archived with its raw counters in `tck-runs/`; consolidated status lives in https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/humboldt/TCK.md[TCK.md].
+On 2026-10-04 the TCK 2.2-RC3 ran 85/85 (`./run-official-tck-telemetry-2.2.sh all`, Temurin 25, Maven 3.9.16), including `code.function.name` on `@WithSpan` spans and `@WithSpan(inheritContext = false)`; it ran 85/85 again on 2026-10-29, on OpenTelemetry 1.67.0. History with the 2.1 TCK: first 85/85 on 2026-05-24, re-verified on 2026-06-01 and 2026-06-24 (`run-official-tck-telemetry-2.1.sh`, since renamed). Every run is archived with its raw counters in `tck-runs/`; consolidated status lives in https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/humboldt/TCK.md[TCK.md].
 
 The road to green (M7b Arquillian adapter, M7c failure clusters — `@ArquillianResource URL` wiring, ShrinkWrap deployments, required CDI beans, commons-io conflicts) is preserved in the dated reports under `tck-runs/` for archaeology.
 
@@ -53,7 +53,7 @@ cd vidocq-components/vidocq-components-microprofile/humboldt
 
 The script:
 
-. Uses the Maven wrapper `mvnw` (Maven 3.9.16) when present, otherwise falls back to system `mvn`.
+. Uses the Maven wrapper `mvnw` (Maven 3.10.0) when present, otherwise falls back to system `mvn`.
 . Passes `maven.test.skip=true` (instead of `-DskipTests`) — required since M7c.12 because `humboldt-rest` test-compile fails (`microprofile.rest.client.api` outside the module path under strict Java Modules).
 . `humboldt-rest` tests remain manually runnable through `mvn test -pl humboldt-rest`.
 

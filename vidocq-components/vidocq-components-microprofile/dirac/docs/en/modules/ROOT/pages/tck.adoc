@@ -93,7 +93,7 @@ Arquillian configuration in `dirac-tck/src/test/resources/arquillian.xml`. Curre
 
 == jlink smoke (M9)
 
-The jlink smoke validates that the whole Dirac stack can be assembled into a Java native image without an automatic module lacking a canonical name. The blocker is lifted by `dirac-mp-metrics-api`, which repackages the MP Metrics spec with an explicit `module-info.class` (`module microprofile.metrics.api { exports ...; }`).
+The jlink smoke validates that the whole Dirac stack can be assembled into a `jlink` runtime image without an automatic module lacking a canonical name. The blocker is lifted by `dirac-mp-metrics-api`, which repackages the MP Metrics spec with an explicit `module-info.class` (`module microprofile.metrics.api { exports ...; }`).
 
 [source,bash]
 ----
@@ -106,7 +106,7 @@ Details in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-component
 
 == Quality contract
 
-Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` must preserve the 127/127 TCK score before merge. A TCK regression is a CI-level blocker: the PR does not pass. Any excluded test (if any) must be justified in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/TCK.md[TCK.md].
+Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` must preserve the 127/127 TCK score before merge. A pull request runs no TCK: the `TCK nightly` workflow of the monorepo runs the suite once a day, on demand on a branch, and for a release. Any excluded test (if any) must be justified in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/TCK.md[TCK.md].
 
 == Further reading
 

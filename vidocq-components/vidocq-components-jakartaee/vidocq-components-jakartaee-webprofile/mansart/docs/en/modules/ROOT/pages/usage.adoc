@@ -209,11 +209,11 @@ And inject the raw datasource anywhere with the generated `@Named` holder:
 DataSource auditDataSource;
 ----
 
-Named datasources need the `vidocq-runtime-mansart-pool-datasources-codegen` jar on the compiler's `annotationProcessorPaths` (it generates the `@Named` holder beans). The end-to-end walkthrough — including this wiring — is the xref:tutorials::rest-and-database.adoc[REST + database tutorial]; the runnable reference is `vidocq-runtime-examples/vidocq-runtime-mansart-h2-example` in the runtime repo.
+Named datasources need the `vidocq-runtime-mansart-pool-datasources-codegen` jar on the compiler's `annotationProcessorPaths` (it generates the `@Named` holder beans). The end-to-end walkthrough — including this wiring — is the xref:tutorials::rest-and-database.adoc[REST + database tutorial]; the runnable reference is `vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-mansart-h2-example` in the monorepo.
 
 NOTE: Repositories routed via `dataStore` are built by the repository factory without interceptor enhancement; transactional semantics are handled, but custom CDI interceptors on such repositories are not applied today (tracked in the repo's `BUG.md`).
 
-In dev mode, the runtime's PostgreSQL Dev Service can provision one disposable container per declared datasource name — nothing to install or configure. See `DEV_SERVICES.md` in the {repo-vidocq}[Vidocq runtime repo].
+In dev mode, the runtime's PostgreSQL Dev Service can provision one disposable container per declared datasource name — nothing to install or configure. See link:{repo-vidocq}/src/branch/main/vidocq-runtime/DEV_SERVICES.md[`DEV_SERVICES.md`] in the runtime's folder.
 
 [#dependency-repositories]
 == Repositories shipped in a library

@@ -143,7 +143,7 @@ the persistence context before it resolves relationships, so a row never overwri
 Every artifact is a named module. `io.vidocq.noether.jpa.core` exports one package to everyone,
 `io.vidocq.noether.jpa.core.spi`, the contract the generated accesses implement; its model packages are exported
 to `io.vidocq.noether.jpa.processor` only. It provides `jakarta.persistence.spi.PersistenceProvider`, and uses
-`ManagedAccessProvider`, `TransactionIntegrationProvider`, `ConnectionPoolFactory`, `DialectFactory` and
+`ManagedAccessProvider`, `PersistenceUnitSource`, `TransactionIntegrationProvider`, `ConnectionPoolFactory`, `DialectFactory` and
 `jakarta.validation.spi.ValidationProvider`, each found through `ServiceLoader`.
 
 [#journal]

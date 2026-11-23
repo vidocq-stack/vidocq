@@ -39,8 +39,8 @@ runs after servlet and listener destruction; it does not drain active requests.
 Foy exposes immutable standard `JspConfigDescriptor` views from root and
 ordered fragment descriptors. Translation still happens at build time using
 the Maven plugin's root descriptor settings; automatic fragment translation
-configuration remains pending. Build-time EL also awaits
-Peano. Production pages compile EL at build time and require Peano's API module;
+configuration remains pending.
+Production pages compile EL at build time and require Peano's API module;
 their runtime graph excludes both compiler modules. HTTP tests prove private
 application accessor-table dispatch with Peano's reflection fallback denied.
 
@@ -98,6 +98,6 @@ Test compilation and the Arquillian control process use a classpath because
 those tooling JARs have incompatible automatic module descriptors. The deployed
 application and server use explicit named modules only.
 
-Foy's published development snapshot contains the JSP-engine SPI and its TLD
-listener extension. PR validation resolves the managed `foy.version` directly;
-no Foy source bootstrap or temporary version override is required.
+Foy, with its JSP-engine SPI and its TLD listener extension, is built by the same
+reactor of the monorepo: the managed `foy.version` is the project version, and
+no Foy snapshot or version override is involved.

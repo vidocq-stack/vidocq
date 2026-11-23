@@ -29,7 +29,7 @@ The standalone JMH harness is isolated from production dependencies:
 
 [source,sh]
 ----
-cd noether-persistence/noether-jpa-bench
+cd vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-bench
 ./run-bench.sh noether
 ./run-bench.sh hibernate
 ./run-bench.sh hibernate5
@@ -41,7 +41,7 @@ cd noether-persistence/noether-jpa-bench
 `createContainerEntityManagerFactory`.
 
 The modular generated-access Leyden AOT cache smoke is
-`noether-persistence/noether-jpa-processor-module-it/run-aot-smoke.sh`.
+`noether-persistence/noether-jpa-processor-module-it/run-aot-smoke.sh`, in Noether's folder.
 It is not a GraalVM native-image claim.
 
 == Pre-optimization baseline after D43

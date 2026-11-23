@@ -7,7 +7,7 @@ Ravel targets **100 % conformance** with the official MicroProfile Config 3.1 Te
 
 == Running the TCK
 
-The TCK lives in the `ravel-tck` module, which is in-reactor but joins the build only under the `tck` Maven profile — a plain `mvn install` neither downloads nor runs anything TCK-related.
+The TCK lives in the `ravel-tck` module, which is in-reactor but joins the build only under the `tck` Maven profile — a plain `mvn install` neither downloads nor runs anything TCK-related. Run the commands of this page from Ravel's folder of the monorepo (`vidocq-components/vidocq-components-microprofile/ravel`).
 
 === Smoke test (default)
 

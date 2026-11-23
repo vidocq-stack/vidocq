@@ -27,6 +27,10 @@ This page consolidates Heisenberg's public surface: Maven artifacts, Java module
 | Modularised repackage of `microprofile-fault-tolerance-api` (named Java module, jlink-compatible).
 
 | `io.vidocq.heisenberg`
+| `heisenberg-processor`
+| Annotation processor: generates the `<Bean>$$HeisenbergPolicies` companions and reports definition errors as compile errors (xref:internals.adoc#compile-time-policies[Annotations read at compile time]). It goes on the processor path.
+
+| `io.vidocq.heisenberg`
 | `heisenberg-bench`
 | JMH benchmarks (vs SmallRye Fault Tolerance). Not for production.
 
@@ -49,13 +53,13 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 | Module | Contents
 
 | `io.vidocq.heisenberg.api`
-| `io.vidocq.heisenberg.api` — public SPI: `FtMetricsRecorder` (metrics SPI with its `NOOP` constant and the `RetryResult`, `CBCallResult`, `CBState` enums) and `FaultToleranceException`. Re-exports the spec annotations via `requires transitive microprofile.fault.tolerance.api`.
+| `io.vidocq.heisenberg.api` — public SPI: `FtMetricsRecorder` (metrics SPI with its `NOOP` constant and the `RetryResult`, `CBCallResult`, `CBState` enums) and `FaultToleranceException`. `io.vidocq.heisenberg.spi.gen` — `FaultToleranceCompanion` and `Literals`, the types of the generated companions. Re-exports the spec annotations via `requires transitive microprofile.fault.tolerance.api`.
 
 | `io.vidocq.heisenberg.core`
 | Internal implementations: engines, `PolicyComposer`, the `CircuitBreakerStateRegistry` / `BulkheadStateRegistry` interfaces and the immutable `*Config` records. The `io.vidocq.heisenberg.internal` package is exported only to `io.vidocq.heisenberg.cdi.vauban`.
 
 | `io.vidocq.heisenberg.cdi.vauban`
-| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` and `InterceptorPriorityExtension` (BCEs), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`.Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime.Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
+| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` and `InterceptorPriorityExtension` (BCEs), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`. Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime. Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
 |===
 
 `io.vidocq.heisenberg.internal` is invisible to application modules (qualified export to `io.vidocq.heisenberg.cdi.vauban` only). Any application class depending on it indicates a regression to fix.
@@ -258,7 +262,7 @@ All keys are read through `ConfigProvider.getConfig()`. Precedence: *method* > *
 | `MP_Fault_Tolerance_NonFallback_Enabled`
 | Boolean. `false` disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Asynchronous`; `@Fallback` stays active (spec §11). Dotted alias: `mp.fault.tolerance.nonFallback.enabled`.
 
-| `mp.fault.tolerance.metrics.enabled`
+| `MP_Fault_Tolerance_Metrics_Enabled`
 | Boolean. `false` disables §9 and §10 recorders. Default `true`.
 
 | `mp.fault.tolerance.interceptor.priority`
@@ -327,14 +331,14 @@ The shared state registries (`CircuitBreakerStateRegistry`, `BulkheadStateRegist
 
 * Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
 * CDI 4.1 Lite (Vauban) or any CDI 4.0 Lite-compatible container — proven on Weld and Open Liberty, see <<other-containers>>.
-* MicroProfile Config 3.1 (Ravel) in `provided`.
+* MicroProfile Config 3.1: the API (`ravel-mp-config-api`) at compile scope; the implementation (Ravel, or the server's) at runtime.
 * OpenTelemetry 1.39 (Humboldt) in `requires static` — optional.
 * MicroProfile Metrics 5.x (Dirac) — optional.
 
 == Bugs and benchmarks
 
-* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BUG.md[BUG.md] — tracked reproducible bugs.
-* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BENCH.md[BENCH.md] — JMH benchmarks, dated runs.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BENCH.md[BENCH.md] — JMH benchmarks, dated runs.
 
 == Going further
 

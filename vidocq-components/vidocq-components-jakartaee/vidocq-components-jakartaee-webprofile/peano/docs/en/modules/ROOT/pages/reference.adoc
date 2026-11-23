@@ -1,4 +1,8 @@
 = Reference
+:description: Peano coordinates, Java modules, dependencies and configuration keys.
+
+[.lead]
+Reference data for Peano `{project-version}`.
 
 == Static function construction
 
@@ -18,10 +22,6 @@ available. Void results are null; failures follow existing ELException handling.
 occurrences from the parser, including each prefix, name and argument count.
 Repeated functions with differing arities remain separate; quoted colon text
 and unprefixed calls do not become qualified function references.
-:description: Peano coordinates, Java modules, dependencies and planned configuration keys.
-
-[.lead]
-Reference data for Peano `{project-version}`. Entries marked _planned_ do not exist yet.
 
 == Artefacts
 
@@ -34,6 +34,8 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 | `io.vidocq.peano:peano-processor` | `io.vidocq.peano.processor` | APT property tables, build time only; exports nothing, provides javax.annotation.processing.Processor
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | Literal/constant template compiler, build time only; Java Class-File API
 |===
+
+[[class-path-discovery]]**On a class path** [.tag-new]#NEW# — `peano-core` also lists its factory in `META-INF/services/jakarta.el.ExpressionFactory`. `ExpressionFactory.newInstance()` reads that file on a class path, where the `provides` of `module-info.java` is ignored. On the module path a named module ignores the file, and nothing changes.
 
 == Annotation processor discovery
 
@@ -413,7 +415,9 @@ provider and registration fragment. Register every required provider in module-i
 that delegates every call to the contextual instance. A generated table serves it as it serves its target when a
 `io.vidocq.peano.spi.ProxyUnwrapper` service, found next to the accessor providers, names the target as the class
 the proxy stands for (`AccessorTable.serves`). Vidocq provides the unwrapper for Vauban's proxies. Without one, the
-proxy falls through to the rest of the chain, as any subclass does. An unwrapper is registered once per class and
+proxy falls through to the rest of the chain, as any subclass does.
+
+[[proxy-unwrapper-lifetime]]**How long an unwrapper stays** [.tag-new]#NEW# — an unwrapper is registered once per class and
 stays registered as long as the class loader of that class lives: one that an application jar brings leaves with the
 application layer at a hot reload of `vidocq dev`.
 
@@ -431,7 +435,7 @@ incremental processing.
 * `-Apeano.accessorTypes=pkg.Type,pkg.Other`: comma-separated owned type names, including models produced by another processor in a later round.
 * Generated provider: `pkg.Type__PeanoAccessors` (nested binary names retain their dollar separators).
 * Registration fragment: `META-INF/peano/accessor-providers/pkg.Type__PeanoAccessors.txt`.
-*Services file: `META-INF/services/io.vidocq.peano.spi.AccessorProvider`, every provider of the module; on an incremental build, the providers already listed stay while their class is in the output.
+* Services file: `META-INF/services/io.vidocq.peano.spi.AccessorProvider`, every provider of the module; on an incremental build, the providers already listed stay while their class is in the output.
 
 Put peano-processor, peano-api and jakarta.el-api on javac's processor module path.
 Only peano-api and peano-core are needed at application runtime.
@@ -440,11 +444,11 @@ AccessorTable.getMethodReference supplies generated metadata. MethodDescriptor s
 erased signatures and runtime annotations; MethodSelection chooses overloads from those
 constants, using the evaluation context for coercion probes.
 
-== Configuration keys (planned)
+== Configuration keys
 
 [cols="1,3",options="header"]
 |===
 | Key | Meaning
 
-| `peano.reflection` | `allow` (default) or `deny` — whether types without a generated accessor table may be resolved reflectively. Name to validate.
+| `peano.reflection` | `allow` (default) or `deny` — whether types without a generated accessor table may be resolved reflectively.
 |===

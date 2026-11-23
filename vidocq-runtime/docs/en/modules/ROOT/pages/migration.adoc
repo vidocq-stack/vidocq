@@ -72,7 +72,7 @@ Vidocq Runtime is at **{project-version}**. Any real-world migration is prematur
 
 [NOTE]
 ====
-The numbers above are indicative and will be updated as `BENCH.md` runs land. See the workspace root `BENCH.md` for exact measurements.
+The numbers above are indicative and will be updated as `BENCH.md` runs land. See `vidocq-runtime/BENCH.md` for exact measurements.
 ====
 
 == From Quarkus
@@ -108,8 +108,6 @@ Vidocq Runtime explicitly borrows the Quarkus extension pattern.
 | JSON-B 3.0 / JSON-P 2.1 implementation
 |===
 
-The forthcoming `compare-to/` workspace examples will illustrate migrating a simple extension.
-
 == From Helidon MP
 
 * Helidon SE (Web) → xref:chappe::index.adoc[Chappe] + xref:cassini::index.adoc[Cassini].
@@ -117,10 +115,7 @@ The forthcoming `compare-to/` workspace examples will illustrate migrating a sim
 * `application.yaml` → MicroProfile Config (`vidocq.properties` or env).
 * Helidon Níma already uses virtual threads — the transition is conceptually transparent.
 
-[NOTE]
-====
 // TODO@user: produce a `helidon-mp-quickstart` migration sample to Vidocq Runtime.
-====
 
 == From Spring Boot
 
@@ -163,13 +158,10 @@ Spring Boot does not naturally align with the MicroProfile model, and migration 
 
 * `server.xml` → MicroProfile Config + Vidocq Runtime extensions.
 * EAR → standalone JAR + Maven plugin.
-* JNDI → CDI lookup via `Vauban.bootstrap()`.
+* JNDI → CDI injection (`@Inject`), or the `java:` names of xref:modules/vidocq-runtime-extensions.adoc#naming[the naming extension].
 * Jakarta annotations — directly compatible, the programming model stays identical.
 
-[NOTE]
-====
 // TODO@user: document the `feature` → extension mapping on the Open Liberty side (mpHealth-4.0 → vidocq-runtime-knock-health-extension, etc.).
-====
 
 == From Payara Micro
 
@@ -245,7 +237,7 @@ contains it (Vidocq/vidocq#143).
   any more.
 
 See xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev tools and binaries] for the whole picture,
-including the six `-dev` panel modules this repository's own extensions now ship.
+including the eight `-dev` panel modules this repository's own extensions now ship.
 
 [#config-rest-client-codegen]
 == Config and Rest Client need their codegen bundle

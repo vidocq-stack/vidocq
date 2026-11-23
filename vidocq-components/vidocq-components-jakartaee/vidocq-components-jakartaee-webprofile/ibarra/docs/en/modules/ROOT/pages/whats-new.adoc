@@ -4,4 +4,4 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+* xref:internals.adoc#stable-module-descriptor[A precompilation that changes no page leaves `module-info.class` as it was] [.tag-new]#NEW# — the page index keeps its place among the services of the module descriptor. A run without a compile moved it to the end, after a service another build step had appended (`vidocq:generate` registers the Peano accessors after the pages): the same module in other bytes, and `vidocq dev` swapped the application layer for a save that changed no class (IBARRA-159).

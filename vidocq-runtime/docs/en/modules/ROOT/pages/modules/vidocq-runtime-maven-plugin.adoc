@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twenty-one goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `test-path`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `eclipse`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq-runtime/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twenty-two goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `test-path`, `build-info`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `eclipse`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq-runtime/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -34,7 +34,7 @@
 | Continuous testing without the application: runs the tests, then again on every change of the main or test sources, with a summary and keys in the terminal. See <<test,the `vidocq:test` goal>>.
 
 | `vidocq:checkpom`
-| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. A missing codegen bundle is reported with the `<path>` to paste into the compiler's `annotationProcessorPaths`, its group and version included; a `-dev` companion module is never asked for one. The bundle is the one the extension's `META-INF/vidocq/extension.properties` names, or none when it names none(xref:modules/vidocq-runtime-cli.adoc#extension-descriptor[the extension descriptor]); for an extension without that descriptor, the `vidocq-runtime-<name>-extension-codegen` its name gives, when that artifact is published. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>>. Warns, never fails, on a codegen `<path>` still declared with `<type>pom</type>`, which IntelliJ's build cannot read(xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]). Fails when an application that declares an extension has lost `vidocq-runtime-core-codegen`, the Vauban indexer the parent wires, typically to an `annotationProcessorPaths` without `combine.children="append"`; a module with `<proc>none</proc>` is left alone.Notes an execution of the pom that names `generate` besides the one the parent binds, which runs once all the same. Warns, never fails, when an extension with a dev service lacks a piece of it — its provider on this plugin, the test-scope pair a plain `mvn test` needs, the pool's JDBC driver — reading the effective model, so a provider a parent declares counts(xref:dev-services.adoc#declared-for-you[Declared for you]).
+| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. A missing codegen bundle is reported with the `<path>` to paste into the compiler's `annotationProcessorPaths`, its group and version included; a `-dev` companion module is never asked for one. The bundle is the one the extension's `META-INF/vidocq/extension.properties` names, or none when it names none (xref:modules/vidocq-runtime-cli.adoc#extension-descriptor[the extension descriptor]); for an extension without that descriptor, the `vidocq-runtime-<name>-extension-codegen` its name gives, when that artifact is published. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>>. Warns, never fails, on a codegen `<path>` still declared with `<type>pom</type>`, which IntelliJ's build cannot read (xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]). Fails when an application that declares an extension has lost `vidocq-runtime-core-codegen`, the Vauban indexer the parent wires, typically to an `annotationProcessorPaths` without `combine.children="append"`; a module with `<proc>none</proc>` is left alone. Notes an execution of the pom that names `generate` besides the one the parent binds, which runs once all the same. Warns, never fails, when an extension with a dev service lacks a piece of it — its provider on this plugin, the test-scope pair a plain `mvn test` needs, the pool's JDBC driver — reading the effective model, so a provider a parent declares counts (xref:dev-services.adoc#declared-for-you[Declared for you]).
 
 | `vidocq:analyze-deps`
 | Explains which dependencies `vidocq:generate` scans, why, and what it does with each; prints the `<scanDependencies>` block that makes the detection explicit. See <<analyze-deps>>.
@@ -49,13 +49,13 @@
 | Native OS bundle (`.app` macOS, `.exe`/`.msi` Windows, `.deb`/`.rpm` Linux) or cross-platform app-image.
 
 | `vidocq:docker`
-| Generates `target/Dockerfile` distroless based on `distroless/base-debian12:nonroot`. Optional build via `vidocq.docker.build=true`.On macOS or Windows, the Dockerfile links the image inside a Linux JDK (<<docker-linux-image,details>>).
+| Generates `target/Dockerfile` distroless based on `distroless/base-debian12:nonroot`. Optional build via `vidocq.docker.build=true`. On macOS or Windows, the Dockerfile links the image inside a Linux JDK (<<docker-linux-image,details>>).
 
 | `vidocq:check-module-info`
 | Verifies the application `module-info.java` declares the Java module directives its Vidocq extensions need (e.g. `opens db.migration` for Flyway migrations); the failure names `vidocq doctor --fix`, which adds those of the catalog extensions. [[check-module-info-uncompiled]]When `module-info.java` did not compile, as under `vidocq dev` after a compile error, the goal says so and checks nothing, instead of reporting a module without `module-info.java`. [[check-module-info-reflected]]It also opens the packages the runtime reaches by reflection: the entities (Jakarta Data) Mansart has no model generated at build time for (xref:java-modules.adoc#entities[Entities and repositories]), and the types a REST resource or provider takes or returns, with the types their fields and getters hold, which JSON-B binds by reflection. [[check-module-info-interceptors]]The package of a CDI interceptor too when a method its container calls is `private`: Vauban calls the other interceptor methods through the provider generated in their package, which needs no directive, but a private one by reflection. Such a package that the module does not open fails the build with the line to add, for instance `opens com.acme.shop.book;   (com.acme.shop.book.Book, reached through com.acme.shop.book.BookResource)`, and names `vidocq doctor --fix` and `./mvnw vidocq:complete-module-info`, which add it; before, the first request failed with an `IllegalAccessException`. [[check-module-info-dev]]Under `vidocq dev` (a `vidocq:dev` among the goals, or its recompile, which passes `-Dvidocq.moduleinfo.dev=true`), the goal opens such a package itself, in `module-info.java` and in the compiled `module-info.class`, prints `✔ module-info.java: opens com.acme.shop.book;   (…)` and lets the application start: a new package of entities or DTOs needs no step of its own. `-Dvidocq.moduleinfo.failOnMissing=false` turns the failure into a warning. xref:java-modules.adoc[Java modules in a Vidocq application] explains what the goal detects and what it cannot see.
 
 | `vidocq:complete-module-info`
-| Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.They include the `opens` of the packages the runtime reaches by reflection that `check-module-info` reports, so `mvn vidocq:complete-module-info` fixes what it asks for.
+| Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives. They include the `opens` of the packages the runtime reaches by reflection that `check-module-info` reports, so `mvn vidocq:complete-module-info` fixes what it asks for.
 
 | `vidocq:test-path`
 | Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path; also writes it to `target/vidocq-test-runtime-path`, for a test an IDE starts. Bound to `process-test-classes` by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
@@ -93,7 +93,7 @@
 ====
 When `vidocq:generate` scans a dependency, the classes it produces for it belong to *that
 dependency's* packages. The plugin keeps the module path split-package-free end to end: `generate`
-parks those classes in `target/vidocq-patches/<artifactId>/`, thenwrites an *enriched* copy of the
+parks those classes in `target/vidocq-patches/<artifactId>/`, then writes an *enriched* copy of the
 jar that carries them and declares its providers (<<generate>>); `dev`, `run`, `package` and `jlink`
 use that copy in place of the original. Only a jar that cannot be given a module descriptor keeps
 its original, its classes attached with `--patch-module`. Zero configuration. See
@@ -267,8 +267,8 @@ mvn vidocq:remove-extension -Dextensions=knock-health
   goal, which names the closest catalog ids and writes nothing.
 * `add-extension` writes the dependency, the codegen bundle into the compiler plugin of the project's own build,
   and the directives into `src/main/java/module-info.java`, each marked `// vidocq:<id>`. It writes no version when
-  `vidocq-runtime-bom` gives it (a `vidocq-runtime-parent` from 0.4.0, or a pom that imports the BOM)
- ; otherwise it pins the version the pom's `vidocq-runtime-parent` gives, else the plugin's own. See
+  `vidocq-runtime-bom` gives it (a `vidocq-runtime-parent` from 0.4.0, or a pom that imports the BOM);
+  otherwise it pins the version the pom's `vidocq-runtime-parent` gives, else the plugin's own. See
   xref:modules/vidocq-runtime-cli.adoc#extension[`vidocq extension`] for each of these edits.
 * `remove-extension` takes back what `add-extension` wrote, the `<dependencies>`, `<build>` and `<plugins>`
   elements it created included.
@@ -300,7 +300,7 @@ mvn vidocq:doctor -Dvidocq.doctor.fix                       # repair the project
   `Key descriptions` and `Config values` read the files the project and its runtime dependencies ship, and warn of
   a value of `vidocq.properties` its key does not allow. A failed check (a JDK older
   than 25, a missing codegen bundle) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the
-  hint of the checks that passed, and`-Dvidocq.doctor.fix` first makes the repairs of
+  hint of the checks that passed, and `-Dvidocq.doctor.fix` first makes the repairs of
   `vidocq doctor --fix` (Vidocq/vidocq#339).
 
 [#create-goal]
@@ -311,7 +311,7 @@ Both run the scaffolder of `vidocq-runtime-tooling`, so they write the same `pom
 `vidocq.properties` and classes (Vidocq/vidocq#314). The goal needs no project; outside one, the plugin is named
 in full, as Maven resolves the `vidocq` prefix only for a project that declares the plugin:
 
-[source,bash]
+[source,bash,subs=attributes+]
 ----
 mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}:create \
     -Dname=my-api -DgroupId=com.acme -Dextensions=cassini-rest,knock-health
@@ -327,6 +327,7 @@ mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}:create \
 | `extensions` | The catalog ids of the extensions to enable, comma-separated, written in this order.
 | `parentVersion` | The `vidocq-runtime-parent` version; the plugin's own by default. From 0.4.0 its BOM versions the Vidocq dependencies, written without a `<version>`.
 | `main` | `true` also writes an `@VidocqMain` trampoline, for an IDE Run or a `VidocqApp`.
+| `withParent` | `true` inherits `vidocq-runtime-parent` instead of importing the BOM and loading the plugin as a build extension, as `vidocq create --with-parent` does (<<parentless>>).
 | `openModule`| `true` declares an `open module`, which opens every package to reflection: no `opens` line is ever needed. See xref:java-modules.adoc#open-module[Java modules in a Vidocq application].
 |===
 
@@ -360,14 +361,14 @@ Last, it writes `META-INF/vidocq/generate.stamp`, which records the `META-INF/va
 | Any jar with a `META-INF/beans.xml` whose `bean-discovery-mode` is not `none`. On by default; `-Dvidocq.generate.autoScan=false` or `<autoScan>false</autoScan>` turns it off.
 
 | A brick
-| A brick whose codegen bundle declares `META-INF/vidocq/dependency-codegen.properties` selects the jars it can process: a jar with one of its `resources`, or with one of its `class-bytes` in a class file, orholding a class the application lists for it. See <<brick-processors>>.
+| A brick whose codegen bundle declares `META-INF/vidocq/dependency-codegen.properties` selects the jars it can process: a jar with one of its `resources`, or with one of its `class-bytes` in a class file, or holding a class the application lists for it. See <<brick-processors>>.
 |===
 
 The dependencies considered are the compile-scope and runtime-scope ones: everything the module path holds at run time. A selected jar is left out when it already carries generated code (a Vidocq brick compiled with the Vauban processor), when `<scanExcludes>` names it, or when it is signed and `<scanDependencies>` does not name it: the build log says which, and why.
 
 === The enriched copy
 
-Each scanned jar gets a copy in `target/vidocq-enriched/`, under its original file name: the jar with its generated classes, and a module descriptor that `provides io.vidocq.vauban.api.VaubanComponentProvider` with them and `requires` the Vauban modules they call. A jar without a descriptor is first given one, an `open module` synthesized as `vauban:modularize` does. `vidocq:dev`, `vidocq:run`, `vidocq:package` and `vidocq:jlink` put the copy on the module path in place of the original.So does the application a `@VidocqTest` starts, under `mvn test` and `vidocq test`: `vidocq:test-path` names the copy, which takes the place of the jar Surefire put on the module path.
+Each scanned jar gets a copy in `target/vidocq-enriched/`, under its original file name: the jar with its generated classes, and a module descriptor that `provides io.vidocq.vauban.api.VaubanComponentProvider` with them and `requires` the Vauban modules they call. A jar without a descriptor is first given one, an `open module` synthesized as `vauban:modularize` does. `vidocq:dev`, `vidocq:run`, `vidocq:package` and `vidocq:jlink` put the copy on the module path in place of the original. So does the application a `@VidocqTest` starts, under `mvn test` and `vidocq test`: `vidocq:test-path` names the copy, which takes the place of the jar Surefire put on the module path.
 
 A copy is written again only when what it is made from changes — the jar, its generated classes, its providers — so a `vidocq:dev` reload leaves alone the jar its JVM holds open. On a clean build `generate` runs before `vauban:modularize`; at packaging, when that goal gave the jar a descriptor, the copy is rebuilt on it, so the module name and openness configured there are the ones shipped.
 
@@ -423,9 +424,9 @@ The dev console's CDI panel shows the result: a scanned jar's beans read `Class-
 [#brick-processors]
 === Brick processors on dependency jars
 
-Besides Vauban's own code, `vidocq:generate` runs the annotation processors of every brick whose codegen bundle is on the project (Foy's, for instance) over the dependency jars that brick selects. A library compiled without the brick's processor, such as a `@WebListener` or a `ServletContainerInitializer` in a plain jar, then works as if it had been: the processor's output, classes and resources, goes into the jar's enriched copy, and the brick finds it at run time.Mansart takes part too: a jar whose classes name `jakarta.data.repository.Repository` gets the implementation of each of its `@Repository` interfaces, with its entity's metamodel and the repository index — see xref:mansart::usage.adoc#dependency-repositories[repositories shipped in a library] for what the library must keep (parameter names, or `@By` / `@Param`).So does Cassini, whose processor declares its hints itself: a jar whose classes name `jakarta.ws.rs.Path`, such as the MCP server of langchain4j-cdi, gets the adapter and the routes of each of its resources. So does Champollion, through the REST extension's codegen bundle: the types of a library that the application's REST resources take or return — a DTO jar shared with a client, say — get their JSON-B binding generated in the library's enriched copy, with the types they hold, so JSON-B maps them without reflection and the library's packages need no `opens` (xref:java-modules.adoc#json-b-at-build-time[JSON-B without reflection]).
+Besides Vauban's own code, `vidocq:generate` runs the annotation processors of every brick whose codegen bundle is on the project (Foy's, for instance) over the dependency jars that brick selects. A library compiled without the brick's processor, such as a `@WebListener` or a `ServletContainerInitializer` in a plain jar, then works as if it had been: the processor's output, classes and resources, goes into the jar's enriched copy, and the brick finds it at run time. Mansart takes part too: a jar whose classes name `jakarta.data.repository.Repository` gets the implementation of each of its `@Repository` interfaces, with its entity's metamodel and the repository index — see xref:mansart::usage.adoc#dependency-repositories[repositories shipped in a library] for what the library must keep (parameter names, or `@By` / `@Param`). So does Cassini, whose processor declares its hints itself: a jar whose classes name `jakarta.ws.rs.Path`, such as the MCP server of langchain4j-cdi, gets the adapter and the routes of each of its resources. So does Champollion, through the REST extension's codegen bundle: the types of a library that the application's REST resources take or return — a DTO jar shared with a client, say — get their JSON-B binding generated in the library's enriched copy, with the types they hold, so JSON-B maps them without reflection and the library's packages need no `opens` (xref:java-modules.adoc#json-b-at-build-time[JSON-B without reflection]).
 
-The processors see only the classes the hints point at: the top-level classes whose class file holds one of the brick's `class-bytes`, the classes listed in the service files among its matched `resources`, andthe classes the application lists for the brick. The other classes of the jar are not compiled, so a class that needs an optional API missing from the build, such as a websocket endpoint without `jakarta.websocket`, does not fail it.
+The processors see only the classes the hints point at: the top-level classes whose class file holds one of the brick's `class-bytes`, the classes listed in the service files among its matched `resources`, and the classes the application lists for the brick. The other classes of the jar are not compiled, so a class that needs an optional API missing from the build, such as a websocket endpoint without `jakarta.websocket`, does not fail it.
 
 A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. Vauban scans such a jar with annotated discovery, even without a `beans.xml`: its classes with a bean-defining annotation become beans. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`. Such a jar, when it has no module descriptor, stays an automatic module in its enriched copy even when Vauban generates providers for it: the providers are listed in its `META-INF/services` files, and an automatic module may use any service, which a synthesized descriptor cannot guarantee. [[brick-automatic-packaging]]`vidocq:package` ships that automatic copy, even when `vauban:modularize` gave the jar a descriptor: it used to rebuild the copy on that descriptor, which can miss a `uses`. The copy's manifest says so with `Vidocq-Automatic: brick-selected`, and its module name is the automatic one, not a name configured for `vauban:modularize`. Only `vidocq:jlink`, which refuses automatic modules, rebuilds it on the `vauban:modularize` descriptor (Vidocq/vidocq#251).
 
@@ -461,7 +462,7 @@ The whole javac output is in `target/vidocq-depgen/<artifactId>.log`. A generate
 
 * An annotation with `SOURCE` retention is not in the class files of a library, so a processor cannot see it.
 * Versioned classes under `META-INF/versions/N` are not processed.
-* A Mansart repository interface compiled without `-parameters` cannot be implemented from a class file, unless its parameters use `@Param`. Mansart's hints are pending (mansart#40, mansart#41): Foy is the first brick to declare them.
+* A Mansart repository interface compiled without `-parameters` cannot be implemented from a class file, unless its parameters use `@Param`.
 
 [#brick-authors]
 ==== For brick authors
@@ -1340,6 +1341,11 @@ xref:usage.adoc#dev-save-seen[How soon a save is seen].
 | `vidocq.dev.devServices`
 | _(unset)_
 | Whether the goal opens a dev services session for the tests: the explicit value, then the application's files, then on.
+
+| `vidocq.test.once`
+| `false`
+| `true` runs every test once and ends with the verdict, the build failing when a test does, instead of watching
+the sources: for CI and scripts, as `vidocq test --once` does.
 |===
 
 [#dev-continuous-testing]
@@ -1517,7 +1523,7 @@ An application with no Chappe gets no console, and says so instead of adding one
 Offline, or before the console was ever built locally, costs the console only — a warning, never a failed
 goal, and `vidocq:dev` continues without it:
 
-[source,text]
+[source,text,subs=attributes+]
 ----
 [WARNING] Dev tools: cannot resolve io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension:{project-version} (the dev console); vidocq:dev continues without it. Run the build once online, or mvn -U.
 ----
@@ -1608,7 +1614,7 @@ of the reactor, from what the poms already declare. By default that is three fil
 **Maven** run of `vidocq:dev` suffixed ` (dev)`, the configuration a developer runs day to day (the console, hot
 reload, continuous testing), one of <<run,`vidocq:run`>> suffixed ` (run)` — that one still compiles the module,
 completes the bean index and starts the application, the three through Maven — and a Remote JVM Debug one
-suffixed ` (debug)` that attaches to `vidocq:dev`'s own debug agent(Vidocq/vidocq#143); see
+suffixed ` (debug)` that attaches to `vidocq:dev`'s own debug agent (Vidocq/vidocq#143); see
 <<dev-tools,Dev tools and binaries>>. Next to them it writes one shared JUnit template,
 `.run/Template JUnit.run.xml`, that starts every test with the Vidocq test agent: see
 <<idea-junit-template,The JUnit template>>.
@@ -1763,7 +1769,7 @@ agent itself, which `vidocq:dev` and `vidocq:idea` both read the same way.
 application that declares a main class, of that main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the
 application's own pom. Unlike the Maven kind's three files, there is only ever this one: the application runs
 in the JVM IntelliJ starts directly, never under `vidocq:dev`, so it never has the dev console or any `-dev`
-module(<<dev-tools,Dev tools and binaries>>), and there is no `(debug)` file to attach a
+module (<<dev-tools,Dev tools and binaries>>), and there is no `(debug)` file to attach a
 separate debugger to — attach IntelliJ's own debugger to this configuration instead.
 
 IntelliJ puts the application on the module path, so in the JVM's boot layer, and the trampoline loads it again into
@@ -1837,7 +1843,7 @@ A `<mainClass>` set on an execution (for example the `jlink` one) is not read; w
 class and the module declares no `vidocq.mainModule`, the goal warns. These values
 are read from each module's pom, never from the command line: a `-Dvidocq.mainClass`, `-Dvidocq.mainModule`,
 `-Dvidocq.idea.configurationName`, `-Dvidocq.idea.moduleName`, `-Dvidocq.idea.exclude`, `-Dvidocq.dev.debugHost`
-or `-Dvidocq.dev.debugPort`is ignored with a warning, so that the committed files do not depend
+or `-Dvidocq.dev.debugPort` is ignored with a warning, so that the committed files do not depend
 on how Maven was invoked.
 
 [cols="2,1,3"]

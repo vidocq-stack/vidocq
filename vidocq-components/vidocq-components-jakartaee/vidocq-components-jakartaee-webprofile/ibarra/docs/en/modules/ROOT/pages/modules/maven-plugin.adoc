@@ -57,12 +57,14 @@ This is initial I4 packaging. Default generation compiles EL through Peano into
 the application module. Add `peano-api` and `requires io.vidocq.peano.api` when
 pages use EL. Startup interpretation cannot be enabled by packaging.
 Initial classic/simple TLD handlers, fixed-arity TLD functions, root
-`jsp-config/taglib` mappings and Foy deployment are implemented. Tag files,
-web-fragment merging and complete deployment-descriptor validation remain pending.
+`jsp-config/taglib` mappings and Foy deployment are implemented. Tag files are
+compiled within the limits of xref:modules/tag-handlers.adoc[Tag handlers].
+Web-fragment merging and complete deployment-descriptor validation remain pending.
 DOCTYPE/entity declarations are rejected and external schemas are
 not fetched. Supported descriptor namespaces are Jakarta EE, Java EE/J2EE and the
 unnamespaced form; foreign JSP configuration namespaces are rejected.
 
-`examples/precompiled-pages` is built by the actual goal locally and in PR CI.
+`examples/precompiled-pages` is built by the actual goal, on its own (`-f examples/precompiled-pages/pom.xml`):
+it is not a module of the reactor, and the pull request build of the monorepo does not build it.
 A separate application-JAR fixture verifies discovery and rendering with
 `java.compiler` and `ibarra-compiler` excluded from the runtime module graph.

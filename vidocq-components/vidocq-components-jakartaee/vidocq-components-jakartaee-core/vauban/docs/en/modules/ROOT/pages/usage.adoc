@@ -450,6 +450,7 @@ Code written for an application server looks its resources up by name: `new Init
 [source,java]
 ----
 @VaubanTest
+@AddBeans(GreetingService.class)
 class GreetingServiceTest {
     @Inject GreetingService greeting;
 

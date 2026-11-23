@@ -83,7 +83,7 @@ To benefit from reflection-free bindings (Champollion's identity-defining streng
   <scope>provided</scope>
 </dependency>
 ----
-. Annotate the records to bind with `@JsonbStatic` (`io.vidocq.champollion.jsonb.spi`) — it is the APT's trigger; un-annotated types keep using runtime introspection.
+. Annotate the records to bind with `@JsonbStatic` (`io.vidocq.champollion.jsonb.spi`) — it is the APT's trigger; un-annotated types keep using runtime introspection, except those a JAX-RS resource exchanges (xref:reference.adoc#rest-bindings[REST bindings]).
 . Recompile. The runtime auto-discovers each `<Type>$$Binding` via ServiceLoader. To verify which types are statically bound, inspect the `META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding` entries in the produced jar.
 
 === Expected performance
@@ -92,7 +92,7 @@ Measured binding figures (runtime mode and static codegen mode) are recorded in 
 
 === Subtle differences
 
-* No `synchronized`, no application-visible thread-local state — better behavior under virtual threads (the only `ThreadLocal` is an internal per-thread parser cache).
+* No `synchronized`, no application-visible thread-local state — better behavior under virtual threads (no `ThreadLocal`: the parser a `Jsonb` keeps between calls sits in an atomic slot).
 * The error on a missing key in `JsonObject.getString(key)` is stricter (NPE per spec §2.1.4) — Yasson tolerated silently.
 
 == From Jackson
@@ -169,7 +169,7 @@ public final class MyJsonbSer implements JsonbSerializer<Money> {
 }
 ----
 
-The `JsonGenerator` on the JSON-B side is the **Jakarta JSON-P** one — not Jackson's `ObjectGenerator`. No checked `IOException`, fluent.
+The `JsonGenerator` on the JSON-B side is the **Jakarta JSON-P** one — not Jackson's class of the same name. No checked `IOException`, fluent.
 
 === Expected performance
 
@@ -192,7 +192,7 @@ Champollion guards its own two modes with a differential suite — for each cove
 
 [source,bash]
 ----
-# Runtime vs static-codegen differential suite (in the Champollion repo)
+# Runtime vs static-codegen differential suite (in Champollion's folder of the monorepo)
 mvn -ntp -pl champollion-codegen-apt -Dtest=DifferentialBindingTest test
 ----
 

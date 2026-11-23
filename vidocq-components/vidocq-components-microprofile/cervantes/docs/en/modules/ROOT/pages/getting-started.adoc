@@ -41,7 +41,7 @@ For a standard JAX-RS application, declaring the two integration modules (`cerva
 
 [NOTE]
 ====
-In an application packaged by xref:vidocq::index.adoc[Vidocq Runtime], simply include the `vidocq-runtime-cervantes-jwt-extension` wrapper instead of declaring the two artefacts directly — it sets up the transitive dependency and registers it as a Vidocq extension (priority ~500).
+In an application packaged by xref:vidocq::index.adoc[Vidocq Runtime], simply include the `vidocq-runtime-cervantes-jwt-extension` wrapper instead of declaring the two artefacts directly — it sets up the transitive dependency and registers it as a Vidocq extension.
 ====
 
 == Prepare the verification public key
@@ -59,7 +59,7 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
 openssl rsa -in private.pem -pubout -out public.pem
 ----
 
-Place `public.pem` under `src/main/resources/META-INF/keys/` of the application — Cervantes resolves `classpath:` locations.
+Place `public.pem` under `src/main/resources/META-INF/keys/` of the application — Cervantes reads a location that is neither a URL nor a `file:` path as a class-path resource (no `classpath:` prefix).
 
 == MicroProfile Config
 
@@ -70,7 +70,7 @@ Put the keys in `META-INF/microprofile-config.properties`:
 # Verification public key — pick one:
 #   - JWKS URL (production), or
 #   - classpath/file path (tests).
-mp.jwt.verify.publickey.location=classpath:/META-INF/keys/public.pem
+mp.jwt.verify.publickey.location=/META-INF/keys/public.pem
 
 # Expected issuer (the "iss" claim) — required for spec conformance
 mp.jwt.verify.issuer=https://issuer.example.com
@@ -173,7 +173,7 @@ To forge tokens from Java tests, see the `TestJwts` helper in `cervantes-core/sr
 | `mp.jwt.verify.publickey=…`
 
 | Location (file or URL)
-| `classpath:`, `file:`, `http://`, `https://` path. Auto-detection of PEM vs JWKS.
+| Class-path resource path, `file:`, `http://` or `https://` URL. Auto-detection of PEM vs JWKS.
 | `mp.jwt.verify.publickey.location=…`
 
 | Multi-key JWKS

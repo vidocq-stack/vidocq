@@ -180,7 +180,7 @@ Two related notes:
 
 == Full example in Vidocq Runtime
 
-The `vidocq-runtime-mansart-h2-example` example (in the Vidocq Runtime repo) shows end-to-end wiring: `MansartDataSource` + `mansart-jakarta-data` + `@Transactional` + Cassini REST endpoint. It is the reference sandbox to validate an integration.
+The `vidocq-runtime-mansart-h2-example` example (in `vidocq-runtime/vidocq-runtime-examples/` of the monorepo) shows end-to-end wiring: `MansartDataSource` + `mansart-jakarta-data` + `@Transactional` + Cassini REST endpoint. It is the reference sandbox to validate an integration.
 
 == Next step
 

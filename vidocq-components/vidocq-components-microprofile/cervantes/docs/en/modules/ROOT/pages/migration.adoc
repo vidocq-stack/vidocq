@@ -10,13 +10,14 @@ Cervantes is at `{project-version}`. The MicroProfile JWT 2.2 spec is fully cove
 On the application code side, migration is trivial: Cervantes strictly consumes the standard `org.eclipse.microprofile.jwt.*` and `jakarta.annotation.security.*` annotations. No proprietary import to replace. The gaps lie in transport/JWE configuration and in the dependency footprint.
 
 [#upgrading-from-0-3-0]
-== Upgrading from Cervantes {release-version}
+== Upgrading from Cervantes 0.3.0
 
-Cervantes now follows MicroProfile JWT 2.2. Application code does not change, but four things behave differently from `{release-version}`:
+Cervantes now follows MicroProfile JWT 2.2. Application code does not change, but five things behave differently from `0.3.0`:
 
-* **An unset `mp.jwt.verify.publickey.algorithm` accepts RS256 and ES256** — `{release-version}` defaulted to `RS256`. If the application relied on that default to refuse EC-signed tokens, set `mp.jwt.verify.publickey.algorithm=RS256` explicitly. When the property is set, it is now enforced as a family on every token: with `RS256`, an `RS512` token passes and an `ES256` token is rejected. See xref:concepts.adoc#supported-algorithms[supported algorithms].
-* **An EC public key in PEM needs no extra setting** — with the property unset, an inline or file/classpath PEM key is read as RSA or EC from the key itself; `{release-version}` read it as RSA unless the property named an EC algorithm. See xref:reference.adoc#signature-verification[signature verification keys].
-* **A bad configuration now stops the container start** — an unrecognised `mp.jwt.verify.publickey.algorithm` or `mp.jwt.decrypt.key.algorithm` (exact, case-sensitive names), or an unreadable verification or decryption key, fails the start with a `DeploymentException` naming the property and the value. `{release-version}` started anyway: it read an unrecognised verification algorithm as RSA, rejected every encrypted token for an unrecognised decryption algorithm (CERV-004), and reported an unreadable key only when the validator was first injected. Check `mp.jwt.*` values that used to be tolerated, such as `rs256` or `rsa-oaep`. See xref:reference.adoc#config-validated-at-start[when the configuration is validated].
+* **An unset `mp.jwt.verify.publickey.algorithm` accepts RS256 and ES256** — `0.3.0` defaulted to `RS256`. If the application relied on that default to refuse EC-signed tokens, set `mp.jwt.verify.publickey.algorithm=RS256` explicitly. When the property is set, it is now enforced as a family on every token: with `RS256`, an `RS512` token passes and an `ES256` token is rejected. See xref:concepts.adoc#supported-algorithms[supported algorithms].
+* **An EC public key in PEM needs no extra setting** — with the property unset, an inline or file/classpath PEM key is read as RSA or EC from the key itself; `0.3.0` read it as RSA unless the property named an EC algorithm. See xref:reference.adoc#signature-verification[signature verification keys].
+* **A bad configuration now stops the container start** — an unrecognised `mp.jwt.verify.publickey.algorithm` or `mp.jwt.decrypt.key.algorithm` (exact, case-sensitive names), or an unreadable verification or decryption key, fails the start with a `DeploymentException` naming the property and the value. `0.3.0` started anyway: it read an unrecognised verification algorithm as RSA, rejected every encrypted token for an unrecognised decryption algorithm (CERV-004), and reported an unreadable key only when the validator was first injected. Check `mp.jwt.*` values that used to be tolerated, such as `rs256` or `rsa-oaep`. See xref:reference.adoc#config-validated-at-start[when the configuration is validated].
+* **A cleartext `http://` key location to a remote host stops the start** — `mp.jwt.verify.publickey.location=http://…` is accepted only for a loopback host (`localhost`, `127.0.0.1`, `::1`); any other host fails the start with a `DeploymentException` that names the location and `io.vidocq.cervantes.jwks.allowHttp`. `0.3.0` fetched it. Move the location to `https://`, or set the system property `io.vidocq.cervantes.jwks.allowHttp=true`. See xref:reference.adoc#signature-verification[signature verification keys].
 * **`JwtConfig` record** — it gained a seventh component, `requiredAlgorithm`. The six-argument constructor is kept, so code that builds a `JwtConfig` still compiles; source code that uses record deconstruction patterns on `JwtConfig` must add the new component.
 
 == From SmallRye JWT
@@ -57,7 +58,7 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 
 | `smallrye.jwt.path.sub`, `…path.groups`, `…claims.groups`
 | No equivalent (standard claims only)
-| If the issuer does not place `groups` in the standard location, configure a filter on the issuer side or an `OASModelReader` on the client side. Out of scope for standard MP JWT 2.2.
+| If the issuer does not place `groups` in the standard location, configure a filter on the issuer side. Out of scope for standard MP JWT 2.2.
 
 | `smallrye.jwt.verify.aud` (alias)
 | `mp.jwt.verify.audiences` (standard key)
@@ -68,8 +69,8 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 | Rename (`mp.jwt.` prefix instead of `smallrye.jwt.`).
 
 | Quarkus Dev Mode hot reload
-| No equivalent
-| The cycle is `./mvnw clean install` + restart.
+| `vidocq:dev` of the xref:vidocq::index.adoc[Vidocq runtime]
+| Cervantes has no dev mode of its own; outside the Vidocq runtime the cycle is `./mvnw clean install` + restart.
 |===
 
 == Notable differences
@@ -90,7 +91,7 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 | `smallrye-jwt`, `jose4j`, `parsson` (or `jackson-databind`), `microprofile-jwt-auth-api`. Indirectly: `commons-logging`, sometimes `bouncycastle`.
 
 | Cervantes
-| `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-jaxrs`, `cervantes-api`, `cervantes-mp-jwt-api`, `champollion-impl` (JSON-P 2.1, ~120 KB), `ravel-impl` (MP Config). *No* third-party crypto/JWT library.
+| `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-jaxrs`, `cervantes-api`, `cervantes-mp-jwt-api`, `champollion-jsonp` (JSON-P 2.1, ~120 KB), `ravel-core` (MP Config). *No* third-party crypto/JWT library.
 |===
 
 == Porting checklist

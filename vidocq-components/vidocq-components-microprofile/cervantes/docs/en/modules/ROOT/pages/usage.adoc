@@ -67,7 +67,7 @@ public class MeResource {
 }
 ----
 
-Without a token, the principal is an _anonymous_ one — `getName() == null`, `getGroups()` empty, all claims `null`. No NPE to fear, but a `@RolesAllowed` endpoint will already have returned 401 before the method runs — an unannotated or `@PermitAll` endpoint, on the other hand, executes with this anonymous principal.
+Without a token, the principal is an _anonymous_ one — `getName() == null`, `getGroups() == null`, all claims `null`. The injected `jwt` itself is never `null`, and a `@RolesAllowed` endpoint will already have returned 401 before the method runs — an unannotated or `@PermitAll` endpoint, on the other hand, executes with this anonymous principal.
 
 == Injecting a single claim with `@Claim`
 
@@ -166,7 +166,7 @@ When the issuer encrypts the token (to hide claims from intermediate logs):
 [source,properties]
 ----
 # Decryption private key — inline PKCS#8 PEM, or pointed to by .location
-mp.jwt.decrypt.key.location=classpath:/META-INF/keys/decrypt-private.pem
+mp.jwt.decrypt.key.location=/META-INF/keys/decrypt-private.pem
 
 # Expected key-wrapping algorithm: RSA-OAEP or RSA-OAEP-256 (exact names). Unset = both are accepted.
 mp.jwt.decrypt.key.algorithm=RSA-OAEP-256

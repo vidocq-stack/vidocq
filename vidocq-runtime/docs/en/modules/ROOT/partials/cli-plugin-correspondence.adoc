@@ -43,12 +43,16 @@ application run their goal through Maven (`./mvnw` when the project has one).
 | none
 | A summary read from the project's files: `vidocq:list-extensions` gives the extensions in detail; versions are the build's.
 
+| `vidocq pom convert` / `vidocq pom upgrade`
+| none
+| They rewrite the pom itself, its style or its Vidocq version, with the code of `vidocq-runtime-tooling`.
+
 | `vidocq update`, `completion`, `version`, `help`
 | none
 | They manage the CLI itself.
 
 | none
-| `vidocq:generate`, `vidocq:checkpom`, `vidocq:check-module-info`
+| `vidocq:generate`, `vidocq:checkpom`, `vidocq:check-module-info`, `vidocq:test-path`, `vidocq:build-info`
 | Bound to the build: no command needed.
 
 | none

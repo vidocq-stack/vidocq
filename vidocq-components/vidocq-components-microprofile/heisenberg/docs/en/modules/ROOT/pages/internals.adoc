@@ -59,7 +59,7 @@ is applied when the container starts (<<interceptor-priority>>).
 
 `heisenberg-core` is plain Java — no CDI, no `@Inject`. It is usable outside a container, which is how the project's own JUnit 5 tests verify a `RetryEngine`'s logic without deploying an application. Its `io.vidocq.heisenberg.internal` package is exported only to the CDI module — it is not application API.
 
-`heisenberg-cdi-vauban` is the integration layer: a single CDI `@Interceptor` (`FaultToleranceInterceptor`) orchestrates the engines, a Build Compatible Extension (`HeisenbergExtension`) declares it at startup, a second one (`InterceptorPriorityExtension`) gives it the configured priority, two `@ApplicationScoped` beans (`StateRegistryBean`, `BulkheadStateRegistryBean`) maintain the shared state.
+`heisenberg-cdi-vauban` is the integration layer: a single CDI `@Interceptor` (`FaultToleranceInterceptor`) orchestrates the engines, a Build Compatible Extension (`HeisenbergExtension`) binds it to the guarded classes when the application builds (<<generated-code>>), a second one (`InterceptorPriorityExtension`) gives it the configured priority, two `@ApplicationScoped` beans (`StateRegistryBean`, `BulkheadStateRegistryBean`) maintain the shared state.
 
 == Invocation pipeline
 
@@ -95,7 +95,7 @@ flowchart LR
 What the annotations and MicroProfile Config say about a method is resolved on its first invocation and kept: `MethodPolicies` holds the enabled policies and their configurations per bean class and method, for the `Config` instance they were read from, and resolves them again under another instance (another deployment). The interceptor keeps, the same way, the method it resolved on the bean class, and the interceptor priority read from the configuration or, when it does not set it, from the class path. Until 0.4.0-RC1 all of it was read on every invocation: a `@Retry` method that succeeded at once cost about 4 µs and 16 KB (BENCH.md, BENCH-20261030-01).
 . Each engine applies its logic:
 .. `RetryEngine` loops up to `maxRetries` with `delay + jitter` randomness.
-.. `TimeoutEngine` runs the attempt on a virtual thread and calls `Thread.join(Duration)`; on expiry, it raises `TimeoutException` and interrupts the worker.
+.. `TimeoutEngine` runs a synchronous attempt on the caller's thread, which a watchdog virtual thread interrupts at the deadline, and an `@Asynchronous` attempt on a virtual thread it joins with `Thread.join(Duration)`; on expiry, it raises `TimeoutException`.
 .. `BulkheadEngine` acquires a fair `Semaphore` (sync mode); in async mode a second bounded `Semaphore` models the `waitingTaskQueue`.
 .. `CircuitBreakerEngine` reads/updates the three-state machine held by the shared registry; its sliding window counts requests and failures with `AtomicInteger` counters.
 .. `FallbackResolver` resolves `fallbackMethod` or instantiates the `FallbackHandler<T>` through CDI lookup.
@@ -108,10 +108,10 @@ What the annotations and MicroProfile Config say about a method is resolved on i
 | Engine | Implementation
 
 | `RetryEngine`
-| `for` loop bounded by `maxRetries` / `maxDuration`. `Thread.sleep(Duration)` for delay. `ThreadLocalRandom` for jitter (lock-free).
+| Loop bounded by `maxRetries` / `maxDuration`. `Thread.sleep` for delay. `ThreadLocalRandom` for jitter (lock-free).
 
 | `TimeoutEngine`
-| `Thread worker = Thread.ofVirtual().start(task)`. `worker.join(Duration.ofMillis(timeoutMs))`. If not done: `worker.interrupt()` and `TimeoutException`.
+| Synchronous: the attempt runs on the caller's thread, and a watchdog `Thread.ofVirtual()` interrupts it at the deadline; `TimeoutException` once the method has ended (§4.1.2). `@Asynchronous`: `Thread worker = Thread.ofVirtual().start(task)`. `worker.join(Duration.ofMillis(timeoutMs))`. If not done: `worker.interrupt()` and `TimeoutException`.
 
 | `CircuitBreakerEngine`
 | Finite-state machine (CLOSED/OPEN/HALF_OPEN) stored in the shared registry as a `volatile` per-method snapshot; sliding window backed by a `ConcurrentLinkedDeque` plus `AtomicInteger` request/failure counters. No lock.
@@ -150,13 +150,13 @@ Consequence: a `@RequestScoped` bean recreated on every request _shares_ its `@C
 
 Every policy that needs to block (`@Timeout`, `@Asynchronous`, `@Bulkhead` async mode) uses `Thread.ofVirtual()`. No platform thread pool is created by Heisenberg.
 
-* `TimeoutEngine` — `Thread.ofVirtual().start(task)` + `join(Duration)`. Memory cost is in the order of a few kB per attempt (stack pinning included).
+* `TimeoutEngine` — a watchdog `Thread.ofVirtual()` for a synchronous attempt, which runs on the caller's thread; `Thread.ofVirtual().start(task)` + `join(Duration)` for an `@Asynchronous` one. Memory cost is in the order of a few kB per attempt (stack pinning included).
 * `AsynchronousEngine` (`heisenberg-core`) — `Thread.ofVirtual().start(...)` to run the full chain and complete the returned `CompletionStage`.
 * `BulkheadEngine` (async) — waiting invocations block on the fair `Semaphore` from their own virtual thread; no dispatcher thread exists.
 
 [NOTE]
 ====
-`StructuredTaskScope` (JEP 505, finalised in Java 25) is available but the current implementation uses `Thread.join(Duration)` to stay strictly compatible with Java 21+. Migration to `StructuredTaskScope` is listed in `ROADMAP.md`.
+`StructuredTaskScope` (JEP 505) is still a preview API in Java 25, and the current implementation uses `Thread.join(Duration)` to stay strictly compatible with Java 21+. Migration to `StructuredTaskScope` is listed in `ROADMAP.md`.
 ====
 
 === No `synchronized`, no `ThreadLocal`
@@ -206,7 +206,7 @@ Startup validation stays the portable path: any malformed annotation (`@Asynchro
 Both extensions are declared twice, as every Build Compatible Extension must be: with `provides` in `module-info.java` for the module path, and in `META-INF/services` for the class path.
 
 [#interceptor-priority]
-=== The interceptor's priority
+=== The interceptor's priority [.tag-new]#NEW#
 
 `mp.fault.tolerance.interceptor.priority` belongs to the configuration the application starts with: a system property, an environment variable, a properties file of the deployment. A build reads the configuration of the build machine. So `InterceptorPriorityExtension` asks Vauban's `ExtensionPhase.isBuildTime()` first and does nothing at build time; when the container starts, it replaces the `@Priority` of `FaultToleranceInterceptor` by the configured value, read once, from the configuration at that moment: nothing keeps the value, so a container started after another one in the same JVM gets its own (BUG-020). `FaultToleranceInterceptor` is the only Fault Tolerance interceptor: every configured value moves it, the `3850` of the TCK's priority test included.
 
@@ -215,7 +215,7 @@ The priority has an extension of its own because of how Vauban treats extensions
 NOTE: Under a Vauban older than its fix BUG-20261113-12 (Vidocq/vauban#289), the configured priority does not move the interceptor (BUG-019, heisenberg#66): Vauban drops a `@Priority` that an `@Enhancement` adds to an interceptor class with `ClassConfig.addAnnotation(Annotation)`, so `FaultToleranceInterceptor` keeps its default priority `4010`, whatever the value, `3850` included. Until that fix, a second interceptor, `FaultTolerancePriority3850Interceptor`, declared `3850` statically so that the TCK's priority test passed; it was removed once Vauban applied the configured priority. `Integer.MAX_VALUE` still disables Fault Tolerance under any Vauban: the interceptor checks it on each call.
 
 [#definition-errors]
-== Definition errors at build time
+== Definition errors at build time [.tag-new]#NEW#
 
 The processor reports the MicroProfile Fault Tolerance 4.1 definition errors as compile errors, one per rule, with the
 messages of `FaultToleranceDefinitionException`. It checks every method an interceptor guards, with the annotations the

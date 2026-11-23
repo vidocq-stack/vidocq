@@ -27,7 +27,7 @@ javac, and the security annotations of a resource are read once, when Cassini bu
 | Cassini reads their annotations by reflection.
 
 | The synthetic `@Claim` beans, one per injected claim type
-| `CervantesClaimExtension` (<<_vauban_bce_cervantesclaimextension>>), which Vauban runs in javac when
+| `CervantesClaimExtension` (<<vauban-bce-cervantesclaimextension>>), which Vauban runs in javac when
   `cervantes-cdi-vauban` is on the processor path; on Vidocq the `vidocq-runtime-cervantes-jwt-extension-codegen`
   bundle puts it there
 | Vauban, from the synthetic metadata the processor wrote
@@ -50,7 +50,7 @@ Cervantes does not log which path it took.
 
 == Separation `cervantes-core` / integrations
 
-`cervantes-core` is pure Java. It depends only on `cervantes-mp-jwt-api` (spec), `cervantes-api` (public SPI), `jakarta.json` (parsing through xref:champollion::index.adoc[Champollion]), and on the MicroProfile Config SPI as a method signature — _not_ on any runtime implementation. It can be used outside any container: a unit test can generate an RSA pair, forge a token, and validate the whole thing without starting Cassini or Vauban.
+`cervantes-core` is pure Java. It depends only on `cervantes-mp-jwt-api` (spec), `cervantes-api` (public SPI) and `jakarta.json` (parsing through xref:champollion::index.adoc[Champollion]) — _not_ on any runtime implementation. It can be used outside any container: a unit test can generate an RSA pair, forge a token, and validate the whole thing without starting Cassini or Vauban.
 
 `cervantes-cdi-vauban` wires the engine into CDI: `@RequestScoped JsonWebToken` producer, `@Claim` synthesis BCE, `JwtValidator` producer configured from MP-Config, and the check of that configuration when the container starts (<<configuration-check>>).
 
@@ -152,7 +152,7 @@ public class JsonWebTokenContext {
 ----
 
 * Filter side: `tokenContext.setToken(jwt)` (at the start of the request); `clear()` resets the context.
-* Producer side: `JsonWebTokenProducer.@Produces @RequestScoped JsonWebToken get(JsonWebTokenContext ctx)` reads `ctx.current()` and falls back to the anonymous `DefaultJsonWebToken.anonymous()` when it is empty.
+* Producer side: `JsonWebTokenProducer.@Produces @RequestScoped JsonWebToken currentToken(JsonWebTokenContext ctx)` reads `ctx.current()` and falls back to the anonymous `DefaultJsonWebToken.anonymous()` when it is empty.
 * `@Claim` side: the synthetic BCE also re-reads `ctx.current()` on every resolution.
 
 `@RequestScoped` guarantees per-request isolation _without_ `ThreadLocal` — which avoids pinning virtual threads.
@@ -163,7 +163,7 @@ public class JsonWebTokenContext {
 
 . **`@Registration`** — Vauban calls the extension for each injection-point type carrying `@Claim`. The extension collects the list of _types_ encountered (`String`, `Long`, `Set<String>`, `Optional<String>`, `ClaimValue<String>`, …).
 . **`@Synthesis`** — Vauban calls the extension, which registers, for each collected type, a `SyntheticBean` qualified `@Claim` and `@Dependent`. Because `@Claim` has `value` and `standard` marked `@Nonbinding`, _a single bean per type_ covers all injection sites — the claim name is read off the `InjectionPoint` at instantiation.
-. **`ClaimSyntheticCreator`** — implements `SyntheticBeanCreator<T>`. On each resolution, it reads the `InjectionPoint`, extracts `@Claim` (`value()` or `standard().name()`), retrieves the current `JsonWebToken` through `JsonWebTokenContext`, and delegates to `ClaimResolver.resolve(jwt, claimName, type)` for typed conversion.
+. **`ClaimSyntheticCreator`** — implements `SyntheticBeanCreator<T>`. On each resolution, it looks up the `InjectionPoint` and the `JsonWebTokenContext`, and delegates to `ClaimResolver.resolve(injectionPoint, context)`, which extracts `@Claim` (`value()` or `standard().name()`), retrieves the current `JsonWebToken` and does the typed conversion.
 
 The pattern mirrors Ravel's `ConfigCdiExtension`, which inspired the approach.
 
@@ -214,7 +214,7 @@ Implementation:
 
 The snapshot is immutable; the `AtomicReference` acts as the memory barrier (JMM happens-before).
 
-== Threading and `ScopedValue`
+== Threading
 
 . **No `synchronized` around I/O.** JWKS fetching, PEM file reading and JSON parsing go through primitives non-blocking for the virtual-thread scheduler.
 . **No `ThreadLocal`.** Per-request state sharing goes through `@RequestScoped` (CDI) or `SecurityContext` (JAX-RS), not `ThreadLocal`. Avoids virtual-thread pinning.
@@ -223,7 +223,7 @@ The snapshot is immutable; the `AtomicReference` acts as the memory barrier (JMM
 == AOT / jlink compatibility
 
 * Each sub-module ships its own `module-info.java`. No `Automatic-Module-Name` fallback.
-* No `setAccessible(true)` in production. When a privileged view is needed (rarely), `MethodHandles.privateLookupIn`.
+* No `setAccessible(true)` in production.
 * No dynamic `java.lang.reflect.Proxy`. `@Claim` beans are _synthetic_, created at CDI compile time by Vauban — not at runtime.
 * `cervantes-tck` joins the reactor only under the `tck` Maven profile (a regular child of `cervantes-parent`): a plain `mvn install` never builds nor downloads it, which decouples the runtime build from the official TCK stack.
 

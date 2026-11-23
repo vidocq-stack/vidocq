@@ -2,7 +2,7 @@
 :repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Jakarta Data 1.0 + transactions + JDBC pool, virtual threads, static codegen, zero reflection.
 
-NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+NOTE: Persistence and Validation now live in xref:noether::index.adoc[Noether], a component of its own in the monorepo (`vidocq-preview/`). Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to Noether's folder.
 
 
 [.text-center]

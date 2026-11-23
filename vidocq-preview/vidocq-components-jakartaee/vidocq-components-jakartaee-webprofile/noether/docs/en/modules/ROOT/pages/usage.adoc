@@ -108,8 +108,8 @@ A unit gets its connections in one of three ways:
 | Jakarta EE servers, CDI containers, Vidocq
 |===
 
-In Java SE, `<jta-data-source>` and `<non-jta-data-source>` cannot be resolved (there is no JNDI): use the JDBC
-properties, or pass the `DataSource` object.
+In Java SE, `<jta-data-source>` and `<non-jta-data-source>` are looked up through JNDI, and the unit is refused when
+no naming context binds the name: use the JDBC properties, or pass the `DataSource` object.
 
 *Pooling JDBC-property units.* Add `noether-jpa-pool-mansart` at run time and Noether pools the connections of a unit
 configured by `jakarta.persistence.jdbc.*`; the pool closes with the factory. Without it, each transaction opens its
@@ -521,7 +521,7 @@ The Vidocq runtime assembles Noether for you. The `noether-persistence` extensio
 `noether-jpa-cdi`, the H2 and PostgreSQL dialects and Mansart Transactions; the units run on the data sources
 declared in the Vidocq configuration. Every factory an injection point names is created when the application starts,
 so a unit that cannot start fails the boot rather than the first request. See
-xref:dev@vidocq::modules/vidocq-runtime-extensions.adoc#noether-persistence[the `noether-persistence` extension].
+xref:{page-component-version}@vidocq::modules/vidocq-runtime-extensions.adoc#noether-persistence[the `noether-persistence` extension].
 
 [#servers]
 == Application servers

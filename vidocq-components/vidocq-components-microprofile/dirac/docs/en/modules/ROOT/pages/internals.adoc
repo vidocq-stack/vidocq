@@ -9,7 +9,7 @@ Dirac rejects instrumentation by hot-path reflection: all wiring is done at CDI 
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Dirac that is the metric metadata of each bean
-class; the annotation scan of the <<_startup_pipeline,startup pipeline>> stays as the fallback, unchanged.
+class; the annotation scan of the <<startup-pipeline,startup pipeline>> stays as the fallback, unchanged.
 
 [cols="2,2,3,3"]
 |===
@@ -79,7 +79,7 @@ A class also carries the metrics of the methods it inherits from its superclasse
 The same walk collects the `@Gauge` methods a bean inherits and does not override, static ones left out (DRC-013). A gauge is not intercepted, so §4.2 does not apply, but its method belongs to the bean: the gauge is read on the bean, under the name its declaring class gives it. When the superclass is itself a bean, or is scanned on its own, it carries that gauge too: the gauge is read on the class that declares the method, not on its subclass. Two unrelated beans that carry one gauge id, two subclasses of one base say, give one gauge, read on the bean whose class name comes first, and a `WARNING` names both. The `$$DiracMetrics` companion lists the inherited gauges too; it calls them from the bean's package, so a gauge method inherited as `protected` from another package leaves the bean to the scan.
 +
 An interface is no bean (CDI 4.1, §3.1.1): the extension keeps none, and an abstract method an interface declares carries no metric of the class that implements it. A default method a bean inherits from an interface and does not override is another matter: Vauban and Weld intercept it through the annotation of the interface's method. The scan collects, for the bean, the metrics of those default methods, `@Gauge` ones included, named after the interface that declares the method, as the interceptors name them (DRC-012). `Class.getMethods()` gives the most specific method of each signature, so a default method that the class, a superclass or a more specific interface overrides passes nothing on. The companion lists them too.
-. `@Synthesis` phase— `registerDiscoveredMetrics(SyntheticComponents)` registers a synthetic `DiscoveredMetrics` bean whose parameter lists those class names; `DiscoveredMetricsCreator` resolves their metrics again, in the container: gauge methods to `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`) when no compile-time `$$DiracMetrics` companion covers them. The state belongs to the extension instance, so each container has its own: two containers sharing Dirac's classes, as two applications on one class loader do, never see each other's metrics (dirac#23). It used to be a `static` field of the extension.
+. `@Synthesis` phase — `registerDiscoveredMetrics(SyntheticComponents)` registers a synthetic `DiscoveredMetrics` bean whose parameter lists those class names; `DiscoveredMetricsCreator` resolves their metrics again, in the container: gauge methods to `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`) when no compile-time `$$DiracMetrics` companion covers them. The state belongs to the extension instance, so each container has its own: two containers sharing Dirac's classes, as two applications on one class loader do, never see each other's metrics (dirac#23). It used to be a `static` field of the extension.
 . `MetricRegistryProducerBean` is a regular `@ApplicationScoped` bean; its **constructor** instantiates the three `MetricRegistryImpl` (`APPLICATION`, `BASE`, `VENDOR`) and invokes `BaseMetricsRegistrar` to populate the `BASE` scope (JVM gauges: GC, threads, heap, classloader, CPU, uptime). No `@PostConstruct` callback is involved.
 . `GaugeRegistrationBean`, at application start, takes this container's `DiscoveredMetrics` and registers the gathered `@Gauge` as `Gauge<T>` in the target scope (`APPLICATION` by default), and pre-registers the `@Timed` and `@Counted` metrics. Gauge beans are looked up in this container, not through `CDI.current()`. How the target of a gauge class is obtained is decided once, at the first read of one of its gauges, and kept, a failed decision too: one reference of the bean of that class. Among the container's beans, whatever their qualifiers, it is the one whose bean class is that class and that has a type of it: the raw class, or, for a class with type variables, a parameterized type of it (CDI 4.1 §5.2.4: the raw class of a class with a bounded type variable is not a type its bean is looked up by). Those with `@Default` are taken first, the others when there is none (DRC-017). A producer the class declares and a class whose bean types `@Typed` restricts are left out, so a read never runs a producer. A class with no bean of its own, such as an abstract superclass the extension scanned on its own, is read on the bean of that type with `@Default`. For a bean of a normal scope the reference is its client proxy. A `@Dependent` bean is created once, at the first read, and released when the container stops (DRC-016: each read used to create an instance, which Weld kept until the container stopped). When the resolution or the creation fails, each read fails with that cause and none tries again; a gauge with no bean at all fails at each read, unsatisfied. `GaugeRegistrationBean` reads the bean types, a `ParameterizedType` and its raw type, and no member: it is a documented entry of the architecture rule on reflection for that reason.
 
@@ -87,19 +87,18 @@ No user class is instantiated until it is actually injected: `MethodHandle` reso
 
 == `@Counted` hot path
 
-The `CountedInterceptor` is dispatched by CDI on every invocation. It maintains a `ConcurrentHashMap<CacheKey, ResolvedCounter>` cache keyed by `(BeanClass, Method)` — `MetricID` resolution happens only once, on the first call; subsequent calls pull from the cache.
+The `CountedInterceptor` is dispatched by CDI on every invocation. It maintains a per-class cache, a `ClassValue` holding a `ConcurrentHashMap<Method, Optional<ResolvedCounter>>` — `MetricID` resolution happens only once per bean class and method, on the first call; subsequent calls pull from the cache.
 
 [source,java]
 ----
 // simplified excerpt from CountedInterceptor.aroundInvoke
-ResolvedCounter resolved = counters.computeIfAbsent(
-    new CacheKey(beanClass, method),
-    k -> resolve(beanClass, method));
-resolved.counter.inc();        // LongAdder — no contention
+ResolvedCounter resolved = INVOCATIONS.get(targetClass)
+    .computeIfAbsent(method, m -> resolve(targetClass, m));
+registry.getCounter(resolved.metricID()).inc();   // LongAdder — no contention
 return ctx.proceed();
 ----
 
-`Counter.inc()` is a `LongAdder.increment()` — no CAS, no `synchronized`. `Tag` is an immutable record.
+`Counter.inc()` is a `LongAdder.increment()` — no CAS, no `synchronized`. `Tag` is an immutable class of the spec API.
 
 `TimedInterceptor` follows the same scheme: `long t0 = System.nanoTime();` before `ctx.proceed()`, `histogram.update(System.nanoTime() - t0);` after.
 
@@ -158,24 +157,20 @@ On a host runtime that runs on virtual threads (for example Chappe with `Executo
 
 == `MetricsResource`
 
-`MetricsResource` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`, paired with `ContentNegotiationFilter` — a `@PreMatching` `ContainerRequestFilter` that rewrites a missing, blank or wildcard `Accept` header to `text/plain` before routing. The resource holds the three registries as three injected fields:
+`MetricsResource` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`, paired with `ContentNegotiationFilter` — a `@PreMatching` `ContainerRequestFilter` that rewrites a missing, blank or wildcard `Accept` header to `text/plain` before routing. The resource receives the three registries through its injected constructor:
 
 [source,java]
 ----
-@Inject @RegistryScope
-MetricRegistry appRegistry;
-
-@Inject @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
-MetricRegistry baseRegistry;
-
-@Inject @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
-MetricRegistry vendorRegistry;
+@Inject
+MetricsResource(@RegistryScope MetricRegistry appRegistry,
+                @RegistryScope(scope = MetricRegistry.BASE_SCOPE) MetricRegistry baseRegistry,
+                @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE) MetricRegistry vendorRegistry)
 ----
 
 Three routes (`/metrics`, `/metrics/\{scope}`, `/metrics/\{scope}/\{name}`), three steps per call:
 
 . Resolve the format via `Accept` (JSON only when it contains `application/json`; otherwise OpenMetrics, served as `text/plain;version=0.0.4;charset=utf-8`).
-. Pick the target registry among the three injected fields.
+. Pick the target registry among the three injected registries.
 . Emit via `OpenMetricsFormatter` or `JsonMetricsFormatter`.
 
 No lock is taken; the serialisation itself can be parallelised safely, since registry reads are lock-free.

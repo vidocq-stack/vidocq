@@ -27,11 +27,11 @@ The official MicroProfile JWT 2.2 TCK verifies that an implementation correctly 
 | 0
 |===
 
-Any future regression must be logged in the repository's `TCK.md` with: test name, reason, remediation plan.
+Any future regression must be logged in Cervantes's `TCK.md` with: test name, reason, remediation plan.
 
 == Prerequisites
 
-The `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2` artefact (and its `tests` classifier) is now available on Maven Central — it is downloaded automatically. The runner also installs `cassini-tck` into the local M2 to provide `CassiniTestHarness`.
+The `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2` artefact (and its `tests` classifier) is now available on Maven Central — it is downloaded automatically.
 
 [source,bash]
 ----
@@ -119,7 +119,7 @@ The TCK surfaced several gaps between the spec and the initial implementation; e
 | _Lazy_ HTTP load + PEM-vs-JWKS auto-detection on the same URL + URL re-read after the server starts (the port is only known after bind).
 
 | `JwksSource`
-| Added `Accept: application/json` header (§9.2.2) + `classpath:` resolution honoured.
+| Added `Accept: application/json` header (§9.2.2) + class-path resource resolution honoured.
 
 | `JwkParser`
 | Parsing of JWK private key (`d`) and certificate (`x5c`).
@@ -149,7 +149,7 @@ Two external fixes were necessary to reach 206/206 on the 2.1 TCK (still part of
 
 == Quality contract
 
-Any structural change to `cervantes-core`, `cervantes-cdi-vauban` or `cervantes-jaxrs` must preserve the 208 / 208 score before merge. A TCK regression is a CI blocker: the PR does not pass.
+Any structural change to `cervantes-core`, `cervantes-cdi-vauban` or `cervantes-jaxrs` must preserve the 208 / 208 score before merge. A pull request runs no TCK: the `TCK nightly` workflow of the monorepo runs it once a day, on demand on the branch of a pull request, and for a release, which requires it to pass.
 
 == Further reading
 

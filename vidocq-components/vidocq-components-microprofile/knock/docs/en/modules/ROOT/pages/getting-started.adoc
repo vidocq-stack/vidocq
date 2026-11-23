@@ -159,6 +159,7 @@ System.out.println(report.json());         // serialised payload
 
 [source,bash]
 ----
+# from Knock's folder of the monorepo (vidocq-components/vidocq-components-microprofile/knock)
 sdk env
 ./mvnw -ntp install -DskipTests
 ./mvnw test

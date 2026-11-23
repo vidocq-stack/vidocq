@@ -2,7 +2,7 @@
 :description: @VidocqTest starts the application in its own JVM for a test class and sends it HTTP requests.
 
 [.lead]
-`@VidocqTest`starts the application before the first test of a class and stops it after the
+`@VidocqTest` starts the application before the first test of a class and stops it after the
 last one. A test then sends it HTTP requests, as a client would, through the `VidocqApplication` it receives as a
 parameter. `vidocq create` writes such a test for a REST application (Vidocq/vidocq#350).
 
@@ -72,7 +72,7 @@ class HelloResourceTest {
   `ServiceLoader` found each `provides` of its
   `module-info.java` twice, so Vaadin refused to start with _multiple eligible instantiator implementations_
   (BUG-20261114-07).
-* [[runtime-dependencies]]**Every runtime dependency**reaches the application, on its module path or in its
+* [[runtime-dependencies]]**Every runtime dependency** reaches the application, on its module path or in its
   application layer, and every module is resolved, as under `vidocq:dev` and in the packaged application: a JDBC driver in
   `runtime` scope, which no module requires, is found without `requires org.postgresql.jdbc`. Surefire leaves such a
   jar on the class path of the tests; `vidocq:test-path`, which `vidocq-runtime-parent` binds to
@@ -105,7 +105,7 @@ does not read the file, which that folder does not hold: the application starts 
 builds for the launch (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]).
 The same is expected of Eclipse. A project the extension compiles into `target/`, an application of several modules
 without the `ide-output` profile or one that sets `vidocq.ide.output.skip`, reads the file there, as before.
-* [[dev-services]]**The dev services of the run**reach the application. `vidocq test`, `vidocq dev`
+* [[dev-services]]**The dev services of the run** reach the application. `vidocq test`, `vidocq dev`
   and, under a plain `mvn test`, the `vidocq-runtime-devservices-junit` listener (see
   xref:dev-services.adoc[Dev services]) put the keys their containers publish, `vidocq.pool.url` or
   `mp.jwt.verify.issuer` for instance, in the system properties of the tests. The application gets each of them, as
@@ -137,7 +137,7 @@ A test method declares any of these parameters:
 | `get(path)`, `post(path, contentType, body)` and `request(method, path, contentType, body)` send a request and
   return a `VidocqResponse` (`status()`, `body()` read as UTF-8, `header(name)`, `headers()`); `url()` and
   `url(path)` give the URL; `log()` gives what the application wrote so far.
-  [[request-headers]]`get(path, headers)` and `request(method, path, headers, contentType, body)`add request
+  [[request-headers]]`get(path, headers)` and `request(method, path, headers, contentType, body)` add request
   headers, an `Authorization: Bearer …` for a `@RolesAllowed` endpoint for one. The test cannot send the request
   itself: patched into the application module, it does not read `java.net.http`.
 

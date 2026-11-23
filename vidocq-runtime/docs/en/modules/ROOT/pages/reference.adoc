@@ -11,7 +11,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Artefact | Role
 
 | `io.vidocq.runtime:vidocq-runtime-parent:{project-version}`
-| Parent POM of an application (Model 4.0.0). [[parent-pom-versions]]It imports `vidocq-runtime-bom`, sets Java 25 and UTF-8, puts the Vauban indexer (`vidocq-runtime-core-codegen`) on the compiler's processor path, pins the Maven plugins and `vidocq-runtime-maven-plugin` at the runtime version written out literally, and binds `checkpom`, `generate`, `check-module-info`, `test-path` and `package` to the application that declares the plugin. An application that declares a `<version>` of its own resolves the runtime at the runtime's version, not its own. Until 0.4.0 it was the reactor root, `vidocq-runtime-build` now: see xref:migration.adoc#application-parent[the migration note]. Since 0.4.0 an application needs no parent: the plugin, declared with `<extensions>true</extensions>`, gives its build the same (xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[Vidocq/vidocq#380]); `vidocq create` writes that pom, `--with-parent` this one.
+| Parent POM of an application (Model 4.0.0). [[parent-pom-versions]]It imports `vidocq-runtime-bom`, sets Java 25 and UTF-8, puts the Vauban indexer (`vidocq-runtime-core-codegen`) on the compiler's processor path, pins the Maven plugins and `vidocq-runtime-maven-plugin` at the runtime version written out literally, and binds `checkpom`, `build-info`, `generate`, `check-module-info`, `test-path` and `package` to the application that declares the plugin. An application that declares a `<version>` of its own resolves the runtime at the runtime's version, not its own. Until 0.4.0 it was the reactor root, `vidocq-runtime-build` now: see xref:migration.adoc#application-parent[the migration note]. Since 0.4.0 an application needs no parent: the plugin, declared with `<extensions>true</extensions>`, gives its build the same (xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[Vidocq/vidocq#380]); `vidocq create` writes that pom, `--with-parent` this one.
 
 | `io.vidocq.runtime:vidocq-runtime-bom:{project-version}`
 | The versions of every Vidocq artifact an application declares: runtime, extensions, `-codegen` bundles, `-dev` modules, Dev Services, test support. The pom `vidocq create` writes imports it (`<type>pom</type>`, `<scope>import</scope>`), and so does `vidocq-runtime-parent`.
@@ -32,13 +32,11 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `@VidocqTest`, test scope: the application started in its own JVM for a test class, and HTTP requests to it. See xref:testing.adoc[Testing an application].
 
 | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
-| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev consoleis `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
+| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev console is `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
 
-| `io.vidocq.runtime.extensions.essentials:vidocq-runtime-langchain4j-cdi-mcp-extension:{project-version}`
-| langchain4j-cdi MCP server extension, in its own repository since 2026-11-19: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
 
 | `io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-peano-el-extension:{project-version}`
-| Jakarta Expression Language 6.0 through Peano; standard provider discovery and the `el` startup report. Companion POM bundle `vidocq-runtime-peano-el-extension-codegen` generates application accessor tables. See xref:modules/vidocq-runtime-extensions.adoc#peano-el[Expression Language (Peano)].
+| Jakarta Expression Language 6.0 through Peano; standard provider discovery and the `el` startup report. Companion bundle `vidocq-runtime-peano-el-extension-codegen` generates application accessor tables. See xref:modules/vidocq-runtime-extensions.adoc#peano-el[Expression Language (Peano)].
 
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-ibarra-pages-extension:{project-version}`
 | Jakarta Pages 4.0 through Ibarra: Foy serves the JSP pages `vidocq:generate` compiled into the application module, and the `pages` startup report lists them. See xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)].
@@ -56,7 +54,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
 
 | `io.vidocq.runtime:vidocq-runtime-examples:{project-version}`
-| Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-cervantes-jwt-example`, `vidocq-runtime-knock-health-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-petstore-example`, `vidocq-runtime-foy-servlet-example`, `vidocq-runtime-noether-persistence-example`, plus the `vidocq-runtime-external-rest-lib` helper library)
+| Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-cervantes-jwt-example`, `vidocq-runtime-cyrano-rest-client-example`, `vidocq-runtime-knock-health-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-petstore-example`, `vidocq-runtime-foy-servlet-example`, `vidocq-runtime-noether-persistence-example`, plus the `vidocq-runtime-external-rest-lib` helper library)
 
 | `io.vidocq.runtime:vidocq-runtime-integration-tests:{project-version}`
 | Multi-extension integration tests
@@ -173,7 +171,7 @@ none +
 | Declares a JNDI `java:` name: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` binds a bean, a value starting with `java:` links to another name. A key outside `comp/`, `module/`, `app/` and `global/` fails the start. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
 | `vidocq.pool.maxSize`
-| `20`
+| `10`
 | Mansart pool maximum size. See the Mansart pool extension for `minIdle`, `acquireTimeout`, `validation`, `xa`, …
 
 | `vidocq.migration.enabled` +
@@ -258,10 +256,7 @@ extension claims through `VidocqExtension.configKeys()`. The core claims `vidocq
 carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`].
 ====
 
-[NOTE]
-====
 // TODO@user: extract the exhaustive key list from the shipped extensions. Each extension declares the keys it consumes via `VidocqExtension.configKeys()`; MicroProfile Config itself is provided by `vidocq-runtime-ravel-config-extension`.
-====
 
 `ConfigSource` hierarchy (descending ordinal):
 
@@ -523,7 +518,7 @@ environment or in a system property.
   The plugin depends on `io.vidocq.ibarra:ibarra-compiler` for it: build tooling, never in the application.
 
 | `vidocq:package`
-| Standalone distribution: `bin/<artifactId>.sh` + `bin/<artifactId>.cmd` launchers (`vidocq.scriptName`), `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` that keeps the execute bit of the `.sh` launcher.
+| Standalone distribution: `bin/<artifactId>.sh` + `bin/<artifactId>.cmd` launchers (`vidocq.scriptName`), `lib/*.jar` (the parent layer) and `app/*.jar` (the application and, by default, its libraries), attached as a `-dist.zip` that keeps the execute bit of the `.sh` launcher.
 
 | `vidocq:dev`
 | Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.
@@ -556,7 +551,7 @@ environment or in a system property.
 | Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path; also writes it to `target/vidocq-test-runtime-path`, for a test an IDE starts. Bound to `process-test-classes` by the plugin as a build extension, or by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
 
 | `vidocq:build-info`
-| Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, from `.git` without running `git`; outside a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by the plugin as a build extension where `git-commit-id-maven-plugin` does not run (`vidocq-runtime-parent` keeps that plugin). xref:modules/vidocq-runtime-maven-plugin.adoc#build-info[Details].
+| Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, from `.git` without running `git`; outside a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by the plugin as a build extension where `git-commit-id-maven-plugin` does not run, or by `vidocq-runtime-parent`. xref:modules/vidocq-runtime-maven-plugin.adoc#build-info[Details].
 
 | `vidocq:idea`
 | Experimental — IntelliJ IDEA shared run configurations (`.run/*.run.xml`) for the reactor's applications, and a shared JUnit template that starts tests with the Vidocq test agent (`-Dvidocq.idea.junitTemplate=false` leaves it out), or a CI check of them. xref:modules/vidocq-runtime-maven-plugin.adoc#idea[Details], xref:modules/vidocq-runtime-maven-plugin.adoc#idea-junit-template[the JUnit template].
@@ -591,7 +586,7 @@ The `vidocq` command-line tool (see xref:getting-started.adoc[Getting started] f
 | Remove build outputs.
 
 | `config`
-| Inspect and edit CLI configuration.
+| Inspect and edit the project's `vidocq.properties` (`get`, `set`, `list`).
 
 | `doctor`
 | Diagnose the local setup (JDK, Maven) and the project (codegen bundles, `module-info.java`, HTTP port); `--fix` repairs the project.
@@ -726,6 +721,9 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 
 | xref:dev-console.adoc#vidocq-devc-005[`VIDOCQ-DEVC-005`]
 | A dev console panel failed to sample; that poll misses its live values.
+
+| xref:dev-services.adoc#vidocq-devs-001[`VIDOCQ-DEVS-001`]
+| The state file of the dev services exists but could not be read.
 
 | xref:modules/vidocq-runtime-extensions.adoc#vidocq-mig-001[`VIDOCQ-MIG-001`]
 | A datasource's migration found no migration, and its schema history records none: the schema was not migrated.

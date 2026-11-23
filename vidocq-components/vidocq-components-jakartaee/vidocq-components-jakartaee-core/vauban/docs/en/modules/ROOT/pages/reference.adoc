@@ -56,11 +56,7 @@ This page lists every artefact published by Vauban, the Java Modules packages th
 
 | `io.vidocq.vauban:vauban-junit:{project-version}`
 | `test`
-| JUnit 5 extension (`@VaubanTest`)
-
-| `io.vidocq.vauban:vauban-test-suite:{project-version}`
-| `test`
-| Official integration test suite
+| JUnit Jupiter extension (`@VaubanTest`)
 
 | `io.vidocq.vauban:vauban-bench`
 | not published
@@ -81,13 +77,13 @@ This page lists every artefact published by Vauban, the Java Modules packages th
 | `io.vidocq.vauban.api`
 
 | `io.vidocq.vauban.core`
-| `io.vidocq.vauban.core`, `.container`, `.langmodel`, `.langmodel.declarations`, `.langmodel.types`, `.types`, `.bean.model`, `.bean.discovery`, `.bean.resolution`, `.bean.validation`, `.context`, `.event`, `.interceptor`, `.enrichment`, `.extensions`, `.weaving`; `.proxy` and `.codegen` are qualified exports to `io.vidocq.vauban.processor`, which gets them through `ProcessorAccess` when javac defines it in a layer above vauban-core's (`--processor-module-path`)
+| `io.vidocq.vauban.core`, `.container`, `.langmodel`, `.langmodel.declarations`, `.langmodel.types`, `.types`, `.annotation`, `.bean.model`, `.bean.discovery`, `.bean.resolution`, `.bean.validation`, `.context`, `.event`, `.interceptor`, `.enrichment`, `.extensions`, `.weaving`; `.proxy` and `.codegen` are qualified exports to `io.vidocq.vauban.processor`, which gets them through `ProcessorAccess` when javac defines it in a layer above vauban-core's (`--processor-module-path`)
 
 | `io.vidocq.vauban.indexer`
 | `io.vidocq.vauban.indexer`, `.indexer.codegen`, `.indexer.model`, `.indexer.scanner`
 
 | `io.vidocq.vauban.processor`
-| (internal — requires `java.compiler`)
+| `io.vidocq.vauban.processor`, `.processor.apt`, `.processor.codegen`, `.processor.codegen.proxy`, `.processor.codegen.interceptor` (internal — requires `java.compiler`)
 
 | `io.vidocq.vauban.classloader.spi`
 | `io.vidocq.vauban.classloader.spi`
@@ -120,7 +116,7 @@ This page lists every artefact published by Vauban, the Java Modules packages th
 | Goal | Role
 
 | `vauban:generate`
-| Bound to `process-classes`. Scans the dependency JARs and the project classes for CDI beans, writes the `META-INF/vauban-beans.list` bean index into `${project.build.outputDirectory}`, and weaves the client-proxy marker constructor into the compiled normal-scoped beans. For a produced type whose proxy cannot live in the producer's package — a package-private or `protected` overridable member, or no accessible constructor — it also ships the proxy pre-generated under `META-INF/vauban/placed/` and adds the type to `META-INF/vauban/required-opens.list`, merging with what the annotation processor already wrote. It then reports those types at build time, and says plainly that they need the application to start through `Launch` or `Vidocq.run`, since whether a Vauban layer exists is decided at launch, not at build.It pre-generates the `$$Intercepted` subclass of every bean the container would wrap: a bean with a class-level binding, as before, and now also one intercepted through a method-level binding (declared, inherited from a superclass, or on an interface default method), a constructor binding, or an `@AroundInvoke` method of its own. It lists those subclasses in the `_VaubanComponents` it writes, so a module it built boots on the strict module path without `opens`, where the container used to fail with `Could not define interceptor subclass`. It writes no subclass for an `@Interceptor` class, which the container never wraps, and skips with a warning a bean whose members cannot be linked on the plugin's class path.It runs the `@Enhancement` phase of the build compatible extensions on the plugin's class path, and skips with a warning, naming `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`, a provider listed there that cannot be loaded or instantiated; the other extensions still run. Its output is reproducible (xref:internals.adoc#reproducible-output[Internals]). [.tag-new]#NEW# With `<freezeExtensions>true</freezeExtensions>` (`-Dvauban.freezeExtensions=true`, off by default) it then freezes the build compatible extensions of the application: it runs them on the runtime class path of the project and writes `META-INF/vauban-frozen-extensions.properties` and its two companion files into the output directory, so that the container start loads what they did instead of running them (xref:concepts.adoc#frozen-extensions[Extensions frozen at build]). `<startExtensions>` (`-Dvauban.startExtensions=a.B,c.D`) names extensions the start runs again whatever they asked. The goal logs how many extensions it froze and which ones run again at start, or why it froze none; without the parameter it removes the record an earlier build left.
+| Bound to `process-classes`. Scans the dependency JARs and the project classes for CDI beans, writes the `META-INF/vauban-beans.list` bean index into `${project.build.outputDirectory}`, and weaves the client-proxy marker constructor into the compiled normal-scoped beans. For a produced type whose proxy cannot live in the producer's package — a package-private or `protected` overridable member, or no accessible constructor — it also ships the proxy pre-generated under `META-INF/vauban/placed/` and adds the type to `META-INF/vauban/required-opens.list`, merging with what the annotation processor already wrote. It then reports those types at build time, and says plainly that they need the application to start through `Launch` or `Vidocq.run`, since whether a Vauban layer exists is decided at launch, not at build. It pre-generates the `$$Intercepted` subclass of every bean the container would wrap: a bean with a class-level binding, as before, and now also one intercepted through a method-level binding (declared, inherited from a superclass, or on an interface default method), a constructor binding, or an `@AroundInvoke` method of its own. It lists those subclasses in the `_VaubanComponents` it writes, so a module it built boots on the strict module path without `opens`, where the container used to fail with `Could not define interceptor subclass`. It writes no subclass for an `@Interceptor` class, which the container never wraps, and skips with a warning a bean whose members cannot be linked on the plugin's class path. It runs the `@Enhancement` phase of the build compatible extensions on the plugin's class path, and skips with a warning, naming `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`, a provider listed there that cannot be loaded or instantiated; the other extensions still run. Its output is reproducible (xref:internals.adoc#reproducible-output[Internals]). [.tag-new]#NEW# With `<freezeExtensions>true</freezeExtensions>` (`-Dvauban.freezeExtensions=true`, off by default) it then freezes the build compatible extensions of the application: it runs them on the runtime class path of the project and writes `META-INF/vauban-frozen-extensions.properties` and its two companion files into the output directory, so that the container start loads what they did instead of running them (xref:concepts.adoc#frozen-extensions[Extensions frozen at build]). `<startExtensions>` (`-Dvauban.startExtensions=a.B,c.D`) names extensions the start runs again whatever they asked. The goal logs how many extensions it froze and which ones run again at start, or why it froze none; without the parameter it removes the record an earlier build left.
 
 | `vauban:modularize`
 | Bound to `prepare-package`, **opt-in** (declare an execution). Gives the non-modular dependency jars of the closure a `module-info` of their own, in `target/vauban-modularized/` under the original file name, so tooling can substitute them. `requires` is derived from the types each jar actually uses, every package is exported, `META-INF/services` becomes `provides`, and the `ServiceLoader` lookups found in the bytecode become `uses` — an automatic module may consume any service, an explicit one only what it declares. Fails on a split package between two automatic jars, since the module system could not host them side by side. A jar whose own lookup cannot be declared legally (a module cycle, typically) is left automatic and the reason is written to `report.txt`. Nothing is installed, deployed or redistributed: the copies never leave `target/`. Moved here from the Vidocq runtime plugin, which is where it used to live as `vidocq:modularize`. Full reference: <<modularize>>. A caller that builds its own copy, such as `vidocq:generate`, uses `Modularizer.synthesizeOne` instead: the same descriptor for one jar, written nowhere.
@@ -194,14 +190,14 @@ closure. They are not optional: an automatic module may consume any service, an 
 what it declares, so a jar promoted without them fails its own `ServiceLoader.load` with
 _module … does not declare `uses`_. Lookups written through a helper that takes the service type
 as a `Class` parameter are followed across jars, since it is the module reaching `ServiceLoader` —
-not the one naming the service — that must declare the directive.They are followed
+not the one naming the service — that must declare the directive. They are followed
 through an interface or superclass method as well, when an implementation in the closure forwards to
 `ServiceLoader` (vauban#167). A service type passed as a
 variable rather than a class literal cannot be seen by any bytecode scan: the lookup declares it at
 its call (see _Lookups the descriptor cannot declare_ below).
 
 Every `ServiceLoader` factory is covered: `load(Class)`, `load(Class, ClassLoader)`,
-`load(ModuleLayer, Class)` and `loadInstalled(Class)`.The `ClassLoader` argument
+`load(ModuleLayer, Class)` and `loadInstalled(Class)`. The `ClassLoader` argument
 can now also come from a computed `Class`, such as `getClass().getClassLoader()` as Vaadin's
 `FeatureFlags` writes it, or a `Class` or `ClassLoader` variable (vauban#158).
 

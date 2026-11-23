@@ -117,7 +117,7 @@ If application code uses `synchronized` or `ThreadLocal` inside a method annotat
 | Same key, unprefixed — the dotted alias `mp.fault.tolerance.nonFallback.enabled` is also read.
 
 | `MP_Fault_Tolerance_Metrics_Enabled` (MP spec)
-| `mp.fault.tolerance.metrics.enabled` (default `true`).
+| Same key (default `true`).
 |===
 
 == Porting checklist
@@ -134,4 +134,4 @@ If application code uses `synchronized` or `ThreadLocal` inside a method annotat
 
 * xref:concepts.adoc[Concepts] — MP FT model, canonical order.
 * xref:internals.adoc[Internals] — virtual threads, shared state registries, observability.
-* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BUG.md[BUG.md] — known pitfalls.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg/BUG.md[BUG.md] — known pitfalls.

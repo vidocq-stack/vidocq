@@ -184,8 +184,8 @@ Numbers: see link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-compone
 == Roadmap
 
 * ✅ MP1 — API + skeleton.
-* ⏳ MP2 — Core implementation (`MansartDataSource`, semaphore, deque, validation).
-* ⏳ MP3 — Metrics + leak detection.
-* ⏳ MP4 — `mansart-jakarta-data` integration (transparent for the user).
+* ✅ MP2 — Core implementation (`MansartDataSource`, semaphore, deque, validation).
+* ✅ MP3 — Metrics + leak detection.
+* ✅ MP4 — `mansart-jakarta-data` integration (transparent for the user).
 
 See link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-pool/PLAN.md[mansart-pool PLAN.md].

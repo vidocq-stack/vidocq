@@ -15,14 +15,14 @@ user guide; jump straight to <<getting-started>> for a Hello-World walkthrough.
 | Artefact | `io.vidocq.runtime:vidocq-runtime-cli:{project-version}`
 | Java module | `io.vidocq.runtime.cli`
 | Main class | `io.vidocq.runtime.cli.VidocqCli`
-| Dependencies | None beyond the JDK and `io.vidocq.runtime.core` (hand-rolled arg parser, pure Java 25)
+| Dependencies | None beyond the JDK, `io.vidocq.runtime.core` and `io.vidocq.runtime.tooling` (hand-rolled arg parser, pure Java 25)
 |===
 
 == Prerequisites
 
 * **Java 25** (Temurin recommended) — the CLI refuses to run a project on an older JVM and
   `vidocq doctor` flags it.
-* **Maven 3.10.0** — pinned per project via `.sdkmanrc` (`sdk env`). The build/clean commands
+* **Maven 3.10.0** — pinned per project by the Maven wrapper `vidocq create` writes. The build/clean commands
   reuse the project's `mvnw` wrapper, falling back to `mvn` on the `PATH`.
 
 == Installing the `vidocq` command
@@ -45,8 +45,9 @@ irm https://vidocq.dev/install.ps1 | iex
 $env:VIDOCQ_VERSION = 'snapshot'; irm https://vidocq.dev/install.ps1 | iex
 ----
 
-`VIDOCQ_VERSION=snapshot`takes the newest `-SNAPSHOT` of the CLI from the
-Central snapshot repository, where every build of `main` is published. A SNAPSHOT is
+`VIDOCQ_VERSION=snapshot` takes the newest `-SNAPSHOT` of the CLI from the
+Vidocq snapshot repository, `https://maven.vidocq.dev/snapshots/`, where every build of `main` is published
+(`VIDOCQ_SNAPSHOTS` points the script to another one, such as its mirror). A SNAPSHOT is
 downloaded again on every run, since it changes with every build; a release already
 installed is kept. A CLI installed this way scaffolds projects against its own SNAPSHOT
 runtime (see <<create-snapshot>>). Run the installer again to go back to the latest release.
@@ -186,9 +187,9 @@ reload instead, use dev mode:
 vidocq dev
 ----
 
-`dev` boots the runtime and watches `src/main/java`, `src/main/resources` and
-`target/classes`; any `.java` / `.properties` / `.xml` / `.yml` change is debounced and
-re-applies your configuration and resources in-process without leaving the CLI.
+`dev` runs `mvn vidocq:dev`, which starts the application and watches `src/main/java` and
+`src/main/resources`; a change is debounced, recompiled and reloaded without leaving the CLI
+(see <<dev>>).
 
 === 5. Add an HTTP endpoint
 
@@ -205,7 +206,7 @@ including the resource class, the Java module declarations, and `curl` calls.
 
 == Command reference
 
-Run `vidocq help` for the command list, or `vidocq help <command>` for per-command options; `vidocq <command> --help` (or `-h`)shows the same. After `--`, a `--help` goes to Maven.
+Run `vidocq help` for the command list, or `vidocq help <command>` for per-command options; `vidocq <command> --help` (or `-h`) shows the same. After `--`, a `--help` goes to Maven.
 
 [cols="1,3"]
 |===
@@ -278,11 +279,11 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 Scaffolds a minimal Maven project (`pom.xml`, `module-info.java` and `vidocq.properties`, plus a
 `HelloResource` with `-x cassini-rest` and an `…App` trampoline with `--main`: `DemoApp` for `demo-app`, `ShopApp`
 for `shop`). The project has a version of its own, `1.0.0-SNAPSHOT`, and the Maven wrapper of the
-Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`), pinned to the ecosystem's Maven version
-. Under a `--parent-version` before 0.4.0, whose `dependencyManagement` resolves at the project's
+Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`), pinned to the ecosystem's Maven version.
+Under a `--parent-version` before 0.4.0, whose `dependencyManagement` resolves at the project's
 version, the project inherits the parent's version instead, and `create` says so. Without the CLI,
-xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] writes the same project
-. The extensions are written in the order given.
+xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] writes the same project.
+The extensions are written in the order given.
 
 [#create-parentless]
 **No parent by default** (Vidocq/vidocq#380). The pom imports `vidocq-runtime-bom` and `junit-bom`, declares
@@ -295,7 +296,7 @@ and the plugin read: an upgrade changes one line. `--with-parent` writes the pre
 A version before 0.4.0, or a 0.4.0 release candidate, inherits the parent whatever the option: the plugin of those
 versions gives the build nothing.
 
-From 0.4.0 the project is finished(Vidocq/vidocq#339):
+From 0.4.0 the project is finished (Vidocq/vidocq#339):
 
 * **A first test.** With `-x cassini-rest`, `src/test/java/<package>/HelloResourceTest.java` starts the application
   with xref:testing.adoc[`@VidocqTest`] and checks `GET /hello`; the pom declares `vidocq-runtime-junit` and
@@ -337,10 +338,10 @@ A project created before this change declares `central-snapshots` instead: it ke
 
 [source,bash]
 ----
-vidocq create --name my-api -x cassini-rest --parent-version 0.4.0-SNAPSHOT
+vidocq create --name my-api -x cassini-rest --vidocq-version 0.5.0-SNAPSHOT
 ----
 
-A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-started.adoc[Getting started]) scaffolds with its own SNAPSHOT runtime, so `--parent-version` is not needed there. A SNAPSHOT changes with every push to `main`: run `mvn -U package` to pick up the newest one.
+A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-started.adoc[Getting started]) scaffolds with its own SNAPSHOT runtime, so `--vidocq-version` is not needed there. A SNAPSHOT changes with every push to `main`: run `mvn -U package` to pick up the newest one.
 
 [#pom-convert]
 === `vidocq pom convert`
@@ -469,11 +470,11 @@ project and starts the application with its dependencies and extensions on the m
 [#test]
 === `vidocq test`
 
-Runs `mvn vidocq:test` in the project, through `./mvnw` when there is one: every test, then again on each change
+Runs `mvn process-classes vidocq:test` in the project, through `./mvnw` when there is one: every test, then again on each change
 of the main or test sources, without starting the application. `r` runs every test, `f` the failed ones, `q`
 quits. See xref:continuous-testing.adoc[Continuous testing].
 
-`vidocq test --once`is for CI and scripts, which a watch mode never gives back to: it runs every
+`vidocq test --once` is for CI and scripts, which a watch mode never gives back to: it runs every
 test once, stops the dev services, and exits with status 1 when a test fails or the code does not compile, 0
 otherwise (`mvn process-classes vidocq:test -Dvidocq.test.once=true`).
 
@@ -620,7 +621,7 @@ same blocks. `\{app}` below is the project's artifactId.
 | `mansart-pool`
 | Comments only: `vidocq.pool.url=jdbc:postgresql://localhost:5432/\{app}`, `vidocq.pool.username=\{app}` and
   `vidocq.pool.password=\{app}`. The PostgreSQL dev service sets the three keys under `vidocq dev`, `vidocq test`
-  and `mvn test`; uncommented, they are the database of `vidocq run` and of the packaged application. A
+  and `mvn test`; uncommented, they are the database of `vidocq start` and of the packaged application. A
   `jdbc:postgresql:` URL in the file never switches the dev service off (xref:dev-services.adoc#postgres-only-for-postgres[A PostgreSQL container only for a PostgreSQL application]).
 |===
 
@@ -782,8 +783,7 @@ $ vidocq config set vidocq.htpp.port 9090
 Inspects the local environment and current project and prints a ✔/⚠/✘ report. It exits
 non-zero when a blocking issue is found, so it doubles as a CI pre-flight gate
 (`vidocq doctor && vidocq build`). Without the CLI,
-xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:doctor`] runs the same checks
-.
+xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:doctor`] runs the same checks.
 
 [cols="1,3"]
 |===
@@ -867,7 +867,7 @@ never fail the command; only ✘ checks set a non-zero exit code.
 [#completion]
 === `vidocq completion`
 
-Prints a self-contained completion script to stdout. It completescommands, sub-commands
+Prints a self-contained completion script to stdout. It completes commands, sub-commands
 (`extension list|add|remove`, `config get|set|list`, …), each command's options, build types,
 and values: the catalog's extension ids after `extension add` and `create -x`, less those the `pom.xml` already declares, the extensions
 the current `pom.xml` declares after `extension remove`, the keys of the project's
@@ -883,7 +883,7 @@ source <(vidocq completion bash)
 vidocq completion zsh > "${fpath[1]}/_vidocq"
 ----
 
-`vidocq completion install`does it for you: it writes the script to
+`vidocq completion install` does it for you: it writes the script to
 `~/.vidocq/completion/vidocq.<shell>` and adds a marked block sourcing it to `~/.zshrc` or
 `~/.bashrc`. The shell comes from `$SHELL` unless named (`vidocq completion install bash`).
 Running it again replaces the block instead of adding another. The script records which CLI
@@ -900,8 +900,8 @@ NOTE: On macOS, Terminal starts bash as a login shell, which reads `~/.bash_prof
 Updates the CLI itself, from the same repositories as `install.sh`:
 
 * a release CLI moves to the latest release on Maven Central (`0.3.0` → `0.4.0`);
-* a SNAPSHOT CLI moves to the latest build of the highest SNAPSHOT line in the Central snapshot
-  repository. It records the build it installed, so the next run knows whether a newer one was
+* a SNAPSHOT CLI moves to the latest build of the highest SNAPSHOT line on `maven.vidocq.dev`, the project's
+  snapshot repository (<<create-snapshot>>). It records the build it installed, so the next run knows whether a newer one was
   published. A SNAPSHOT CLI without that record — installed by `install.sh`, or built locally —
   takes the published build only when it was deployed after the running CLI was built: a local
   build of newer sources is never downgraded.
@@ -965,8 +965,8 @@ include::partial$cli-plugin-correspondence.adoc[]
 == Configuration & profiles
 
 The CLI operates on the standard Vidocq configuration model. `vidocq.properties` lives in the
-project root or `src/main/resources`; profile overlays (`vidocq-<profile>.properties`) are
-layered by `vidocq dev --profile`. Any key is overridable via `-Dkey=value`, environment
+project root or `src/main/resources`; its profile keys (`%<profile>.<key>`) are
+activated by `vidocq dev --profile`. Any key is overridable via `-Dkey=value`, environment
 variables, or an external file — see xref:reference.adoc[Reference] for the full ordinal
 hierarchy.
 

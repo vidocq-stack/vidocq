@@ -2,12 +2,12 @@
 :description: Your first Vidocq Runtime service — install the CLI, scaffold, build and run a REST app in minutes.
 
 [.lead]
-This page installs the Vidocq CLI, scaffolds a REST application, builds it with plain Maven, and serves a first endpoint — every command below is tested end-to-end against the released *0.2.x* artifacts on Maven Central. If you prefer not to use the CLI, jump to <<without-the-cli,the manual annex>>.
+This page installs the Vidocq CLI, scaffolds a REST application, builds it with plain Maven, and serves a first endpoint — every command below is tested end-to-end against the released *{release-version}* artifacts on Maven Central. If you prefer not to use the CLI, jump to <<without-the-cli,the manual annex>>.
 
 == Prerequisites
 
 * **Java 25** (Temurin recommended) — check with `java -version`
-* **Maven 3.9+** — check with `mvn -version`
+* **Maven 3.10.0** or later, only to build without the wrapper — check with `mvn -version`. A project `vidocq create` writes carries `./mvnw`, which downloads Maven 3.10.0, and the CLI runs it rather than the `mvn` of your `PATH`.
 
 TIP: With https://sdkman.io[SDKMAN!]: `sdk install java 25-tem && sdk install maven`.
 
@@ -30,7 +30,7 @@ The script downloads the latest released CLI from Maven Central into `~/.vidocq/
 [source,bash,subs=attributes+]
 ----
 $ vidocq version
-Vidocq CLI {cli-version}
+Vidocq CLI {release-version}
 ----
 
 TIP: To try what is on `main` before it is released, install the latest SNAPSHOT CLI instead: `curl -fsSL https://vidocq.dev/install.sh | VIDOCQ_VERSION=snapshot sh` (PowerShell: `$env:VIDOCQ_VERSION='snapshot'; irm https://vidocq.dev/install.ps1 | iex`). The projects it scaffolds resolve Vidocq from the Vidocq snapshot repository, `https://maven.vidocq.dev/snapshots/`; see xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
@@ -106,10 +106,10 @@ No further wiring: the Cassini annotation processor generates the dispatch adapt
 [source,bash,subs=attributes+]
 ----
 mvn package
-sh target/todo-{release-version}/bin/todo.sh
+sh target/todo-1.0.0-SNAPSHOT/bin/todo.sh
 ----
 
-`mvn package` compiles, runs the code generators, and assembles a standalone distribution under `target/todo-{release-version}/` (launchers in `bin/`, module path in `lib/`). In another terminal:
+`mvn package` compiles, runs the code generators, and assembles a standalone distribution under `target/todo-1.0.0-SNAPSHOT/` (launchers in `bin/`, module path in `lib/`). In another terminal:
 
 [source,bash]
 ----
@@ -140,7 +140,7 @@ Nothing to add: since `todo` already has the Chappe HTTP server (through `cassin
 
 To run the application once, without the watcher, use `mvn vidocq:run`: it compiles, completes the bean index and forks the same JVM, and its exit code is the build's. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the `vidocq:run` goal].
 
-`mvn vidocq:idea`writes IntelliJ IDEA run configurations for what an IDE should run: by
+`mvn vidocq:idea` writes IntelliJ IDEA run configurations for what an IDE should run: by
 default, three files per application — a Maven run of `vidocq:dev` suffixed ` (dev)` (the one above, console
 included), one of `vidocq:run` suffixed ` (run)`, and a Remote JVM Debug one suffixed ` (debug)` that attaches to
 `vidocq:dev`'s own debug agent. `vidocq.mainModule` is all it needs: the files are named after the
@@ -159,7 +159,7 @@ In Eclipse, `mvn vidocq:eclipse`(`vidocq eclipse`) writes `.eclipse/`: Maven bui
 imported. The same folder is expected there, and was not run in Eclipse. See
 xref:modules/vidocq-runtime-maven-plugin.adoc#eclipse[the `vidocq:eclipse` goal].
 
-NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goal) boot the runtime from the CLI's own module path and therefore do not see the extensions declared in your pom. Prefer `mvn vidocq:dev` and the packaged launcher for extension-based apps.
+NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goals) run `mvn vidocq:dev` and `mvn vidocq:run` in the project: they see the extensions declared in your pom.
 
 == Step 6 — Add extensions as you grow
 
@@ -274,7 +274,7 @@ the pom alone, and the project is created in UTF-8 (`project.build.sourceEncodin
 NOTE: This is the pom of 0.4.0. Until then, the project inherited `vidocq-runtime-parent`, pinned every Vidocq
 version, bound the `package` execution and listed each extension's codegen bundle in a `maven-compiler-plugin`
 block: xref:migration.adoc#no-parent[the migration page] says what became of each line. The project has a version
-of its own, `1.0.0-SNAPSHOT`, and the Maven wrapper of the Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`),
+of its own, `1.0.0-SNAPSHOT`, and the Maven wrapper of the Vidocq repository (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`),
 so it builds with the ecosystem's Maven version and `vidocq doctor` finds it.
 
 `src/main/java/module-info.java`:

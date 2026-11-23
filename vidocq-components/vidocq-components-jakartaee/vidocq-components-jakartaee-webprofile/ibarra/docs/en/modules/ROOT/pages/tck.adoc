@@ -19,13 +19,16 @@ sdk env
 ./run-official-tck-pages-4.0.sh all
 ----
 
-| Measure | Result |
-|---|---:|
-| Official classes selected | 92 |
-| Official methods executed | 682 |
-| Passing methods | 682 |
-| Pass rate | 100% |
-| Failures, errors, skipped methods | 0, 0, 0 |
+[cols="3,1",options="header"]
+|===
+| Measure | Result
+
+| Official classes selected | 92
+| Official methods executed | 682
+| Passing methods | 682
+| Pass rate | 100%
+| Failures, errors, skipped methods | 0, 0, 0
+|===
 
 The detailed environment, report totals and historical snapshots are in
 link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/ibarra-tck/BASELINE.md[the recorded baseline].
@@ -35,9 +38,9 @@ there are no outstanding official TCK failures.
 
 == Smoke and CI
 
-The pull-request smoke workflow is a bounded regression subset and does not
-replace the full `all` run. The complete command above is the acceptance check for
-milestone I8.
+In the monorepo a pull request runs no TCK. The `smoke` selection of the script is a
+bounded regression subset and does not replace the full `all` run. The complete
+command above, run from Ibarra's folder, is the acceptance check for milestone I8.
 
 == Runner
 

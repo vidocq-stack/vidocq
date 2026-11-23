@@ -10,7 +10,7 @@ This page describes what happens when the application calls `authors.findByName(
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Mansart (Jakarta Data) that is the
 implementation of each repository and the model of each entity; implementing a repository at run time and reading an
-entity by reflection stay as the fallback, unchanged (<<_the_run_time_fallback>>).
+entity by reflection stay as the fallback, unchanged (<<runtime-fallback>>).
 
 [cols="2,2,3,3"]
 |===
@@ -23,7 +23,7 @@ entity by reflection stay as the fallback, unchanged (<<_the_run_time_fallback>>
 | `RuntimeRepositoryProxy` and `RuntimeRepositoryClassGenerator` implement it at run time with the Class-File API
   (announced); there is no `java.lang.reflect.Proxy` fallback.
 
-| `_Book` (Mansart's entity model, `$MODEL`) and `Book_` (the Jakarta Data static metamodel)
+| `_Book`, the Jakarta Data static metamodel, which also carries Mansart's entity model (`$MODEL`)
 | `mansart-data-processor`, for each `@Entity`
 | `EntityModels`, the first time an entity is used: the package's `_MansartComponents`, then the `$MODEL` field of
   `_Book`
@@ -111,15 +111,15 @@ Source code generated under `target/generated-sources/annotations/`, marked `@Ge
 ....
 @startuml
 package "mansart-data-processor (APT)" {
-  [DataProcessor] --> [EntityModelWriter]
-  [DataProcessor] --> [RepositoryWriter]
-  [EntityModelWriter] --> [_Book.java]
+  [MansartProcessor] --> [MansartMetamodelWriter]
+  [MansartProcessor] --> [RepositoryWriter]
+  [MansartMetamodelWriter] --> [_Book.java]
   [RepositoryWriter] --> [BookRepositoryImpl.java]
   [RepositoryWriter] --> [META-INF/mansart-repositories.list]
 }
 package "Application" {
-  [Book.java] -[#blue]-> [DataProcessor] : @Entity
-  [BookRepository.java] -[#blue]-> [DataProcessor] : @Repository
+  [Book.java] -[#blue]-> [MansartProcessor] : @Entity
+  [BookRepository.java] -[#blue]-> [MansartProcessor] : @Repository
 }
 @enduml
 ....

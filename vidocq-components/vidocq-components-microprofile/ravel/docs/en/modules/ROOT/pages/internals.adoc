@@ -221,7 +221,7 @@ With `mp.config.profile=prod`:
 Ravel uses a two-stage converter lookup:
 
 . **Registered converters, competing by priority** — built-ins at priority 1; user converters from ServiceLoader (their `@Priority` value, default 100) or `ConfigBuilder.withConverter(type, priority, converter)` (explicit priority). The highest priority wins; on ties the last registered converter overrides.
-. **Derived converters, when nothing is registered for the type** — arrays converted component-wise, then implicit converters (public `String` constructor, `valueOf(String)`, `parse(CharSequence)`, enums), cached in `RavelConfig.derivedConverters`.
+. **Derived converters, when nothing is registered for the type** — arrays converted component-wise, then implicit converters (enums, `of(String)`, `valueOf(String)`, `parse(CharSequence)`, public `String` constructor), cached in `RavelConfig.derivedConverters`.
 
 If no converter matches, `IllegalArgumentException` is thrown.
 

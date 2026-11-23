@@ -42,7 +42,7 @@ resource class, built at compile time; the annotation scan of the <<build-pipeli
 | Cassini's fallback.
 |===
 
-A JAX-RS `Response` is described as an opaque `type: object` schema, by the scan and by the processor alike: its
+[[response-schema]]**A JAX-RS `Response`** [.tag-new]#NEW# — it is described as an opaque `type: object` schema, by the scan and by the processor alike: its
 getters are never read and no `Response`, `URI`, `Locale` or `MediaType` component is published. The `mp.openapi.schema.<FQCN>`
 override of `jakarta.ws.rs.core.Response` still wins over it.
 
@@ -93,28 +93,21 @@ flowchart LR
   S4 --> Cache
 ....
 
-. **`ModelReaderInvoker`** — if `mp.openapi.model.reader` is set, instantiates the class (CDI lookup preferred, no-arg constructor as fallback) and calls `buildModel()`: the starting model.
+. **`ModelReaderInvoker`** — if `mp.openapi.model.reader` is set, instantiates the class (no-arg constructor) and calls `buildModel()`: the starting model.
 . **`StaticFileReader`** — searches for `META-INF/openapi.yaml`, `.yml`, then `.json`. Read through the current classloader. Returns `Optional<OpenAPI>`.
-. **Annotation source** — compile-time `$$GrimmModel` fragments contributed by `grimm-processor` are folded in first (`ContributionRegistry` + `FragmentMerger`); `AnnotationScanner` then walks the remaining application classes recorded by the BCE — `@Path` resources as well as `@Schema` POJOs and the `Application` subclass — and builds a partial `OpenAPI`. The output is tagged by `AnnotationSource` (sealed sub-type of `ModelSource`).The processor leaves to the runtime scan any class with a `jakarta.validation.constraints.*` or `javax.validation.constraints.*` annotation on an operation parameter, as it does for the other constructs outside its subset, so the constraints the scan derives (`minimum`, `pattern`, …) reach the document.
-. **`ModelMerger`** — merges the three `ModelSource` instances (sealed: `StaticFileSource`, `ReaderSource`, `AnnotationSource`) into a single `OpenAPI`, with the spec priority annotations > static file > reader (the static file overrides the conflicting elements of the reader model, the annotations those of both).The reader is invoked before the static file is read, and the merge order follows (it was static file, then reader, up to {release-version}); see xref:concepts.adoc#how-the-sources-combine[How the sources combine].
+. **Annotation source** — compile-time `$$GrimmModel` fragments contributed by `grimm-processor` are folded in first (`ContributionRegistry` + `FragmentMerger`); `AnnotationScanner` then walks the remaining application classes recorded by the BCE — `@Path` resources as well as `@Schema` POJOs and the `Application` subclass — and builds a partial `OpenAPI`. The output is tagged by `AnnotationSource` (sealed sub-type of `ModelSource`). The processor leaves to the runtime scan any class with a `jakarta.validation.constraints.*` or `javax.validation.constraints.*` annotation on an operation parameter, as it does for the other constructs outside its subset, so the constraints the scan derives (`minimum`, `pattern`, …) reach the document.
+. **`ModelMerger`** — merges the three `ModelSource` instances (sealed: `StaticFileSource`, `ReaderSource`, `AnnotationSource`) into a single `OpenAPI`, with the spec priority annotations > static file > reader (the static file overrides the conflicting elements of the reader model, the annotations those of both). The reader is invoked before the static file is read, and the merge order follows (it was static file, then reader, up to 0.3.0); see xref:concepts.adoc#how-the-sources-combine[How the sources combine].
 . **`ConfigApplier`** — applies the configuration overrides on the merged document: `mp.openapi.servers`, `mp.openapi.servers.path.<path>`, `mp.openapi.servers.operation.<operationId>`, and the `mp.openapi.schema.<FQCN>` schema overrides (registered before the scan so that references resolve, applied here).
-. **`FilterInvoker`** — if `mp.openapi.filter` is set, loads the `OASFilter` (CDI lookup or no-arg constructor) and walks it across the tree. The filter is dispatched recursively via a typed visitor that `switch`es on the sealed model types.
+. **`FilterInvoker`** — if `mp.openapi.filter` is set, loads the `OASFilter` (no-arg constructor) and walks it across the tree.
 
-The final `OpenAPI` is then stored in **`GrimmModelCache`**: a one-time initialisation guarded by a `ReentrantLock`, published through a `volatile` field.
+The final `OpenAPI` is then stored in **`GrimmModelCache`**: a one-time initialisation guarded by a `ReentrantLock`, published through an `AtomicReference`.
 
 == Vauban BCE: `GrimmExtension`
 
-The class discovery lives in `io.vidocq.grimm.cdi.GrimmExtension`, a Build Compatible Extension that uses exactly two CDI 4.1 Lite hooks — no `@Synthesis`, no synthetic bean:
+The class discovery lives in `io.vidocq.grimm.cdi.GrimmExtension`, a Build Compatible Extension that uses exactly two CDI 4.1 Lite hooks, `@Enhancement` and `@Synthesis`:
 
 [source,java]
 ----
-@Discovery
-public void resetForNewDeployment(ScannedClasses classes) {
-    // One container boot = one deployment: drop everything collected
-    // by a previous boot in the same JVM before this deployment's
-    // @Enhancement phase runs.
-}
-
 @Enhancement(types = Object.class, withSubtypes = true)
 public void registerApplicationClass(ClassConfig classConfig) {
     // Records every application class found by the CDI scanner —
@@ -122,9 +115,15 @@ public void registerApplicationClass(ClassConfig classConfig) {
     // not only @Path resources. Grimm's own classes (io.vidocq.grimm.*)
     // are skipped so the /openapi endpoint never documents itself.
 }
+
+@Synthesis
+public void registerScannedTypes(SyntheticComponents components) {
+    // Hands this container's classes to the runtime, as a synthetic
+    // ScannedTypes bean whose parameter lists their names.
+}
 ----
 
-The recorded class names belong to the extension instance, so to one container. Its `@Synthesis` phase registers a synthetic `ScannedTypes` bean whose parameter lists them, and `ScannedTypesCreator` resolves them in the container, through the application's class loader. The creator also adds every resource class `grimm-processor` described in the application's `META-INF/services/io.vidocq.grimm.spi.gen.OpenApiContribution`: in `annotated` discovery mode a `@Path` class with no bean-defining annotation is not a bean, so the extension never sees it, and its generated description is what puts it in the document. Up to {release-version}, the names lived in a `static` set, shared by every container of the class loader (grimm#22).
+The recorded class names belong to the extension instance, so to one container. Its `@Synthesis` phase registers a synthetic `ScannedTypes` bean whose parameter lists them, and `ScannedTypesCreator` resolves them in the container, through the application's class loader. The creator also adds every resource class `grimm-processor` described in the application's `META-INF/services/io.vidocq.grimm.spi.gen.OpenApiContribution`: in `annotated` discovery mode a `@Path` class with no bean-defining annotation is not a bean, so the extension never sees it, and its generated description is what puts it in the document. Up to 0.3.0, the names lived in a `static` set, shared by every container of the class loader (grimm#22).
 
 `GrimmConfigProducer` `@Produces` the `GrimmConfig` (read from MicroProfile Config). `GrimmModelCache` is a regular `@ApplicationScoped` bean, which takes the `ScannedTypes` through an `Instance` (the synthetic bean only exists once the extension ran) and whose `@PostConstruct` runs the pipeline once; `getDocument()` simply returns the cached reference.
 
@@ -133,7 +132,7 @@ The recorded class names belong to the extension instance, so to one container. 
 [#virtual-threads]
 === One-time locking, `volatile` reads
 
-`GrimmModelCache` stores the document in a `volatile` field, initialised once in `@PostConstruct` behind a `ReentrantLock` (double-checked: `initialize()` is idempotent and subsequent calls are no-ops). After that build, `getDocument()` is a single `volatile` read on the fast path — the lock is only re-taken to lazily create an empty skeleton if the cache was never initialised. No `synchronized` anywhere, so a virtual thread never pins its carrier. The BCE guards its discovered-names set the same way, with a `ReentrantLock` held only during the container build phase.
+`GrimmModelCache` stores the document in an `AtomicReference`, initialised once in `@PostConstruct` behind a `ReentrantLock` (double-checked: `initialize()` is idempotent and subsequent calls are no-ops). After that build, `getDocument()` is a single `volatile` read on the fast path — the lock is only re-taken to lazily create an empty skeleton if the cache was never initialised. No `synchronized` anywhere, so a virtual thread never pins its carrier. The BCE guards its discovered-names set the same way, with a `ReentrantLock` held only during the container build phase.
 
 === Virtual threads for potentially blocking operations
 

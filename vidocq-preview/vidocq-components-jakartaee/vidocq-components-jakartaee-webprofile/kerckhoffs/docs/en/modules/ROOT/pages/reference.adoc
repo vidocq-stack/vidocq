@@ -7,8 +7,11 @@
 |===
 | Artifact | Java module | Role
 
-| `kerckhoffs-core` | `io.vidocq.kerckhoffs.core` | `IdentityStoreHandler` chain, in-memory identity store, PBKDF2 password hash. No CDI.
-| `kerckhoffs-cdi` | `io.vidocq.kerckhoffs.cdi` | Build compatible extension: declares the identity stores of `@InMemoryIdentityStoreDefinition` and the handler as beans, and fails the start on an invalid definition.
+| `kerckhoffs-core` | `io.vidocq.kerckhoffs.core` | `IdentityStoreHandler` chain, in-memory identity store, PBKDF2 password hash, the built-in BASIC and FORM mechanisms, `SecurityContext`. No CDI.
+| `kerckhoffs-cdi` | `io.vidocq.kerckhoffs.cdi` | Build compatible extension: declares the identity stores of `@InMemoryIdentityStoreDefinition`, the handler and the mechanisms of `@BasicAuthenticationMechanismDefinition` and `@FormAuthenticationMechanismDefinition` as beans, and fails the start on an invalid definition.
+| `kerckhoffs-authentication` | `io.vidocq.kerckhoffs.authentication` | Jakarta Authentication 3.1: the Servlet Container Profile that drives a mechanism (minimal slice).
+| `kerckhoffs-authorization` | `io.vidocq.kerckhoffs.authorization` | Jakarta Authorization 3.0: the policy factory and the default policy that answers web resource permissions from the security constraints (minimal slice).
+| `kerckhoffs-foy` | `io.vidocq.kerckhoffs.foy` | Engine adapter: places a mechanism and the policy in service on the request authentication and access control hooks of Foy.
 |===
 
 The extension works at build and is frozen by `vidocq:generate`; the check of the definitions
@@ -31,4 +34,4 @@ it (§2.2.1).
 WARNING: Kerckhoffs is not tested on an application server yet. Jakarta Security is a feature
 of such servers: keep their own security feature on only if you do not ship Kerckhoffs, and do
 not ship both. The tested `<exclusions>` and the Open Liberty WAR arrive with the
-`kerckhoffs-it-openliberty` module.
+`kerckhoffs-it-other-containers` module.

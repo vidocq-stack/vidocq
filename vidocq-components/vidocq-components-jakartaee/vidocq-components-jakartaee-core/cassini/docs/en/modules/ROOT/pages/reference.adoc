@@ -31,6 +31,9 @@ Factual reference: published Maven artefacts, exported Java modules, supported J
 | `io.vidocq.cassini:cassini-jdk-http:{project-version}`
 | Pure JDK transport — `com.sun.net.httpserver.HttpServer`, no external dependency.
 
+| `io.vidocq.cassini:cassini-servlet:{project-version}`
+| Servlet transport — the application runs as a Servlet of a Servlet container (Servlet API `provided`). See xref:usage.adoc#running-as-a-servlet[Running as a Servlet].
+
 | `io.vidocq.cassini:cassini-processor:{project-version}`
 | APT annotation processor — generates `+$$CassiniAdapter+` / `+$$CassiniRoutes+` / `+$$CassiniApplication+` *sources* at compile time. AOT-safe.
 
@@ -41,7 +44,7 @@ Factual reference: published Maven artefacts, exported Java modules, supported J
 | Examples: `cassini-examples-chappe` (standard SE-Bootstrap), `cassini-examples-jdkhttp` (direct CassiniStack), `cassini-examples-vauban` (CDI + SE-Bootstrap).
 
 | `io.vidocq.cassini:cassini-architecture-tests`
-| **Test only**, never released. Runs Cassini's architecture rules on the classes of every shipped module: allowed dependencies per module (the Jakarta APIs it implements or reads, `cassini-api`, nothing else), layering (`cassini-api` never depends on `cassini-core`; `cassini-core` reaches no transport, no CDI container and no other brick), no `ThreadLocal`, no platform-thread pool, and no reflection outside a list of documented fallbacks, each with its reason (the residual reflection described in xref:internals.adoc#_documented_residual_reflection[Documented residual reflection], plus the JAX-RS generic-type model). The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. `cassini-maven-plugin`, a build tool that runs inside Maven, is not part of the analysed classes.
+| **Test only**, never released. Runs Cassini's architecture rules on the classes of every shipped module: allowed dependencies per module (the Jakarta APIs it implements or reads, `cassini-api`, nothing else), layering (`cassini-api` never depends on `cassini-core`; `cassini-core` reaches no transport, no CDI container and no other brick), no `ThreadLocal`, no platform-thread pool, and no reflection outside a list of documented fallbacks, each with its reason (the residual reflection described in xref:internals.adoc#documented-residual-reflection[Documented residual reflection], plus the JAX-RS generic-type model). The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. `cassini-maven-plugin`, a build tool that runs inside Maven, is not part of the analysed classes.
 |===
 
 NOTE: `cassini-tck` is not published; it is an **in-reactor module gated behind the `tck` Maven profile** — a plain `mvn install` neither downloads nor runs anything TCK-related. See xref:tck.adoc#runner-out-of-reactor[TCK — runner architecture].
@@ -70,8 +73,8 @@ a|
 One public export: `io.vidocq.cassini.runtime` (maintenance API for hosts
 that hot-reload the application in the same JVM — Vidocq dev mode).
 `internal.*` is qualified-exported only to
-`cassini.tck`, `cassini.client`, `cassini.maven.plugin`,
-`cassini.chappe`, `cassini.jdkhttp`. No `opens`.
+`cassini.tck`, `cassini.testing`, `cassini.client`, `cassini.maven.plugin`,
+`cassini.chappe`, `cassini.jdkhttp`, `cassini.servlet`. No `opens`.
 [source]
 ----
 exports io.vidocq.cassini.runtime;
@@ -79,6 +82,7 @@ provides io.vidocq.cassini.spi.http.CassiniStack.BuilderFactory
     with io.vidocq.cassini.internal.CassiniStackBuilderFactory;
 uses io.vidocq.cassini.spi.gen.ResourceAdapter;
 uses io.vidocq.cassini.spi.gen.RouteProvider;
+uses io.vidocq.cassini.spi.gen.ProviderDescriptor;
 ----
 
 | `io.vidocq.cassini.chappe`
@@ -97,6 +101,17 @@ a|
 exports io.vidocq.cassini.jdkhttp;
 provides jakarta.ws.rs.ext.RuntimeDelegate
     with io.vidocq.cassini.jdkhttp.JdkHttpRuntimeDelegate;
+----
+
+| `io.vidocq.cassini.servlet`
+a|
+[source]
+----
+exports io.vidocq.cassini.servlet;
+provides jakarta.ws.rs.ext.RuntimeDelegate
+    with io.vidocq.cassini.servlet.ServletRuntimeDelegate;
+provides jakarta.servlet.ServletContainerInitializer
+    with io.vidocq.cassini.servlet.CassiniServletInitializer;
 ----
 
 | `io.vidocq.cassini.cdi.vauban`
@@ -143,7 +158,7 @@ provides javax.annotation.processing.Processor
 ----
 |===
 
-NOTE: `cassini-core` deliberately does **not** expose its `CassiniRuntimeDelegate` via `ServiceLoader` — to avoid a collision with the `RuntimeDelegate` from the active transport (`cassini-chappe` or `cassini-jdk-http`).
+NOTE: `cassini-core` deliberately does **not** expose its `CassiniRuntimeDelegate` via `ServiceLoader` — to avoid a collision with the `RuntimeDelegate` from the active transport (`cassini-chappe`, `cassini-jdk-http` or `cassini-servlet`).
 
 == Supported annotations
 
@@ -207,7 +222,7 @@ SeBootstrap.Instance instance = SeBootstrap.start(MyApplication.class,
 int port = instance.configuration().port();
 ----
 
-Behaviour change:: Up to {release-version}, the transport picked a free port, built the application, then bound that port: another process could take it in between. The Chappe transport then failed to start; the JDK transport, which listened on every address, started, and on macOS the clients of `127.0.0.1` reached the other process (CASSINI-049).
+Behaviour change:: Up to 0.4.0-RC2, the transport picked a free port, built the application, then bound that port: another process could take it in between. The Chappe transport then failed to start; the JDK transport, which listened on every address, started, and on macOS the clients of `127.0.0.1` reached the other process (CASSINI-049).
 
 When Cassini is driven by xref:vidocq::index.adoc[Vidocq Runtime] (the `io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-cassini-rest-extension` extension), the JAX-RS application is mounted on the shared Chappe server through the runtime's HTTP mount configuration:
 

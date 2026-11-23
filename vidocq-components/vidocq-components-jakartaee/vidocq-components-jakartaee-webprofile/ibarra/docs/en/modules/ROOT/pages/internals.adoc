@@ -101,7 +101,7 @@ retained build failure. This follows
 https://jakarta.ee/specifications/pages/4.0/jakarta-server-pages-spec-4.0.html#precompilation-protocol[Pages 4.0 section 11.4.2].
 
 `IbarraJspFactory` allocates fresh request contexts and shared application contexts.
-The future container binding installs it with `JspFactory.setDefaultFactory()`
+The container binding installs it with `JspFactory.setDefaultFactory()`
 and removes application contexts only after requests have drained.
 
 == Application EL context (initial implementation)
@@ -253,9 +253,11 @@ modules excluded. Initial I5 also verifies HTTP deployment on Foy/Chappe.
 `PagePrecompiler` emits application pages and a `PageIndex` with direct constructor
 references. The JDK Class-File API updates only the compiled module's service and
 package metadata; existing providers, exports, opens and requirements are preserved.
-The page index keeps its place among the services the module provides: a run that
+
+[[stable-module-descriptor]]**The same descriptor at every run** [.tag-new]#NEW# — the page index keeps its place among the services the module provides: a run that
 changes no page writes the descriptor it read, byte for byte, so a build tool that
 compares the classes by content sees no change.
+
 The core's `PrecompiledPages` catalogue discovers indexes in a supplied module
 layer without creating servlet instances. Deployment creates and initializes pages.
 
@@ -301,7 +303,8 @@ conflicts retain their source diagnostics. Generated order is XML declaration,
 DOCTYPE, then normal page content, including preserved prolog whitespace or processing
 instructions. Identifier literals retain decoded characters and use a quote delimiter
 absent from their value; no DTD lookup occurs. URI, public-ID and root-name lexical
-validity remains the page author's responsibility. XML tag-file output remains pending.
+validity remains the page author's responsibility. An XML tag file emits a UTF-8 XML
+declaration at each invocation when its `jsp:output` asks for one; its DOCTYPE output remains pending.
 New shared-scope beans use direct construction; existing
 typed shared beans are supported. This is not TCK certification.
 

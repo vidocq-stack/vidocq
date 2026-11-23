@@ -100,7 +100,7 @@ documented in COMP-007. Numeric literals retain evaluation-time parsing and lazy
 
 Target: no bytecode generated at run time, no `opens`, no `setAccessible`.
 The spec's own `BeanELResolver` is the property-access fallback for accessible exported types.
-The interpreter uses `java.lang.reflect.Array` only for runtime-typed array coercion
+The interpreter uses `java.lang.reflect.Array` only for runtime-typed array coercion,
 the `empty` operator and array stream sources (EL 6.0 sections 1.25.7, 1.11 and 2.3.1): allocation, element access
 and length, with no member lookup, accessibility changes or `java.desktop` dependency.
 
@@ -249,7 +249,7 @@ Each tokenization owns its cursor and returns an immutable list ending in an EOF
 `Parser` uses recursive descent to turn expression-body tokens into a sealed AST
 of records. Operator precedence and associativity follow EL 6.0 section 1.16.
 The grammar includes navigation, function and method calls, assignment, sequences,
-lambdas, lists, sets and maps. Parsing these constructs does not yet evaluate them.
+lambdas, lists, sets and maps. Parsing these constructs does not evaluate them.
 All AST collections are copied into immutable lists.
 
 `ExpressionParser` handles literal text, immediate and deferred delimiters, and

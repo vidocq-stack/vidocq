@@ -77,7 +77,7 @@ counter("http_requests_total", new Tag("method", "POST"));
 // → two distinct Counter instances, aggregated under the same OpenMetrics family
 ----
 
-`MetricID` is an immutable record. The registry is a `ConcurrentHashMap<MetricID, Metric>` per scope.
+`MetricID` is an immutable class of the spec API. The registry is a `ConcurrentHashMap<MetricID, Metric>` per scope.
 
 == Tags
 
@@ -114,7 +114,7 @@ Histograms and timers read three `mp.metrics.distribution.*` keys — resolved f
 | Key | Effect
 
 | `mp.metrics.distribution.percentiles`
-| List of percentiles (`0.5,0.95,0.99`) emitted by the snapshots — global, or per metric via the `name=values` form.
+| List of percentiles (`0.5,0.95,0.99`) emitted by the snapshots — `name=values` entries separated by `;`, per metric or, with the pattern `+*+`, for every metric (`+*=0.5,0.95,0.99+`).
 
 | `mp.metrics.distribution.histogram.buckets`
 | Fixed buckets for `Histogram` — global or per metric.
@@ -123,7 +123,7 @@ Histograms and timers read three `mp.metrics.distribution.*` keys — resolved f
 | Fixed buckets for `Timer`, expressed as `ms`, `s`, `ns`, etc. — global or per metric.
 |===
 
-An empty value (`mp.metrics.distribution.percentiles=`) disables percentiles entirely. Implementation lives in `DistributionConfig` inside `dirac-core`.
+An entry without values (`+mp.metrics.distribution.percentiles=*=+`) disables percentiles for the metrics it matches. Implementation lives in `DistributionConfig` inside `dirac-core`.
 
 == REST endpoint `GET /metrics`
 

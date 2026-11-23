@@ -154,8 +154,8 @@ Cache frequently-accessed values:
 @ApplicationScoped
 public class PerformantConfig {
 
-    private final String dbHost;
-    private final int dbPort;
+    private String dbHost;
+    private int dbPort;
 
     @PostConstruct
     void init() {
@@ -209,7 +209,7 @@ void testConfigProcessing() {
     properties.put("app.port", "9999");
 
     ConfigBuilder builder = ConfigProviderResolver.instance().getBuilder();
-    builder.withSources(new MapConfigSource(properties));
+    builder.withSources(new MapConfigSource(properties)); // your own ConfigSource over a Map
     Config config = builder.build();
 
     assertEquals("TestApp", config.getValue("app.name", String.class));

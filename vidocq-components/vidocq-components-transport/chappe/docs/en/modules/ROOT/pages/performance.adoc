@@ -20,7 +20,7 @@ good enough for production.
 
 [source,bash]
 ----
-# Multi-runtime shootout harness (needs the bench host, see BENCH.md)
+# Multi-runtime shootout harness, run from the chappe folder (needs the bench host, see BENCH.md)
 ./chappe-bench/docker/run-remote.sh shootout
 
 # Without native build (if GraalVM 25 unavailable)

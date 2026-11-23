@@ -15,13 +15,13 @@ This page consolidates the status of the official TCK tests run against Cassini.
 | Tests applicable to the profile | **2538** (the rest excluded via `@Tag` or documented challenges)
 | Passed | **2538**
 | Failures + Errors | **0**
-| Skipped | **132** (2670 − 2538: out-of-profile `@Tag` exclusions + 4 challenged test methods)
+| Skipped | **131** (out-of-profile `@Tag` exclusions + 3 challenged test methods; the signature test runs since 2026-08-27)
 | Conformance score | **100.00 %** of applicable tests
 |===
 
 [source,text]
 ----
-[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 132
+[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 131
 [INFO] BUILD SUCCESS
 ----
 
@@ -67,7 +67,7 @@ Configuration in `cassini-tck/pom.xml`:
 
 == Intentionally skipped tests (official challenges)
 
-Four test methods across three classes are disabled via `TckChallengeExclusions` (auto-discovered JUnit 5 `ExecutionCondition`) with documented justification — per the **TCK Process 1.4.1**:
+Three test methods across two classes are disabled via `TckChallengeExclusions` (auto-discovered JUnit 5 `ExecutionCondition`) with documented justification — per the **TCK Process 1.4.1**:
 
 [cols="3,1,4",options="header"]
 |===
@@ -77,17 +77,13 @@ Four test methods across three classes are disabled via `TckChallengeExclusions`
 | spec interpretation
 | Per a literal reading of §3.7.2 step 2(g), `@GET @Path("locator/locator/locator")` matches `/locator/locator/locator` → 200 expected. The test imposes a non-portable segment-by-segment interpretation.
 
-| `signaturetest.jaxrs.JAXRSSigTestIT#signatureTest`
-| TCK environment
-| TDK 2.5 sigtest requires a complete TCK layout. The `jakarta.ws.rs` API is unmodified by Cassini — this test evaluates the TCK environment, not Cassini's conformance.
-
 | `jaxrs31.ee.multipart.MultipartSupportIT#basicTest` + `multiFormParamTest`
 | client harness
 | Cassini SERVER fully implements §3.5.4 `EntityPart`. The test fails on the Jersey CLIENT side (harness limitation).
 
 |===
 
-Historical note: three additional §11 SSE streaming challenges (`ssebroadcaster#sseBroadcastTest`, `sseeventsink#closeTest`, `sseeventsource#closeTest`) were **lifted with M2i** (2026-06-11) — `ChappeHttpExchange` now opens real chunked streaming (pipe + latch in `ChappeHttpAdapter`, see link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/ASYNC.md[`ASYNC.md`]), so events reach the wire incrementally and those tests now PASS.
+Historical note: three additional §11 SSE streaming challenges (`ssebroadcaster#sseBroadcastTest`, `sseeventsink#closeTest`, `sseeventsource#closeTest`) were **lifted with M2i** (2026-06-11) — `ChappeHttpExchange` now opens real chunked streaming (pipe + latch in `ChappeHttpAdapter`, see link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/ASYNC.md[`ASYNC.md`]), so events reach the wire incrementally and those tests now PASS. `signaturetest.jaxrs.JAXRSSigTestIT#signatureTest` was lifted on 2026-08-27: `run-official-tck-restful-4.0.sh` fetches the EFTL bundle that holds the signature resources, and the test runs and passes.
 
 [#runner-out-of-reactor]
 == Runner architecture: in-reactor behind the `tck` profile
@@ -106,15 +102,10 @@ cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-cor
 # 1. Prerequisites: Java 25 + Maven 3.10.0 (via .sdkmanrc)
 sdk env
 
-# 2. Install the official TCK JAR (non-public, fetch once).
-#    The build resolves jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1.
-curl -Lo /tmp/restful-ws-tck.zip \
-  https://download.eclipse.org/jakartaee/restful-ws/4.0/jakarta-restful-ws-tck-4.0.1.zip
-unzip /tmp/restful-ws-tck.zip -d /tmp/restful-ws-tck
-mvn install:install-file \
-  -Dfile=/tmp/restful-ws-tck/jakarta-restful-ws-tck/lib/jakarta-restful-ws-tck-4.0.1.jar \
-  -DgroupId=jakarta.ws.rs -DartifactId=jakarta-restful-ws-tck \
-  -Dversion=4.0.1 -Dpackaging=jar
+# 2. Nothing to install by hand: the build resolves
+#    jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1 from Maven Central, and the script
+#    downloads the EFTL bundle (signature-test resources, SHA-256 checked) into
+#    cassini-tck/target/eftl.
 
 # 3. Run the TCK
 ./run-official-tck-restful-4.0.sh                          # smoke test
@@ -126,6 +117,6 @@ Expected output on `all`:
 
 [source,text]
 ----
-[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 132
+[INFO] Tests run: 2670, Failures: 0, Errors: 0, Skipped: 131
 [INFO] BUILD SUCCESS
 ----

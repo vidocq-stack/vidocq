@@ -1,4 +1,3 @@
-| `vidocq:generate`, bound to `process-classes` by the plugin as a build extension, or by `vidocq-runtime-parent`
 = Internals
 :description: Boot sequence, extension mechanism, threading model.
 
@@ -27,7 +26,7 @@ them over the dependency jars too, and reports what was left to reflection.
 | The same code for the dependency jars: Vauban's components, client proxies and intercepted subclasses, and what
   each brick's processor generates for the classes it selects (servlets, repositories, JSON-B bindings…), in an
   enriched copy of each jar under `target/vidocq-enriched/`
-| `vidocq:generate`, bound to `process-classes` by `vidocq-runtime-parent`
+| `vidocq:generate`, bound to `process-classes` by the plugin as a build extension, or by `vidocq-runtime-parent`
   (xref:modules/vidocq-runtime-maven-plugin.adoc#generate[`vidocq:generate`])
 | Each brick, from the enriched copy, which `provides` the generated providers
 | The dependency's classes run on each brick's fallback.
@@ -54,7 +53,6 @@ The bundles and the bricks they serve:
 | `vidocq-runtime-cassini-rest-extension-codegen` | `cassini-processor`, `champollion-codegen-apt`, and the
   extensions of `cassini-cdi` and `champollion-jsonb-cdi`
 | xref:cassini::internals.adoc#generated-code[Cassini], xref:champollion::internals.adoc#generated-code[Champollion]
-| `vidocq-runtime-langchain4j-cdi-mcp-extension-codegen` | the bundle of the REST extension, hence `cassini-processor`, which writes the adapter of `McpEndpoint` in the langchain4j-cdi jar | xref:cassini::internals.adoc#generated-code[Cassini]
 | `vidocq-runtime-ravel-config-extension-codegen` | `ravel-processor`, the extension of `ravel-cdi-vauban` | xref:ravel::internals.adoc#generated-code[Ravel]
 | `vidocq-runtime-cyrano-rest-client-extension-codegen` | `cyrano-processor`, the extension of `cyrano-cdi-vauban` | xref:cyrano::internals.adoc#generated-code[Cyrano]
 | `vidocq-runtime-heisenberg-fault-tolerance-extension-codegen` | `heisenberg-processor`, the extension of `heisenberg-cdi-vauban` | xref:heisenberg::internals.adoc#generated-code[Heisenberg]
@@ -66,12 +64,14 @@ The bundles and the bricks they serve:
 | `vidocq-runtime-mansart-data-extension-codegen` | `mansart-data-processor`, the extension of `mansart-data-cdi` | xref:mansart::internals.adoc#generated-code[Mansart]
 | `vidocq-runtime-mansart-transactions-extension-codegen` | the extension of `mansart-transactions-cdi` | xref:mansart::internals.adoc#generated-code[Mansart]
 | `vidocq-runtime-mansart-pool-datasources-codegen` | `VidocqDataSourcesProcessor` | —
+| `vidocq-runtime-noether-persistence-extension-codegen` | `noether-jpa-processor`, the extension of `noether-jpa-cdi` | —
+| `vidocq-runtime-kerckhoffs-security-extension-codegen` | the extensions of `kerckhoffs-cdi` and `kerckhoffs-foy` | —
 | `vidocq-runtime-peano-el-extension-codegen` | `peano-processor` | xref:peano::internals.adoc#generated-code[Peano]
 |===
 
 JSP pages are not compiled by a processor: `vidocq:generate` compiles them with Ibarra's page compiler
 (xref:ibarra::internals.adoc#generated-code[Ibarra]). On the application layer, the processors' `META-INF/services`
-files become `provides` directives (<<_class_loading_the_vauban_application_layer>>), so an application never writes
+files become `provides` directives (<<class-loading-the-vauban-application-layer>>), so an application never writes
 one for a generated class. `vidocq-runtime-peano-el-extension` provides the `ProxyUnwrapper` that lets a bean's
 Peano table serve its Vauban client proxy. It reads the bean class from Vauban's `ClientProxyClass` and names it only
 when the proxy extends it: past a `final` method of the bean class, or for a `final` bean class, the proxy extends a
@@ -285,7 +285,7 @@ The `vidocq-runtime-spi` module exposes the contribution interfaces. The main ty
 | Lifecycle interface with `name()`, `priority()`, `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()` and `configKeys()`. Registered via `provides … with …` in `module-info.java` (or `META-INF/services`), loaded through `ServiceLoader`.
 
 | `io.vidocq.runtime.spi.ExtensionContext`
-| Handed to `onStart` — access to the Vauban `container()`, the CDI `beanManager()`, the legacy `configuration()`, the typed `config()`, the `launchMode()`and the `startupReport()`of the boot.
+| Handed to `onStart` — access to the Vauban `container()`, the CDI `beanManager()`, the legacy `configuration()`, the typed `config()`, the `launchMode()` and the `startupReport()` of the boot.
 
 | `io.vidocq.runtime.spi.VidocqConfiguration`
 | String-property view passed to `configure`: `property(key)` returns `Optional<String>`, plus `property(key, default)` and `portFor(extensionName, defaultPort)` helpers.
@@ -335,7 +335,7 @@ There is no bytecode-recording machinery in `vidocq-runtime-core`: nothing is "r
 * **Common pool** — the JVM's own `ForkJoinPool.commonPool()`, whose workers are platform threads whatever their
   factory: Vidocq only gives them the application's class loader (<<common-pool>>).
 
-No platform thread pool is created by default. The rule is documented in the workspace root `CLAUDE.md`.
+No platform thread pool is created by default. The rule is documented in the workspace root `AGENTS.md`.
 
 == Recommended reading
 

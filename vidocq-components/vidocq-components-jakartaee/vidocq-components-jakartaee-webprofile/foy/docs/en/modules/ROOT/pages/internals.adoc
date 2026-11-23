@@ -10,7 +10,7 @@ This page documents the implementation: what happens between the moment an HTTP 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Foy that is the description and the factory
 of each Servlet, Filter and listener, and the class index initializers ask about; reading the class file, then
-reflection, stay as the fallback tiers, unchanged (<<_component_resolution_tiers>>).
+reflection, stay as the fallback tiers, unchanged (<<component-resolution-tiers>>).
 
 [cols="2,2,3,3"]
 |===
@@ -179,7 +179,7 @@ Body path: `ServletOutputStreamImpl` buffers up to `getBufferSize()` bytes; the 
 
 Package `io.vidocq.foy.internal.security`.
 
-*At deploy.* `WebAppDeployer` compiles a `ConstraintTable` once: the descriptor constraints first, then each servlet's `ServletSecurityElement` (annotation or `setServletSecurity`) on its url-patterns, except the patterns a descriptor constraint names exactly. Without `<deny-uncovered-http-methods/>`, the uncovered methods are reported then (`WARNING`). `WebSecurity.authenticatorFor(login-config, store)` picks the mechanism: `BasicAuthenticator`, `FormAuthenticator`, or a `DenyingAuthenticator` for any other `auth-method`. A `RoleMapping` holds the declared roles and each servlet's `security-role-ref`s. The three, with the embedder's `SecuritySettings` (identity store, HTTPS port, rotation), form the context's `WebSecurity`.
+*At deploy.* `WebAppDeployer` compiles a `ConstraintTable` once: the descriptor constraints first, then each servlet's `ServletSecurityElement` (annotation or `setServletSecurity`) on its url-patterns, except the patterns a descriptor constraint names exactly. Without `<deny-uncovered-http-methods/>`, the uncovered methods are reported then (`WARNING`). `WebSecurity.authenticatorFor(login-config, store)` picks the mechanism: `BasicAuthenticator`, `FormAuthenticator`, `ClientCertAuthenticator`, or a `DenyingAuthenticator` for any other `auth-method`. A `RoleMapping` holds the declared roles and each servlet's `security-role-ref`s. The three, with the embedder's `SecuritySettings` (identity store, HTTPS port, rotation), form the context's `WebSecurity`.
 
 *At request time.* `WebSecurity.admit(req, res, canonicalPath)` runs for the original REQUEST dispatch only; forward, include, error and async dispatches are not checked again (section 13.8). In order:
 

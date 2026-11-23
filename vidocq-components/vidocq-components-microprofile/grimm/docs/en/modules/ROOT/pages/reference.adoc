@@ -40,7 +40,7 @@ Every artefact is at `{project-version}`.
 [#java-modules]
 == Java modules
 
-Every Grimm jar ships its compiled `module-info.class`, so Grimm is made of the three named modules below, never of automatic modules. Up to {release-version} the descriptors were not compiled into the jars: Grimm ran as automatic modules (`grimm.core`, `grimm.processor`, `grimm.cdi.vauban`), and in a modular application a build tool could take `grimm-cdi-vauban` for a class-path jar and split its package (grimm#15). An application module that read Grimm by its automatic name moves to `requires io.vidocq.grimm.cdi.vauban;` — see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
+Every Grimm jar ships its compiled `module-info.class`, so Grimm is made of the three named modules below, never of automatic modules. Up to 0.3.0 the descriptors were not compiled into the jars: Grimm ran as automatic modules (`grimm.core`, `grimm.processor`, `grimm.cdi.vauban`), and in a modular application a build tool could take `grimm-cdi-vauban` for a class-path jar and split its package (grimm#15). An application module that read Grimm by its automatic name moves to `requires io.vidocq.grimm.cdi.vauban;` — see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
 
 [cols="2,3"]
 |===
@@ -53,7 +53,7 @@ Every Grimm jar ships its compiled `module-info.class`, so Grimm is made of the 
 | No exports — the APT processor is consumed exclusively through the `javax.annotation.processing.Processor` service it `provides`. It resolves on the module path, as a named module (grimm#19).
 
 | `io.vidocq.grimm.cdi.vauban`
-| `io.vidocq.grimm.cdi` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`.`requires transitive` the MicroProfile OpenAPI and JAX-RS APIs that its own API exposes (`OpenAPI`, `Response`), and `provides` its Vauban-generated `_VaubanComponents`, so the container builds Grimm's beans with no `opens`.
+| `io.vidocq.grimm.cdi` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`. `requires transitive` the MicroProfile OpenAPI and JAX-RS APIs that its own API exposes (`OpenAPI`, `Response`), and `provides` its Vauban-generated `_VaubanComponents`, so the container builds Grimm's beans with no `opens`.
 |===
 
 Apart from `io.vidocq.grimm.internal.reader`, the `io.vidocq.grimm.internal.*` packages are reserved for Grimm's own modules. Any application class depending on them signals a regression to fix.
@@ -130,7 +130,7 @@ Apart from `io.vidocq.grimm.internal.reader`, the `io.vidocq.grimm.internal.*` p
 | ✅
 |===
 
-JAX-RS annotations consumed by the scanner: `@Path`, `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS`, `@Produces`, `@Consumes`, `@PathParam`, `@QueryParam`, `@HeaderParam`, `@CookieParam`, `@FormParam`, `@MatrixParam`, `@DefaultValue`, `@ApplicationPath`.
+JAX-RS annotations consumed by the scanner: `@Path`, `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS`, `@Produces`, `@Consumes`, `@PathParam`, `@QueryParam`, `@HeaderParam`, `@CookieParam`, `@FormParam`, `@DefaultValue`, `@ApplicationPath`.
 
 [#annotation-values]
 == How annotation values are mapped

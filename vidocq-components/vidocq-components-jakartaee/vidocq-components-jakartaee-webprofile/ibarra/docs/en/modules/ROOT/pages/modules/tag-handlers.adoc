@@ -141,7 +141,8 @@ the Bodoni Tags TCK shows a need for it.
 == Standard tag files
 
 Referenced standard `.tag` files support tag/import/attribute/variable/taglib
-directives, static text, Java declarations, scriptlets and scripting expressions.
+directives, static text, Java declarations, scriptlets, scripting expressions,
+immediate EL, `jsp:doBody` and `jsp:invoke` on a fragment attribute.
 Declared scalar attributes generate setters; tag-file variables follow their
 declared scopes. Every invocation receives a `PageContext` wrapper with an empty,
 isolated page scope; declared attributes and the declared dynamic-attribute map
@@ -152,7 +153,7 @@ attributes generate direct calls to simple or classic handlers, including
 request-time Java expressions. Literal-path `jsp:forward` dispatches and throws
 `SkipPageException` so neither the rest of the tag file nor its caller continues.
 Nested action bodies, `jsp:param` in tag-file forwards, classic body and exception
-callbacks, EL, XML tag-file actions, fragments and complete tag-file runtime
+callbacks, deferred EL, XML tag-file actions and complete tag-file runtime
 semantics remain unsupported.
 
 TLD-declared `TagFileInfo` and ordinary `TagInfo` entries are available to TEI
@@ -233,7 +234,7 @@ bean declarations, directives or actions creates no page variables or metadata.
 
 This is an initial I6/I7 implementation. Broader standard-action named-attribute
 support, namespaced dynamic attributes, dynamic TEI metadata, complete tag
-metadata, tag-file bodies and fragments, and broader XML tag-file actions remain
+metadata, bodies of tags nested in a tag file, and broader XML tag-file actions remain
 follow-up work. Unsupported invoked metadata fails translation; no reflective
 fallback or handler pooling is enabled.
 

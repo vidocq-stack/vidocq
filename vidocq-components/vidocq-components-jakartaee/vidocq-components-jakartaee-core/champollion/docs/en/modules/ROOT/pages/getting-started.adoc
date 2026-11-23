@@ -92,7 +92,7 @@ public record Hieroglyph(String symbol, String meaning, int age) {}
 Jsonb jsonb = JsonbBuilder.create();
 
 String json = jsonb.toJson(new Hieroglyph("eye-of-Horus", "eye", 5000));
-// {"age":5000,"meaning":"eye","symbol":"eye-of-Horus"}
+// {"symbol":"eye-of-Horus","meaning":"eye","age":5000}
 
 Hieroglyph back = jsonb.fromJson(json, Hieroglyph.class);
 ----
@@ -113,7 +113,7 @@ The `champollion-codegen-apt` annotation processor generates `Hieroglyph$$Bindin
 
 == Verify the install
 
-From a clone of the Champollion repo, run the provider-resolution test — it asserts that `ServiceLoader` picks up `ChampollionJsonProvider`:
+From Champollion's folder of a clone of the monorepo (`vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion`), run the provider-resolution test — it asserts that `ServiceLoader` picks up `ChampollionJsonProvider`:
 
 [source,bash]
 ----

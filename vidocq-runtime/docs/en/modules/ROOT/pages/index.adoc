@@ -37,7 +37,7 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 | Jakarta + MicroProfile specs only — no third-party framework
 
 | TCK
-| See xref:tck.adoc[detailed status] — JAX-RS via xref:cassini::tck.adoc[Cassini], Servlet via xref:foy::tck.adoc[Foy], all eight MicroProfile TCKs green on the assembled runtime (1837 tests)
+| See xref:tck.adoc[detailed status] — JAX-RS via xref:cassini::tck.adoc[Cassini], Servlet via xref:foy::tck.adoc[Foy], all eight MicroProfile TCKs green on the assembled runtime (1888 tests)
 |===
 
 == Position in the ecosystem
@@ -53,7 +53,7 @@ graph TB
     end
 
     subgraph "Jakarta / MicroProfile bricks"
-        CHAPPE[Chappe<br/>HTTP/1.1 + H2 + H3]
+        CHAPPE[Chappe<br/>HTTP/1.1 + H2]
         FOY[Foy<br/>Jakarta Servlet 6.1]
         CASSINI[Cassini<br/>Jakarta REST 4.0]
         VAUBAN[Vauban<br/>CDI 4.1 Lite]

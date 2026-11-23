@@ -1,5 +1,5 @@
 = Peano
-:description: Jakarta Expression Language 6.0 implementation — zero third-party dependency, native Java Modules, build-time accessors and compiled expressions. P6 implementation in progress.
+:description: Jakarta Expression Language 6.0 implementation — zero third-party dependency, native Java Modules, build-time accessors and compiled expressions.
 
 [.text-center]
 image::peano-logo.png[Peano,300,role=module-logo]
@@ -9,7 +9,7 @@ Peano is the Jakarta Expression Language 6.0 implementation of the Vidocq ecosys
 
 [IMPORTANT]
 ====
-Peano is **in development (P6)**: grammar, operators, coercions and the `ExpressionFactory`
+Peano is **released** (first shipped with 0.4.0-RC1): grammar, operators, coercions and the `ExpressionFactory`
 provider are implemented. Resolver-backed value expressions now navigate models,
 capture variables and expose get/set/metadata with imports and static fields.
 Functions, method expressions, method references and assignments are implemented.
@@ -24,7 +24,7 @@ APT property generation supports @ELAccessible and explicit selected types.
 Direct public method calls and generated signatures/runtime annotations are implemented.
 All 361 official EL 6.0.1 TCK tests pass on Temurin 25, including signatures.
 This is a test result, not a certification announcement.
-This documentation describes the intended `{project-version}` development line; every page states what exists today.
+This documentation describes Peano `{project-version}`; every page states what exists today.
 ====
 
 == Origin of the name
@@ -42,7 +42,7 @@ Peano wanted expressions written in a notation without ambiguity, so that evalua
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.peano.core`, `io.vidocq.peano.api` — see xref:internals.adoc[Internals]
 | Runtime dependencies | None beyond `jakarta.el`
-| Status | P6 accessor-table runtime usable — APT planned, not released or certified
+| Status | Stable, released since 0.4.0-RC1 — accessor-table runtime and APT generation implemented, not certified
 | Official TCK | 361/361 tests pass, including signatures — see xref:tck.adoc[TCK status]
 |===
 
@@ -69,5 +69,5 @@ Peano is a foundational brick: it depends on no other Vidocq module. Ibarra (Jak
 
 [NOTE]
 ====
-Performance numbers live in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/BENCH.md[BENCH.md] (no numbers recorded yet). None appear inline in this page.
+Performance numbers live in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/BENCH.md[BENCH.md]. None appear inline in this page.
 ====

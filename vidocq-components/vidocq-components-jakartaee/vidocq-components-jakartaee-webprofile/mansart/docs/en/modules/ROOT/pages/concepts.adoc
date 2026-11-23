@@ -2,11 +2,11 @@
 :repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Mansart vocabulary — Entity, Repository, EntityManager, Transaction, ConnectionPool, Dialect, Metamodel.
 
-NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+NOTE: Persistence and Validation now live in xref:noether::index.adoc[Noether], a component of its own in the monorepo (`vidocq-preview/`). Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to Noether's folder.
 
 
 [.lead]
-Mansart's technical lexicon. Sets the common definitions across the four sub-modules to avoid ambiguity when reading `internals.adoc` or `reference.adoc`.
+Mansart's technical lexicon. Sets the common definitions across the three sub-modules to avoid ambiguity when reading `internals.adoc` or `reference.adoc`.
 
 == Entity
 
@@ -92,7 +92,7 @@ The JPA canonical metamodel, `Book_`, is not Mansart's [.tag-new]#NEW#: the pers
 | Method names + JDQL + lifecycle annotations
 | JPQL + Criteria API
 
-| Mansart status
+| Status
 | ✅ Delivered (TCK 74/74)
 | ✅ P0–P12 delivered within scope; local patched TCK, not certification
 |===

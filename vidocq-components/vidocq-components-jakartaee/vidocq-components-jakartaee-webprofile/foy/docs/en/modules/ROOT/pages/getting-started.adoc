@@ -26,6 +26,12 @@ The Jakarta Servlet API comes transitively with Foy: the application does not de
         <groupId>io.vidocq.foy</groupId>
         <artifactId>foy-chappe</artifactId>
         <version>{project-version}</version>
+    </dependency>
+    <!-- The Chappe server engine, found through ServiceLoader -->
+    <dependency>
+        <groupId>io.vidocq.chappe</groupId>
+        <artifactId>chappe-core</artifactId>
+        <version>{project-version}</version>
         <scope>runtime</scope>
     </dependency>
     <!-- Optional CDI through Vauban -->
@@ -129,7 +135,7 @@ sdk env
 
 [TIP]
 ====
-Official Jakarta Servlet 6.1 TCK: `./run-official-tck-servlet6.1.sh --all` from the `foy` repo root. The `foy-tck` module joins the reactor only under the `tck` Maven profile — see xref:tck.adoc[the TCK page].
+Official Jakarta Servlet 6.1 TCK: `./run-official-tck-servlet6.1.sh --all` from Foy's folder of the monorepo. The `foy-tck` module joins the reactor only under the `tck` Maven profile — see xref:tck.adoc[the TCK page].
 ====
 
 == Next steps

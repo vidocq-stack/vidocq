@@ -10,7 +10,7 @@
 |===
 | Artefact | `io.vidocq.runtime:vidocq-runtime-core:{project-version}`
 | Java module | `io.vidocq.runtime.core`
-| Source | `vidocq-runtime-core/src/main/java/io/vidocq/runtime/core/`
+| Source | `vidocq-runtime/vidocq-runtime-core/src/main/java/io/vidocq/runtime/core/` in the monorepo
 |===
 
 == Responsibilities
@@ -208,7 +208,7 @@ The *context line* is `Java <version> (<vendor>) | <mode> (<reason>) | debug <ad
 
 Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the dev console, and the name comes back whole if it then fits, then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason, the debugger and the dev console whatever their length.
 
-The Vidocq bricks have their own versions. When a brick (Vauban, Chappe, Cassini, ...) has another version than the runtime, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
+The Vidocq bricks are released with the runtime, at its version. When a brick (Vauban, Chappe, Cassini, ...) has another version than the runtime, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
 
 [source,text]
 ----
@@ -389,12 +389,12 @@ git.dirty=false
 ----
 
 * `git.dirty` is `true` when tracked files had uncommitted changes; untracked files do not count. `git.commit.time` is when the commit was made. For an application, both come from the `git` command; on a machine where it does not answer, `vidocq:build-info` leaves them out and its log line says so.
-* `git.build.time` is the time of the build that wrote the file; `vidocq:build-info` writes it at every build. `git-commit-id-maven-plugin` leaves an existing file alone when only that time would change, so a build without `mvn clean` keeps the time of the first build of the same commit and dirty state. This repository's build (`vidocq-runtime-build`) deletes the file at the `validate` phase, so every build of the runtime modules writes its own time; for a brick built directly from `vidocq-parent`, `built` can be that first build.
+* `git.build.time` is the time of the build that wrote the file; `vidocq:build-info` writes it at every build. `git-commit-id-maven-plugin` leaves an existing file alone when only that time would change, so a build without `mvn clean` keeps the time of the first build of the same commit and dirty state. The runtime's build (`vidocq-runtime-build`) deletes the file at the `validate` phase, so every build of the runtime modules writes its own time; for a brick built directly from `vidocq-parent`, `built` can be that first build.
 * Releases have no `git.build.time` and stay byte-for-byte reproducible (`project.build.outputTimestamp` is the commit time in the `release` profile).
 * The file name carries the artifactId: on the class path, a shared name would make every jar read the first one found. The banner reads each file inside the jar of its own module.
 * `-Dmaven.gitcommitid.skip=true` builds a jar of `vidocq-parent` without it, and `-Dvidocq.buildInfo.skip=true` an application; the banner then falls back to the jar date.
 
-To find the commit a snapshot was built from, read the file in the jar, then look the commit up in the repository of that brick:
+To find the commit a snapshot was built from, read the file in the jar, then look the commit up in the monorepo:
 
 [source,bash]
 ----

@@ -19,7 +19,7 @@ _Knock, or the Triumph of Medicine_ (« Knock, ou le Triomphe de la médecine »
 | Repo | {repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/knock
 | Java | 25
 | Java modules | `knock-mp-health-api`, `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-jaxrs` (plus `knock-tck`, the TCK runner — profile-gated, no `module-info.java`)
-| Runtime dependencies | `knock-core`: only the MicroProfile Health API and `jakarta.json` (JSON-P). The integration modules add their spec APIs — `jakarta.cdi`/`jakarta.inject` for `knock-cdi-vauban`, `jakarta.ws.rs` for `knock-jaxrs` — plus compile-time-only (`requires static`) `vauban-api` / `cassini-api`
+| Runtime dependencies | `knock-core`: only the MicroProfile Health API and `jakarta.json` (JSON-P). The integration modules add their spec APIs — `jakarta.cdi`/`jakarta.inject` for `knock-cdi-vauban`, `jakarta.ws.rs` for `knock-jaxrs` — plus `vauban-api` (API types only) and the compile-time-only (`requires static`) `cassini-api`
 | MicroProfile Health 4.0 TCK | 28 / 28 PASS — see xref:tck.adoc[detailed status]
 |===
 

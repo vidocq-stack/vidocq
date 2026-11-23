@@ -1,5 +1,5 @@
 = Validation stopgap
-:description: Provisional local-only Jakarta Validation provider.
+:description: Provisional Jakarta Validation provider, a stopgap for Noether's tests.
 
 `noether-validation-core` supplies the V0–V2 stopgap used by Persistence tests
 and the local TCK harness. It is not a complete Jakarta Validation 3.1

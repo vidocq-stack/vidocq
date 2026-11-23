@@ -21,7 +21,7 @@ database holds must stay the same thing across every flush, every transaction an
 [cols="1,3"]
 |===
 | Implemented spec | {spec-jpa-3-2}[Jakarta Persistence 3.2]
-| Status | Version `{project-version}`, not released yet: snapshots on `https://maven.vidocq.dev/snapshots/`
+| Status | Version `{project-version}`. A preview component, first released with 0.4.0: usable, not certified
 | Java | 25 (LTS), module path or class path
 | Databases | H2 and PostgreSQL (`noether-jpa-dialect-h2`, `noether-jpa-dialect-postgresql`)
 | Runs on | Java SE; CDI through `noether-jpa-cdi` (tested on Vauban and Quarkus ArC); the Vidocq runtime; Jakarta EE servers (tested on Open Liberty)

@@ -2,7 +2,7 @@
 :description: Conformance status of the Vauban container against the official CDI 4.1 TCK.
 
 [.lead]
-This page consolidates the state of the official CDI 4.1 TCK runs against Vauban. The source of truth is the `vauban-tck-runner`, executed on every build: **774/774 CDI Lite tests pass (100%)**.
+This page consolidates the state of the official CDI 4.1 TCK runs against Vauban. The source of truth is the `vauban-tck-runner`, run under its `tck` profile: **774/774 CDI Lite tests pass (100%)**.
 
 == Summary
 
@@ -205,5 +205,5 @@ The runner uses Arquillian + TestNG. The Surefire report lands in `vauban-tck-ru
 
 [NOTE]
 ====
-Per the workspace constraint, `vauban-tck-runner` is included in the Vauban reactor — unlike `cassini-tck` or `foy-tck`, which are detached because of ShrinkWrap Maven Resolver. The CDI TCK does not depend on ShrinkWrap Resolver in this configuration.
+`vauban-tck-runner` is included in the reactor; the TCK itself runs only under the `tck` profile. The CDI TCK does not depend on ShrinkWrap Resolver in this configuration.
 ====

@@ -2,7 +2,7 @@
 :description: Supported versions, how to report a vulnerability privately, response times and the vulnerability process of Vidocq Runtime.
 
 [.lead]
-How to report a vulnerability in Vidocq Runtime, what to expect in return, and how a fix reaches a release. The same policy, in the same words, is in the `SECURITY.md` at the root of every Vidocq repository.
+How to report a vulnerability in Vidocq Runtime, what to expect in return, and how a fix reaches a release. The same policy, in the same words, is in `vidocq-runtime/SECURITY.md` of the repository.
 
 == Supported versions
 
@@ -135,4 +135,4 @@ Remove the custom trust store once your JDK vendor ships a release that blocks t
 
 In scope: the code and the artifacts published by the repository. Out of scope: vulnerabilities of the application built with the artifacts, of third-party software, and findings without security impact.
 
-For what the runtime defends against and what it leaves to the application, see `THREAT-MODEL.md` at the root of the repository.
+For what the runtime defends against and what it leaves to the application, see `vidocq-runtime/THREAT-MODEL.md` in the repository.

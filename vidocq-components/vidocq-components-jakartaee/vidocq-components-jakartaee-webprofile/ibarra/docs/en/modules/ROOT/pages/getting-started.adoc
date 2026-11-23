@@ -37,7 +37,9 @@ EL, TLD functions, listeners and initial tag-handler invocations are generated a
 The application module requires `io.vidocq.ibarra.api`; generated packages need
 no exports or opens. Put pages in `src/main/webapp` and run `mvn package`.
 See xref:modules/maven-plugin.adoc[the plugin reference] and the repository's
-`examples/precompiled-pages` for a complete buildable example.
+`examples/precompiled-pages` for a complete buildable example. On the Vidocq runtime,
+the Pages extension (`vidocq-runtime-ibarra-pages-extension`) replaces this plugin:
+`vidocq:generate` compiles the pages the application keeps under `META-INF/resources/`.
 
 Deploy with `ibarra-foy` and the explicit application layer as described in
 xref:modules/foy-binding.adoc[the binding reference]. Default packaging compiles EL
@@ -93,9 +95,8 @@ implemented in initial I4/I5. See xref:internals.adoc[Internals] for the current
 
 == Building Ibarra from source
 
-Peano's published development snapshot includes the compiled-function extension.
-The normal Maven build resolves it directly; no prerequisite source checkout is
-needed.
+Ibarra is built by the reactor of the monorepo, with Peano and Foy: no snapshot of
+another repository is needed. From the root of the monorepo:
 
 [source,bash]
 ----

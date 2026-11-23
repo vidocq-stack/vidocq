@@ -24,7 +24,7 @@ try (var p = Json.createParser(input)) {
 }
 ----
 
-`p.skipObject()` / `p.skipArray()` skip without materializing. `p.getValue()` materializes the sub-tree `JsonValue` at the current position (handy for leaves).
+[[skip-in-container]]`p.skipObject()` / `p.skipArray()` [.tag-new]#NEW# skip without materializing: from anywhere inside an object (an array), they advance to the end of that container, as the JSON-P 2.1 javadoc says; outside a container of that kind they do nothing. `p.getValue()` materializes the sub-tree `JsonValue` at the current position (handy for leaves).
 
 === Push generator (`JsonGenerator`)
 
@@ -165,4 +165,4 @@ public sealed interface Shape permits Rect, Circle {}
 
 == Virtual threads
 
-Champollion has no `synchronized`. A `Jsonb` instance is immutable and thread-safe — create it once and share it. During `toJson` / `fromJson`, per-call state travels in explicit per-operation context objects; the only thread-local state is an internal per-thread parser cache that avoids reallocating buffers on every `fromJson` (cf. xref:internals.adoc[]). Use Champollion freely from `Executors.newVirtualThreadPerTaskExecutor()` without precaution.
+Champollion has no `synchronized`. A `Jsonb` instance is immutable and thread-safe — create it once and share it. During `toJson` / `fromJson`, per-call state travels in explicit per-operation context objects; the only state kept between calls is internal to the `Jsonb`, a parser and two buffers it reuses, each in an atomic slot and not in a `ThreadLocal` (cf. xref:internals.adoc[]). Use Champollion freely from `Executors.newVirtualThreadPerTaskExecutor()` without precaution.

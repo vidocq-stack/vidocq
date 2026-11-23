@@ -379,6 +379,7 @@ The first form that yields a value wins:
 == Special properties
 
 * `mp.config.profile` — active configuration profile; resolved like any other property, from whichever registered config source defines it (highest ordinal wins)
+* `mp.config.property.expressions.enabled` — `false` turns property expressions off; values are then returned as written (default: enabled)
 
 == Exceptions
 

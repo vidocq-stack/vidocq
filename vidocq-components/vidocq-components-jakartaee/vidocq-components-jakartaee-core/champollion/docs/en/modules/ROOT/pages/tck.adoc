@@ -28,7 +28,7 @@ The `champollion-tck` module is **in-reactor, gated behind the `tck` Maven profi
 | ✅ 100% of applicable tests PASS
 |===
 
-Last baseline date: **2026-06-16** (cf. link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/TCK.md[TCK.md] §_Verified status — 2026-06-16 (full rerun)_; that run also has the JSON-P pluggability suite at 18/18).
+Last baseline date: **2026-06-16** (cf. link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/TCK.md[TCK.md] §_Verified status — 2026-06-16 (full rerun)_; that run also has the JSON-P pluggability suite at 18/18). The run of 2026-11-17 gave the same counts.
 
 == JSON-P 2.1 — detailed status
 
@@ -101,9 +101,9 @@ cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-cor
 
 Maven coordinates installed:
 
-* `jakarta.json:jakarta.json-tck-common:2.1.0`
-* `jakarta.json:jakarta.json-tck-tests:2.1.0`
-* `jakarta.json:jakarta.json-tck-tests-pluggability:2.1.0`
+* `jakarta.json:jakarta.json-tck-common:2.1.1`
+* `jakarta.json:jakarta.json-tck-tests:2.1.1`
+* `jakarta.json:jakarta.json-tck-tests-pluggability:2.1.1`
 * `jakarta.json.bind:jakarta.json.bind-tck:3.0.0`
 
 === Run the JSON-P 2.1 TCK
@@ -139,7 +139,7 @@ Report: `champollion-tck/target/tck-report-jsonb.txt`.
 
 The scripts check the presence of the TCK jar in `~/.m2/`. If absent: exit `78` (`EX_CONFIG`, clean _skip_), so that a caller can tell a missing TCK from a failing one.
 
-No CI workflow runs these scripts today: `main` builds, tests and deploys in one pass without the TCK, and the root `pom.xml` declares no `ci.tck.modules` or `ci.tck.command`, so pull requests are not gated on the official TCK either. Run both suites locally before merging a change they cover.
+A pull request runs no TCK. The `TCK nightly` workflow of the monorepo runs both suites once a day, on demand on a branch, and for a release: Champollion's root `pom.xml` declares them in `ci.tck.command`, with `install-tck.sh` first, so a CI runner needs no pre-installed TCK. Run both suites locally, or dispatch that workflow on the branch, before merging a change they cover.
 
 == Release discipline
 

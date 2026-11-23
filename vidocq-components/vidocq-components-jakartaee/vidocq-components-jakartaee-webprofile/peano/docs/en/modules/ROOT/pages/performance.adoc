@@ -11,6 +11,8 @@ link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee
 
 [source,bash]
 ----
+# from the root of the monorepo
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano
 sdk env
 ./mvnw -ntp -Pbench -pl peano-bench -am package
 ./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBenchmark.evaluate)$' -rf json -rff peano-bench/target/results.json

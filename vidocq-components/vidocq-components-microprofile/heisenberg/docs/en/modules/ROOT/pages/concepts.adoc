@@ -146,7 +146,7 @@ A method annotated `@Asynchronous` must not be called _directly_ from another vi
 
 * **Synchronous mode** (no `@Asynchronous`): a `Semaphore` with N permits; a call beyond raises `BulkheadException` immediately.
 * **Asynchronous mode** (with `@Asynchronous`): a `Semaphore` with N permits + a `waitingTaskQueue` queue of pending tasks; beyond that, `BulkheadException`.
-***Queued tasks run in arrival order** — a freed permit goes to the task that has waited longest; a later call never takes it first. That includes a `@Retry` of an execution that just failed: the retry joins the back of the queue, as spec §7.2 requires.
+* **Queued tasks run in arrival order** — a freed permit goes to the task that has waited longest; a later call never takes it first. That includes a `@Retry` of an execution that just failed: the retry joins the back of the queue, as spec §7.2 requires.
 
 == Configuration through MicroProfile Config
 
@@ -168,7 +168,7 @@ MP FT 4.1 spec §12 defines a config-key scheme — `<Annotation>/<param>`, opti
 | `MP_Fault_Tolerance_NonFallback_Enabled`
 | Boolean. `false` disables everything except `@Fallback`. Dotted alias: `mp.fault.tolerance.nonFallback.enabled`.
 
-| `mp.fault.tolerance.metrics.enabled`
+| `MP_Fault_Tolerance_Metrics_Enabled`
 | Boolean. `false` disables §9 / §10 metric emission.
 |===
 

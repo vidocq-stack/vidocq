@@ -142,7 +142,7 @@ Neither module is published. What they found, now fixed:
 | ⚠️ Not exposed by the API
 |===
 
-An interceptor binding of the application that carries `@Counted` or `@Timed`, an annotation annotated with `@InterceptorBinding` and with the metric annotation, names the metric as that annotation would on the same method, constructor or class. A bean carries the metrics of the methods it inherits and does not override: from a superclass, named after that superclass, and from the default methods of its interfaces, named after the interface. An abstract method of an interface carries no metric, and an interface on its own has none.
+[[bindings-and-inherited-metrics]]**Interceptor bindings and inherited methods** [.tag-new]#NEW# — an interceptor binding of the application that carries `@Counted` or `@Timed`, an annotation annotated with `@InterceptorBinding` and with the metric annotation, names the metric as that annotation would on the same method, constructor or class. A bean carries the metrics of the methods it inherits and does not override: from a superclass, named after that superclass, and from the default methods of its interfaces, named after the interface. An abstract method of an interface carries no metric, and an interface on its own has none.
 
 == Configuration keys
 
@@ -153,7 +153,7 @@ Dirac reads its configuration without any MicroProfile Config dependency: `Distr
 | Key | Effect
 
 | `mp.metrics.distribution.percentiles`
-| Global percentile list (`0.5,0.95,0.99`) or per-metric (`name=0.5,0.99`). An empty value disables percentiles.
+| Percentiles as `name=values` entries separated by `;`: per metric (`name=0.5,0.99`) or, with the pattern `+*+`, for every metric (`+*=0.5,0.95,0.99+`); the most specific pattern wins. An entry without values (`name=`) disables percentiles for the metrics it matches.
 
 | `mp.metrics.distribution.histogram.buckets`
 | Fixed buckets for `Histogram`. Global or per metric.
@@ -180,7 +180,7 @@ The MP Metrics 5.1 spec defines no path option (no equivalent of `quarkus.smallr
 * Sizes — `BITS`, `KILOBITS`, `MEGABITS`, `BYTES`, `KILOBYTES`, `MEGABYTES`, `GIGABYTES`
 * Generic — `NONE`, `PERCENT`, `PER_SECOND`
 
-Dirac performs no automatic conversion: the unit is exposed as declared. Prometheus convention: express durations as `SECONDS`, sizes as `BYTES`.
+Dirac converts no value by its unit: the unit stays in the metric's metadata, and a `Timer` is always exposed in seconds. Prometheus convention: express durations as `SECONDS`, sizes as `BYTES`.
 
 == `GET /metrics` endpoint
 

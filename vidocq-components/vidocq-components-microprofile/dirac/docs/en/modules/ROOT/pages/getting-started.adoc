@@ -48,7 +48,7 @@ The MicroProfile Metrics API, which ships the annotations the application code u
 
 == Annotate a bean
 
-The example below exposes three metrics from a single CDI bean. `@Counted` records a monotonic counter (`LongAdder`), `@Timed` records a duration histogram (`System.nanoTime()`), and `@Gauge` exposes an instantaneous value resolved by `MethodHandle` at startup.
+The example below exposes three metrics from a single CDI bean. `@Counted` records a monotonic counter (`LongAdder`), `@Timed` records a duration histogram (`System.nanoTime()`), and `@Gauge` exposes an instantaneous value resolved by `MethodHandle` at startup. `absolute = true` keeps each name as written, without the class-name prefix.
 
 [source,java]
 ----
@@ -67,17 +67,17 @@ public class OrderService {
 
     private final Queue<String> pending = new ConcurrentLinkedQueue<>();
 
-    @Counted(name = "orders_placed_total", description = "Total orders placed")
+    @Counted(name = "orders_placed_total", absolute = true, description = "Total orders placed")
     public void placeOrder(String id) {
         pending.add(id);
     }
 
-    @Timed(name = "order_checkout", description = "Checkout duration")
+    @Timed(name = "order_checkout", absolute = true, description = "Checkout duration")
     public void checkout(String id) {
         pending.remove(id);
     }
 
-    @Gauge(name = "orders_pending", unit = "none", description = "Orders awaiting checkout")
+    @Gauge(name = "orders_pending", absolute = true, unit = "none", description = "Orders awaiting checkout")
     public int pendingOrders() {
         return pending.size();
     }
@@ -144,8 +144,8 @@ Dirac populates three registries at startup, as the spec requires:
 | Automatic — `BaseMetricsRegistrar`, invoked by the `MetricRegistryProducerBean` constructor.
 
 | `VENDOR`
-| Runtime-specific metrics (internal Dirac counters).
-| Automatic — extensible by the user via `@Inject @RegistryScope(VENDOR) MetricRegistry`.
+| Runtime-specific metrics — Dirac registers none of its own.
+| Empty at startup — extensible by the user via `@Inject @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE) MetricRegistry`.
 |===
 
 See xref:concepts.adoc[Concepts] for the full model.

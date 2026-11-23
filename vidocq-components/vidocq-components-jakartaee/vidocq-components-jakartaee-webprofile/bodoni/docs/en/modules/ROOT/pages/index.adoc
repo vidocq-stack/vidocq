@@ -1,11 +1,11 @@
 = Bodoni
-:description: Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, native Java Modules, portable tag handlers with optional build-time inlining by Ibarra. B5: official Tags TCK runner, first baseline 452/541.
+:description: Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, native Java Modules, portable tag handlers; build-time inlining by Ibarra is planned, on standby. B5: official Tags TCK runner, 541/541 after the TCK fixes (first baseline 452/541), not a certification.
 
 // TODO: centred logo (image::bodoni-logo.png[Bodoni,300,role=module-logo]) once
 // modules/ROOT/images/bodoni-logo.png exists — tracked in tasks/todo.md.
 
 [.lead]
-Bodoni is the Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem, in pure Java 25: the `c:`, `fmt:`, `fn:`, `x:` and `sql:` libraries as standard, portable tag handlers, with no dependency beyond the JSTL API and the JDK — and, when Ibarra precompiles the pages, the hot core tags inlined at build time.
+Bodoni is the Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem, in pure Java 25: the `c:`, `fmt:`, `fn:`, `x:` and `sql:` libraries as standard, portable tag handlers, with no dependency beyond the JSTL API and the JDK — and, when Ibarra precompiles the pages, the hot core tags inlined at build time (planned, on standby: see xref:concepts.adoc[Concepts]).
 
 [IMPORTANT]
 ====
@@ -27,9 +27,9 @@ JSTL is the standard catalogue of tags every page composes with. Ibarra (Jakarta
 | Implemented spec | {spec-tags-3-0}[Jakarta Standard Tag Library 3.0]
 | Repo | {repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni
 | Java | 25 (LTS)
-| Java modules | `io.vidocq.bodoni.core` — see xref:internals.adoc[Internals]
+| Java modules | `io.vidocq.bodoni.core`, and the optional `io.vidocq.bodoni.peano` — see xref:internals.adoc[Internals]
 | Runtime dependencies | None beyond the JSTL API (`compile`); Pages, Servlet and EL APIs are `provided` by the container
-| Status | B5 — `c:`, `fn:`, `fmt:`, `x:` and `sql:` implemented, official TCK runner delivered; not released or certified
+| Status | B5 — `c:`, `fn:`, `fmt:`, `x:` and `sql:` implemented, official TCK runner delivered; released, not certified
 | Official TCK | 541/541 on Ibarra + Foy + Peano (first baseline 452/541); not a certification — see xref:tck.adoc[TCK status]
 |===
 
@@ -55,5 +55,5 @@ Bodoni sits in the Jakarta EE web tier next to Peano (Expression Language 6.0) a
 
 [NOTE]
 ====
-Performance numbers live in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni/BENCH.md[BENCH.md] (no numbers recorded yet). None appear inline in this page.
+Performance numbers live in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni/BENCH.md[BENCH.md], and are presented on xref:performance.adoc[Performance]. None appear inline in this page.
 ====

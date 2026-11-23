@@ -23,14 +23,15 @@ All Noether artifacts are under `io.vidocq.noether`, version `{project-version}`
 | `noether-jpa-jta` | `io.vidocq.noether.jpa.jta` | JTA bridge: the container's `TransactionSynchronizationRegistry` (`java:comp/TransactionSynchronizationRegistry` on a server)
 | `noether-jpa-cdi` | `io.vidocq.noether.jpa.cdi` | CDI integration: `@PersistenceContext`, `@PersistenceUnit`, and `@Inject` of each unit of `persistence.xml`; JTA through `noether-jpa-jta`
 | `noether-jpa` | | Aggregator POM of the Persistence modules (directory `noether-persistence`), not a dependency
-| `noether-root` | | Reactor of the repository
+| `noether-root` | | Reactor of the component, a module of the monorepo's build
 | `noether-validation`, `noether-validation-core` | `io.vidocq.noether.validation.*` | Provisional Validation provider for Noether's own tests; published since 0.4.0, not a conformant provider
 | `noether-architecture-tests` | | **Test only**, never released. Runs Noether's architecture rules on the classes of every shipped module: allowed dependencies per module, layers, no foundational brick (`noether-jpa-cdi` stays free of Vauban), Mansart's pool through `noether-jpa-pool-mansart` only, no reflection outside the documented fallbacks (nor a private lookup or a member found by name through `java.lang.invoke`), no platform thread, no `ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. The reflective fallbacks are listed, each with its reason, in `ArchitectureRules.REFLECTIVE_FALLBACKS` and `DEEP_LOOKUP_ADAPTERS` (xref:internals.adoc#reflective-fallbacks[Internals])
 |===
 
 External dependencies stay under `io.vidocq.mansart` (Pool, Transactions) and `io.vidocq.vauban`. In the Noether
-build, `mansart.version` pins the independent Mansart version, and `vauban.version` the Vauban of the CDI module-it.
-Integration vehicles and all provisional Validation artifacts are excluded from release publishing.
+build, `mansart.version` and `vauban.version` (the Vauban of the CDI module-it) are the version of the monorepo, which
+has one version for every component. Integration vehicles are excluded from release publishing; of the provisional
+Validation artifacts, `noether-validation` and `noether-validation-core` are published since 0.4.0.
 
 [#properties]
 == Configuration properties
@@ -170,7 +171,8 @@ refused). Noether defines no hint of its own.
 
 === `persistence.xml`
 
-Versions 1.0 to 3.2 are read, each against its schema; a DTD is refused.
+Versions 1.0 to 3.2 are read, each in the namespace of its schema; the structure is checked while reading, without
+schema validation. A DTD is refused.
 
 [cols="2,4"]
 |===
@@ -184,8 +186,8 @@ Versions 1.0 to 3.2 are read, each against its schema; a DTD is refused.
 | `RESOURCE_LOCAL` when absent.
 
 | `jta-data-source`, `non-jta-data-source`
-| Resolved by the container: a JNDI name on a server, a `@Named` `DataSource` bean with `noether-jpa-cdi`. Refused in
-  Java SE, which has no JNDI.
+| Resolved by the container: a JNDI name on a server, a `@Named` `DataSource` bean with `noether-jpa-cdi`. When the
+  application creates the factory itself, the name is looked up through JNDI, and refused when no naming context binds it.
 
 | `shared-cache-mode`, `validation-mode`
 | Honoured, `UNSPECIFIED` and `AUTO` by default.
@@ -521,6 +523,7 @@ decision numbers (D14, D22, ...) point to `noether-persistence/ROADMAP.md`.
 [cols="2,4"]
 |===
 | Standard hint | Query SQL contract (D14)
+
 | `jakarta.persistence.fetchgraph`
 | Explicit eligible to-one nodes/subgraphs become LEFT fetch joins. Omitted eager
 attributes may still be overfetched by the loader; they are not guaranteed unloaded.
@@ -1137,6 +1140,7 @@ and missing mappings remain separate priorities.
 [cols="3,1,4"]
 |===
 | Factory property | Default | Values
+
 | `io.vidocq.noether.jpa.fetch.batch-size` | `16`
 | Integer `1`–`256`; `1` disables grouping. Invalid/blank values fail factory creation.
 |===

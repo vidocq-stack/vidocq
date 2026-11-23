@@ -2,7 +2,7 @@
 :repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Jakarta Data 1.0 implementation — repositories, JDQL, JDBC dialects, APT codegen.
 
-NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+NOTE: Persistence and Validation now live in xref:noether::index.adoc[Noether], a component of its own in the monorepo (`vidocq-preview/`). Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to Noether's folder.
 
 
 [.lead]
@@ -31,7 +31,7 @@ NOTE: Persistence and Validation now live in the separate xref:noether::index.ad
 | `mansart-data-dialect-spi` + shipped dialects `mansart-data-dialect-h2`, `mansart-data-dialect-postgresql`.
 
 | `mansart-data-processor`
-| APT — static metamodel (`_Book`, `Book_`) + `*RepositoryImpl` + `META-INF/mansart-repositories.list`.
+| APT — static metamodel (`_Book`) + `*RepositoryImpl` + `META-INF/mansart-repositories.list`.
 
 | `mansart-data-maven-plugin`
 | Maven plugin — generates, at build time, the `*RepositoryImpl` for `@Repository` interfaces coming from **dependency jars** (where the APT never ran), indexed in `META-INF/mansart-repositories-external.list`.
@@ -82,7 +82,7 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 * `BasicRepository`, `CrudRepository`, `DataRepository`.
 * Inherited methods: `save`, `saveAll`, `findById`, `findAll`, `deleteById`, `delete`, `deleteAll` (+ `insert`/`update` pairs via `CrudRepository`).
 * Lifecycle: `@Insert`, `@Update`, `@Delete`, `@Save`.
-* `@Find` (parameter-name binding) — served by the reflective runtime fallback; the APT compiles `@Query` and the lifecycle annotations.
+* `@Find` (parameter-name binding) — compiled by the APT, like `@Query` and the lifecycle annotations (xref:usage.adoc[Usage]).
 * Derived queries: `findBy`, `existsBy`, `countBy`, `deleteBy` + `And`, `Or`, `Like`, `Between`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
 * `@Query` JDQL (SELECT/UPDATE/DELETE).
 * Offset pagination (`PageRequest.ofPage(n).size(s)`) and keyset cursors (`PageRequest.afterCursor(cursor)`).
@@ -212,7 +212,7 @@ See link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakar
 * ✅ M2 — Skeleton + APT metamodel.
 * ✅ M3a — H2 dialect + BasicRepository CRUD.
 * ⏳ M3b — Keyset pagination, lifecycle, derived queries (extras).
-* ⏳ M4 — PostgreSQL dialect.
+* ✅ M4 — PostgreSQL dialect.
 * ⏳ M5 — `@Query` JDQL (extras — base delivered in M7-27).
 * ✅ M6 — Jakarta Data 1.0 TCK.
 * ✅ M7 — Runtime impl generation — TCK 74/74 PASS.

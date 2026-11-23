@@ -130,8 +130,8 @@ The Jakarta Data bridge (`mansart-data-cdi`) takes its connections from `JtaConn
 * ✅ **M1** — Local single-thread (TM, UT, status).
 * ✅ **M2** — `Synchronization` (`beforeCompletion`, `afterCompletion`).
 * ✅ **M3** — `suspend` / `resume` (TX inheritance via virtual threads).
-* ⏳ **M4** — Multi-resource (true 2PC).
-* ⏳ **M5** — Recovery log + crash tests.
+* ✅ **M4** — Multi-resource (true 2PC).
+* ✅ **M5** — Recovery log (`FileRecoveryLog`).
 * ✅ **M5b** — Driver-side auto-recovery.
 * ⚠️ **M6** — Official Jakarta Transactions 2.0 TCK — smoke 5/5 ✅, `full-tck` build SUCCESSFUL ✅, report parsing in M6c.
 * ✅ **M7** — `@Transactional` CDI interceptor + `@TransactionScoped` + Vauban BCE.
@@ -143,7 +143,7 @@ See link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakar
 
 Detailed status: xref:tck.adoc[Mansart TCK status] and link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-transactions/TCK.md[TCK.md].
 
-The Jakarta Transactions 2.0 TCK is a historical Sun tsharness harness (Apache Ant + `ts.jte` + ~80 properties). No Surefire-scannable jar. Mansart ships `MansartTckProvider` + `MansartUserTransaction` that plug into the harness; smoke wiring 5/5 validated in CI.
+The Jakarta Transactions 2.0 TCK is a historical Sun tsharness harness (Apache Ant + `ts.jte` + ~80 properties). No Surefire-scannable jar. Mansart ships `MansartTckProvider` + `MansartUserTransaction` that plug into the harness; smoke wiring 5/5, run by hand (not in CI: see xref:tck.adoc[Mansart TCK status]).
 
 == Bugs / Bench
 

@@ -26,7 +26,7 @@ The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produc
 | 0
 |===
 
-Any future regression must be logged in the repository's `TCK.md` with: test name, reason, remediation plan.
+Any future regression must be logged in Grimm's `TCK.md` with: test name, reason, remediation plan.
 
 == Prerequisites
 

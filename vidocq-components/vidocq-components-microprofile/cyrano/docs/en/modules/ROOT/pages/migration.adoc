@@ -10,9 +10,9 @@ Cyrano is at `{project-version}` and passes the official MicroProfile Rest Clien
 Cyrano implements MicroProfile Rest Client 4.0 strictly. Migration means aligning annotations with the spec and giving up the proprietary extensions of existing implementations.
 
 [#upgrading]
-== Upgrading from {release-version}
+== Upgrading from 0.3.0
 
-What changes for an application that moves from Cyrano {release-version} to the `{project-version}` line (full list: xref:whats-new.adoc[What's new]):
+What changes for an application that moves from Cyrano 0.3.0 to the `{project-version}` line (full list: xref:whats-new.adoc[What's new]):
 
 * **Client methods returning `Publisher`** — declare `org.reactivestreams:reactive-streams` yourself: `cyrano-core` no longer brings it. Every other application drops an automatic module and can be linked with jlink. xref:reference.adoc#reactive-streams[Reactive Streams for `Publisher`].
 * **Interfaces without a `cyrano-processor` proxy, in a named module** — keep only `opens <package> to io.vidocq.cyrano.core`, and remove any `--add-reads io.vidocq.cyrano.core=...` or `--add-exports io.vidocq.cyrano.core/io.vidocq.cyrano.internal=...` added to make the runtime-fallback proxy work. With `cyrano-processor` on the processor path, no `opens` is needed. xref:internals.adoc#runtime-fallback[Tier 3: runtime generation].
@@ -60,8 +60,8 @@ SmallRye is the implementation used by Quarkus and WildFly. Its spec fidelity is
 | Identical.
 
 | Dev mode (hot reload)
-| Standard Maven cycle
-| No dev-mode equivalent for now.
+| `vidocq:dev` of the xref:vidocq::index.adoc[Vidocq runtime]
+| Cyrano has no dev mode of its own; the hot reload of the Vidocq runtime covers its clients.
 |===
 
 == From RESTEasy MicroProfile Rest Client

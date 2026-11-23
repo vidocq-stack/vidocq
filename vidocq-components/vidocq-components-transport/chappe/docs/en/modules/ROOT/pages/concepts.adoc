@@ -36,7 +36,7 @@ Both types are **immutable** at the API surface. `Response` is built through a b
 // Request — read-only access
 req.method()           // HttpMethod: GET, POST, ...
 req.path()             // String relative to the mount, no query string
-req.queryParams()      // Map<String, List<String>>
+req.queryParams()      // Map<String, String>
 req.pathParams()       // Map<String, String>
 req.headers()          // Headers (case-insensitive)
 req.body()             // Body (asInputStream(), contentLength(), ...)
@@ -81,7 +81,7 @@ After the last chunk of a chunked body, the transport calls `Response.trailers()
 
 Every response field follows one rule, so that no field can be injected into the response head and none reaches the wire truncated:
 
-* the name must be an RFC 9110 token (letters, digits and `!#$%&'*+-.^_`|~`);
+* the name must be an RFC 9110 token (letters, digits and `pass:c[!#$%&'*+-.^_`|~]`);
 * the value may hold only visible ASCII, obs-text (`U+0080`–`U+00FF`, written as ISO-8859-1), space and tab. CR, LF, NUL, other controls and any char above `U+00FF` are refused. Such a char has no one-byte form, and truncating it could forge a CR or LF.
 
 Where the rule is checked:
@@ -187,7 +187,7 @@ Resolution order inside a `Router`:
 
 == ServerProvider SPI
 
-`ServerProvider` is a `ServiceLoader` service. `chappe-core` registers `ChappeServerProvider` via `provides`/`with` in its `module-info`. An alternate implementation (e.g. `cassini-jdk-http`, which falls back on the JDK `HttpServer` for tests) can register alongside.
+`ServerProvider` is a `ServiceLoader` service. `chappe-core` registers `ChappeServerProvider` via `provides`/`with` in its `module-info`. An alternate implementation can register alongside.
 
 == Diagram: concept graph
 

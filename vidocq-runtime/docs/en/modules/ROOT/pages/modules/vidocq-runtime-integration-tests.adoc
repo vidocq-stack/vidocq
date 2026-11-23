@@ -19,13 +19,10 @@
 * Shutdown behaviour — virtual thread drain, pool close, HTTP listener release.
 * What `vidocq create` writes: `vidocq-runtime-it-create` (profile `it`, on every CI run) runs
   `mvn verify vidocq:jlink` on a created REST application — its first `@VidocqTest` test included, then the jlink
-  image `vidocq build jlink` makes — and fails on any warning but the three javac ones documented as expected.
+  image `vidocq build jlink` makes — and fails on any warning.
 * Regressions tracked by bugs documented in `vidocq-runtime/BUG.md`, `vidocq-runtime/CHAPPE-BUGS.md`, `vidocq-runtime/VAUBAN-BUGS.md`.
 
-[NOTE]
-====
-// TODO@user: enumerate the test classes precisely once the module is stabilised. Source to index: `vidocq-runtime-integration-tests/vidocq-runtime-it-*/src/test/java/`.
-====
+// TODO@user: enumerate the test classes precisely once the module is stabilised. Source to index: `vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-it-*/src/test/java/`.
 
 == Run
 
@@ -55,7 +52,7 @@ The two are complementary and both required to release a version.
 
 == TDD convention
 
-Per the workspace philosophy, every new feature of the Vidocq Runtime engine arrives via a red test in this module before any production code. See the workspace root `CLAUDE.md` for the full rule.
+Per the workspace philosophy, every new feature of the Vidocq Runtime engine arrives via a red test in this module before any production code. See `AGENTS.md` of `Vidocq/vidocq-workspace` for the full rule.
 
 == Next steps
 

@@ -56,7 +56,7 @@ and names what to remove:
 dependency declared in any scope but `test`. See xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev
 tools and binaries] for the full picture, companions included.
 
-The console's SPI, `vidocq-runtime-devconsole-spi`, is not marked: it is an ordinary API jar of five small types,
+The console's SPI, `vidocq-runtime-devconsole-spi`, is not marked: it is an ordinary API jar of twelve types,
 and it ships in a binary whenever an extension that keeps the all-in-one `DevConsolePanel` form
 (xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged]) requires it, so that such an extension
 still resolves outside `vidocq:dev`.
@@ -209,12 +209,12 @@ Falling back costs about one second of boot: before the console takes a free por
 [#the-page]
 == The page
 
-The page is plain HTML, one stylesheet and one JavaScript module, all served by the console: no build step, and nothing loaded from another site, not even a font. It reads one document, `GET /api/snapshot`, about once a second.
+The page is plain HTML, one stylesheet and three JavaScript modules, all served by the console: no build step, and nothing loaded from another site, not even a font. It reads one document, `GET /api/snapshot`, about once a second.
 
-* **Tabs.** *Startup* first, then one tab per section of the startup report, in the order of the report, and the console's own *Configuration*, *CDI (Vauban)* and *JVM* last. The page keeps the selected tab and the pause in the browser's `localStorage`, and nothing else.
+* **Tabs.** *Startup* first, then one tab per section of the startup report, in the order of the report, and the console's own *Configuration*, *CDI (Vauban)* and *JVM* last. The page keeps the selected tab, the pause, and each panel's open sub-tab and choice in the browser's `localStorage`, and nothing else.
 * **Polling.** One request at a time. None while the tab is hidden, or while *Pause* is pressed.
 * **A reload.** When the application stops answering, during a dev reload, the page greys the last data under `reloading…` and retries every second; after a minute it says `unreachable` and retries every five seconds. A new boot is recognised by its id: the page draws its boot facts again and starts its charts over.
-* **Charts.** The page keeps five minutes of history, 300 points per value, in the browser only: nothing is stored on the server. Time is the server's clock, so a missed poll or a debugger paused on a breakpoint leaves a gap, never a lie.
+* **Charts.** The console keeps five minutes of history, 300 points per value, on the server, and a poll asks for the points the page is missing (<<history>>). Time is the server's clock, so a debugger paused on a breakpoint leaves a gap, never a lie.
 * **Themes.** Light and dark follow the system's preference.
 
 [#startup-tab]
@@ -246,7 +246,7 @@ The panels shipped today:
 | Panel | Shows
 
 | *Mansart pools*
-| One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. In a `dev` launch, a tab per poollists its tables, describes one, shows its first rows and runs the SQL you type, read-only or in a transaction rolled back unless committed. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section] and xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-sql[Tables and a SQL editor].
+| One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. In a `dev` launch, a tab per pool lists its tables, describes one, shows its first rows and runs the SQL you type, read-only or in a transaction rolled back unless committed. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section] and xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-sql[Tables and a SQL editor].
 
 | *Mansart Data*
 | The catalogue of `vidocq-runtime-mansart-data-extension`, one card per entity: its table and columns, then each of its repositories with its methods, their kind, `@Query` text, parameters and return type, and the methods inherited from Jakarta Data. Read once per boot; no connection, no query. See xref:modules/vidocq-runtime-extensions.adoc#mansart-data-catalogue[the Mansart Data catalogue].
@@ -256,6 +256,9 @@ The panels shipped today:
 
 | *REST (Cassini)*
 | The routes of `vidocq-runtime-cassini-rest-extension`, in match order, each mount, the resource classes and the providers by contract, then live, one card per mount: requests per second, responses by status class, requests in flight, the share of time spent in handlers, and the mean and longest time to answer. See xref:modules/vidocq-runtime-extensions.adoc#cassini-rest-live[the `rest` panel].
+
+| *Servlet (Foy)*
+| The `servlet` section of `vidocq-runtime-foy-servlet-extension`: the servlets, filters and listeners of the application and the prefixes they are mounted on, then live, the active sessions of each servlet deployment. See xref:modules/vidocq-runtime-extensions.adoc#the-servlet-section-of-the-startup-report[the `servlet` section].
 
 | *Metrics (Dirac)*
 | The MicroProfile Metrics registries of `vidocq-runtime-dirac-metrics-extension`, one card per registry, application first: how many counters, timers, histograms and gauges each holds, then live every counter's count and every timer's count and mean, under a key derived from the metric's name and tags that the boot facts map back to it. Gauges are counted and named, never called. See xref:modules/vidocq-runtime-extensions.adoc#dirac-metrics-panel[the `metrics` panel].
@@ -816,7 +819,7 @@ In a `dev` launch, a panel may offer actions, such as setting a log level (xref:
 . the header `X-Vidocq-Console-Token` equals the token of the boot, 32 random bytes in hex drawn from `SecureRandom` when the console starts, compared in constant time; the page reads it from `/api/snapshot` (`console.actionToken`), which another site cannot read (`403`);
 . the panel and the action exist (`404`), the body is at most 64 KiB for an action with a `json` argument, such as the <<mcp-inspector,MCP inspector>>'s, 4 KiB otherwise (`413`), and it is one JSON object of strings whose keys are exactly the arguments the action declared, each value accepted by its check, a `json` value parsing as a JSON object (`400`).
 
-A refusal at step 3 or 4 is logged as <<vidocq-devc-006>>. An action runs on a virtual thread, one at a time per panel (`409` while another runs), and the request waits for it up to 60 seconds: `200 {"result": "..."}`, `500 {"error": "<exception class>"}`, or `202 {"state": "running"}` past the limit, the action going on. The snapshot lists each action with its last outcome of the boot, so the page shows it after a reload too. Every run is logged at INFO, `Vidocq dev console: action <panel>/<action> by <address>: <result>`; a failure at WARNING with the class of the exception, which is all the page shows of it, never its message. The decision and the options set aside are in ADR 0001, `docs/adr/0001-dev-console-actions.md` in the repository; ADR 0001, amendment 1, adds the `json` argument, the structured result and the groups this section and xref:dev-console-panels.adoc#actions[Actions] describe.
+A refusal at step 3 or 4 is logged as <<vidocq-devc-006>>. An action runs on a virtual thread, one at a time per panel (`409` while another runs), and the request waits for it up to 60 seconds: `200 {"result": "..."}`, `500 {"error": "<exception class>"}`, or `202 {"state": "running"}` past the limit, the action going on. The snapshot lists each action with its last outcome of the boot, so the page shows it after a reload too. Every run is logged at INFO, `Vidocq dev console: action <panel>/<action> by <address>: <result>`; a failure at WARNING with the class of the exception, which is all the page shows of it, never its message. The decision and the options set aside are in ADR 0001, `vidocq-runtime/docs/adr/0001-dev-console-actions.md` in the repository; ADR 0001, amendment 1, adds the `json` argument, the structured result and the groups this section and xref:dev-console-panels.adoc#actions[Actions] describe.
 
 [#dev-mcp]
 == Dev MCP
@@ -868,7 +871,7 @@ Each tool answers one JSON object, as `structuredContent` and, for a client that
 [#anomalies]
 == Anomaly codes
 
-The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, the sixth from a refused action request, and the seventh, eighth and ninthfrom matching the live panels the `-dev` modules bring against the report's sections, once per boot — all five on the console's own logger, `io.vidocq.devconsole`.
+The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, the sixth from a refused action request, and the seventh, eighth and ninth from matching the live panels the `-dev` modules bring against the report's sections, once per boot — all five on the console's own logger, `io.vidocq.devconsole`.
 
 [#vidocq-devc-001]
 === VIDOCQ-DEVC-001 — on outside development
@@ -933,7 +936,7 @@ It is a bug of the panel: see xref:dev-console-panels.adoc[Writing a dev console
 [#vidocq-devc-006]
 === VIDOCQ-DEVC-006 — an action request from elsewhere
 
-In a `dev` launch, an action request was refused for its `Origin` or its `X-Vidocq-Console-Token` (<<security>>), or a <<dev-mcp,dev MCP>> requestfor its `Origin`: it did not come from the console's own page. Most likely a page of another site tried to make the console do something, or a stale tab of a previous boot sent its old token. Nothing ran. The WARNING is logged on `io.vidocq.devconsole` with the origin the request named, once per origin, reason and boot, 64 at most:
+In a `dev` launch, an action request was refused for its `Origin` or its `X-Vidocq-Console-Token` (<<security>>), or a <<dev-mcp,dev MCP>> request for its `Origin`: it did not come from the console's own page. Most likely a page of another site tried to make the console do something, or a stale tab of a previous boot sent its old token. Nothing ran. The WARNING is logged on `io.vidocq.devconsole` with the origin the request named, once per origin, reason and boot, 64 at most:
 
 [source,text]
 ----
@@ -999,7 +1002,7 @@ module, not both.
 | Logger | Records
 
 | `io.vidocq.devconsole`
-| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch: the URL of the <<dev-mcp,dev MCP>> (INFO), every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. <<vidocq-devc-007>>, <<vidocq-devc-008>> and <<vidocq-devc-009>>, once per boot, the first time the report is read. The <<logs-panel,logs panel>>logs nothing: its handler only reads what reaches the root logger.
+| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch: the URL of the <<dev-mcp,dev MCP>> (INFO), every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. <<vidocq-devc-007>>, <<vidocq-devc-008>> and <<vidocq-devc-009>>, once per boot, the first time the report is read. The <<logs-panel,logs panel>> logs nothing: its handler only reads what reaches the root logger.
 
 | `io.vidocq.startup.anomaly`
 | <<vidocq-devc-001>> to <<vidocq-devc-004>>, as every startup anomaly.
@@ -1007,6 +1010,6 @@ module, not both.
 
 == Next steps
 
-* xref:dev-console-panels.adoc[Writing a dev console panel]— show the live values of an extension
+* xref:dev-console-panels.adoc[Writing a dev console panel] — show the live values of an extension
 * xref:modules/vidocq-runtime-core.adoc#startup-report[Startup report] — what the *Startup* tab shows
 * xref:modules/vidocq-runtime-maven-plugin.adoc[vidocq-runtime-maven-plugin] — `vidocq:dev`

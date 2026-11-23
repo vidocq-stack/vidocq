@@ -97,7 +97,7 @@ Vidocq Runtime invents no runtime; it **composes** the six foundational bricks t
 * in `onStart`, resolves the JAX-RS `Application` bean from the Vauban container, then mounts the xref:cassini::index.adoc[Cassini] dispatcher (whose routing was generated statically at compile time) on a mount point of the Chappe server contributed by `vidocq-runtime-chappe-webserver-extension`;
 * relies on `priority()` so the Chappe engine exists before the mount and the listeners open after it.
 
-This shared lifecycle grammar keeps the ecosystem homogeneous while every brick remains self-contained in its own repo.
+This shared lifecycle grammar keeps the ecosystem homogeneous while every brick remains self-contained in its own folder of the monorepo.
 
 == Next steps
 

@@ -29,7 +29,7 @@ Consolidated technical reference. Use this page as an anchor for external links 
 | Optional Jakarta WebSocket 2.2 server (programmatic API) on the Servlet engine; see <<websocket-module>>. Depends on `foy-api`, the Servlet API and `jakarta.websocket-api` and `jakarta.websocket-client-api` 2.2.0, both at `compile` scope: the server API's Java Module requires the client API.
 
 | `io.vidocq.foy:foy-tck`
-| Arquillian harness for the official TCK — **in-reactor, gated behind the `tck` Maven profile** (a plain `mvn install` neither downloads nor runs anything TCK-related; see xref:tck.adoc[TCK status]).Its `sigtest` profile runs the TCK's API signature test with two build-time tools, never shipped: `jakarta.tck:sigtest-maven-plugin` 2.5 (test scope) and `maven-dependency-plugin` (copies the `jakarta.servlet-api` jar under test).
+| Arquillian harness for the official TCK — **in-reactor, gated behind the `tck` Maven profile** (a plain `mvn install` neither downloads nor runs anything TCK-related; see xref:tck.adoc[TCK status]). Its `sigtest` profile runs the TCK's API signature test with two build-time tools, never shipped: `jakarta.tck:sigtest-maven-plugin` 2.5 (test scope) and `maven-dependency-plugin` (copies the `jakarta.servlet-api` jar under test).
 
 | `io.vidocq.foy:foy-architecture-tests`
 | **Test only**, never released. Runs Foy's architecture rules (dependencies, layers, no reflection, no platform thread, no `ThreadLocal`) on the classes of every shipped module. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope.
@@ -42,11 +42,13 @@ Consolidated technical reference. Use this page as an anchor for external links 
 module io.vidocq.foy.api {
     requires transitive jakarta.servlet;
     requires static jakarta.annotation;
+    requires static jakarta.cdi;
 
     exports io.vidocq.foy.spi.session;    // SessionStore
     exports io.vidocq.foy.spi.security;   // IdentityStore, Identity, RequestAuthentication, AccessControl
     exports io.vidocq.foy.spi.gen;        // WebComponent, WebComponentDescriptor
     exports io.vidocq.foy.spi.cdi;        // CdiWebComponents
+    exports io.vidocq.foy.spi.jsp;        // JspEngine
     exports io.vidocq.foy.spi.websocket;  // WebSocketUpgradeHandler, WebSocketListener, WebSocketPeer
 }
 ----
@@ -68,6 +70,7 @@ module io.vidocq.foy.core {
     exports io.vidocq.foy.internal.container;
     exports io.vidocq.foy.internal.dispatcher;
     exports io.vidocq.foy.internal.error;
+    exports io.vidocq.foy.internal.gen;
     exports io.vidocq.foy.internal.http;
     exports io.vidocq.foy.internal.listener;
     exports io.vidocq.foy.internal.security;
@@ -86,6 +89,7 @@ module io.vidocq.foy.chappe {
     requires jakarta.cdi;
 
     exports io.vidocq.foy.chappe;         // FoyChappeBoot
+    uses io.vidocq.foy.spi.cdi.CdiContextListeners;
 }
 ----
 
@@ -95,8 +99,16 @@ module io.vidocq.foy.cdi.vauban {
     requires transitive io.vidocq.foy.api;
     requires jakarta.cdi;
     requires io.vidocq.vauban.core;
+    requires io.vidocq.vauban.api;
+    requires io.vidocq.vauban.webcontexts;
 
     exports io.vidocq.foy.cdi.vauban;     // FoyVaubanBootstrap
+    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+            with io.vidocq.foy.cdi.vauban.FoyWebExtension;
+    provides io.vidocq.foy.spi.cdi.CdiContextListeners
+            with io.vidocq.foy.cdi.vauban.VaubanCdiContextListeners;
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.foy.cdi.vauban._VaubanComponents;
 }
 ----
 
@@ -128,7 +140,7 @@ module io.vidocq.foy.websocket {          // exports nothing
 }
 ----
 
-`foy-api` also exports `io.vidocq.foy.spi.websocket` (see <<websocket-spi>>). `foy-core` additionally declares `uses io.vidocq.foy.spi.gen.WebComponent`.
+`foy-api` also exports `io.vidocq.foy.spi.websocket` (see <<websocket-spi>>). `foy-core` additionally declares `uses` for `io.vidocq.foy.spi.gen.WebComponent`, `jakarta.servlet.ServletContainerInitializer`, `io.vidocq.foy.spi.jsp.JspEngine` and `io.vidocq.foy.spi.cdi.CdiContextListeners`.
 
 [NOTE]
 ====
@@ -182,7 +194,7 @@ Each run writes a fresh `META-INF/services/io.vidocq.foy.spi.gen.WebComponent` a
 | Returns a fresh `Builder`.
 
 | `Builder.beanManager(BeanManager bm)`
-| **Required.** The `BeanManager` of the CDI container — Vauban's, Weld's, any CDI 4 container's — from which `@WebServlet` / `@WebFilter` / `@WebListener` beans will be resolved.With it, Foy also activates the CDI request context for each request; see <<other-containers>>.
+| **Required for annotated components.** The `BeanManager` of the CDI container — Vauban's, Weld's, any CDI 4 container's — from which `@WebServlet` / `@WebFilter` / `@WebListener` beans will be resolved; without it, no annotated component is discovered (descriptors, fragments and initializers still deploy). With it, Foy also activates the CDI request context for each request; see <<other-containers>>.
 
 | `Builder.contextPath(String path)`
 | URL prefix served by this container. Default: `"/"`.
@@ -217,10 +229,10 @@ Each run writes a fresh `META-INF/services/io.vidocq.foy.spi.gen.WebComponent` a
 | `Builder.identityStore(IdentityStore store)`
 | The user base behind BASIC, FORM, CLIENT-CERT and `login()`. With neither this nor `user(...)`/`certificateUser(...)`, every login fails. Exclusive with `user` and `certificateUser`.
 
-| `Builder.requestAuthentication(RequestAuthentication hook)`
+| `Builder.requestAuthentication(RequestAuthentication hook)` [.tag-new]#NEW#
 | Hands the authentication of every request to `hook` (a Jakarta Authentication runtime, such as Kerckhoffs): it is asked before the constraint of the resource is applied and replaces the `login-config` mechanism. Without it the container's own mechanisms apply.
 
-| `Builder.accessControl(AccessControl control)`
+| `Builder.accessControl(AccessControl control)` [.tag-new]#NEW#
 | Hands the access decision of every request to `control` (a Jakarta Authorization runtime, such as Kerckhoffs): it is asked once the caller is known, in place of the security constraints, which it can still read. Without it the constraints decide.
 
 | `Builder.confidentialPort(int port)`
@@ -366,7 +378,8 @@ Lot 1 of Jakarta WebSocket 2.2: the programmatic server API. How to use it: xref
 [#security]
 == Security
 
-=== `RequestAuthentication` hook
+[#request-authentication]
+=== `RequestAuthentication` hook [.tag-new]#NEW#
 
 `RequestAuthentication` lets a runtime take over the authentication of an application, for instance a Jakarta Authentication implementation that places an `HttpAuthenticationMechanism` in service (Jakarta Security 4.0, section 2.5). Foy defines the contract and depends on no implementation: the arrow goes from the implementation to Foy, never the reverse.
 
@@ -376,14 +389,16 @@ When one is installed (`SecuritySettings.withRequestAuthentication`), it replace
 * A caller left anonymous on a protected resource gets `403`: there is no container mechanism to challenge with. An excluded resource is `403` without asking. An exception from the hook fails closed.
 * `HttpServletRequest.authenticate` asks the hook with `mandatory` set; `login(user, password)` throws `ServletException`; `logout` calls `cleanSubject`.
 
-=== `AccessControl` decision
+[#access-control]
+=== `AccessControl` decision [.tag-new]#NEW#
 
 `AccessControl` lets a runtime decide the access to web resources, for instance a Jakarta Authorization implementation whose `Policy` answers the `WebResourcePermission` of a request (Servlet 6.1 section 13, Jakarta Authorization 3.0). Installed with `SecuritySettings.withAccessControl` (`Builder.accessControl`), it is asked for _every_ request, once the caller is known:
 
 * `permits(path, method, caller, constraints)` -- `caller` is `null` when nobody was identified; `constraints` answers what the security constraints of the application say, so a default policy can simply return it. `false` is `403`; an exception fails closed.
 * It replaces the constraints: an excluded resource, or a protected one reached by an anonymous caller, goes through if the control says so. Without a `RequestAuthentication` hook, an anonymous caller of a protected resource is still challenged by the container's mechanism unless the control accepts it.
 
-=== `CurrentRequest`
+[#current-request]
+=== `CurrentRequest` [.tag-new]#NEW#
 
 `CurrentRequest.get()` returns the request being served by the current thread, for code that is not handed it: a security context that answers `getCallerPrincipal()`, a producer of a request-bound object. Foy binds it (a `ScopedValue`) around the whole processing of a request on the thread that serves it -- listeners, filters, servlet -- and inside a dispatch it answers the request of the dispatch, so `getUserPrincipal()` is the caller the `RequestAuthentication` hook established.
 
@@ -460,7 +475,7 @@ The roles are application role names, used as they are by the constraints and by
 
 == `web.xml` and `web-fragment.xml` coverage
 
-`WebXmlParser` reads the Servlet 6.1 `web-app_6_1` schema and the `web-fragment` variant. The root element is checked, DOCTYPE is disallowed, and a parse error names the offending element. Descriptors are merged with the annotated components per Servlet 6.1 §8.2.3: `web.xml` wins on a same-name conflict, a conflict between two fragments fails the deployment (including two fragments that give the same servlet different `role-link`s for one `security-role-ref`; equal values are not a conflict), a `url-pattern` claimed by two components fails (§12.2), and `metadata-complete="true"` ignores annotations and fragments. `<init-param>` duplicates keep the first value; `<async-supported>` is tri-state (unset, true, false); `<session-config>/<cookie-config>` merges per sub-element.
+`WebXmlParser` reads the Servlet 6.1 `web-app_6_1` schema and the `web-fragment` variant. The root element is checked, a DOCTYPE is accepted but never resolved, and a parse error names the offending element. Descriptors are merged with the annotated components per Servlet 6.1 §8.2.3: `web.xml` wins on a same-name conflict, a conflict between two fragments fails the deployment (including two fragments that give the same servlet different `role-link`s for one `security-role-ref`; equal values are not a conflict), a `url-pattern` claimed by two components fails (§12.2), and `metadata-complete="true"` ignores annotations and fragments. `<init-param>` duplicates keep the first value; `<async-supported>` is tri-state (unset, true, false); `<session-config>/<cookie-config>` merges per sub-element.
 
 [cols="2,1,3",options="header"]
 |===
@@ -475,8 +490,8 @@ The roles are application role names, used as they are by the constraints and by
 | `<enabled>false</enabled>` leaves the servlet unserved; `web.xml` multipart-config wins over `@MultipartConfig`; `<multipart-config>` reaches the runtime (`getParts()`, form fields as parameters)
 
 | `<servlet>` with `<jsp-file>`
-| skipped
-| no JSP engine: logged at `WARNING`, the rest of the deployment proceeds
+| applied with a JSP engine
+| served by the engine plugged into the <<jsp-engine,JSP-engine service>>; without an engine the servlet is skipped and the rest of the deployment proceeds
 
 | `<run-as>`
 | parsed
@@ -512,7 +527,7 @@ The roles are application role names, used as they are by the constraints and by
 
 | `<security-constraint>`, `<login-config>`, `<security-role>`
 | enforced
-| per url-pattern, merged with `@ServletSecurity` (the descriptor wins on an exact pattern); `auth-method` BASIC or FORM, any other fails closed; see <<security>>
+| per url-pattern, merged with `@ServletSecurity` (the descriptor wins on an exact pattern); `auth-method` BASIC, FORM or CLIENT-CERT, any other fails closed; see <<security>>
 
 | `<security-role-ref>`, `<run-as>`
 | applied
@@ -522,9 +537,13 @@ The roles are application role names, used as they are by the constraints and by
 | applied
 | fragment name and §8.2.2 ordering
 
-| `<jsp-config>`, `<resource-ref>`, `<env-entry>` and the other Jakarta EE environment elements
+| `<jsp-config>`
+| applied
+| exposed through `ServletContext.getJspConfigDescriptor()` for a page engine; see <<jsp-engine>>
+
+| `<resource-ref>`, `<env-entry>` and the other Jakarta EE environment elements
 | ignored
-| no JSP engine and no naming environment in Foy
+| no naming environment in Foy
 |===
 
 The `version` and `metadata-complete` attributes of `<web-app>` and `<web-fragment>` are honoured. A DOCTYPE (Servlet 2.2 and 2.3 descriptors) is accepted without being resolved: the public id sets the version, a version before 2.5 implies `metadata-complete`, and an entity reference is rejected (see xref:usage.adoc#legacy-deployment-descriptors[Legacy deployment descriptors]).
@@ -603,7 +622,7 @@ On a forward the mapping is that of the target; `jakarta.servlet.forward.mapping
 | Keeps the attributes, fires `HttpSessionIdListener.sessionIdChanged`, sends the new cookie; the requested id is updated.
 
 | Cookie
-| Built from `SessionCookieConfig` (name, path, domain, `HttpOnly`, `Secure`, `Max-Age`, attributes). On a secure request the cookie is `Secure` unless `setSecure` or `<secure>` was set.`SameSite=Lax` unless the application set a `SameSite` attribute. For the root context the cookie path is `/`.
+| Built from `SessionCookieConfig` (name, path, domain, `HttpOnly`, `Secure`, `Max-Age`, attributes). On a secure request the cookie is `Secure` unless `setSecure` or `<secure>` was set. `SameSite=Lax` unless the application set a `SameSite` attribute. For the root context the cookie path is `/`.
 
 | URL rewriting
 | `encodeURL`, `encodeRedirectURL` append `;jsessionid=<id>` to application URLs while the client sends no cookie and `URL` is a tracking mode.
@@ -724,11 +743,11 @@ On a TLS connection the five Servlet 6.1 section 3.10 attributes are seeded when
 
 Foy does not need Vauban: give `FoyChappeBoot` the `BeanManager` of any CDI 4 container (`CDI.current().getBeanManager()`). Without `foy-cdi-vauban`'s build-time index, Foy finds the web components by walking the container's `Servlet`, `Filter` and `EventListener` beans (foy#18).
 
-* **The request context is active for each request** — Foy activates it through the standard `RequestContextController` before the application's request listeners, and deactivates it after them, on the thread that served the request (an asynchronous request included: Foy waits for it). `@RequestScoped` beans work in servlets, filters and listeners, and the container fires `@Initialized(RequestScoped.class)` and `@Destroyed(RequestScoped.class)`. If the context is already active (an embedding runtime activated it), Foy leaves it alone. Up to {release-version}, Foy activated it under no container, Vauban included (BUG-20261010-01). On Vauban, this needs a Vauban with its built-in `RequestContextController` (vauban#147); before it, the request context was not activated under Vauban and a `@RequestScoped` bean failed with `ContextNotActiveException`.
-***The session context, on Vauban** — `@SessionScoped` beans live in the `HttpSession`: one instance per session, created on first use (which creates the session), destroyed with it when it is invalidated or expires, between `@BeforeDestroyed` and `@Destroyed(SessionScoped.class)`; a new session fires `@Initialized(SessionScoped.class)`. CDI Lite leaves the session context to the servlet container (CDI 4.1 §6.7.2): Vauban's `vauban-webcontexts` provides it, and `foy-cdi-vauban`, which depends on it, drives it from Foy's request and session events (foy#21). Nothing to configure. The instances are never written out, except at a Vidocq dev swap, when they move with the session to the next deployment as CDI passivation: no `@PreDestroy`, no `@PostConstruct` [.tag-new]#NEW# (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]).
-***Error pages, denials and async threads keep the contexts** — `requestDestroyed`, where the context listeners unbind, fires after the error page and after `AsyncListener.onComplete`, as in Tomcat; a security denial, a login page and the error page of a refused path (`/WEB-INF/…`, an invalid path) run inside the request listeners too. A `Runnable` given to `AsyncContext.start()` runs with the container's context listeners bound on its own thread: it shares the request's session, and gets a request context of its own (the request-scoped instances of the serving thread are not visible there). The application's request listeners still see one request.
+* **The request context is active for each request** — Foy activates it through the standard `RequestContextController` before the application's request listeners, and deactivates it after them, on the thread that served the request (an asynchronous request included: Foy waits for it). `@RequestScoped` beans work in servlets, filters and listeners, and the container fires `@Initialized(RequestScoped.class)` and `@Destroyed(RequestScoped.class)`. If the context is already active (an embedding runtime activated it), Foy leaves it alone. Up to 0.3.0, Foy activated it under no container, Vauban included (BUG-20261010-01). On Vauban, this needs a Vauban with its built-in `RequestContextController` (vauban#147); before it, the request context was not activated under Vauban and a `@RequestScoped` bean failed with `ContextNotActiveException`.
+* **The session context, on Vauban** — `@SessionScoped` beans live in the `HttpSession`: one instance per session, created on first use (which creates the session), destroyed with it when it is invalidated or expires, between `@BeforeDestroyed` and `@Destroyed(SessionScoped.class)`; a new session fires `@Initialized(SessionScoped.class)`. CDI Lite leaves the session context to the servlet container (CDI 4.1 §6.7.2): Vauban's `vauban-webcontexts` provides it, and `foy-cdi-vauban`, which depends on it, drives it from Foy's request and session events (foy#21). Nothing to configure. The instances are never written out, except at a Vidocq dev swap, when they move with the session to the next deployment as CDI passivation: no `@PreDestroy`, no `@PostConstruct` [.tag-new]#NEW# (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]).
+* **Error pages, denials and async threads keep the contexts** — `requestDestroyed`, where the context listeners unbind, fires after the error page and after `AsyncListener.onComplete`, as in Tomcat; a security denial, a login page and the error page of a refused path (`/WEB-INF/…`, an invalid path) run inside the request listeners too. A `Runnable` given to `AsyncContext.start()` runs with the container's context listeners bound on its own thread: it shares the request's session, and gets a request context of its own (the request-scoped instances of the serving thread are not visible there). The application's request listeners still see one request.
 * **The request, the session and the context as beans, on Vauban** [.tag-new]#NEW# — `@Inject HttpServletRequest` (`@RequestScoped`), `@Inject HttpSession` (`@SessionScoped`) and `@Inject ServletContext` (`@ApplicationScoped`), qualifier `@Default`, as CDI 4.1 requires of a Servlet container: `foy-cdi-vauban` produces them, with client proxies generated at its build, and the application declares nothing. Not on another container: Weld's servlet integration provides its own. xref:usage.adoc#servlet-built-in-beans[Usage], xref:internals.adoc#servlet-built-in-beans[Internals].
-* **The session context, on another container** — Foy finds the listeners that drive a CDI implementation's contexts through the `io.vidocq.foy.spi.cdi.CdiContextListeners` service, registers them ahead of the application's listeners, before the deployment's initializers run, when it is given that implementation's `BeanManager`, and an adapter such as `foy-cdi-vauban` provides them. `listeners` returns context, request and session listeners that run outside the request context (ahead of the listener that activates it); a context listener among them hears `contextInitialized` before the `ServletContainerInitializer`s and `contextDestroyed` after the application's listeners; `requestContextListeners` [.tag-new]#NEW# returns request listeners that need it, registered right behind that listener. `aroundSessionImport` [.tag-new]#NEW# (a default method that only runs its `Supplier`) lets an adapter bind its CDI container for the duration of a session import, so the session's CDI objects rebind to it; Foy nests the adapters' calls around `Mounted.importSessions`. `foy-cdi-vauban`'s binds the Vauban container, and leaves another container's import as is (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]). Unlike a `ServletContainerInitializer`, such a provider does not make Foy start an application that has no web component. Weld's own servlet integration, `weld-servlet-core`, also runs on Foy: its `ServletContainerInitializer` starts Weld and manages the request and session contexts itself; Foy is then given no `BeanManager`, and servlets declared in `web.xml` reach their beans through `CDI.current()`.
+* [[cdi-context-listeners]]**The session context, on another container** — Foy finds the listeners that drive a CDI implementation's contexts through the `io.vidocq.foy.spi.cdi.CdiContextListeners` service, registers them ahead of the application's listeners, before the deployment's initializers run, when it is given that implementation's `BeanManager`, and an adapter such as `foy-cdi-vauban` provides them. `listeners` returns context, request and session listeners that run outside the request context (ahead of the listener that activates it); a context listener among them hears `contextInitialized` before the `ServletContainerInitializer`s and `contextDestroyed` after the application's listeners; `requestContextListeners` [.tag-new]#NEW# returns request listeners that need it, registered right behind that listener. `aroundSessionImport` [.tag-new]#NEW# (a default method that only runs its `Supplier`) lets an adapter bind its CDI container for the duration of a session import, so the session's CDI objects rebind to it; Foy nests the adapters' calls around `Mounted.importSessions`. `foy-cdi-vauban`'s binds the Vauban container, and leaves another container's import as is (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]). Unlike a `ServletContainerInitializer`, such a provider does not make Foy start an application that has no web component. Weld's own servlet integration, `weld-servlet-core`, also runs on Foy: its `ServletContainerInitializer` starts Weld and manages the request and session contexts itself; Foy is then given no `BeanManager`, and servlets declared in `web.xml` reach their beans through `CDI.current()`.
 
 `foy-it-weld`, part of every build and never published, runs Foy on Chappe with Weld SE 6.0 (CDI 4.1) on a class path, without `foy-cdi-vauban`: a servlet, a filter and a listener get an injected bean, a `@RequestScoped` bean is one instance per request, and the request context events fire. No Open Liberty module: on a server, use the server's own Servlet container.
 
@@ -746,9 +765,9 @@ application before initializers/listeners. It supplies the `jsp` servlet's
 `*.jsp` and `*.jspx` mappings, respecting application mappings, and backs
 `ServletContext.addJspFile` and descriptor `jsp-file` declarations.
 Engine-owned servlet instances retain application-layer isolation; Foy owns
-their initialization and destruction. Stop and drain the HTTP server before
-closing the deployment. Engine application close follows servlet and listener
-destruction; closing a deployment does not drain requests itself.
+their initialization and destruction. Close the deployment before you stop the
+HTTP server (<<foychappeboot>>). Engine application close follows servlet and listener
+destruction.
 
 `jsp-config` is exposed through immutable standard `JspConfigDescriptor` views.
 Ordered fragments contribute property groups; root taglib locations take

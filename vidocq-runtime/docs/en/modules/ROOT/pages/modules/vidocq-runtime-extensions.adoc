@@ -9,7 +9,7 @@
 [cols="1,3"]
 |===
 | Parent artefact | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
-| Source | `vidocq-runtime-extensions/`
+| Source | `vidocq-runtime/vidocq-runtime-extensions/` in the monorepo
 |===
 
 == Catalogue
@@ -20,7 +20,7 @@
 
 | `vidocq-runtime-chappe-webserver-extension`
 | `essentials`
-| Wires xref:chappe::index.adoc[Chappe] as HTTP/1.1, H2, H3 transport. Configures bind via `vidocq.http.host` / `vidocq.http.port`.
+| Wires xref:chappe::index.adoc[Chappe] as HTTP/1.1 and HTTP/2 transport. Configures bind via `vidocq.http.host` / `vidocq.http.port`.
 
 | `vidocq-runtime-crac-extension`
 | `essentials`
@@ -65,11 +65,11 @@
 
 | `vidocq-runtime-bodoni-jstl-extension`
 | `jakartaee-web`
-| Gives the pages compiled by Ibarra the Jakarta Standard Tag Library 3.0 of link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni[Bodoni] (`c:`, `fmt:`, `fn:`, `x:`, `sql:`), with Ibarra, the Servlet extension and Peano. See <<bodoni-jstl>>.
+| Gives the pages compiled by Ibarra the Jakarta Standard Tag Library 3.0 of link:xref:{page-component-version}@bodoni::index.adoc[Bodoni] (`c:`, `fmt:`, `fn:`, `x:`, `sql:`), with Ibarra, the Servlet extension and Peano. See <<bodoni-jstl>>.
 
 | `vidocq-runtime-naming-extension`
 | `jakartaee-web`
-| Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. The pools answer `java:comp/DefaultDataSource` and `java:comp/env/<name>` without a declaration. See <<naming>>.
+| Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:{page-component-version}@vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. The pools answer `java:comp/DefaultDataSource` and `java:comp/env/<name>` without a declaration. See <<naming>>.
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
@@ -143,7 +143,7 @@ A `<path>` that still says `<type>pom</type>` keeps working with Maven, since ev
 With the Vidocq runtime parent, declare the provider extension and append its processor
 bundle to the inherited compiler configuration:
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependency>
     <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
@@ -190,7 +190,7 @@ the implementation; these wiring tests do not certify the assembled runtime.
 
 Declare the extension, and its codegen bundle on the processor path:
 
-[source,xml]
+[source,xml,subs=attributes+]
 ----
 <dependency>
     <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
@@ -401,12 +401,10 @@ At run time, Foy finds Ibarra's JSP engine and the compiled pages in the applica
 
 The `pages` section of the startup report counts the compiled pages and lists their paths; when none was compiled, it reports an anomaly with the steps above.
 
-Not covered yet: expressions on CDI beans by name (`${cart.total}` on a `@Named` bean) need an EL resolver from Vauban (Vidocq/vauban#150); a page reads request, session and application attributes.
-
 [[bodoni-jstl]]
 == Jakarta Standard Tag Library (Bodoni)
 
-`vidocq-runtime-bodoni-jstl-extension` lets the pages of <<ibarra-pages>> use the standard tags: `c:` (core), `fmt:` (formatting and internationalisation), `fn:` (functions), `x:` (XML) and `sql:` (relational database access). link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni[Bodoni] implements Jakarta Standard Tag Library 3.0 and depends on its APIs only; this extension assembles the rest. It brings with it the Pages extension (<<ibarra-pages>>, which brings the Servlet extension and <<peano-el>>) and `bodoni-peano`, the accessor tables Peano needs under `-Dpeano.reflection=deny` to read the `varStatus` of `c:forEach`, the items of a `Map` and the `Result` of `sql:query`. An application declares the extension, nothing else of that chain.
+`vidocq-runtime-bodoni-jstl-extension` lets the pages of <<ibarra-pages>> use the standard tags: `c:` (core), `fmt:` (formatting and internationalisation), `fn:` (functions), `x:` (XML) and `sql:` (relational database access). link:xref:{page-component-version}@bodoni::index.adoc[Bodoni] implements Jakarta Standard Tag Library 3.0 and depends on its APIs only; this extension assembles the rest. It brings with it the Pages extension (<<ibarra-pages>>, which brings the Servlet extension and <<peano-el>>) and `bodoni-peano`, the accessor tables Peano needs under `-Dpeano.reflection=deny` to read the `varStatus` of `c:forEach`, the items of a `Map` and the `Result` of `sql:query`. An application declares the extension, nothing else of that chain.
 
 [source,xml]
 ----
@@ -450,7 +448,7 @@ The same `bodoni-core` jar is the JSTL implementation in a WAR on Open Liberty (
 [[naming]]
 == JNDI `java:` names
 
-Code written for an application server looks its resources up by name, and the bricks keep doing so: Mansart Data resolves `@Repository(dataStore = "java:comp/env/jdbc/audit")` with `new InitialContext().lookup(…)`, and the Standard Tag Library's `sql:` tags look a data source up under `java:comp/env`. Naming is a service of the platform: `vidocq-runtime-naming-extension` provides it, from the running CDI container, through xref:vauban::jndi.adoc[Vauban Naming].
+Code written for an application server looks its resources up by name, and the bricks keep doing so: Mansart Data resolves `@Repository(dataStore = "java:comp/env/jdbc/audit")` with `new InitialContext().lookup(…)`, and the Standard Tag Library's `sql:` tags look a data source up under `java:comp/env`. Naming is a service of the platform: `vidocq-runtime-naming-extension` provides it, from the running CDI container, through xref:{page-component-version}@vauban::jndi.adoc[Vauban Naming].
 
 [source,xml]
 ----
@@ -478,7 +476,7 @@ vidocq.naming.app/env/jdbc/reporting = java:comp/env/jdbc/orders
 ----
 
 * *The key* copies into a lookup as it is: `vidocq.naming.comp/env/com.acme.Orders/ds` is `java:comp/env/com.acme.Orders/ds`. A properties key takes `/`; only a `:` would need escaping, and the key has none. A key under `vidocq.naming.` that does not start with `comp/`, `module/`, `app/` or `global/` fails the start, so that `vidocq.naming.comp.env.orders`, with dots for slashes, is not silently ignored.
-* *A value starting with `java:`* links to that name. *Any other value* is a bean written as text: `@Named`, `@Default` and `@Any` take their short name, every other qualifier its fully qualified name, and a member is a Java source literal (xref:vauban::jndi.adoc#text[the grammar]). A properties file reads `\\` as `\`, so double each backslash of a literal: `@Named("say \"hi\"")` is written `@Named("say \\"hi\\"")` in `vidocq.properties`.
+* *A value starting with `java:`* links to that name. *Any other value* is a bean written as text: `@Named`, `@Default` and `@Any` take their short name, every other qualifier its fully qualified name, and a member is a Java source literal (xref:{page-component-version}@vauban::jndi.adoc#text[the grammar]). A properties file reads `\\` as `\`, so double each backslash of a literal: `@Named("say \"hi\"")` is written `@Named("say \\"hi\\"")` in `vidocq.properties`.
 * *The four namespaces are distinct*, as in the Jakarta EE Platform: `java:comp`, `java:module`, `java:app` and `java:global`. A name exists only in the namespace it is declared in, so `java:comp/env/jdbc/orders` does not answer `java:app/env/jdbc/orders`: declare both, or link one to the other.
 * *The pools answer by default* [.tag-new]#NEW#, as the data sources of an application server do (Vidocq/vidocq#676): `java:comp/DefaultDataSource` (Jakarta EE Platform, §5.19) is the default pool (`vidocq.pool.url`), and `java:comp/env/<name>` the pool `vidocq.pool.<name>.url`: the pool `orders` answers `java:comp/env/orders`. Any `DataSource` bean does: the `@Default` one and each `@Named` one.
 ** *With the transactions extension*, the name answers the pool through Mansart's `JtaDataSource`: within a transaction, its connections are the one connection of that transaction and that pool, which the transaction manager alone commits or rolls back, and which a Jakarta Data repository or a JTA persistence unit on the same pool works on too. Outside a transaction, and without the transactions extension, they are the pool's own.
@@ -494,7 +492,7 @@ vidocq.naming.app/env/jdbc/reporting = java:comp/env/jdbc/orders
 
 The `naming` section of the startup report says which factory answers `java:` names, this extension's or the one the application chose, then lists each name `vidocq.properties` declares with its target.
 
-An application or a library can also declare names in code, with a `JndiBindings` bean, and answer names not known in advance with a `JndiNameProvider` bean: see xref:vauban::jndi.adoc[Vauban Naming].
+An application or a library can also declare names in code, with a `JndiBindings` bean, and answer names not known in advance with a `JndiNameProvider` bean: see xref:{page-component-version}@vauban::jndi.adoc[Vauban Naming].
 
 Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-ref` in `web.xml`, `@DataSourceDefinition`, and the `jms/` names of Tassis, which will come as a `JndiNameProvider` of its extension (vidocq#297).
 
@@ -662,7 +660,7 @@ Sampling sums a few counters and creates nothing. The counters are on in every s
 [#dirac-metrics-panel]
 == Dirac metrics in the startup report and the dev console
 
-`vidocq-runtime-dirac-metrics-extension` writes the `metrics` section, titled *Metrics (Dirac)*: what the three MicroProfile Metrics registries of xref:dirac::index.adoc[Dirac] hold. The dev console shows it as the `metrics` panel. Dirac itself needs no Vidocq code; the extension's one class, `DiracMetricsExtension`, only reads what Dirac publishes.
+`vidocq-runtime-dirac-metrics-extension` writes the `metrics` section, titled *Metrics (Dirac)*: what the three MicroProfile Metrics registries of xref:dirac::index.adoc[Dirac] hold. The dev console shows it as the `metrics` panel. Dirac itself needs no Vidocq code; the extension, `DiracMetricsExtension`, only reads what Dirac publishes.
 
 [#dirac-metrics-report]
 === Boot facts
@@ -720,7 +718,7 @@ The section and the panel read the registries of the `MetricRegistryProducerBean
 [#knock-health-panel]
 == Knock health checks in the startup report and the dev console
 
-`vidocq-runtime-knock-health-extension` writes the `health` section, titled *Health (Knock)*: the health checks xref:knock::index.adoc[Knock] registered, by probe, and the last answer of each. The dev console shows it as the `health` panel. Knock itself needs no Vidocq code; the extension's one class, `KnockHealthExtension`, only reads what Knock keeps in memory.
+`vidocq-runtime-knock-health-extension` writes the `health` section, titled *Health (Knock)*: the health checks xref:knock::index.adoc[Knock] registered, by probe, and the last answer of each. The dev console shows it as the `health` panel. Knock itself needs no Vidocq code; the extension, `KnockHealthExtension`, only reads what Knock keeps in memory.
 
 A health check is application code, and may do I/O: neither the section nor the panel ever calls one. Knock remembers the last answer of each check as a probe request ran it, `GET /health`, `/health/live`, `/health/ready` or `/health/started`, and the panel shows that answer. A check that turns DOWN shows DOWN once the next probe request has run it, not before.
 
@@ -1176,7 +1174,7 @@ How it works: the extension finds the `HttpAuthenticationMechanism` bean of the 
 * Also there: `@RememberMe` (the cookie, the application's `RememberMeIdentityStore`, and its `*Expression` attributes, which the extension evaluates with Peano, brought with it) and an application `HttpAuthenticationMechanismHandler`.
 * Also there: Jakarta Authorization for web resources. The access to each request is asked of the `Policy` of the `PolicyFactory` as a `WebResourcePermission`; the default policy answers with the security constraints, and a policy the application registers decides in its place (it may delegate to the default one). `PolicyContext.PRINCIPAL_MAPPER` gives it the caller and the roles of the subject.
 * Not there yet: an Expression Language expression that reads a bean in the definitions or in `@LoginToContinue` (a string literal is fine), `@RolesAllowed` through Jakarta Authorization, a CDI decorator on a mechanism (Vauban applies no `@Decorator`).
-* Out of scope for now: the part of the Jakarta Security 4.0 TCK that needs JSF, an EJB, an LDAP directory or an OpenID provider. Coverage per official TCK application, on this runtime and on the Kerckhoffs container: the `tck` page of xref:kerckhoffs::tck.adoc[Kerckhoffs]; the runtime's own figures are in `vidocq-runtime-integration-tests/TCK.md`.
+* Out of scope for now: the part of the Jakarta Security 4.0 TCK that needs JSF, an EJB, an LDAP directory or an OpenID provider. Coverage per official TCK application, on this runtime and on the Kerckhoffs container: the `tck` page of xref:kerckhoffs::tck.adoc[Kerckhoffs]; the runtime's own figures are in `vidocq-runtime/vidocq-runtime-integration-tests/TCK.md`.
 
 [#noether-persistence]
 == Jakarta Persistence (Noether) [.tag-new]#NEW#
@@ -1273,11 +1271,11 @@ vidocq.persistence.journal.properties.jakarta.persistence.schema-generation.data
 
 * *Declaring or overriding.* `module`, `packages`, `classes`, `transaction-type`, `qualifier` and `scope` declare the unit, so a unit of that name in a `persistence.xml` is a duplicate and fails the start. `datasource`, `non-jta-datasource` and `properties.<name>` alone override the unit a `persistence.xml` declares, its properties winning over the file's, and declare it otherwise, on the entities of the application module, as a JTA unit.
 * *The default unit.* Without any `vidocq.persistence.*` key, the application has a unit named `default`, JTA on the default pool, of the entities of the application module: it exists only when no `persistence.xml` declares a unit and the module has an entity, so a `@PersistenceContext` without a unit name reaches it. An application that is not a named Java module has none.
-* *Build and start.* `vidocq:generate` freezes the beans of each unit at build (xref:dev@vauban::concepts.adoc#writing-a-frozen-extension[a frozen extension]), so the build reads the keys of the application's `vidocq.properties` and `application.properties`, and the start reads them from the whole configuration, `-D` and the environment included. The data sources and the properties of a unit may differ at start. A unit declared or gone, or a transaction type, a qualifier or a scope that differs from the build's, would need other beans: the start fails with a `DeploymentException` that names each difference and asks for a rebuild.
+* *Build and start.* `vidocq:generate` freezes the beans of each unit at build (xref:{page-component-version}@vauban::concepts.adoc#writing-a-frozen-extension[a frozen extension]), so the build reads the keys of the application's `vidocq.properties` and `application.properties`, and the start reads them from the whole configuration, `-D` and the environment included. The data sources and the properties of a unit may differ at start. A unit declared or gone, or a transaction type, a qualifier or a scope that differs from the build's, would need other beans: the start fails with a `DeploymentException` that names each difference and asks for a rebuild.
 * *Environment variables.* The units are found by the names of their keys, which a `vidocq.properties` file or a `-D` gives: an environment variable, such as `VIDOCQ_PERSISTENCE_LEDGER_DATASOURCE`, changes the value of a key one of them names, and does not declare one alone.
 * *Errors.* A key that sets nothing a unit has, a module the application does not have, or a transaction type other than `JTA` and `RESOURCE_LOCAL` fails the start, naming the key.
 
-See xref:dev@noether::usage.adoc#unit-sources[Units declared by a runtime] in Noether's documentation.
+See xref:{page-component-version}@noether::usage.adoc#unit-sources[Units declared by a runtime] in Noether's documentation.
 
 [#noether-persistence-inject]
 *Injection with `@Inject`.* Every unit is also a set of CDI beans (Jakarta EE 11 Platform §13.12):
@@ -1300,13 +1298,13 @@ EntityManagerFactory archive;
 ----
 
 * *Same unit, same factory.* The beans run on the factory that `@PersistenceContext` and `@PersistenceUnit` inject, so an `@Inject` entity manager and a `@PersistenceContext` of the same unit share the persistence context of a transaction.
-* *Proxies generated at build* [.tag-new]#NEW#. The `EntityManager` and `EntityManagerFactory` beans are of normal scopes, so they are injected through client proxies. The extension's jar holds them, generated when it was built (xref:dev@vauban::concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic beans]): each call goes straight to the unit's entity manager or factory. They used to be `java.lang.reflect.Proxy` instances built at start, every call going through reflection, and the start printed the _VAUBAN — RUNTIME CODE GENERATION FALLBACK_ warning for them.
+* *Proxies generated at build* [.tag-new]#NEW#. The `EntityManager` and `EntityManagerFactory` beans are of normal scopes, so they are injected through client proxies. The extension's jar holds them, generated when it was built (xref:{page-component-version}@vauban::concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic beans]): each call goes straight to the unit's entity manager or factory. They used to be `java.lang.reflect.Proxy` instances built at start, every call going through reflection, and the start printed the _VAUBAN — RUNTIME CODE GENERATION FALLBACK_ warning for them.
 * *No `EntityManager` bean for a RESOURCE_LOCAL unit.* A container-managed entity manager is a JTA one, so Vidocq gives that unit no `EntityManager` bean and logs its `<scope>` as ignored.
 * *Units without a qualifier.* Each of them gives `@Default` beans, so with two of them an `@Inject EntityManager` is ambiguous and fails the start. Give each unit a `<qualifier>`, or inject with `@PersistenceContext(unitName = ...)`.
 * *A pool and a unit of the same name.* The `EntityManagerFactory` bean takes the unit's name, and the `DataSource` bean of a named pool takes the pool's name, so CDI refuses the two and the start fails. Name them differently: the `archive` unit above runs on the pool `notes`.
 * *Errors.* A `<qualifier>` or `<scope>` class the application cannot load, or one that is not a qualifier or a scope, fails the start, naming the unit.
 
-See xref:dev@noether::usage.adoc#inject-units[Injecting a persistence unit with @Inject] in Noether's documentation.
+See xref:{page-component-version}@noether::usage.adoc#inject-units[Injecting a persistence unit with @Inject] in Noether's documentation.
 
 [#noether-persistence-references]
 *References declared on a class* [.tag-new]#NEW#. A component written for a Jakarta EE server may declare its persistence contexts and units on its class, with a name, and look them up instead of having them injected (Jakarta EE 11 Platform §5.13, §5.14). With the xref:#naming[naming extension], each name is bound under `java:comp/env`:
@@ -1324,7 +1322,7 @@ public class OrdersServlet extends HttpServlet {
 * *Errors.* A reference without a name, an `EXTENDED` context declared on a class and a name two classes declare for different beans fail the start, naming the class.
 * *Without the naming extension*, nothing binds the names, and a lookup finds no initial context.
 
-See xref:dev@noether::usage.adoc#references[References declared on a class] in Noether's documentation.
+See xref:{page-component-version}@noether::usage.adoc#references[References declared on a class] in Noether's documentation.
 
 *Data sources.* A unit takes its connections from a Mansart pool, never from its own JDBC properties when a pool is there.
 
@@ -1332,11 +1330,11 @@ See xref:dev@noether::usage.adoc#references[References declared on a class] in N
 * *A RESOURCE_LOCAL unit* uses the pool its `non-jta-data-source` names, or else the default pool, or else, without a pool, the JDBC properties of the unit.
 * *A factory the application creates itself* [.tag-new]#NEW#, with `Persistence.createEntityManagerFactory("orders")`, finds the pool its unit names by a JNDI lookup (Vidocq/vidocq#676): the name as written, then `java:comp/env/<name>`, which the <<naming,naming extension>> answers for each pool, through the application's transactions. So the application needs the naming extension. A `DataSource` object the application passes wins, and a unit that names no data source keeps its JDBC properties. Two differences with a factory the container creates: a JTA unit with a `TABLE` identifier generator must name a `non-jta-data-source` that does not enlist (a `vidocq.naming.*` key bound to the pool bean), and a RESOURCE_LOCAL unit used within a JTA transaction gets that transaction's connection, which it cannot commit.
 
-*A unit of another provider* [.tag-new]#NEW#. A unit whose `<provider>` names another provider than Noether is handed to that provider's `createContainerEntityManagerFactory`, with the pool of its `jta-data-source` or `non-jta-data-source` as above (Jakarta Persistence 3.2, §9.6). The application declares the provider as a service: `provides jakarta.persistence.spi.PersistenceProvider with ...;` in its `module-info.java`, or its jar's `META-INF/services/jakarta.persistence.spi.PersistenceProvider`. The startup report and the dev console list Noether's units only. See xref:dev@noether::usage.adoc[Noether's usage page], "With CDI".
+*A unit of another provider* [.tag-new]#NEW#. A unit whose `<provider>` names another provider than Noether is handed to that provider's `createContainerEntityManagerFactory`, with the pool of its `jta-data-source` or `non-jta-data-source` as above (Jakarta Persistence 3.2, §9.6). The application declares the provider as a service: `provides jakarta.persistence.spi.PersistenceProvider with ...;` in its `module-info.java`, or its jar's `META-INF/services/jakarta.persistence.spi.PersistenceProvider`. The startup report and the dev console list Noether's units only. See xref:{page-component-version}@noether::usage.adoc[Noether's usage page], "With CDI".
 
 A name no pool answers fails the start, naming the key to set (`vidocq.pool.<name>.url`). The pools are declared as for Mansart Data: a named pool is a `vidocq.pool.<name>.url`, and its `@Named("<name>") DataSource` bean is generated at compile time from that key of `vidocq.properties` by `vidocq-runtime-mansart-pool-datasources-codegen`, which the application adds to its annotation processor paths, as the xref:#mansart-pool-002[MANSART-POOL-002] anomaly of the startup report reminds when it is missing. See the named datasources of xref:mansart::usage.adoc[Mansart's usage page].
 
-*Mansart Data in the same transaction.* Within one transaction, a Jakarta Data repository and a JTA unit on the same pool work on the same connection: Mansart keeps one connection per transaction and per data source, which the extension hands the unit through Mansart's `JtaDataSource` over the pool bean the repository takes too (xref:dev@mansart::modules/mansart-transactions.adoc#jta-datasource[One connection per transaction and data source]). Each sees what the other wrote before the commit, the unit's writes once it has flushed them (`flush()`, or a query that flushes), and the transaction commits or rolls back the writes of both together. A repository and a unit on two different pools work on two connections, one per pool: when neither can prepare (a single-phase `ConnectionXAResource`), the transaction commits them one after the other, and a failure of the second commit leaves the first one committed.
+*Mansart Data in the same transaction.* Within one transaction, a Jakarta Data repository and a JTA unit on the same pool work on the same connection: Mansart keeps one connection per transaction and per data source, which the extension hands the unit through Mansart's `JtaDataSource` over the pool bean the repository takes too (xref:{page-component-version}@mansart::modules/mansart-transactions.adoc#jta-datasource[One connection per transaction and data source]). Each sees what the other wrote before the commit, the unit's writes once it has flushed them (`flush()`, or a query that flushes), and the transaction commits or rolls back the writes of both together. A repository and a unit on two different pools work on two connections, one per pool: when neither can prepare (a single-phase `ConnectionXAResource`), the transaction commits them one after the other, and a failure of the second commit leaves the first one committed.
 
 *The application module.* Noether's processor generates, per package of entities, an accessor (`_NoetherJpaAccess`) that Noether calls instead of reflecting: the package needs no `opens`, and `vidocq:check-module-info` does not ask for one. The accessor implements Noether's SPI, so the module needs `requires io.vidocq.noether.jpa.core;`, which `vidocq extension add noether-persistence` writes with the `requires` of the extension. The processor lists the accessor in `META-INF/services`, and the layer `Vidocq.run` creates for the application turns that file into the `provides` of its module; a test that boots Vidocq without that layer declares it in its `module-info.java`: `provides io.vidocq.noether.jpa.core.spi.ManagedAccessProvider with com.acme.ledger._NoetherJpaAccess;`.
 
@@ -1347,7 +1345,7 @@ A name no pool answers fails the start, naming the key to set (`vidocq.pool.<nam
 * its schema action, `jakarta.persistence.schema-generation.database.action`, or `none` when it sets none;
 * how many entities, embeddables, named queries and indexes it declares, a unique constraint counting as an index.
 
-The counts come from the unit's description (xref:dev@noether::reference.adoc#tools[Describing a unit for tools]), read once at start, without opening a connection.
+The counts come from the unit's description (xref:{page-component-version}@noether::reference.adoc#tools[Describing a unit for tools]), read once at start, without opening a connection.
 
 [#noether-persistence-dev]
 === The Persistence panel in the dev console [.tag-new]#NEW#
@@ -1410,6 +1408,23 @@ A value that does not convert fails the call and names the parameter: `parameter
 * `missing in the database`: the database does not have it.
 
 A database index that no declared index matches is `extra in the database`. A declared index is matched first by its name and its columns, then by its columns, then by its name. Names are compared ignoring case, since a database stores an unquoted name in its own case: H2's `IDX_NOTE_TITLE` is the mapping's `idx_note_title`. The indexes a database creates for a primary key or a foreign key are left out. The database's indexes come from the JDBC metadata of the connection (`DatabaseMetaData.getIndexInfo`).
+
+[#module-repackaged]
+== Third-party jars made Java modules
+
+`jlink` refuses an automatic module, a jar that only names itself with `Automatic-Module-Name`. The `module-repackaged` aggregator holds third-party jars an application commonly embeds, repackaged with an explicit `module-info.class` and no class changed, so that an application that uses them can still be linked into an image. It holds one today:
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.module.repackaged</groupId>
+    <artifactId>vidocq-runtime-h2-module-repackaged</artifactId>
+    <version>{project-version}</version>
+    <scope>runtime</scope>
+</dependency>
+----
+
+It is the classes of `com.h2database:h2`, as Java module `com.h2database`, under H2's own licences (MPL 2.0 or EPL 1.0); the application declares it in place of `com.h2database:h2`, never beside it. The Noether and petstore examples use it.
 
 [#langchain4j-cdi-mcp]
 == langchain4j-cdi MCP server
@@ -1555,7 +1570,7 @@ Actions on one datasource run one after the other. An action runs while the appl
 
 == Activation by dependency
 
-An extension activates as soon as it is on the module-path. No `@EnableX` annotation is required — the APT index detects the Java Modules `provides VidocqExtension` declaration.
+An extension activates as soon as it is on the module-path. No `@EnableX` annotation is required — `ServiceLoader` finds the Java Modules `provides VidocqExtension` declaration.
 
 [source,xml,subs=attributes+]
 ----

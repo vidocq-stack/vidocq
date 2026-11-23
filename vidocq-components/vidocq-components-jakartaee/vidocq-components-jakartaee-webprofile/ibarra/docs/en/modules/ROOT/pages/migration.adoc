@@ -1,20 +1,20 @@
 = Migration
-:description: Coming to Ibarra from Jasper (Tomcat, GlassFish) — what will map, what will differ.
+:description: Coming to Ibarra from Jasper (Tomcat, GlassFish) — what maps, what differs.
 
 [.lead]
-Ibarra's initial runtime is implemented (I1): there is no complete page engine to
-migrate to yet. This page records the intended contract so the expectation is clear.
+Ibarra passes the complete official Pages 4.0 TCK (see xref:tck.adoc[TCK status], not a
+certification). This page records what maps and what differs when coming from Jasper.
 
-== The good news (target)
+== The good news
 
-Standard pages, standard actions, custom tags with TLDs, tag files and `jsp-config` work unchanged — they are the specification.
+Standard pages, standard actions, custom tags with TLDs, tag files and `jsp-config` work unchanged — they are the specification. The tag-file constructs Ibarra still refuses at translation are listed in xref:modules/tag-handlers.adoc[Tag handlers].
 
-== What to check (target)
+== What to check
 
-* **JSTL** — not provided by Ibarra. Applications using `c:`, `fmt:`, `fn:` tags need a JSTL implementation on their side.
-* **Precompilation** — the default path. Pages added to a running server after deployment need the development mode.
+* **JSTL** — not provided by Ibarra. Applications using `c:`, `fmt:`, `fn:` tags need a JSTL implementation on their side: xref:bodoni::index.adoc[Bodoni] in the Vidocq ecosystem.
+* **Precompilation** — the default path. Pages added to a running server after deployment are not served (HTTP 404): the development mode that would translate them is planned.
 * **Jasper-specific settings** — `development`, `checkInterval`, `compilerSourceVM` and other `JspServlet` init parameters have no Ibarra equivalent.
-* **`jsp:useBean beanName`** (serialized beans) — support is an open question.
+* **`jsp:useBean beanName`** (serialized beans) — supported: the class is loaded by name, else the `.ser` resource of that name is deserialized. It is the one place where a generated page loads a class by name.
 * **Tag handler pooling** — Ibarra does not pool handlers; a handler that relied on reuse between invocations must not.
 
 == Precompilation requests

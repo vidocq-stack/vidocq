@@ -1,5 +1,5 @@
 = Chappe
-:description: Pure Java 25 HTTP/1.1 + HTTP/2 + HTTP/3 server, virtual threads, zero dependency.
+:description: Pure Java 25 HTTP/1.1 + HTTP/2 server, virtual threads, zero dependency.
 
 [.text-center]
 image::chappe-logo.png[Chappe,300,role=module-logo]
@@ -45,7 +45,7 @@ flowchart TB
         vidocq["Vidocq Runtime<br/>orchestrator"]
     end
     subgraph transport["Transport layer"]
-        chappe["**Chappe**<br/>HTTP/1.1 · HTTP/2 · HTTP/3<br/>TLS 1.3 · Virtual Threads"]
+        chappe["**Chappe**<br/>HTTP/1.1 · HTTP/2<br/>TLS 1.3 · Virtual Threads"]
     end
     subgraph jdk["Platform"]
         loom["Java 25<br/>Project Loom · Scoped Values"]

@@ -5,7 +5,7 @@
 The complete official Jakarta Expression Language 6.0.1 TCK passes
 **361 tests out of 361**, including ELSigTestIT, on Temurin 25 (2026-10-10).
 No tests are excluded or skipped. This is an execution result, not a certification
-announcement. Generated accessors, arbitrary functional-interface adapters and known
+announcement. Arbitrary functional-interface adapters and known
 upstream API issues remain open.
 
 The `-Ptck` profile alone builds test support and reports `No tests to run`.
@@ -24,7 +24,7 @@ A successful build of that profile is not a TCK pass.
 | Container | Inspected standalone suite sources do not use Arquillian.
 | Signature test | ELSigTestIT uses `jakarta.tck:sigtest-maven-plugin:2.3`, the API jar and JDK classes extracted by the upstream harness.
 | Script | `run-official-tck-el-6.0.sh` with `smoke` / `all` / `-Dtest=` modes. Default: full suite.
-| Merge gate | 100 % PASS is required; `tck-official.yml` runs the full suite on pull requests and pushes to main.
+| Merge gate | 100 % PASS is required; a pull request runs no TCK: the script runs the full suite.
 |===
 
 == Tracking
@@ -58,6 +58,8 @@ before each scripted run.
 
 [source,bash]
 ----
+# from the root of the monorepo
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano
 sdk env
 ./run-official-tck-el-6.0.sh all
 ./run-official-tck-el-6.0.sh smoke

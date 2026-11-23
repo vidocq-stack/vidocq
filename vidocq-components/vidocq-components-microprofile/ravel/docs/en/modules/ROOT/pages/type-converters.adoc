@@ -25,7 +25,7 @@ Ravel provides converters (priority 1) for these types, automatically applied du
 | Single-character string; longer values throw `IllegalArgumentException`
 
 | `java.net.URL`
-| Via `new URL(string)`
+| Via `URI.create(string).toURL()`
 
 | `java.net.URI`
 | Via `URI.create(string)`
@@ -37,7 +37,7 @@ Ravel provides converters (priority 1) for these types, automatically applied du
 | Parses the numeric value and wraps it (`Optional<T>` itself is served by `getOptionalValue()`, not by a converter)
 
 | `java.time.Duration`
-| ISO-8601 format: `PT1H30M`, `PT45S`, `1800000ms`, etc.
+| ISO-8601 format: `PT1H30M`, `PT45S`, etc.
 
 | `java.time.Period`
 | ISO-8601 format: `P1Y2M3D`, `P30D`, etc.
@@ -102,9 +102,10 @@ In CDI beans, `List<T>` and `Set<T>` can be injected directly with `@ConfigPrope
 
 If no registered converter matches a type, Ravel falls back to an **implicit converter** (MicroProfile Config §5.2):
 
-1. **Public constructor taking `String`**: `new MyType(string)`
+1. **Static method `of(String)`**: `MyType.of(string)`
 2. **Static method `valueOf(String)`**: `MyType.valueOf(string)`
 3. **Static method `parse(CharSequence)`**: `MyType.parse(charseq)`
+4. **Public constructor taking `String`**: `new MyType(string)`
 
 [source,java]
 ----

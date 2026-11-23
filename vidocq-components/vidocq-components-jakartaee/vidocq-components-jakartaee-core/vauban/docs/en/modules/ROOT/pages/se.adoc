@@ -140,8 +140,8 @@ hold the application back; name the module.
 A runtime that starts the application through this policy can name its own root modules: each of them
 stays in the parent layer with everything it reads, whatever their names, and every other explicit module
 that the rules above do not keep moves to the application layer. A runtime can use this so that a brick's
-library stays in the parent layer once and the application's own libraries move; the Vidocq runtime will
-name its core and its extensions this way (vidocq#247, vauban#154). Automatic modules still stay where
+library stays in the parent layer once and the application's own libraries move; the Vidocq runtime names
+its core and its extensions this way (vidocq#247, vauban#154). Automatic modules still stay where
 they are: re-created in the layer, one would read its own twin in the parent layer.
 
 The policy is public as `VaubanLayerFactory.applicationPaths(configuration, keptPrefixes, roots)` and, with

@@ -127,7 +127,7 @@ JSON-B builds on JSON-P: `Jsonb.toJson(obj)` ultimately pushes into a `JsonGener
 | Automated suite: for each tested type, verify `runtime.toJson(o).equals(static.toJson(o))` and the symmetric for reads. Guardrail against codegen regressions.
 
 | **`@JsonbStatic`**
-| Champollion-specific annotation (`io.vidocq.champollion.jsonb.spi`) marking a **record** for binding generation. It is the APT's only trigger — types carrying just standard annotations (`@JsonbProperty`, etc.) are handled by the runtime mode, not by codegen.
+| Champollion-specific annotation (`io.vidocq.champollion.jsonb.spi`) marking a **record** for binding generation. With the types JAX-RS resources exchange (xref:reference.adoc#rest-bindings[REST bindings]), it is the APT's only trigger — other types carrying just standard annotations (`@JsonbProperty`, etc.) are handled by the runtime mode, not by codegen.
 
 | **`JsonbBinding` SPI**
 | `io.vidocq.champollion.jsonb.spi.JsonbBinding` — the ServiceLoader SPI exposing a generated static binding (registered under `META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding`). The runtime queries this SPI first, then falls back to introspection if absent.

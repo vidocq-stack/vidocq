@@ -35,8 +35,9 @@ container's normal path: the reflective path below it exists for classes no buil
 | `MyBean_ClientProxy`, for normal-scoped beans
 | `vauban-processor` or `vauban:generate`; for a type in another owner's package, shipped as a resource under
   `META-INF/vauban/placed/` with `META-INF/vauban/required-opens.list`. For an interface, a class that `implements`
-  it, from `vauban-processor` only: for a producer of that interface, and for each interface an extension lists in
-  `@ClientProxies` for its synthetic beans (<<proxy-strategies>>)
+  it: from `vauban-processor`, for a producer of that interface, and for each interface an extension lists in
+  `@ClientProxies` for its synthetic beans (<<proxy-strategies>>); from the build that freezes the extensions, for a
+  synthetic bean of an interface (xref:concepts.adoc#frozen-extensions[Extensions frozen at build])
 | The container when it hands out a reference to the bean
 | Generated at boot or on first use with the Class-File API, or a `java.lang.reflect.Proxy` for an interface,
   and announced (<<aot>>); the announcement names the interface of a synthetic bean apart, with the
@@ -50,7 +51,7 @@ container's normal path: the reflective path below it exists for classes no buil
 | What Build Compatible Extensions produce: `vauban-synthetic-metadata.properties`, `vauban-enhancements.properties`,
   `vauban-contexts.list`, `vauban-bce-runtime.list`, and the `vauban-bce-processed` marker
 | `vauban-processor`, which runs the extensions inside javac
-  (xref:concepts.adoc#_build_compatible_extensions[Build Compatible Extensions])
+  (xref:concepts.adoc#build-compatible-extensions[Build Compatible Extensions])
 | The container at boot: it applies the frozen enhancements and registers the synthetic beans, observers and
   contexts instead of running the extensions again; `vauban-bce-runtime.list` names the (extension, class) pairs
   whose `@Enhancement` it still replays when no frozen patch covers them
@@ -75,7 +76,7 @@ warning, not an error: an extension may still veto the class at boot, which the 
 
 * A class compiled without `vauban-processor` and never processed by `vauban:generate` or `vidocq:generate`: a jar
   on the class path, an IDE run whose output the build never processed
-  (<<_7_an_ide_run_where_the_build_output_was_never_woven>>).
+  (<<7-an-ide-run-where-the-build-output-was-never-woven>>).
 * A type no generated provider covers: a producer only known at run time, a private interceptor method, an
   interceptor compiled without the processor.
 * A live annotation the index does not describe (<<aot>>).
@@ -295,7 +296,8 @@ fallback).
 |No class for the APT to see: the extension's module lists the interface in `@ClientProxies`, and the
 APT emits the same static class `implements <Iface>` in the package of the annotated class, registered
 under the interface's key (xref:concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic
-beans]). Unlisted, the container falls back to a `java.lang.reflect.Proxy` at boot, announced apart.
+beans]). Unlisted, and when no build froze the extensions, the container falls back to a
+`java.lang.reflect.Proxy` at boot, announced apart.
 |Zero `opens`; zero reflection once listed (BUG-20261113-19).
 
 |**Producer of a class whose proxy must live in its own package** — a package-private or
@@ -424,7 +426,7 @@ actually be in, and shows what each one prints.
 
 === 1. Your own code, compiled here
 
-The processor renders the factory, the client proxy, the intercepted subclass and the per-package
+The processor renders the client proxy, the intercepted subclass and the per-package
 provider as Java source in the same compilation, and the auto-started javac plugin weaves the
 side-effect-free entry constructor into the compiled beans once javac has written them.
 
@@ -984,7 +986,7 @@ Vauban uses **virtual threads** (https://openjdk.org/jeps/444[JEP 444]) in two p
 
 [NOTE]
 ====
-The `ThreadLocal` → `ScopedValue` move is documented in the Vauban repo's `CLAUDE.md` as a guiding principle.
+The `ThreadLocal` → `ScopedValue` move is documented in Vauban's `CLAUDE.md` as a guiding principle.
 ====
 
 [#aot]

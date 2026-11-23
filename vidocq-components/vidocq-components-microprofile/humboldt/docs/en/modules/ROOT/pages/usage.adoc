@@ -100,9 +100,9 @@ try (Scope ignored = child.makeCurrent()) {
 With `humboldt-rest` active, every JAX-RS endpoint is automatically instrumented. Behavior of `HumboldtServerRequestFilter` (`@Provider`):
 
 . Reads headers through `TextMapGetter<ContainerRequestContext>`.
-. Extracts the span context via `W3CPropagators.textMap()`.
-. Starts a `SERVER` span with parent = extracted span, name = `\{method} \{path}`.
-. OTel attributes: `http.request.method`, `url.path` (normalized `/`), `url.scheme`.
+. Extracts the span context via the installed propagator (`W3CPropagators.textMap()` when none is installed).
+. Starts a `SERVER` span with parent = extracted span, name = `\{method} \{route}` (the `http.route` template, or the path when no resource class is known).
+. OTel attributes: `http.request.method`, `http.route`, `url.path` (normalized `/`, with the context root), `url.scheme`.
 . Stores `Span` + `Scope` via `ContainerRequestContext.setProperty()`.
 
 `HumboldtServerResponseFilter` closes the span: `http.response.status_code`, status `ERROR` if ≥ 500, and records the `http.server.request.duration` histogram — with an `error.type` attribute (the status code as a string) whenever the status is ≥ 400 — then `Scope.close()` and `span.end()` in `finally`.
@@ -179,7 +179,7 @@ latency.record(durationMs);
 [#otel-logs]
 == OTel logs
 
-`humboldt-sdk-log` exposes `SdkLoggerProvider`. The JUL bridge (`HumboldtJulHandler`, shipped in M5b) is installed automatically on the root JUL logger by `HumboldtAutoConfigure` whenever the log pipeline is active, so `java.util.logging` records flow to the OTel pipeline out of the box. There is no SLF4J bridge. Direct emission is also possible:
+`humboldt-sdk-log` exposes `SdkLoggerProvider`. The JUL bridge (`HumboldtJulHandler`, shipped in M5b) is installed automatically on the root JUL logger by `HumboldtAutoConfigure` whenever the logs exporter is `otlp` or `logging` (not `in-memory`, not `none`), so `java.util.logging` records flow to the OTel pipeline out of the box. There is no SLF4J bridge. Direct emission is also possible:
 
 [source,java]
 ----
@@ -275,8 +275,8 @@ try (AutoConfiguredHumboldt sdk = HumboldtAutoConfigure.configure()) {
     runCodeUnderTest();
     sdk.flush().join(5, TimeUnit.SECONDS);
 
-    List<SpanData> spans = sdk.inMemorySpanExporter().getFinishedSpanItems();
-    assertThat(spans).extracting(SpanData::getName).contains("payment.charge");
+    List<SpanData> spans = sdk.inMemorySpanExporter().getFinishedSpans();
+    assertThat(spans).extracting(SpanData::name).contains("payment.charge");
 }
 ----
 

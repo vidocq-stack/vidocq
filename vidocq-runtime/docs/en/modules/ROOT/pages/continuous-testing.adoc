@@ -57,7 +57,7 @@ on a clean project, `vidocq:test` alone found no configuration, and the Keycloak
 [#once]
 == One run, for CI and scripts
 
-`vidocq:test` watches, so it never ends by itself. `vidocq test --once`runs every test once instead:
+`vidocq:test` watches, so it never ends by itself. `vidocq test --once` runs every test once instead:
 the dev services start as usual, the tests run, the dev services stop, and the command exits with status 0 when
 they passed (or there was none to run), 1 when a test failed or the code does not compile.
 

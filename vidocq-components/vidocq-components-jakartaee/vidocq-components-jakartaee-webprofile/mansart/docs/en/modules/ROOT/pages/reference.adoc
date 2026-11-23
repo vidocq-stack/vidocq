@@ -2,7 +2,7 @@
 :repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Maven artefacts, annotations, configuration, dialects, Java modules.
 
-NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+NOTE: Persistence and Validation now live in xref:noether::index.adoc[Noether], a component of its own in the monorepo (`vidocq-preview/`). Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to Noether's folder.
 
 
 [.lead]
@@ -239,7 +239,7 @@ An entity may be a static nested class [.tag-new]#NEW#. The metamodel of `shop.L
 | `password` | `String` | Password.
 | `minIdle` | `int` | Idle connections kept warm (default 0).
 | `maxSize` | `int` | Hard pool bound (default 10).
-| `acquireTimeout` | `Duration` | Timeout on `getConnection()` (default 30 s).
+| `acquireTimeout` | `Duration` | Timeout on `getConnection()` (default 5 s).
 | `idleTimeout` | `Duration` | Eviction of an idle connection (default 10 min).
 | `maxLifetime` | `Duration` | Eviction of an old connection (default 30 min).
 | `validation` | `ValidationMode` | `NEVER`, `ON_BORROW` (default when `validationQuery` is set), `PERIODIC`.
@@ -257,7 +257,7 @@ An entity may be a static nested class [.tag-new]#NEW#. The metamodel of `shop.L
 | Dialect | Status | Notes
 
 | H2 | ✅ Delivered | Test reference + embedded. `MERGE INTO` upsert, `LIMIT/OFFSET` pagination.
-| PostgreSQL | ⏳ M4 | Production target. `ON CONFLICT`, `RETURNING`, `UUID`/`JSONB` types.
+| PostgreSQL | ✅ Delivered | Production target. `ON CONFLICT`, `RETURNING`, `UUID`/`JSONB` types.
 | MariaDB / MySQL | ❌ Backlog | —
 | SQL Server | ❌ Backlog | —
 | Oracle | ❌ Backlog | —
@@ -290,7 +290,7 @@ Read a statement's first keyword (is it an `UPDATE` or a `DELETE`?) and the enti
 == Compatibility
 
 * Java 25 (LTS), Maven 3.10.0 (pinned at the root of the monorepo).
-* {spec-data-1}[Jakarta Data 1.0] (delivered), {spec-jpa-3-2}[Jakarta Persistence 3.2] (P0–P12 delivered within documented scope), Jakarta Transactions 2.0.
+* {spec-data-1}[Jakarta Data 1.0] (delivered), Jakarta Transactions 2.0. {spec-jpa-3-2}[Jakarta Persistence 3.2] is xref:noether::index.adoc[Noether]'s.
 * {spec-cdi-4-1}[CDI 4.1 Lite] via xref:vauban::index.adoc[Vauban].
 * Virtual Threads for any JDBC execution.
 

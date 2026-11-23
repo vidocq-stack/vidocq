@@ -24,7 +24,6 @@ This page shows how to write a first `@ApplicationScoped` bean, wire it via `@In
         <groupId>io.vidocq.vauban</groupId>
         <artifactId>vauban-core</artifactId>
         <version>{project-version}</version>
-        <scope>runtime</scope>
     </dependency>
     <dependency>
         <groupId>io.vidocq.vauban</groupId>
@@ -101,6 +100,7 @@ module io.example {
     requires jakarta.cdi;
     requires io.vidocq.vauban.core;
     exports io.example;
+    provides io.vidocq.vauban.api.VaubanComponentProvider with io.example._VaubanComponents;
 }
 ----
 
@@ -110,7 +110,7 @@ module io.example {
 ----
 import io.vidocq.vauban.core.container.VaubanContainer;
 
-void main() {
+public static void main(String[] args) {
     try (var container = VaubanContainer.builder().scanLocal().build()) {
         var app = container.select(HelloApp.class);
         app.run();

@@ -49,22 +49,23 @@ public final class AcmeCacheExtension implements VidocqExtension, DevConsolePane
 
 [source,java]
 ----
-module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
+module com.acme.cache.extension {
     requires transitive io.vidocq.runtime.spi;
     requires transitive io.vidocq.runtime.spi.devconsole;   // transitive: the exported extension class is a panel
     // ...
 }
 ----
 
-It is a hard requirement, since a class does not load without the interfaces it implements, and a light one: the module holds five small types and brings only `io.vidocq.runtime.spi`. It is an ordinary API jar, not a dev tool: unlike the console, it ships in the binary with an extension that requires it. The console itself stays the application's choice: without it, the panel is a contributor like any other, and its `sample` is never called.
+It is a hard requirement, since a class does not load without the interfaces it implements, and a light one: the module holds twelve types and brings only `io.vidocq.runtime.spi`. It is an ordinary API jar, not a dev tool: unlike the console, it ships in the binary with an extension that requires it. The console itself stays the application's choice: without it, the panel is a contributor like any other, and its `sample` is never called.
 
 [#dev-module]
 == A `-dev` module, never packaged
 
 The panel above is the *all-in-one* form: `AcmeCacheExtension` is both the extension and the panel, and whatever
 implements `DevConsolePanel` ships in every binary that has the extension, whether or not `vidocq:dev` is ever
-run (Vidocq/vidocq#143). Every extension the Vidocq Runtime itself ships — Mansart's pools, Knock's health,
-Cassini's REST mounts, Dirac's metrics, the schema migration extension, the langchain4j-cdi MCP server — instead
+run (Vidocq/vidocq#143). Every extension the Vidocq Runtime itself ships — Mansart's pools and Data catalogue,
+Noether's persistence units, Foy's servlets, Knock's health, Cassini's REST mounts, Dirac's metrics, the schema
+migration extension — instead
 splits its live half into a **`-dev` module**: a second, small Java module next to the runtime extension, that
 `vidocq:dev` alone puts on the child's module path. The all-in-one form still works, still ships in the binary,
 and stays the right shape for an extension of your own that has no packaging concerns of its own to keep small;
@@ -112,6 +113,8 @@ public interface LivePanel {
     default List<Chart> charts() { return List.of(); }
     void sample(PanelSample sample);
     default List<PanelAction> actions() { return List.of(); }
+    default List<PanelLanguage> languages() { return List.of(); }
+    default Optional<PanelSelector> selector() { return Optional.empty(); }
 }
 ----
 
@@ -133,6 +136,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev {
     requires io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.mansart.pool.api;
     requires io.vidocq.mansart.pool.core;
+    requires java.sql;
 
     provides io.vidocq.runtime.spi.devconsole.LivePanel
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev.PoolsLivePanel;
@@ -197,8 +201,8 @@ What that package holds is either of two shapes, both public, read-only, and fre
   boot, nothing published by the extension itself.
 
 Either way, the `-dev` module's own class — `PoolsLivePanel`, `HealthLivePanel`, `RestLivePanel`,
-`MetricsLivePanel` — stays package-private: only its `LivePanel` service registration, never a compile-time
-dependency, is what the console needs.
+`MetricsLivePanel` — is public, as a service provider must be, in a package its module does not export: only its
+`LivePanel` service registration, never a compile-time dependency, is what the console needs.
 
 === The manifest marking
 
@@ -302,25 +306,19 @@ An extension with a `VidocqExtension` class implements `DevConsolePanel` next to
 
 [source,java]
 ----
-public final class MansartPoolExtension implements VidocqExtension, DevConsolePanel {
+public final class DevServicesExtension implements VidocqExtension, DevConsolePanel {
 ----
 
-This is the case of the Mansart pool extension, and of most extensions. The panel reads the fields the extension already fills in its lifecycle, and clears them in its `onStop`.
+This is the case of the dev services extension, `vidocq-runtime-devservices-extension`. The panel reads the fields the extension already fills in its lifecycle, and clears them in its `onStop`.
 
 [#wrapper-panel]
 === A wrapper without an extension class
 
-Some extensions have no Java class at all. The Knock, Dirac and Heisenberg extensions are *wrappers*: a `pom.xml` and a `module-info` that bring the component in, which then integrates through standard CDI and JAX-RS discovery alone.
+Some extensions have no Java class at all. The Cervantes, Cyrano and Heisenberg extensions are *wrappers*: a `pom.xml` and a `module-info` that bring the component in, which then integrates through standard CDI and JAX-RS discovery alone. None of them has a panel today.
 
-Their panel goes into the wrapper all the same. For Knock, that is one adapter class, such as `KnockHealthPanel`, in `vidocq-runtime-knock-health-extension` itself, declared as a service through `ServiceLoader`: `provides io.vidocq.runtime.spi.report.StartupReportContributor` in the `module-info`, and the same class in `META-INF/services`. It is never a `VidocqExtension`, and it never goes into a new artifact beside the wrapper: that layout was weighed against this one and rejected, for the reasons above (<<where-it-lives>>).
+A wrapper's panel goes into the wrapper all the same: one adapter class in the wrapper itself, declared as a service through `ServiceLoader`, `provides io.vidocq.runtime.spi.report.StartupReportContributor` in the `module-info` and the same class in `META-INF/services`. It is never a `VidocqExtension`, and it never goes into a new artifact beside the wrapper: that layout was weighed against this one and rejected, for the reasons above (<<where-it-lives>>). The rest of the wrapper's shape stays: no lifecycle and no priority.
 
-Knock's ADR-002 (`docs/adr/ADR-002-vidocq-runtime-integration-strategy.md` in the `knock` repository) is where the class-less shape is written down, and the panel departs from it, deliberately:
-
-* **What the ADR decided.** Its decision is option B, a wrapper "without Java code" — "No own Java classes" — over a `KnockExtension implements VidocqExtension`, its option A, because in M5 the standard CDI and JAX-RS SPIs did the whole integration: there was no code to write.
-* **Its principle, which the panel keeps.** What only Vidocq needs stays on the Vidocq side and never goes into Knock, so that Knock stays portable. The wrapper's `pom.xml` says it in a comment: "Toute logique spécifique vidocq doit aller dans un module séparé pour préserver la portabilité de Knock hors écosystème vidocq" — any logic specific to Vidocq goes into a separate module, to keep Knock portable outside the Vidocq ecosystem. The panel is Vidocq-specific logic on the Vidocq side: Knock is not touched, depends on no Vidocq SPI, and stays usable outside Vidocq.
-* **What the panel departs from.** Option B's "No own Java classes": the wrapper gains one. That is a decision of the Vidocq maintainers, not a reading of the ADR. Nor is the panel the one later addition the ADR sketches, an optional `vidocq-runtime-knock-secure-extension` that "_in addition_ to the wrapper exposes a `ContainerRequestFilter`": that is middleware an application opts into, while a panel is the brick's own section, there whenever the brick is. Record the departure where the class-less shape is written down when the Knock panel lands: a note in Knock's ADR-002, and, in the same change, the description and comments of the wrapper's `pom.xml` and the Javadoc of its `module-info`, which say it has no Java class of its own. Dirac's and Heisenberg's say the same, pointing at the same ADR, and change the same way when they gain a panel.
-
-The rest of the wrapper's shape stays: no `VidocqExtension`, no lifecycle and no priority, so option A stays rejected.
+Knock and Dirac started as such wrappers; Knock's ADR-002 (`knock/docs/adr/ADR-002-vidocq-runtime-integration-strategy.md` in the monorepo) chose the class-less shape because, at the time, the standard CDI and JAX-RS SPIs did the whole integration. Both have since gained a `VidocqExtension` class with their section, `KnockHealthExtension` and `DiracMetricsExtension` (<<extension-is-the-panel>>), and a `-dev` companion for their live values. The ADR's principle stays: what only Vidocq needs lives on the Vidocq side, and the component depends on no Vidocq SPI, so that it stays usable outside Vidocq.
 
 A wrapper around a component, Ledger, whose `@ApplicationScoped` `LedgerStats` bean keeps its counters in memory:
 
@@ -404,7 +402,7 @@ What changes for a service:
 * **No `onStop` to clear its fields.** None is needed: a stopping boot withdraws its report first, so that the console samples no contributed panel any more, and closes the console's listener before any other extension stops.
 * **Its place in the report** comes after the sections of the extensions, by `order()`, then `id()`.
 
-A wrapper that only has boot facts to show implements `StartupReportContributor` alone, declared the same way: every section is a panel of the console, with its boot facts. Knock's `KnockHealthPanel` is such a case for now, a class of the wrapper like any other: its checks can be listed by probe, but their status is only known by running them, which a sample must not do (<<rule-memory-only>>), until Knock keeps its last result in memory. Implement `DevConsolePanel` when there is something to sample.
+A wrapper that only has boot facts to show implements `StartupReportContributor` alone, declared the same way: every section is a panel of the console, with its boot facts. A value known only by running something, such as the status of a health check, is not something to sample (<<rule-memory-only>>) until the component keeps its last result in memory, as Knock now does for each check. Implement `DevConsolePanel` when there is something to sample.
 
 [#two-halves]
 == Two halves: boot facts and live values
@@ -422,7 +420,7 @@ A wrapper that only has boot facts to show implements `StartupReportContributor`
 | The charts the page draws: which values, how. It may depend on what the boot found. None by default.
 
 | `sample(out)`
-| On every poll of the page, about once a second per open tab: on the console's request threads, possibly several at once, and only once the report of the boot is written.
+| On every poll of the page, about once a second per open tab: on the console's request threads, possibly several at once, and only once the report of the boot is written. Also once a second on the console's history thread, whether or not a page is open.
 | The *live values*: what changes while the application runs.
 |===
 
@@ -573,7 +571,7 @@ for a `json` argument it means "parses as a JSON object", whatever its length.
 
 The page renders it as a form generated from the schema when the schema allows one, an object of scalars one level
 down included (xref:dev-console.adoc#json-form[the generated form]), and as the
-xref:dev-console.adoc#json-editor[JSON editor]otherwise, which colours, checks and completes the
+xref:dev-console.adoc#json-editor[JSON editor] otherwise, which colours, checks and completes the
 value against the schema, whose keywords that page lists; the console never validates the value against the schema
 itself — the action's target does. The MCP inspector's own tool action is a short example
 (`TestPanels.InspectorPanel`'s `tool.weather`):
@@ -591,13 +589,13 @@ new PanelAction("tool.weather", "Weather", null,
         }, "Tools", "The weather in a city.\nIn Celsius.");
 ----
 
-A string property whose schema also says `"format": "textarea"`is a field of several lines in that
+A string property whose schema also says `"format": "textarea"` is a field of several lines in that
 form rather than a one-line one: four lines of monospace text to start with, taller when dragged, its value sent as
 any other string's.
 
 Such a field whose schema also says `"contentMediaType": "text/x-query"` and `"x-language": "<id>"`
 is the query editor, which colours, completes and checks a query with the vocabulary of the panel's language of that
-id, and one that says `"x-parameters-of": "<query property>"`is the JSON editor of that query's
+id, and one that says `"x-parameters-of": "<query property>"` is the JSON editor of that query's
 parameters, its schema following the query (xref:dev-console.adoc#query-language[A query language for a panel]).
 The Mansart Data panel's *JDQL* tab uses both for its statement and its parameters
 (xref:modules/vidocq-runtime-extensions.adoc#mansart-data-jdql[A JDQL console for Mansart Data]):
@@ -611,7 +609,7 @@ The Mansart Data panel's *JDQL* tab uses both for its statement and its paramete
  "required": ["query"]}
 ----
 
-Such a field whose schema also says `"contentMediaType": "text/csv"`gets a *Choose file* input next
+Such a field whose schema also says `"contentMediaType": "text/csv"` gets a *Choose file* input next
 to it: the file picked is read by the browser and replaces the field's value, nothing being sent until the form is.
 It is read as UTF-8, then again as Windows-1252 when it is not UTF-8 (as a spreadsheet of a decimal-comma locale
 saves CSV), the line under the input saying `read as Windows-1252 (not UTF-8)`. While the field still shows the file
@@ -729,7 +727,7 @@ return ActionResult.rowsWithMenu("20 rows", columns, rows, more, menu);
 [#action-groups]
 === Groups and descriptions
 
-Two more optional fields, both on every constructor:
+Two more optional fields, both on the 7-argument constructor:
 
 * `group`, at most 40 characters, such as `Tools`: the page shows each group as a sub-tab of the panel, in the
   order each group is first seen, after a *Monitoring* sub-tab that keeps everything else — the summary, the links,
@@ -814,7 +812,7 @@ Each has its reason. The console enforces what it can; the rest is up to the pan
 
 No I/O, no network, no blocking call, no lock the application may hold, no bean created, nothing logged; well under a millisecond.
 
-*No bean created* is the part that is easy to break. A panel that reads CDI beans keeps their `Bean` metadata, resolved once in `onStart`, and asks the bean's `Context` for the instance it already has, with the single-argument `Context.get`, which returns `null` rather than creating one; holding a client proxy obtained at boot and calling it from `sample` creates the bean on the first poll of the page. `McpExtension`, in `vidocq-runtime-langchain4j-cdi-mcp-extension`, does it that way for a concrete reason: creating `McpSessionManager` starts its `mcp-session-cleanup` thread, so a panel that merely observes would start a thread, every second, on an application that asked for nothing (xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel]). A bean with no instance has no number to give, so the value is written `absent` with the reason — `no request served yet`, `not created yet` — never a zero.
+*No bean created* is the part that is easy to break. A panel that reads CDI beans keeps their `Bean` metadata, resolved once in `onStart`, and asks the bean's `Context` for the instance it already has, with the single-argument `Context.get`, which returns `null` rather than creating one; holding a client proxy obtained at boot and calling it from `sample` creates the bean on the first poll of the page. `McpExtension`, in `vidocq-runtime-langchain4j-cdi-mcp-extension`, does it that way for a concrete reason: creating `McpSessionManager` starts its `mcp-session-cleanup` thread, so a panel that merely observes would start a thread, every second, on an application that asked for nothing (xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[the `mcp` panel]). A bean with no instance has no number to give, so the value is written `absent` with the reason — `no request served yet`, `not created yet` — never a zero.
 
 *Why:* the page polls about once a second, per open tab, on the request threads, several at once. A panel that ran a query, called a service or ran the health checks on each poll would make the console a load generator, and its figures would measure the console. A panel that took a lock the application holds could stall the application's own threads. A value that only I/O could give is left out, or written `absent` with the reason; when it matters, the component keeps it in memory and the panel reads that. `contribute` follows the same rule, for the report's sake. The console times every sample and flags one above 5 ms `slow`.
 
@@ -1082,7 +1080,7 @@ public final class PoolsLivePanel implements LivePanel {
     }
 ----
 
-No `start(ExtensionContext)` override: `MansartPoolsLive` is filled and cleared entirely by the runtime
+Its `start(ExtensionContext)` and `stop()` only forget what its actions read of the pools' tables: `MansartPoolsLive` is filled and cleared entirely by the runtime
 extension's own `beforeStart`/`onStop`, so the panel has nothing to resolve on its own when the console starts
 it. Once the holder is cleared — the boot stopped, or a dev reload is between two boots — `sample` writes no
 group at all: an empty loop, not an anomaly.
@@ -1137,6 +1135,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev {
     requires io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.mansart.pool.api;
     requires io.vidocq.mansart.pool.core;
+    requires java.sql;
 
     provides io.vidocq.runtime.spi.devconsole.LivePanel
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev.PoolsLivePanel;
@@ -1316,7 +1315,7 @@ draws, to check what your panel sends.
 Before shipping a panel, check that:
 
 . **It lives in the brick's existing runtime extension**, a class-less wrapper included, never in the component and never in a new artifact beside it; the module requires `io.vidocq.runtime.spi.devconsole` (transitively when the panel class is exported) and the pom depends on `vidocq-runtime-devconsole-spi`.
-. **It is found**: the extension class implements `DevConsolePanel`, or the wrapper's one class, never a `VidocqExtension`, is declared with `provides io.vidocq.runtime.spi.report.StartupReportContributor` in its `module-info` *and* in `META-INF/services`; the wrapper keeps its Java modules workaround, its `pom.xml` and `module-info` no longer say it has no class, and Knock's ADR-002 has a note recording the departure from option B. Its section is in the detailed report.
+. **It is found**: the extension class implements `DevConsolePanel`, or the wrapper's one class, never a `VidocqExtension`, is declared with `provides io.vidocq.runtime.spi.report.StartupReportContributor` in its `module-info` *and* in `META-INF/services`; the wrapper keeps its Java modules workaround, and its `pom.xml` and `module-info` no longer say it has no class. Its section is in the detailed report.
 . **Its `id()` is stable, lowercase and unique**, not `startup`, `config`, `cdi`, `logs`, `tests`, `jvm` or `devconsole`, and `title()` names it for a person.
 . **`contribute` reads memory only**, writes a short summary with no configured value, its rows for `DETAILED`, and its anomalies under a code of its own.
 . **`sample` reads memory only**: no I/O, network, blocking call, application lock, bean creation or logging, and it is never flagged `slow`.
@@ -1329,6 +1328,6 @@ Before shipping a panel, check that:
 
 == Next steps
 
-* xref:dev-console.adoc[The dev console]— what the user sees
-* xref:modules/vidocq-runtime-spi.adoc#dev-console-panels[The panel SPI]— the types, one by one
+* xref:dev-console.adoc[The dev console] — what the user sees
+* xref:modules/vidocq-runtime-spi.adoc#dev-console-panels[The panel SPI] — the types, one by one
 * xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report] — the contract a panel extends
