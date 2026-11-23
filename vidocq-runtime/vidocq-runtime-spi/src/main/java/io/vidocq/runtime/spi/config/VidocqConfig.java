@@ -69,4 +69,20 @@ public interface VidocqConfig {
      * Currently registered configuration sources, sorted by descending ordinal.
      */
     Iterable<ConfigSource> getConfigSources();
+
+    /**
+     * The active configuration profile, {@code dev} for instance: {@code vidocq.profile}, else
+     * {@code mp.config.profile}; empty when none is set. Under a profile, each source is asked for
+     * {@code %<profile>.<key>} before {@code <key>} (MicroProfile Config 3.1 "Config Profile"): a profiled key wins over
+     * the plain key of its own source, and the ordinals still order the sources.
+     *
+     * <p>The default reads both keys through {@link #getValue(String)}; the runtime's implementation reads them as the
+     * sources hold them.</p>
+     */
+    default Optional<String> activeProfile() {
+        return getValue("vidocq.profile")
+                .or(() -> getValue("mp.config.profile"))
+                .map(String::strip)
+                .filter(profile -> !profile.isEmpty());
+    }
 }

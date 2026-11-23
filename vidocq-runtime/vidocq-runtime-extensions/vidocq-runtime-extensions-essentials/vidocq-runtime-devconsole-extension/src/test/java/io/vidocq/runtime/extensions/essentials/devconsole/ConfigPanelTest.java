@@ -192,6 +192,32 @@ class ConfigPanelTest {
     }
 
     @Test
+    void underAProfileTheRowShowsTheValueAndSourceTheApplicationReads() {
+        // BUG-20261123-64: without Ravel, the row of vidocq.http.port named the plain key's value under %dev.
+        Map<String, String> file = new LinkedHashMap<>();
+        file.put("vidocq.http.port", "8080");
+        file.put("%dev.vidocq.http.port", "8081");
+        file.put("%dev.app.mode", "dev-only");
+        file.put("%dev.db.user", "file-dev-user");
+        Map<String, String> system = Map.of("vidocq.profile", "dev", "db.user", "system-user");
+        VidocqConfig config = new VidocqConfigImpl(List.of(new Source("PropertiesFile", 100, file),
+                new Source("SystemProperties", 400, system)));
+
+        Map<String, List<String>> rows = new LinkedHashMap<>();
+        rows(table(sampled(ConfigPanel.of(config, LaunchMode.DEV, Optional::empty)), "keys"))
+                .forEach(row -> rows.put(row.get(0), row.subList(1, 4)));
+
+        assertEquals(List.of("PropertiesFile", "100", "8081"), rows.get("vidocq.http.port"));
+        assertEquals(List.of("PropertiesFile", "100", "dev-only"), rows.get("app.mode"));
+        // The ordinals still order the sources: a plain key of a higher source wins over a profiled one.
+        assertEquals(List.of("SystemProperties", "400", "system-user"), rows.get("db.user"));
+        assertEquals(List.of("PropertiesFile", "100", "8081"), rows.get("%dev.vidocq.http.port"));
+        for (String key : List.of("vidocq.http.port", "app.mode", "db.user")) {
+            assertEquals(config.getValue(key).orElseThrow(), rows.get(key).get(2), key);
+        }
+    }
+
+    @Test
     void theColumnsNameWhatTheRowsHold() {
         assertEquals(List.of("key", "source", "ordinal", "value", "status"),
                 table(sampled(devPanel()), "keys").get("columns"));
