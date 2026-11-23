@@ -159,7 +159,7 @@ public final class ServeCommand {
         // standard output, where a container runtime collects it (BUG-20261123-53): Filter.accessLog() without a
         // sink goes to the io.vidocq.chappe.access system logger instead, which an embedding application configures.
         if (cfg.accessLog()) {
-            h = Filter.accessLog(System.out::println).apply(h);
+            h = Filter.accessLog(System.out::println).apply(h); // NOSONAR java:S106 - CLI output
         }
         return h;
     }

@@ -94,7 +94,7 @@ class FoyChappeWithoutCdiTest {
         Optional<?> built = (Optional<?>) lookup.findVirtual(builderType, "build", MethodType.methodType(Optional.class))
                 .invoke(builder);
         Object mounted = built.orElseThrow();
-        try (AutoCloseable _ = (AutoCloseable) mounted) {
+        try (var _ = (AutoCloseable) mounted) {
             Object context = lookup.findVirtual(mountedType, "servletContext", MethodType.methodType(contextType))
                     .invoke(mounted);
             return (String) lookup.findVirtual(contextType, "getInitParameter",
