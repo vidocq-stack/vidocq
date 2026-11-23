@@ -19,14 +19,10 @@
  */
 package io.vidocq.grimm.internal;
 
-import jakarta.ws.rs.ApplicationPath;
-import jakarta.ws.rs.core.Application;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 
-import java.util.Collection;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -40,20 +36,12 @@ import java.util.Map;
  * out: the specification wants it in the servers ({@code mp.openapi.servers}).</p>
  *
  * <p>With several {@code Application} subclasses that carry one, the first by class name wins, as the Vidocq
- * runtime mounts it (BUG-20261123-49).</p>
+ * runtime mounts it (BUG-20261123-49). {@link ModelBuilder#applicationPath} reads the annotation, in the annotation
+ * scan that is the documented reflective fallback; this class only works on strings and the model.</p>
  */
 final class ApplicationPathPrefix {
 
     private ApplicationPathPrefix() {
-    }
-
-    /** The normalized application path of {@code classes} ({@code /api}), or the empty string for the root or none. */
-    static String of(Collection<Class<?>> classes) {
-        return classes.stream()
-                .filter(type -> Application.class.isAssignableFrom(type) && type.isAnnotationPresent(ApplicationPath.class))
-                .min(Comparator.comparing(Class::getName))
-                .map(type -> normalize(type.getAnnotation(ApplicationPath.class).value()))
-                .orElse("");
     }
 
     /** {@code api/}, {@code /api} and {@code /api/} give {@code /api}; {@code /} and a blank value give nothing. */

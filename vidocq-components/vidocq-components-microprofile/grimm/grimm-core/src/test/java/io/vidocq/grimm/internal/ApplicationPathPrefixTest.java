@@ -60,8 +60,8 @@ class ApplicationPathPrefixTest {
 
     @Test
     void theFirstApplicationByClassNameWins() {
-        assertEquals("/alpha", ApplicationPathPrefix.of(List.of(ZetaApplication.class, AlphaApplication.class)));
-        assertEquals("", ApplicationPathPrefix.of(List.of(NotAnApplication.class, String.class)));
+        assertEquals("/alpha", ModelBuilder.applicationPath(List.of(ZetaApplication.class, AlphaApplication.class)));
+        assertEquals("", ModelBuilder.applicationPath(List.of(NotAnApplication.class, String.class)));
     }
 
     @Test
