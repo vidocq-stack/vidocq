@@ -228,8 +228,8 @@ the claim, so the zero-opens story stays honest about its one deployment-time as
 
 ## Constraints (non-negotiable)
 
-- **TDD**: failing test first, per stage. Unit tests + `vauban-module-it` /
-  `vauban-jpms-it` style integration coverage. Add an IT reproducing the cdi#1015
+- **TDD**: failing test first, per stage. Unit tests + `vauban-module-it`
+  style integration coverage. Add an IT reproducing the cdi#1015
   scenario: module A (plain library, class `Foo`, NOT a bean archive, no `opens`),
   module B (bean archive, `@Produces @ApplicationScoped Foo`), consumer app on the
   **module path** — proving stage 1 works with zero `opens`.
@@ -239,7 +239,7 @@ the claim, so the zero-opens story stays honest about its one deployment-time as
   (`-Ptck`, expected 774/774) and the atinject runner must stay green, and the existing
   weaving ITs must pass. If IDE-related weaving behavior is touched, keep the
   `beans.list` gate intact.
-- **Zero new dependencies**, JPMS strict, Class-File API + APT only (ReflectionFactory
+- **Zero new dependencies**, strict Java Modules, Class-File API + APT only (ReflectionFactory
   and Unsafe were evaluated and rejected — do not reintroduce them).
 - **English** for all code, comments, tests, docs, commit messages.
 - Commits: Conventional Commits, GPG-signed, `Signed-off-by` (DCO), with AI provenance

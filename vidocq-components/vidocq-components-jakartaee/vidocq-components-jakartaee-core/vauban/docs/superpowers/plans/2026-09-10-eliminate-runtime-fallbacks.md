@@ -21,7 +21,7 @@
 
 **Architecture:** Four stages. (1) The annotation processor generates client proxies for normal-scoped *producer* beans at build time, placed in the producer's own package, when the produced class type is "fully public". (3b) A build-time `required-opens.list` descriptor drives an agent-applied `Instrumentation.redefineModule` at boot for the residue. (3) Non-eligible producers become configurable build diagnostics. (2) An opt-in `vauban:enhance-dependencies` Maven goal rewrites third-party jars for the package-private cases. Stage order of execution: 1 → 3 → 3b → 2 (each independently testable and TCK-gated).
 
-**Tech Stack:** Java 25 (Temurin), Maven 3.9.16, JPMS strict, JDK Class-File API (JEP 484) + `javax.annotation.processing` APT, zero external dependencies.
+**Tech Stack:** Java 25 (Temurin), Maven 3.9.16, strict Java Modules, JDK Class-File API (JEP 484) + `javax.annotation.processing` APT, zero external dependencies.
 
 **Spec:** `vauban/ELIMINATE_RUNTIME.md` (the plan argues from it; executors read both). Tracking issue: Vidocq/vauban#42.
 
@@ -29,7 +29,7 @@
 
 - **Java 25 + Maven 3.9.16**, pinned via `.sdkmanrc` (`sdk env`). Build with `./mvnw` (blocked in the Bash tool — spawn it from a `node *.mjs` wrapper).
 - **Zero new dependencies.** Class-File API + APT only. `ReflectionFactory` and `Unsafe` were evaluated and rejected — do not reintroduce.
-- **JPMS strict**: minimal `exports`, no unjustified `opens`, every module has its own `module-info.java`.
+- **Strict Java Modules**: minimal `exports`, no unjustified `opens`, every module has its own `module-info.java`.
 - **TDD, red → green → refactor**, failing test first per task.
 - **Gates before claiming a stage done** (run yourself, never trust a sub-agent report): `./mvnw -T1C clean install` at repo root (never `install` without `clean` — stale `target/` gives false results with the codegen modules); `./mvnw -ntp verify -pl vauban-tck-runner -Ptck` must stay **774/774**; `./mvnw -ntp verify -pl vauban-atinject-tck-runner -Ptck` must stay green. Baseline captured 2026-09-10: CDI Lite 774/774, atinject green.
 - **English** everywhere (code, comments, tests, docs, commit messages).
@@ -69,7 +69,7 @@
 
 `vauban-weaver/.../WeavingAgent.java` — `install(String, Instrumentation)` L52 **discards `inst`** (only static is `ATTACHED_PROPERTY` L40). `ProxyLinkWeaver.addMarkerConstructor` L106, `retargetProxyConstructor` L131.
 
-IT reality: `vauban-jpms-it` is a DEAD stub (no pom, not in root). `vauban-module-it` (root pom) is single strict module, zero opens, `provides _VaubanComponents`, module-path via surefire. **No multi-named-module + separate consumer IT exists — Stage 1 must create one.**
+IT reality: the older Java module IT folder is a DEAD stub (no pom, not in root; since removed). `vauban-module-it` (root pom) is single strict module, zero opens, `provides _VaubanComponents`, module-path via surefire. **No multi-named-module + separate consumer IT exists — Stage 1 must create one.**
 
 ---
 

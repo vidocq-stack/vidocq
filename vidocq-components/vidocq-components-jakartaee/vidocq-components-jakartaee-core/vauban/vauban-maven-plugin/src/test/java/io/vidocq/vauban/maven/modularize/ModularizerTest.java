@@ -774,7 +774,7 @@ class ModularizerTest {
     /**
      * The langchain4j wall. A generic helper reaches {@code ServiceLoader} for a type defined in
      * the jar that calls it, so the JVM demands a {@code uses} on the helper's module — which
-     * would need a {@code requires} back, and JPMS has no cycles. The helper jar has no legal
+     * would need a {@code requires} back, and Java modules allow no cycles. The helper jar has no legal
      * explicit form, so it is left automatic instead of being patched into a graph that
      * cannot resolve.
      */

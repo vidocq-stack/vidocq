@@ -42,8 +42,8 @@ import java.util.TreeSet;
  * <p>A {@code uses} is not a hint: the JVM rejects the whole graph at resolution time with
  * <em>"Module M uses S but does not read a module that exports P to M"</em>. Emitting everything
  * the bytecode scan finds therefore trades a late failure (one broken lookup) for an early one
- * (nothing resolves at all), which is strictly worse. Only directives that satisfy both JPMS
- * conditions are kept:
+ * (nothing resolves at all), which is strictly worse. Only directives that satisfy both module
+ * system conditions are kept:
  *
  * <ol>
  *   <li>the service type resolves to a package of the closure or of the JDK system modules, and</li>
@@ -55,7 +55,7 @@ import java.util.TreeSet;
  * a jar's own code reaches {@code ServiceLoader} for a type defined in a jar that depends on it —
  * langchain4j-core's generic {@code ServiceHelper} loading types from langchain4j — the directive
  * the JVM demands is one the module system forbids, since declaring it would need a
- * {@code requires} back and JPMS has no cycles. No descriptor satisfies both constraints, and the
+ * {@code requires} back and Java modules allow no cycles. No descriptor satisfies both constraints, and the
  * jar has no legal explicit form at all; {@code Modularizer} leaves it automatic.
  */
 final class UsesLegality {

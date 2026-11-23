@@ -27,7 +27,7 @@ import java.nio.file.Path;
  * ({@code target/vauban-modularized/<original file name>}). The dev, jlink and
  * package goals call {@link #resolve} for every dependency so a patched jar wins
  * over the original M2 file whenever one exists — same pattern as the sealed
- * cassini copies and {@link JpmsPatches}.
+ * cassini copies and the Vidocq runtime plugin's {@code JavaModulePatches}.
  */
 public final class ModularizedJars {
 

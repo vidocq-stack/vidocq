@@ -169,7 +169,7 @@ Effects:
 - the Maven-plugin sealing remains for the *legacy* module-path launch (packaged jars
   running without the layer), untouched.
 
-JPMS constraint respected: a synthetic `provides` only names classes living in the same
+Java Modules constraint respected: a synthetic `provides` only names classes living in the same
 archive/module — which is always the case for APT output.
 
 ## 7. Work plan

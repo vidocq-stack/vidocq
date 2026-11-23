@@ -7959,7 +7959,7 @@ while `resolvedGat.equals(jdkGat)` was false (asymmetric), and the anonymous
   mansart's `@TransactionScoped` bean always being empty in
   `vidocq-runtime-mansart-h2-example` ("TX audit: []").
 - **Reproduction minimale** : `TxModulePathTest.transaction_scoped_context_works_on_the_module_path`
-  (mansart-transactions-cdi-jpms-it) — red before the fix (`expected: <2> but was: <0>`).
+  (mansart-transactions-cdi-module-it) — red before the fix (`expected: <2> but was: <0>`).
 - **Hypothèse de cause** : two compounding silent fallbacks. (1) The custom-context
   registration only knew the provider path and the private-lookup path; a public context
   class in an exported package (the normal case, and what the BCE API implies) needs
