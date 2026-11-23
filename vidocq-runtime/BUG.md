@@ -5,6 +5,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261123-64 — The dev console's configuration table ignores the active profile without Ravel
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit), on `fix/runtime-config-profiles`.
+- **Module**: `vidocq-runtime-devconsole-extension` (`ConfigInventory`), `vidocq-runtime-spi` (`VidocqConfig`)
+- **Symptom**: since BUG-20261123-46, `%dev.vidocq.http.port=8081` applies under `vidocq.profile=dev`, yet the
+  `keys` table of the `config` panel showed `vidocq.http.port` at `8080`, the plain key's value, and a key set only
+  under the profile (`%dev.app.mode`) had no row of its plain name. With Ravel the table was right, through Ravel's
+  profiled sources.
+- **Repro**: `ConfigPanelTest.underAProfileTheRowShowsTheValueAndSourceTheApplicationReads`: a source with
+  `vidocq.http.port=8080` and `%dev.vidocq.http.port=8081`, `vidocq.profile=dev`: expected `[PropertiesFile, 100,
+  8081]`, was `[PropertiesFile, 100, 8080]`.
+- **Cause**: `ConfigInventory` asked each source for the plain key alone; the extension sees the configuration
+  through the SPI and could not know the profile.
+- **Fix**: `VidocqConfig.activeProfile()`, a default method of the SPI (`vidocq.profile`, else `mp.config.profile`),
+  which `VidocqConfigImpl` overrides with the profile it applies. `ConfigInventory` asks each source for
+  `%<profile>.<key>` before `<key>` and adds the plain name of each key of the active profile.
+
+---
+
 ## BUG-20261123-46 — Configuration profiles do not work: `%dev.` keys are never applied
 
 - **Date**: 2026-11-23
@@ -32,8 +52,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   set (system property, `VIDOCQ_PROFILE`, `vidocq.properties`, `application.properties`): Ravel applies the same
   profile, and `vidocq.profile` wins over an `mp.config.profile` set elsewhere, in both. Ravel itself is unchanged.
   Tests: `VidocqConfigImplTest` (7 new), `EnvConfigSourceTest`, `VidocqProfileConfigSourceTest`, `ConfigProfileTest`.
-- **Not done**: the dev console's configuration table (`ConfigInventory`) still finds a key's source without the
-  profile when Ravel is absent; documented in `dev-console.adoc`.
+- **Follow-up**: the dev console's configuration table (`ConfigInventory`) still found a key's source without the
+  profile when Ravel is absent: BUG-20261123-64.
 
 ---
 

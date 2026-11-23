@@ -41,7 +41,9 @@ import java.util.TreeSet;
  *
  * <p><b>Which source.</b> The first source, in lookup order, that has a value for the key: exactly what
  * {@link VidocqConfig#getValue(String)} returns. The environment answers a dotted key, {@code db.user}, for a
- * variable {@code DB_USER}; asking every source by key, not by its property names, finds it. The value is the raw
+ * variable {@code DB_USER}; asking every source by key, not by its property names, finds it. Under the
+ * {@linkplain VidocqConfig#activeProfile() active profile}, a source is asked for {@code %<profile>.<key>} first, and a
+ * profiled key also gives a row under its plain name, which names the source that wins. The value is the raw
  * one of the source: under Ravel, before its profiles and its {@code ${...}} expressions, so an expression that names
  * a secret is shown as the expression, never expanded.
  *
@@ -84,6 +86,7 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
     static ConfigInventory read(VidocqConfig config, LaunchMode mode) {
         List<ConfigSource> lookup = new ArrayList<>();
         config.getConfigSources().forEach(lookup::add);
+        String prefix = profilePrefix(config);
         List<String> sources = new ArrayList<>();
         Set<String> applicationKeys = new TreeSet<>();
         Set<String> vidocqKeys = new TreeSet<>();
@@ -95,20 +98,42 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
                 if (key == null) {
                     continue;
                 }
-                if (key.startsWith(VIDOCQ_PREFIX)) {
-                    vidocqKeys.add(key);
-                } else if (key.startsWith(MP_PREFIX)) {
-                    mpKeys.add(key);
-                } else if (!system) {
-                    applicationKeys.add(key);
+                sort(key, system, applicationKeys, vidocqKeys, mpKeys);
+                // A key of the active profile is also read under its plain name: that row shows what wins.
+                if (!prefix.isEmpty() && key.startsWith(prefix)) {
+                    sort(key.substring(prefix.length()), system, applicationKeys, vidocqKeys, mpKeys);
                 }
             }
         }
         List<List<String>> rows = new ArrayList<>();
-        int application = rows(applicationKeys, lookup, mode, rows);
-        int vidocq = rows(vidocqKeys, lookup, mode, rows);
-        int mp = rows(mpKeys, lookup, mode, rows);
+        int application = rows(applicationKeys, lookup, prefix, mode, rows);
+        int vidocq = rows(vidocqKeys, lookup, prefix, mode, rows);
+        int mp = rows(mpKeys, lookup, prefix, mode, rows);
         return new ConfigInventory(sources, rows, application, vidocq, mp, mode == LaunchMode.DEV);
+    }
+
+    /**
+     * Adds {@code key} to the keys of its kind; a key of the system properties or the environment only when it is a
+     * Vidocq or MicroProfile key.
+     */
+    private static void sort(String key, boolean system, Set<String> applicationKeys, Set<String> vidocqKeys,
+                             Set<String> mpKeys) {
+        if (key.startsWith(VIDOCQ_PREFIX)) {
+            vidocqKeys.add(key);
+        } else if (key.startsWith(MP_PREFIX)) {
+            mpKeys.add(key);
+        } else if (!system) {
+            applicationKeys.add(key);
+        }
+    }
+
+    /** {@code %<profile>.} of the active profile; {@code ""} when none is active or the configuration cannot say. */
+    private static String profilePrefix(VidocqConfig config) {
+        try {
+            return config.activeProfile().map(profile -> "%" + profile + ".").orElse("");
+        } catch (RuntimeException _) {
+            return "";
+        }
     }
 
     /** The names of {@code source}, none when it has none or cannot list them. */
@@ -132,12 +157,17 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
 
     /**
      * Adds a row per key that some source has a value for, while the table has room; returns how many keys had one.
+     * Under a profile, each source is asked for the profiled key before the plain one, as {@code VidocqConfig} does.
      */
-    private static int rows(Set<String> keys, List<ConfigSource> lookup, LaunchMode mode, List<List<String>> rows) {
+    private static int rows(Set<String> keys, List<ConfigSource> lookup, String prefix, LaunchMode mode,
+                            List<List<String>> rows) {
         int found = 0;
         for (String key : keys) {
             for (ConfigSource source : lookup) {
-                String value = valueOf(source, key);
+                String value = prefix.isEmpty() ? null : valueOf(source, prefix + key);
+                if (value == null) {
+                    value = valueOf(source, key);
+                }
                 if (value != null) {
                     found++;
                     if (rows.size() < MAX_ROWS) {

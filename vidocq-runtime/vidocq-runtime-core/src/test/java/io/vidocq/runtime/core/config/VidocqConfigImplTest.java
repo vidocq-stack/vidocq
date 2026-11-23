@@ -221,6 +221,13 @@ class VidocqConfigImplTest {
     }
 
     @Test
+    void theActiveProfileIsReadAsTheSourcesHoldIt() {
+        ConfigSource file = source("file", 100, Map.of("vidocq.profile", " dev ", "%dev.vidocq.profile", "other"));
+        assertEquals(Optional.of("dev"), new VidocqConfigImpl(List.of(file)).activeProfile());
+        assertEquals(Optional.empty(), new VidocqConfigImpl(List.of(source("empty", 100, Map.of()))).activeProfile());
+    }
+
+    @Test
     void theActiveProfileExposesItsKeysUnderTheirPlainNames() {
         ConfigSource file = source("file", 100,
                 Map.of("vidocq.profile", "dev", "%dev.only.in.dev", "x", "%prod.only.in.prod", "y"));

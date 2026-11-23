@@ -172,6 +172,13 @@ public final class VidocqConfigImpl implements VidocqConfig {
         return sources;
     }
 
+    /** {@inheritDoc} Read as the sources hold the keys, once, at the first lookup. */
+    @Override
+    public Optional<String> activeProfile() {
+        String prefix = profilePrefix();
+        return prefix.isEmpty() ? Optional.empty() : Optional.of(prefix.substring(1, prefix.length() - 1));
+    }
+
     // ---------- helpers ----------
 
     /**

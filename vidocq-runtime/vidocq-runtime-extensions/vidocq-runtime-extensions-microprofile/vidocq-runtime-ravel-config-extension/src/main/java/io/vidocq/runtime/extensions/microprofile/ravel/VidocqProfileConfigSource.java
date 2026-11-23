@@ -71,7 +71,7 @@ public final class VidocqProfileConfigSource implements org.eclipse.microprofile
             if (value != null) {
                 return value;
             }
-            String sanitized = key.replaceAll("[^A-Za-z0-9_]", "_");
+            String sanitized = key.replaceAll("\\W", "_");
             for (String name : new String[] {key, sanitized, sanitized.toUpperCase(Locale.ROOT)}) {
                 value = environment.apply(name);
                 if (value != null) {
