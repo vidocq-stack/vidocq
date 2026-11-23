@@ -14,7 +14,7 @@
   `requires static`; `FoyChappeBoot` only touches `BeanManager` when one is given. `foy-api` and `foy-core` declare
   the annotation API without a scope, though they only read it with `requires static`: `foy-core` reads
   `@DeclareRoles` and `@RunAs` by their descriptors, never by their classes, and `foy-api` not at all.
-- Status: FIXED (pending commit). `requires static jakarta.cdi` in `foy-chappe`; `jakarta.annotation-api` is
+- Status: FIXED in `02412c212`. `requires static jakarta.cdi` in `foy-chappe`; `jakarta.annotation-api` is
   `provided` in `foy-api` and `foy-core`. Downstream nothing relied on Foy for it: the Vidocq Servlet extension, Ibarra,
   Kerckhoffs and the examples get it from `jakarta.enterprise.cdi-api` (a `compile` dependency of the CDI API 4.1).
   Limit: compiled callers link `FoyChappeBoot` without CDI, but `Class.getMethod` on `FoyChappeBoot` or its
@@ -38,7 +38,7 @@
 - Repro: `OfficialTckScriptTest` (`foy-tck`, `-Ptck`): the script, copied next to a `mvnw` that logs its
   arguments, made two Maven calls without `-Dmaven.repo.local`.
 - Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build".
-- Status: FIXED (pending commit). Every Maven call of the script takes
+- Status: FIXED in `8fc6307a8`. Every Maven call of the script takes
   `-Dmaven.repo.local=<Foy folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
   (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there first, and only reads `~/.m2`, where
   the non-public TCK artifacts stay. `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `foy-tck/README.md`.

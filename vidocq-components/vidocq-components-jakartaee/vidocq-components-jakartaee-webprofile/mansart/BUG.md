@@ -12,7 +12,7 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 ## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
 
 - **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Kerckhoffs and Noether)
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 - **Symptom**: `mansart-data-tck/run-official-tck-data-1.0.sh` ran `(cd .. && mvn -ntp install -DskipTests)`
   whenever `~/.m2` lacked `mansart-data-core-1.0.0-SNAPSHOT.jar` (always: the reactor is at 0.4.0-SNAPSHOT), and
   `mansart-transactions-tck/run-official-tck-transactions-2.0.sh` ran `(cd .. && mvn -q -B -ntp install -DskipTests)`

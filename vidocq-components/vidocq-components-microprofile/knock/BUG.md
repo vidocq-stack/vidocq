@@ -282,7 +282,7 @@ back with compiler plugin 3.13 either). Workaround removed; the shared execution
 ## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
 
 - **Opened**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 - **Symptom**: `run-official-tck-mp-health-4.0.sh` ran `./mvnw -ntp -pl
   knock-api,knock-core,knock-cdi-vauban,knock-jaxrs -am install -DskipTests`, then the TCK, on the default local
   repository, `~/.m2/repository`, which every build and session of the machine shares. A run from a branch replaced

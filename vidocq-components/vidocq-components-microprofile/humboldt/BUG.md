@@ -755,7 +755,7 @@
 - **Regression tests**: `HumboldtSpanFinalizerTest` (3 tests; `cassini-jdk-http`, test scope, provides the `RuntimeDelegate`), `OpenLibertyPortabilityIT.failingResourceRecordsTheExceptionOnItsServerSpan` (the body of the `500` no longer carries the message on RESTEasy).
 
 ## BUG-20261123-57 — the TCK script installs the branch into the shared `~/.m2`
-- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Date**: 2026-11-23 — **Status**: FIXED in `8fc6307a8`
 - **Symptom**: `run-official-tck-telemetry-2.2.sh` ran `./mvnw -ntp clean install -Dmaven.test.skip=true`, then the TCK, on the default local repository, `~/.m2/repository`, which every build and session of the machine shares. A run from a branch replaced the published Humboldt snapshot there: the other builds then resolved the branch's jars until the next snapshot download. Same bug in the TCK scripts of Foy, Peano, Ibarra, Bodoni, Cervantes, Cyrano, Dirac, Grimm, Heisenberg, Knock and Ravel.
 - **Minimal repro**: `OfficialTckScriptTest` (`humboldt-tck`, TestNG, default `-Ptck` run): the script, copied next to a `mvnw` that logs its arguments, made two Maven calls without `-Dmaven.repo.local`.
 - **Root cause**: the script predates the workspace rule "never install into `~/.m2` from a branch build".

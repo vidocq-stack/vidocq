@@ -592,7 +592,7 @@ Track reproducible bugs with:
 
 ## BUG-20261123-49 — the document misses the `@ApplicationPath`: `/pets/{id}` for a resource served at `/api/pets/{id}`
 
-- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Date**: 2026-11-23 — **Status**: FIXED in `6fadac925`
 - **Symptom**: with `@ApplicationPath("/api")` on the `Application` subclass, Vidocq serves `@Path("/pets")` at
   `/api/pets`, but `/openapi` listed `/pets/{id}` and no server: a client built from the document called a URL that
   does not exist. The getting-started page already showed `/api/pets/{id}`, and the reference page listed
@@ -612,7 +612,7 @@ Track reproducible bugs with:
 
 ## BUG-20261123-50 — `GrimmExtension` takes a monitor
 
-- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Date**: 2026-11-23 — **Status**: FIXED in `6fadac925`
 - **Symptom**: `GrimmExtension` kept the discovered class names in a `Collections.synchronizedSet` and copied them in a
   `synchronized` block; the project rules forbid `synchronized` (virtual threads first; Grimm's `CLAUDE.md`,
   constraint 2). Since JDK 24 (JEP 491) a monitor no longer pins a virtual thread, so this is a rule breach, not a
@@ -625,7 +625,7 @@ Track reproducible bugs with:
 - **Fix**: a `ReentrantLock` guards a `LinkedHashSet` (discovery order kept), in both phases.
 
 ## BUG-20261123-57 — the TCK script installs the branch into the shared `~/.m2`
-- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Date**: 2026-11-23 — **Status**: FIXED in `8fc6307a8`
 - **Symptom**: `run-official-tck-mp-openapi-4.2.sh` ran `./mvnw -ntp clean install -DskipTests`, then
   `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test`, on the default local repository, `~/.m2/repository`, which
   every build and session of the machine shares. A run from a branch replaced the published Grimm snapshot there: the

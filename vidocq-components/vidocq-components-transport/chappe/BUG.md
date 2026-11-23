@@ -8,7 +8,7 @@ cause hypothesis, and status.
 ## BUG-20261123-55 — `logging.level` of the CLI's YAML was read and never applied
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `02412c212`
 - **Module**: `chappe-cli` (`ChappeConfig.Logging`)
 - **Symptom**: `logging.level: DEBUG` (or `WARNING`, `OFF`) in the file given to `chappe serve --config` changes
   nothing: the server's loggers keep the JDK's levels. The CLI README and the reference page list the key in the
@@ -26,7 +26,7 @@ cause hypothesis, and status.
 ## BUG-20261123-54 — `chappe serve --help` printed its text in French
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `02412c212`
 - **Module**: `chappe-cli` (`CliArgs.HELP_TEXT`)
 - **Symptom**: `chappe serve --help` (and the help printed after a wrong flag) describes every flag in French
   ("sert un répertoire statique", "Chemin du fichier YAML", ...), one line in English. English is the project's
@@ -38,7 +38,7 @@ cause hypothesis, and status.
 ## BUG-20261123-53 — `chappe serve --access-log` did not write on standard output
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `02412c212`
 - **Module**: `chappe-cli` (`ServeCommand.buildHandler`)
 - **Symptom**: the CLI help, its README and the reference page say `--access-log` writes one Apache CLF line per
   request on stdout, for Docker or Portainer to collect. The lines went to the `io.vidocq.chappe.access`

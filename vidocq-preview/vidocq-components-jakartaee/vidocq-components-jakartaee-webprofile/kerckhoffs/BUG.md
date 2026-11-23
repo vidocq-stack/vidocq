@@ -8,28 +8,28 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - **Symptom:** an application with `@InMemoryIdentityStoreDefinition` starts silently, though PLAN.md §6 asks for a warning at start so that callers and passwords written in the code do not reach production unnoticed.
 - **Minimal repro:** `InMemoryStoreWarningTest#the_start_warns_once_of_each_in_memory_store_and_names_its_declaration`: a container with `MemoryApplication` logs no `WARNING` (`expected: <1> but was: <0>`).
 - **Cause:** `InMemoryIdentityStoreCreator` created the store and logged nothing.
-- **Status:** FIXED (pending commit): the creator logs one `WARNING` on `io.vidocq.kerckhoffs.identitystore`, naming the declaring class. The store is a singleton the start check creates, so the warning comes once per definition, at start. No message id: the `[VIDOCQ-…]` codes are the runtime core's startup anomalies (`StartupAnomalies`, which nothing else logs), and no brick has codes of its own. The opt-in to refuse the start in production (PLAN.md §6) is not done.
+- **Status:** FIXED in `6bb12c904`: the creator logs one `WARNING` on `io.vidocq.kerckhoffs.identitystore`, naming the declaring class. The store is a singleton the start check creates, so the warning comes once per definition, at start. No message id: the `[VIDOCQ-…]` codes are the runtime core's startup anomalies (`StartupAnomalies`, which nothing else logs), and no brick has codes of its own. The opt-in to refuse the start in production (PLAN.md §6) is not done.
 
 ## BUG-20261123-61 · 2026-11-23 · `@CustomFormAuthenticationMechanismDefinition` is silently ignored
 
 - **Symptom:** an application that declares the custom FORM mechanism gets no `HttpAuthenticationMechanism` and no deployment error: its protected pages are served as with no mechanism at all. The Javadoc of `KerckhoffsServletAuthentication` (runtime extension) said Kerckhoffs registers one.
 - **Minimal repro:** `MechanismCdiTest#aCustomFormDefinitionPutsTheCustomFormMechanismInService` (`CustomFormApplication`): `UnsatisfiedResolution No bean found for type: HttpAuthenticationMechanism`.
 - **Cause:** `KerckhoffsExtension` collected the BASIC and FORM definitions only.
-- **Status:** FIXED (pending commit): implemented (PLAN.md K2 lists the custom FORM mechanism). `FormAuthenticationMechanism.customForm` keeps the login to continue of FORM, takes the credential the application hands to `SecurityContext.authenticate` instead of `j_security_check`, and answers `SEND_FAILURE`, `SUCCESS` or `SEND_CONTINUE` with a redirect to the page asked for (`CustomFormAuthenticationMechanismTest`, 8 tests). The TCK application `app-mem-customform` stays out: its login page is a Jakarta Faces page.
+- **Status:** FIXED in `6bb12c904`: implemented (PLAN.md K2 lists the custom FORM mechanism). `FormAuthenticationMechanism.customForm` keeps the login to continue of FORM, takes the credential the application hands to `SecurityContext.authenticate` instead of `j_security_check`, and answers `SEND_FAILURE`, `SUCCESS` or `SEND_CONTINUE` with a redirect to the page asked for (`CustomFormAuthenticationMechanismTest`, 8 tests). The TCK application `app-mem-customform` stays out: its login page is a Jakarta Faces page.
 
 ## BUG-20261123-60 · 2026-11-23 · `@Inject Pbkdf2PasswordHash` does not resolve
 
 - **Symptom:** an application that injects the built-in `Pbkdf2PasswordHash` fails to start: no bean has that type, though `DefaultPbkdf2PasswordHash` exists in `kerckhoffs-core`.
 - **Minimal repro:** `PasswordHashCdiTest` (3 tests): `UnsatisfiedResolution No bean found for type: jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash`.
 - **Cause:** nothing registered `DefaultPbkdf2PasswordHash` as a bean.
-- **Status:** FIXED (pending commit): `KerckhoffsExtension` adds a `@Dependent` synthetic bean of type `Pbkdf2PasswordHash` (`Pbkdf2PasswordHashCreator`) for every application, so each injection point configures its own through `initialize(Map)`. Tested at start, frozen (`FrozenExtensionTest`) and on the assembled runtime (`KerckhoffsSecurityTest#theApplicationInjectsTheBuiltInPasswordHash`).
+- **Status:** FIXED in `6bb12c904`: `KerckhoffsExtension` adds a `@Dependent` synthetic bean of type `Pbkdf2PasswordHash` (`Pbkdf2PasswordHashCreator`) for every application, so each injection point configures its own through `initialize(Map)`. Tested at start, frozen (`FrozenExtensionTest`) and on the assembled runtime (`KerckhoffsSecurityTest#theApplicationInjectsTheBuiltInPasswordHash`).
 
 ## BUG-20261123-57 · 2026-11-23 · The TCK scripts install the branch into the shared `~/.m2`
 
 - **Symptom:** `run-official-tck-security-4.0.sh` ran `./mvnw -ntp install -DskipTests`, the class path build and the TCK's own build on the default local repository, `~/.m2/repository`, which every build and session of the machine shares: a run from a branch replaced the published Kerckhoffs snapshot there for every other build. The runner of the assembled runtime (`vidocq-runtime-tck-kerckhoffs-security/run-official-tck-security-4.0.sh`) did the same with `VIDOCQ_TCK_INSTALL=1`. Both also failed under macOS's Bash 3.2 without `MVN_EXTRA` or `--` arguments (an empty array is unbound under `set -u`). Same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Mansart and Noether.
 - **Minimal repro:** `OfficialTckScriptTest` (`kerckhoffs-tck`, `-Ptck`): the script, copied next to a `mvnw` that logs its arguments, on a stand-in distribution, made its three Maven calls without `-Dmaven.repo.local`. The runtime runner has no test (its module holds none).
 - **Cause:** the scripts predate the workspace rule "never install into `~/.m2` from a branch build".
-- **Status:** FIXED (pending commit). Every Maven call takes `-Dmaven.repo.local=<folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first), the Kerckhoffs folder for the brick's script and `vidocq-runtime/` for the runtime's; the empty arrays expand as `${a[@]+"${a[@]}"}`. `.tck-repository/` is git-ignored.
+- **Status:** FIXED in `8fc6307a8`. Every Maven call takes `-Dmaven.repo.local=<folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first), the Kerckhoffs folder for the brick's script and `vidocq-runtime/` for the runtime's; the empty arrays expand as `${a[@]+"${a[@]}"}`. `.tck-repository/` is git-ignored.
 
 ## KERCK-20261118-03 · 2026-11-18 · A BASIC mechanism's qualifiers differ from Soteria's
 

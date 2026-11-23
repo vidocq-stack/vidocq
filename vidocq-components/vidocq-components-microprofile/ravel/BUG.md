@@ -1,7 +1,7 @@
 ## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit). Every Maven call of the script takes
+- **Status**: FIXED in `8fc6307a8`. Every Maven call of the script takes
   `-Dmaven.repo.local=<Ravel folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
   (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there first, and only reads `~/.m2`.
   `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `TCK.md`, `CLAUDE.md`.

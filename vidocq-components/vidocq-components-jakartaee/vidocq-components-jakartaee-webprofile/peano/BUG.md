@@ -13,7 +13,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   empty matrix.
 - Cause: the per-repository workflow `tck-official.yml` of the former Peano repository did not move into the
   monorepo, and nothing replaced it.
-- Status: FIXED (pending commit). `ci.tck.command` = `./run-official-tck-el-6.0.sh all` (what the former workflow
+- Status: FIXED in `8fc6307a8`. `ci.tck.command` = `./run-official-tck-el-6.0.sh all` (what the former workflow
   ran); the plan step now gives the job `tck / PEANO` with that command. Not run in CI yet.
 
 ## BUG-20261123-57 · 2026-11-23 · The EL TCK script installs the branch into the shared `~/.m2`
@@ -28,7 +28,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build". The signature test
   also read `jakarta.el-api` at `${settings.localRepository}/jakarta/el/...`, a path that a private repository above
   `~/.m2` does not fill (the jar may come from the tail).
-- Status: FIXED (pending commit). Every Maven call takes `-Dmaven.repo.local=<Peano folder>/.tck-repository
+- Status: FIXED in `8fc6307a8`. Every Maven call takes `-Dmaven.repo.local=<Peano folder>/.tck-repository
   -Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first; the folder is git-ignored);
   the selector expands as `${selector[@]+...}`; `peano-tck`'s `tck-official` profile copies `jakarta.el-api` into
   `target/signature-api/` (`maven-dependency-plugin:copy`, as Ibarra's runner does) and the signature class path

@@ -11,7 +11,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Minimal repro: the workflow's `plan` step with `COMPONENTS=BODONI` gave an empty matrix.
 - Cause: the former repository's `tck-tags.yml` (smoke, a required check of its `main`) did not move into the
   monorepo.
-- Status: FIXED (pending commit). `ci.tck.command` = `./run-official-tck-tags-3.0.sh all`. Not run in CI yet.
+- Status: FIXED in `8fc6307a8`. `ci.tck.command` = `./run-official-tck-tags-3.0.sh all`. Not run in CI yet.
 
 ## BUG-20261123-57 · 2026-11-23 · The Tags TCK script installs the branch into the shared `~/.m2`
 
@@ -22,7 +22,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Minimal repro: `OfficialTckRunnerTest.theRepositoryIsPrivateToTheCheckoutByDefault` and
   `noInstallChecksTheSnapshotsOfThePrivateRepository` (`bodoni-tck`, `-Ptck`).
 - Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build".
-- Status: FIXED (pending commit). Every Maven call takes `-Dmaven.repo.local=<Bodoni folder>/.tck-repository
+- Status: FIXED in `8fc6307a8`. Every Maven call takes `-Dmaven.repo.local=<Bodoni folder>/.tck-repository
   -Dmaven.repo.local.tail=$HOME/.m2/repository`; `TCK_LOCAL_REPOSITORY` moves the first and replaces
   `BODONI_M2_REPOSITORY`; `--no-install` checks the snapshots of that private repository, the one the official run
   resolves first. `.tck-repository/` is git-ignored.

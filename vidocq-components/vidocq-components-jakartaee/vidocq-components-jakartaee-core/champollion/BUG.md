@@ -9,7 +9,7 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 ## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
 
 - **Date** : 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Mansart, Kerckhoffs and Noether)
-- **Statut** : FIXED (pending commit)
+- **Statut** : FIXED in `8fc6307a8`
 - **Module touché** : `run-official-tck-jsonp-2.1.sh`, `run-official-tck-jsonb-3.0.sh`,
   `run-official-conformance-protobuf.sh`, `champollion-tck/pom.xml`
 - **Symptôme** : the JSON-P and JSON-B scripts ran `./mvnw -ntp install -DskipTests` (or `mvn -ntp install

@@ -516,7 +516,7 @@ proxy shares its client's instantiator. Containers other than Vauban go through 
 ## BUG-20261123-47 — `<interface>/mp-rest/scope` set at start is ignored in a frozen application
 
 - **Opened**: 2026-11-23
-- **Status**: FIXED (pending commit) — option 2, chosen by the maintainer on 2026-11-23: an application started
+- **Status**: FIXED in `01ee4b4b7` — option 2, chosen by the maintainer on 2026-11-23: an application started
   with `-D` must see the key. The study of start-time configuration against frozen extensions is Vidocq/vidocq#763.
 
 ### Symptom
@@ -582,7 +582,7 @@ write the client proxy of a `@RegisterRestClient` interface that carries a norma
 ## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
 
 - **Opened**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 
 ### Symptom
 

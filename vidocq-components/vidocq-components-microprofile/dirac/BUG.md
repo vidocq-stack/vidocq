@@ -9,7 +9,7 @@ minimal repro, cause hypothesis, status.
 ## BUG-20261123-57 — The TCK and jlink smoke scripts install the branch into the shared `~/.m2`
 
 - **Opening date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 
 ### Symptom
 

@@ -7,7 +7,7 @@
   release. Same for Peano and Bodoni.
 - Repro: the workflow's `plan` step with `COMPONENTS=IBARRA` gave an empty matrix.
 - Cause: the former repository's `tck-pages.yml` (smoke on each pull request) did not move into the monorepo.
-- Status: FIXED (pending commit). `ci.tck.command` = `./run-official-tck-pages-4.0.sh --no-install all`: the whole
+- Status: FIXED in `8fc6307a8`. `ci.tck.command` = `./run-official-tck-pages-4.0.sh --no-install all`: the whole
   suite; the job has just installed Ibarra and its upstream into the runner's local repository, so the script skips
   its own `clean install` (with tests) and reads them below its private repository. Not run in CI yet.
 
@@ -20,7 +20,7 @@
   `thePreparationAndTheBuildsShareTheRepositoryTheEnvironmentNames` (`ibarra-tck`, `-Ptck`): no `-Dmaven.repo.local`
   in the three calls; the preparation saw no `TCK_LOCAL_REPOSITORY`.
 - Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build".
-- Status: FIXED (pending commit). The script exports `TCK_LOCAL_REPOSITORY` (default `<Ibarra folder>/.tck-repository`,
+- Status: FIXED in `8fc6307a8`. The script exports `TCK_LOCAL_REPOSITORY` (default `<Ibarra folder>/.tck-repository`,
   git-ignored) and every Maven call, `prepare-tck.py`'s too, takes `-Dmaven.repo.local=$TCK_LOCAL_REPOSITORY
   -Dmaven.repo.local.tail=$HOME/.m2/repository`.
 - Verification: the two tests red before, green after (`OfficialTckRunnerTest`, 4 tests). `prepare-tck.py` is

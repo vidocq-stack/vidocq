@@ -24,7 +24,7 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 
 - **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Mansart and Kerckhoffs, fixed
   there; for Validation, see `noether-validation/BUG.md`)
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 - **Symptom**: `noether-jpa-tck/run-official-tck-persistence-3.2.sh` ran
   `(cd ../.. && ./mvnw -q -B -ntp -pl noether-persistence/noether-jpa-core,... -am install -DskipTests)` (and the
   same for `noether-validation-core` with `TCK_VALIDATION=on`), then the TCK, on the default local repository,
@@ -901,7 +901,7 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 ## BUG-20261016-01 — Ordinary find callbacks can reenter a loading collection
 
 - **Date**: 2026-10-16
-- **Status**: FIXED (scoped loader fix delivered; D19 partial-cache follow-up verified in the current working tree, pending commit)
+- **Status**: FIXED (scoped loader fix delivered; D19 partial-cache follow-up) in `90cceb64e`
 - **Module**: `noether-jpa-core/flush/EntityLoader`
 - **Symptom**: an ordinary `find` of an owner whose `PostLoad` reads a lazy collection,
   and whose elements' `PostLoad` reads that same collection, throws
@@ -979,7 +979,7 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 ## BUG-20261016-02 — Removing one duplicate bag occurrence deletes every equal join row
 
 - **Date**: 2026-10-16
-- **Status**: FIXED in the working tree, full verification complete, pending commit
+- **Status**: FIXED in `4555c570c`
 - **Module**: `noether-jpa-core/flush/FlushEngine.writeJoinRows`
 - **Symptom**: a managed many-to-many bag `[hammer, hammer, saw]` loses both hammer
   join rows when one occurrence is removed; a reload returns `[saw]` instead of
@@ -1005,7 +1005,7 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 ## BUG-20261016-03 — Initial nested completion routing acquired a connection for complete graph hits
 
 - **Date**: 2026-10-16
-- **Status**: FIXED in the D20 working tree, full verification complete, pending commit
+- **Status**: FIXED in `4555c570c`
 - **Module**: `noether-jpa-core/session/EntityManagerImpl.completeGraph`
 - **Symptom**: the initial D20 routing preserved zero SELECTs but acquired a new
   JDBC connection on a fully complete managed graph hit outside a transaction.
@@ -1029,7 +1029,7 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 ## BUG-20261016-04 — Composite unique indexes are not referenceable constraints on H2
 
 - **Date**: 2026-10-16
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `c53f5230c`
 - **Module**: `SchemaPlan`, dialect SPI schema AST.
 - **Symptom**: the new composite business-key regression fails during DDL with
   `Constraint "PRIMARY KEY | UNIQUE (REVISION, PART_CODE)" not found`.
@@ -1047,7 +1047,7 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 ## BUG-20261016-05 — Business-key bring-up exposed identity and flush safety gaps
 
 - **Date**: 2026-10-16
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `c53f5230c`
 - **Module**: `EntityOperations`, `EntityManagerImpl`, `JpqlQuery`, `FlushEngine`.
 - **Symptom**: intermediate D22 implementations accepted contradictory detached
   tuples, silently cleared an association when bulk SET named a missing identity,
@@ -1077,7 +1077,7 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 ## BUG-20261016-06 — MapsId generated parents leave phantom zero IDs and allow reassignment
 
 - **Date**: 2026-10-16
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `94cc28a83`
 - **Module**: `MappedEntity`, `MappedUnit`, `FlushEngine`, `EntityLoader`, `SchemaPlan`.
 - **Symptom**: a cascaded IDENTITY parent is inserted correctly, but its dependent's
   primitive ID remains zero, including PostPersist and cache state. Reassigning or

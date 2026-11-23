@@ -1166,7 +1166,7 @@ The 500 is empty, and the log line names the exception's class only, with a mess
   "Red run 5", every CASSINI-066 test against the final commit's tests with the main sources of its parent.
 
 ## BUG-20261123-52 — `SeBootstrap` on the Chappe transport listens on `127.0.0.1` whatever the configured host
-- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Date**: 2026-11-23 — **Status**: FIXED in `02412c212`
 - **Severity**: medium. An application started with `SeBootstrap.Configuration.builder().host("0.0.0.0")`, as the
   getting started page, the usage page and the README show, cannot be reached from another machine or a container.
 - **Symptom**: with the Chappe transport (`ChappeRuntimeDelegate`), `host("0.0.0.0")` (or any other host) has no
@@ -1184,7 +1184,7 @@ The 500 is empty, and the log line names the exception's class only, with a mess
 
 ## BUG-20261123-63 — `SeBootstrap` on the JDK transport ignores the configured host
 
-- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Date**: 2026-11-23 — **Status**: FIXED in `47f1d88f0`
 - **Severity**: medium. Found while fixing BUG-20261123-52.
 - **Symptom**: with the JDK transport (`JdkHttpRuntimeDelegate`), `host("0.0.0.0")` has no effect: the server listens
   on `127.0.0.1` for a free port, and on every address for a port it is given, whatever the host; the instance's
@@ -1201,7 +1201,7 @@ The 500 is empty, and the log line names the exception's class only, with a mess
 ## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
 
 - **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Champollion, Mansart, Kerckhoffs and Noether)
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 - **Symptom**: `run-official-tck-restful-4.0.sh` ran `mvn -q install -DskipTests`, then the TCK, on the default local
   repository, `~/.m2/repository`, which every build and session of the machine shares: a run from a branch replaced
   the published Cassini snapshot there for every other build.

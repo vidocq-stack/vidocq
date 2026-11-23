@@ -7,7 +7,7 @@ Convention: workspace `AGENTS.md`. Status: OPEN → INVESTIGATING → FIXED → 
 
 - **Date**: 2026-11-23 (same bug in the Persistence runner, see `noether-persistence/BUG.md`, and in Foy, Peano,
   Ibarra, Bodoni, Cassini, Champollion, Mansart and Kerckhoffs)
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 - **Symptom**: `noether-validation-tck/run-official-tck-validation-3.1.sh` ran
   `(cd ../.. && ./mvnw -q -B -ntp -pl noether-validation/noether-validation-core -am install -DskipTests)`, then the
   TCK, on the default local repository, `~/.m2/repository`, shared by every build and session of the machine: a run

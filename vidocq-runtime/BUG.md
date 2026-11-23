@@ -8,7 +8,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-45 — `DevHandover` links a `VidocqExtension#id()` that does not exist; a stub README left in a removed folder
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `6aa892197`
 - **Module**: `vidocq-runtime-spi` (`DevHandover`), `vidocq-runtime-h2-module-repackaged`
 - **Symptom**: the Javadoc of `DevHandover` says a key starts with the extension's `{@link VidocqExtension#id() id}`;
   the method is `name()`, and the example key `servlet:sessions:/` does not start with the Servlet extension's name
@@ -26,7 +26,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-44 — `vidocq:run` and `vidocq:dev` forward the settings of the plugin's other goals to the application
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `6aa892197`
 - **Module**: `vidocq-runtime-maven-plugin` (`VidocqRunMojo.forwarded`, used by `vidocq:dev` too)
 - **Symptom**: `mvn vidocq:run -Dvidocq.generate.skip=true` (or `-Dvidocq.test.once`, `-Dvidocq.doctor.fix`,
   `-Dvidocq.vscode.*`, `-Dvidocq.eclipse.*`, `-Dvidocq.buildInfo.skip`, `-Dvidocq.extensions.available`,
@@ -44,7 +44,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-43 — The pool's block of `vidocq.properties` tells the user to run `vidocq run`, a command the CLI does not have
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `6aa892197`
 - **Module**: `vidocq-runtime-tooling` (`extension-catalog.properties`), `vidocq-runtime-mansart-pool-extension`
   (`META-INF/vidocq/extension.properties`)
 - **Symptom**: `vidocq extension add mansart-pool` writes `# mvn test. Everywhere else (vidocq run, the packaged
@@ -56,7 +56,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-42 — `vidocq help test` says it runs `mvn vidocq:test`; it runs `mvn process-classes vidocq:test`
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `6aa892197`
 - **Module**: `vidocq-runtime-cli` (`CliParser`)
 - **Symptom**: the help page of `vidocq test` names `mvn vidocq:test`, while `RunGoals.test` runs `process-classes
   vidocq:test` (BUG-20261030-28); the reference page already said so.
@@ -67,7 +67,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-41 — Log lines of the plugin say "JPMS"
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `6aa892197`
 - **Module**: `vidocq-runtime-maven-plugin`, `vidocq-runtime-codegen-commons`, `vidocq-runtime-migration-extension`
 - **Symptom**: `vidocq:generate` logs `JPMS: parked N generated class(es) of '…'`, `vidocq:run` and `vidocq:dev` log
   `JPMS: N --patch-module option(s) added for generated classes`, `vidocq:package` and `vidocq:jlink` end their
@@ -87,7 +87,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-64 — The dev console's configuration table ignores the active profile without Ravel
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit), on `fix/runtime-config-profiles`.
+- **Status**: FIXED in `70ae8cb0c`, on `fix/runtime-config-profiles`.
 - **Module**: `vidocq-runtime-devconsole-extension` (`ConfigInventory`), `vidocq-runtime-spi` (`VidocqConfig`)
 - **Symptom**: since BUG-20261123-46, `%dev.vidocq.http.port=8081` applies under `vidocq.profile=dev`, yet the
   `keys` table of the `config` panel showed `vidocq.http.port` at `8080`, the plain key's value, and a key set only
@@ -107,7 +107,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261123-46 — Configuration profiles do not work: `%dev.` keys are never applied
 
 - **Date**: 2026-11-23
-- **Status**: FIXED (pending commit), on `fix/runtime-config-profiles`.
+- **Status**: FIXED in `8106b3dcf`, on `fix/runtime-config-profiles`.
 - **Module**: `vidocq-runtime-core` (`VidocqConfigImpl`), `vidocq-runtime-ravel-config-extension`
 - **Symptom**: `usage.adoc#profiles` promised that `%dev.vidocq.http.port=8081` applies under `-Dvidocq.profile=dev`,
   and `dev-console.adoc` told the user to write `%dev.vidocq.devconsole.enabled=true`. Without Ravel, a `%dev.` key
@@ -140,7 +140,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 - **Date**: 2026-11-23 (same bug in the component scripts of Foy, Peano, Ibarra, Bodoni, Cassini, Champollion,
   Mansart, Kerckhoffs and Noether; the Kerckhoffs entry describes both Security runners)
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 - **Module**: `vidocq-runtime-integration-tests/vidocq-runtime-tck-kerckhoffs-security/run-official-tck-security-4.0.sh`
 - **Symptom**: with `VIDOCQ_TCK_INSTALL=1`, the script ran `mvnw -ntp install -DskipTests -Dgpg.skip -Ptck -pl <module>
   -am`, then the class path build and the TCK's own build, on the default local repository, `~/.m2/repository`,

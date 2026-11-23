@@ -476,7 +476,7 @@ No code change. The parameterized test guards the frozen case.
 ## BUG-20261123-59 — The TCK script keeps a pre-monorepo block, and the root POM says pull requests run the TCK
 
 - **Opening date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 
 ### Symptom
 
@@ -507,7 +507,7 @@ repository (the BUG-20261123-57 pattern of Foy, Peano, Ibarra and Bodoni).
 ## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
 
 - **Opening date**: 2026-11-23
-- **Status**: FIXED (pending commit)
+- **Status**: FIXED in `8fc6307a8`
 
 ### Symptom
 
