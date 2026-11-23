@@ -129,6 +129,11 @@ Report: `champollion-tck/target/tck-report-jsonp.txt`.
 ./run-official-tck-jsonb-3.0.sh -Dtest=Foo         # targeted test
 ----
 
+Every Maven call of both scripts (and of `run-official-conformance-protobuf.sh`) reads and writes `.tck-repository/`
+in Champollion's folder (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which they only read: the
+install of a branch never replaces the published Champollion snapshot the other builds of the machine resolve. The
+TCK jars `install-tck.sh` installs in `~/.m2/repository` are still found there.
+
 NOTE: Both scripts run the full suite when called without an argument. They still accept `smoke`, but that mode names a `BasicSmokeTest` class that does not exist in the repository, so it fails with "No tests matching pattern". Both scripts exit non-zero when the TCK fails.
 
 The `--static` flag recompiles the TCK fixtures with `champollion-codegen-apt` to validate runtime ↔ codegen consistency.

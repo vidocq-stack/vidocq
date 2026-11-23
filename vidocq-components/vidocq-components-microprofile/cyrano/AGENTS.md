@@ -71,7 +71,9 @@ sdk env
 - The TCK always goes through the root script, which first installs the reactor then invokes
   `mvn -f cyrano-tck/pom.xml -Ptck-official test`.
 - The TCK script explicitly installs `cyrano-api,cyrano-core,cyrano-cdi-vauban` via
-  `./mvnw -pl ... -am install -DskipTests` before executing `cyrano-tck`.
+  `./mvnw -pl ... -am install -DskipTests` before executing `cyrano-tck`, into `.tck-repository/` of this folder:
+  every Maven call of the script uses that private local repository above a read-only `~/.m2/repository`
+  (BUG-20261123-57; `TCK_LOCAL_REPOSITORY` moves it).
 - The TCK drives its own HTTP backend (WireMock, started at JVM boot by `WireMockProbeListener`):
   `CyranoDeployableContainer` is a `Local` Arquillian container that deploys nothing, and
   `VaubanTckBootstrap` starts one Vauban container per deployment for the `cditests.*` tests.

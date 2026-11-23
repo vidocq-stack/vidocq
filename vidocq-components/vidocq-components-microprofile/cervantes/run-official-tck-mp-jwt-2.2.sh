@@ -15,6 +15,8 @@
 #
 # Prerequisites:
 #   - Java 25 (sdk env in the cervantes/ directory); Maven comes from ./mvnw
+#   - Every Maven call uses .tck-repository/ here as its local repository, above the
+#     shared ~/.m2/repository it only reads; TCK_LOCAL_REPOSITORY moves it
 #   - The TCK artifacts on Maven Central (downloaded automatically):
 #       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2
 #       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2:tests
@@ -25,20 +27,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
 TCK_DIR="$ROOT_DIR/cervantes-tck"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$ROOT_DIR/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 # Use the Maven wrapper (pinned Maven version).
-MVN=("$ROOT_DIR/mvnw" "-ntp")
+MVN=("$ROOT_DIR/mvnw" "-ntp" "${REPOSITORY_ARGS[@]}")
 
 if [ ! -f "$TCK_DIR/pom.xml" ]; then
     echo "ERROR: $TCK_DIR/pom.xml not found. Run from the cervantes/ directory." >&2
     exit 1
-fi
-
-CASSINI_TCK_DIR="$SCRIPT_DIR/../cassini/cassini-tck"
-
-# Install cassini-tck jar into local M2 (contains CassiniTestHarness)
-if [ -d "$CASSINI_TCK_DIR" ]; then
-    echo "==> Installing cassini-tck into local M2..."
-    ( cd "$CASSINI_TCK_DIR/.." && ./mvnw -ntp -q -pl cassini-tck install -DskipTests )
 fi
 
 echo "==> Clean install of the cervantes reactor (tests skipped)..."

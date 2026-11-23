@@ -1197,3 +1197,19 @@ The 500 is empty, and the log line names the exception's class only, with a mess
 - **Fix**: the server binds the requested host for either kind of port, `localhost` being `127.0.0.1` as on the
   Chappe transport, and the instance reports the requested host. `JdkHttpAdapter.serve(int)`, which applications
   call directly, is unchanged.
+## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
+
+- **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Champollion, Mansart, Kerckhoffs and Noether)
+- **Status**: FIXED (pending commit)
+- **Symptom**: `run-official-tck-restful-4.0.sh` ran `mvn -q install -DskipTests`, then the TCK, on the default local
+  repository, `~/.m2/repository`, which every build and session of the machine shares: a run from a branch replaced
+  the published Cassini snapshot there for every other build.
+- **Minimal repro**: `OfficialTckScriptTest` (`cassini-tck`, `-Ptck`): the script, copied next to a `mvn` that logs
+  its arguments, made its two Maven calls without `-Dmaven.repo.local`.
+- **Cause**: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+- **Fix**: both Maven calls take
+  `-Dmaven.repo.local=<Cassini folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
+  (`TCK_LOCAL_REPOSITORY` moves the first): the install and the run go there first and only read `~/.m2`, where the
+  TCK nightly's earlier install of the component stays visible. The signature test reads the API jar from
+  `cassini-tck/target/signature-api/` (copied by `maven-dependency-plugin` in `tck-official`) instead of a fixed
+  `~/.m2` path, which a jar resolved into the private repository would miss. `.tck-repository/` is git-ignored.

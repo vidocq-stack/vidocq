@@ -135,4 +135,8 @@ None to date. The Jakarta Data TCK runs in the `TCK nightly` workflow on H2 in m
 (cd mansart-transactions/mansart-transactions-tck && ./run-official-tck-transactions-2.0.sh smoke)
 ----
 
+Every Maven call of both scripts reads and writes `.tck-repository/` in Mansart's folder (`TCK_LOCAL_REPOSITORY`
+moves it), above `~/.m2/repository`, which they only read: the install of a branch never replaces the published
+Mansart snapshot the other builds of the machine resolve.
+
 Prerequisites: none for Jakarta Data, whose TCK Maven resolves from Maven Central. The full Jakarta Transactions suite needs the official zip from Eclipse and Apache Ant: `mansart-transactions/install-tck.sh` downloads and unpacks it (see `mansart-transactions/TCK.md`).

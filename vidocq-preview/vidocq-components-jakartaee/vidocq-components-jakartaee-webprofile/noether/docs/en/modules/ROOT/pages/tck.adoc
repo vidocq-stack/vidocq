@@ -87,6 +87,17 @@ link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vi
 The Validation 3.1 runner, `noether-validation/noether-validation-tck/run-official-tck-validation-3.1.sh`, checks the
 provisional Validation provider used by Noether's tests; it is not a Noether deliverable.
 
+Every Maven call of both scripts reads and writes `.tck-repository/` in the Noether folder (`TCK_LOCAL_REPOSITORY`
+moves it), above `~/.m2/repository`, which they only read: the install of a branch never replaces the published
+Noether snapshot the other builds of the machine resolve. The TCK artefacts `install-tck.sh` installs in
+`~/.m2/repository` are still found there.
+
+Neither runner runs in CI. A pull request runs no TCK, and Noether's root POM declares no `ci.tck.*` property, so
+the `TCK nightly` workflow of the monorepo skips Noether: the Persistence runner needs Docker or an external
+PostgreSQL, which not every CI runner has, and both runners exit 0 whatever the score (the Persistence script once
+its report is written, the Validation run through `testFailureIgnore`), so a nightly job would stay green on a red
+suite. Run them by hand, and record the result here.
+
 [#gaps]
 == What the TCK does not cover
 

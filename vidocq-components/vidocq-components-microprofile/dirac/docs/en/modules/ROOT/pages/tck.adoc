@@ -23,7 +23,7 @@ The consolidated score lives in link:{repo-vidocq}/src/branch/main/vidocq-compon
 
 == Prerequisites
 
-The artefact `org.eclipse.microprofile.metrics:microprofile-metrics-api-tck:5.1.1` is available on Maven Central. The runner first installs the required Dirac modules in the local M2, then runs the reactor on `dirac-tck` with the `tck` profile.
+The artefact `org.eclipse.microprofile.metrics:microprofile-metrics-api-tck:5.1.1` is available on Maven Central. The runner first installs the required Dirac modules, then runs the reactor on `dirac-tck` with the `tck` profile. Both Maven calls read and write `.tck-repository/` in the Dirac folder (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which they only read: the install of a branch never replaces the published Dirac snapshot the other builds of the machine resolve.
 
 [source,bash]
 ----

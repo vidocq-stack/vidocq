@@ -9,7 +9,14 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > identity stores and the security context of a Jakarta EE application, built in the open
 > and generated at build time, with only the credentials left secret.
 
-**Status: scaffold (K0 in progress) — nothing implemented, no TCK run yet.** Read
+**Status: preview, K0 to K3 merged.** Identity stores and the `IdentityStoreHandler`, the
+built-in BASIC and FORM mechanisms and an application's own mechanism, `@AutoApplySession`,
+`@RememberMe`, `SecurityContext.authenticate`, `*Expression` attributes through Jakarta Expression
+Language, a minimal Jakarta Authentication (Servlet Container Profile) and Jakarta Authorization (a
+`Policy` decides the access to web resources) run on Foy and on the assembled Vidocq runtime. Not
+done yet: the custom FORM mechanism, the database and LDAP identity stores (K4), the OpenID Connect
+mechanism (K5: only the ID-token validation, `core.internal.openid`, exists), the mechanism
+decorator (needs CDI Full in Vauban) and the Open Liberty WAR (K6). Read
 [PLAN.md](PLAN.md) before any change: it is the design of record (spec scope, the
 Authentication/Authorization modules of §3 (dependencies one-way, Kerckhoffs → Foy, never the reverse), Java Modules layout, security rules, TCK plan,
 milestones K0–K7, open questions). Structural decisions marked "to validate" there need the
@@ -17,9 +24,10 @@ maintainer's sign-off first.
 
 ## Ecosystem rules
 
-Kerckhoffs is one repository of the Vidocq ecosystem. These rules are shared by every Vidocq
-repository; the summary below is self-contained, the **full text lives in
-`vidocq-workspace/AGENTS.md`** (<https://codefloe.com/Vidocq/vidocq-workspace>). In case
+Kerckhoffs is a component of the Vidocq monorepo (`Vidocq/vidocq`, folder
+`vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs`).
+The rules below are shared by every Vidocq component; the summary is self-contained, the
+**full text lives in `vidocq-workspace/AGENTS.md`** (<https://codefloe.com/Vidocq/vidocq-workspace>). In case
 of local divergence, the brick-specific sections further down take precedence.
 
 - **Branch + pull request.** `main` is protected: it requires signed commits and green
@@ -67,24 +75,33 @@ session id on login, fail closed, write the negative test before the positive on
 
 ## Essential Commands
 
+From the monorepo root (Foy, Vauban, Peano and Champollion are built in the same reactor with `-am`):
+
 ```bash
-./mvnw -ntp install -DskipTests        # full build
-./mvnw test                            # unit tests
-./run-official-tck-security-4.0.sh     # official TCK, from its sources, on the Kerckhoffs container (baseline: kerckhoffs-tck/BASELINE.md)
+./mvnw -ntp -pl vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs -am verify
 ```
 
-A build outside CI may need a scratch `settings.xml` for `maven.vidocq.dev` (the SNAPSHOT
-repository of the ecosystem).
+From this folder:
+
+```bash
+./run-official-tck-security-4.0.sh     # official TCK smoke set, from its sources, on the Kerckhoffs container (kerckhoffs-tck/BASELINE.md)
+./run-official-tck-security-4.0.sh app-mem app-mem-basic   # selected applications
+```
+
+Never install into `~/.m2` from a branch build: `-Dmaven.repo.local=<scratch>/m2
+-Dmaven.repo.local.tail=$HOME/.m2/repository`.
 
 ## Conventions
 
-- **Maven groupId**: `io.vidocq.kerckhoffs`; version `0.4.0-SNAPSHOT` (workspace dev line,
-  parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`). The version property in consumers is
-  `kerckhoffs.version`.
-- **Java modules**: `io.vidocq.kerckhoffs.core` (artifact `kerckhoffs-core`); planned
-  `…cdi`, `…authentication`, `…authorization`, `…foy` (artifacts `kerckhoffs-<name>`). See PLAN.md §4.
-- **Packages** (to fix in K1): exported API-facing packages under `io.vidocq.kerckhoffs.core.*`;
-  `io.vidocq.kerckhoffs.core.internal` = implementation, not exported.
+- **Maven groupId**: `io.vidocq.kerckhoffs`; the monorepo's single version (root POM), parent
+  `io.vidocq:vidocq-parent`. Foy, Vauban, Peano and Champollion are taken at `${project.version}`.
+- **Java modules** (artifacts `kerckhoffs-<name>`, see PLAN.md §4): `io.vidocq.kerckhoffs.core`,
+  `…cdi` (the build compatible extension `KerckhoffsExtension`, interceptors, start check),
+  `…authentication` (`ServletContainerProfile`), `…authorization` (`ConstraintPolicyFactory`,
+  `ConstraintPolicy`), `…foy` (the adapter to Foy's hooks). `kerckhoffs-it-other-containers` does
+  not exist yet (K6).
+- **Packages**: `io.vidocq.kerckhoffs.core.internal.*` = implementation, exported only qualified
+  (`to` the Kerckhoffs modules that use it); each other module exports its single package.
 - Licence header from `etc/license-header.txt` on every `.java` file.
 - Commits: see "Ecosystem rules" above.
 
@@ -96,10 +113,13 @@ spec section in commit messages / PR descriptions (e.g. "Security 4.0 §3.4.3 in
 ## TCK — Technology Compatibility Kit
 
 Target: the Jakarta Security 4.0 TCK (`jakartaee/security`, tag `4.0.0-RELEASE`, directory
-`tck/`). The runner (`kerckhoffs-tck`, `-Ptck`) holds the Arquillian container on Foy; the baseline is in
-`kerckhoffs-tck/BASELINE.md` (first run: `app-mem` refused, nothing implemented yet). A result is a compatibility measurement:
-**never claim certification** from it, nor from a partial or local run. Declare `ci.tck.command`
-in the root POM only when the smoke set is green. Do not use the 5.0.0-M* tags: they are
+`tck/`). The runner (`kerckhoffs-tck`, `-Ptck`) holds the Arquillian container on Foy; the
+per-application results are in `kerckhoffs-tck/BASELINE.md`, the runner of the assembled runtime is
+`vidocq-runtime-tck-kerckhoffs-security`. A result is a compatibility measurement:
+**never claim certification** from it, nor from a partial or local run. `ci.tck.command` of the
+root POM runs the smoke set (`./run-official-tck-security-4.0.sh`, the green applications): a pull
+request runs no TCK, the `TCK nightly` workflow of the monorepo runs it once a day, on demand on a
+branch (tag `KERCKHOFFS`) and for a release. Do not use the 5.0.0-M* tags: they are
 Jakarta EE 12 work.
 
 ## AI Principles — Collaboration on This Repository
@@ -119,8 +139,8 @@ provides a shared UI bundle. **Never customise the UI per project.** Mirror **Va
 
 - `docs/en/antora.yml` → `name: kerckhoffs`, `prerelease: true` on `main`, `project-version`.
 - Canonical navigation: `index` → `getting-started` → `usage` → `concepts` → `internals` → `tck`
-  → `performance` → `reference` → `migration`. The scaffold has `index` only; add the others with
-  the first content they carry.
+  → `performance` → `reference` → `migration`. The component has `index`, `tck` and `reference`;
+  add the others with the first content they carry.
 - `performance` carries only figures that have an entry in `BENCH.md`; `tck` comes before it.
 - `index.adoc`: `= Kerckhoffs`, `:description:`, `[.lead]`, `== Origin of the name`,
   `== At a glance`, ecosystem links. The logo (`kerckhoffs-logo.png`) is a temporary one generated

@@ -623,3 +623,17 @@ Track reproducible bugs with:
 - **Root cause**: the set was made thread-safe with a monitor when the names moved from a static set to the extension
   instance (grimm#22).
 - **Fix**: a `ReentrantLock` guards a `LinkedHashSet` (discovery order kept), in both phases.
+## BUG-20261123-57 — the TCK script installs the branch into the shared `~/.m2`
+- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Symptom**: `run-official-tck-mp-openapi-4.2.sh` ran `./mvnw -ntp clean install -DskipTests`, then
+  `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test`, on the default local repository, `~/.m2/repository`, which
+  every build and session of the machine shares. A run from a branch replaced the published Grimm snapshot there: the
+  other builds then resolved the branch's jars until the next snapshot download. Same bug in the TCK scripts of Foy,
+  Peano, Ibarra, Bodoni, Cervantes, Cyrano, Dirac, Heisenberg, Humboldt, Knock and Ravel.
+- **Minimal repro**: reading the script (`grimm-tck` is a standalone POM: no test runs it outside the TCK).
+- **Root cause**: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+- **Fix**: every Maven call of the script (the install and each `grimm-tck` run) takes
+  `-Dmaven.repo.local=<Grimm folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
+  (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there first, and only reads `~/.m2`.
+  `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `grimm-tck/README.md`.
+- **Regression test**: none (standalone runner POM); `zsh -n` passes.

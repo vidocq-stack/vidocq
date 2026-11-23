@@ -99,9 +99,13 @@ No dependency on Weld, Undertow or any third-party container; WireMock and its t
 
 The script:
 
-. first installs the reactor locally (`./mvnw install -DskipTests -pl cyrano-api,cyrano-core,cyrano-cdi-vauban -am`);
+. first installs the reactor (`./mvnw install -DskipTests -pl cyrano-api,cyrano-core,cyrano-cdi-vauban -am`);
 . invokes `./mvnw -Ptck,<profile> -pl cyrano-tck test` (`smoke` or `tck-official` profile);
 . produces a `cyrano-tck/target/tck-report.txt` report with the `Tests run: N, Failures: F, Errors: E, Skipped: S` line and the count of passed tests.
+
+Both Maven calls read and write `.tck-repository/` in the Cyrano folder (`TCK_LOCAL_REPOSITORY` moves it), above
+`~/.m2/repository`, which they only read: the install of a branch never replaces the published Cyrano snapshot the
+other builds of the machine resolve.
 
 Direct invocation without the script:
 

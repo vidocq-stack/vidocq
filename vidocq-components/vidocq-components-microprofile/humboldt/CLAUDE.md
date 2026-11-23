@@ -38,14 +38,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-Humboldt is a MicroProfile Telemetry 2.2 implementation (tracing + metrics + logs, OpenTelemetry 1.66) based on the public OpenTelemetry API, **without bundling `opentelemetry-sdk` or third-party exporters** — the entire SDK is rewritten behind the standard OTel API surface.
+Humboldt is a MicroProfile Telemetry 2.2 implementation (tracing + metrics + logs, OpenTelemetry 1.67) based on the public OpenTelemetry API, **without bundling `opentelemetry-sdk` or third-party exporters** — the entire SDK is rewritten behind the standard OTel API surface.
 
 ```
 humboldt-api                       ← public facade + stable SPI (M0)
 humboldt-sdk-common                ← Resource, Clock, Attributes, IdGenerator (M1)
-humboldt-context                   ← Virtual-Threads-friendly ContextStorage (ScopedValue) (M1)
+humboldt-context                   ← Virtual-Threads-friendly ContextStorage (ThreadLocal; ScopedValue postponed to M8) (M1)
 humboldt-sdk-trace                 ← SdkTracerProvider, SpanProcessor, samplers, BatchSpanProcessor VT (M2)
-humboldt-exporter-otlp-http        ← OTLP/HTTP-protobuf exporter via chappe-client (M3)
+humboldt-exporter-otlp-http        ← OTLP/HTTP-JSON exporter via java.net.http.HttpClient (M3; protobuf + chappe-client = M3b)
 humboldt-propagator-w3c            ← W3C TraceContext + Baggage (M3)
 humboldt-sdk-metric                ← Counter/Histogram/UpDownCounter/Gauge, PeriodicReader (M4)
 humboldt-sdk-log                   ← LogRecordProcessor, JUL/SLF4J bridge (M5)
@@ -56,7 +56,7 @@ humboldt-tck                       ← official TCK runner, in-reactor behind th
 ```
 
 **Flow of an instrumented incoming HTTP request**:
-`Chappe Filter → humboldt-rest (Cassini) → humboldt-context (ScopedValue<Context>) → @WithSpan resource method → humboldt-sdk-trace → humboldt-exporter-otlp-http → chappe-client → Collector`
+`Chappe Filter → humboldt-rest (Cassini) → humboldt-context (HumboldtContextStorage) → @WithSpan resource method → humboldt-sdk-trace → humboldt-exporter-otlp-http → java.net.http.HttpClient → Collector`
 
 **Key architectural decisions** (see `PLAN.md`):
 
@@ -69,7 +69,7 @@ humboldt-tck                       ← official TCK runner, in-reactor behind th
 
 1. **No `import io.opentelemetry.sdk.*`** in humboldt — this code is rewritten, not consumed.
 2. **No Netty / grpc-java / OkHttp / Guava dependency** — any exception must go through the `dependency-gatekeeper` agent.
-3. **`@WithSpan` must work on virtual threads without pinning** — use `ScopedValue<Context>` (JEP 506), never direct `ThreadLocal` on the hot path.
+3. **`@WithSpan` must work on virtual threads without pinning** — the context lives in `HumboldtContextStorage` (the one documented `ThreadLocal`, which no longer pins a virtual thread since JDK 21; a move to `ScopedValue`, JEP 506, is postponed to M8); no other `ThreadLocal` (`humboldt-architecture-tests`).
 4. **`humboldt-tck` stays gated behind the `tck` Maven profile** — a plain `mvn install` must never download or run anything TCK-related.
 5. **MicroProfile Telemetry 2.2 conformance**: any patch to the core must preserve the TCK score once achieved.
 
@@ -86,7 +86,7 @@ humboldt-tck                       ← official TCK runner, in-reactor behind th
 The detailed plan is in `PLAN.md` (§13 milestones M0..M9). In summary:
 
 - **M0** — Java Modules skeleton + workflows + documentation (in progress)
-- **M1** — `humboldt-sdk-common` + `humboldt-context` (Resource, Clock, ScopedValueContextStorage)
+- **M1** — `humboldt-sdk-common` + `humboldt-context` (Resource, Clock, `HumboldtContextStorage`)
 - **M2** — `humboldt-sdk-trace` (first complete signal, partial tracing TCK)
 - **M3** — `humboldt-propagator-w3c` + `humboldt-exporter-otlp-http` (tracing TCK PASS)
 - **M4** — `humboldt-sdk-metric` (metrics TCK PASS)
@@ -147,7 +147,7 @@ prose, identifiers, or documentation.
 
 ## Architecture rules
 
-- The architecture rules (module dependencies, layers, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal`) are ArchUnit tests in `humboldt-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path is documented in `internals.adoc` and added to the rule's fallback list with its reason, never silently.
+- The architecture rules (module dependencies, layers, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal` except the documented one of `HumboldtContextStorage`) are ArchUnit tests in `humboldt-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path is documented in `internals.adoc` and added to the rule's fallback list with its reason, never silently.
 
 ## Build compatible extensions work at build only
 

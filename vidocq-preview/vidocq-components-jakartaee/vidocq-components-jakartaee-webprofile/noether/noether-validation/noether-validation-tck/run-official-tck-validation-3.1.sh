@@ -22,11 +22,18 @@ REPORT="target/tck-report-validation.txt"
 
 mkdir -p target
 
-echo ">>> Build and install noether-validation-core (skipTests)"
-(cd ../.. && ./mvnw -q -B -ntp -pl noether-validation/noether-validation-core -am install -DskipTests)
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it. The default sits
+# in the Noether folder, where the provider is installed from.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$(cd ../.. && pwd)/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
+echo ">>> Build and install noether-validation-core (skipTests) into $LOCAL_REPOSITORY"
+(cd ../.. && ./mvnw -q -B -ntp "${REPOSITORY_ARGS[@]}" -pl noether-validation/noether-validation-core -am install -DskipTests)
 
 echo ">>> Run the Jakarta Validation ${TCK_VER} TCK"
-"$MVNW" -B -ntp -Dtck.version="$TCK_VER" test "$@" 2>&1 | tee "$LOG" || true
+"$MVNW" -B -ntp "${REPOSITORY_ARGS[@]}" -Dtck.version="$TCK_VER" test "$@" 2>&1 | tee "$LOG" || true
 
 echo ""
 echo ">>> Report ($REPORT)"

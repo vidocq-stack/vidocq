@@ -25,11 +25,17 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$SCRIPT_DIR/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 # Use the Maven wrapper (pinned Maven version) when present, otherwise the system mvn.
 if [[ -x "$SCRIPT_DIR/mvnw" ]]; then
-    MVN_CMD=("$SCRIPT_DIR/mvnw" "-ntp")
+    MVN_CMD=("$SCRIPT_DIR/mvnw" "-ntp" "${REPOSITORY_ARGS[@]}")
 else
-    MVN_CMD=("mvn")
+    MVN_CMD=("mvn" "${REPOSITORY_ARGS[@]}")
 fi
 
 # Pick out the "all" / "--all" argument

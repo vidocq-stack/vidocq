@@ -53,7 +53,7 @@ unzip /tmp/jakarta-servlet-tck-6.1.0.zip -d /tmp/servlet-tck
 
 ### Running the TCK
 
-From the root of the **foy** repository:
+From the Foy folder of the monorepo:
 
 ```bash
 ./run-official-tck-servlet6.1.sh                     # smoke test (DoDestroyedTest)
@@ -73,7 +73,7 @@ Options (all combinable except where noted):
 | `--all` | Runs the whole suite. |
 | `--family <api\|spec\|pluggability\|compat>` | Runs one TCK family (`-Dtest='servlet/tck/<family>/**/*'`). |
 | `--failing [tally-file]` | Runs only the classes whose bad count (3rd column) is above 0 in the tally (default `foy-tck/tck-baseline.txt`, format `<fqcn> <run> <bad>`, produced by `foy-tck/tck-tally.sh`). Combined with `--family`, narrows to that family. |
-| `--no-install` | Skips `./mvnw -ntp install -DskipTests`; use it when the code has not changed since the last build. |
+| `--no-install` | Skips `./mvnw -ntp install -DskipTests`; use it when the code has not changed since the last install of the script. |
 | `--dry-run` | Prints the Maven commands without running them. |
 | `-Dtest=...` | Forwarded to surefire; cannot be combined with `--family` / `--failing`. |
 | `-h`, `--help` | Prints the usage. |
@@ -81,22 +81,22 @@ Options (all combinable except where noted):
 `--family` and `--failing` also pass `-Dsurefire.failIfNoSpecifiedTests=false`.
 Unknown options print the usage and exit with status 2.
 
-Unless `--no-install` is given, the script installs the Foy reactor into the
-local repository (`./mvnw -ntp install -DskipTests`), then runs
+Unless `--no-install` is given, the script installs the Foy reactor
+(`./mvnw -ntp install -DskipTests`), then runs
 `./mvnw -ntp -Ptck,tck-official -pl foy-tck test` with the selection.
+
+Both calls read and write a local repository private to the checkout,
+`.tck-repository/` in the Foy folder (`TCK_LOCAL_REPOSITORY` moves it), above
+`~/.m2/repository`, which they only read (`-Dmaven.repo.local=…
+-Dmaven.repo.local.tail=$HOME/.m2/repository`): the install of a branch never
+replaces the published Foy snapshot the other builds of the machine resolve
+(BUG-20261123-57). The TCK artifacts installed into `~/.m2` above are still found.
 
 ### CI Integration
 
-In a pipeline (GitHub Actions, GitLab CI, etc.):
-
-```yaml
-- name: Build reactor
-  run: ./mvnw -ntp install -DskipTests
-
-- name: Run Jakarta Servlet 6.1 TCK
-  run: ./run-official-tck-servlet6.1.sh --all
-  # Prerequisite: TCK artifacts cached in ~/.m2 (see section above)
-```
+A pull request runs no TCK, and the `TCK nightly` workflow of the monorepo does
+not run this one: Foy's root POM declares no `ci.tck.*` property, because the
+Servlet 6.1 TCK artifacts are not public and a CI runner does not have them.
 
 ## Programmatic Harness
 

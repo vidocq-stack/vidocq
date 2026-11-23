@@ -26,6 +26,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TCK_DIR="${ROOT_DIR}/cyrano-tck"
 REPORT_FILE="${TCK_DIR}/target/tck-report.txt"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-${ROOT_DIR}/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=${LOCAL_REPOSITORY}" "-Dmaven.repo.local.tail=${HOME}/.m2/repository")
+
 mode="${1:-smoke}"
 shift || true
 
@@ -50,7 +56,7 @@ case "${mode}" in
 esac
 
 echo "==> Étape 1/2 : install local des artefacts Cyrano (./mvnw install -DskipTests)"
-( cd "${ROOT_DIR}" && ./mvnw -ntp -pl cyrano-api,cyrano-core,cyrano-cdi-vauban -am install -DskipTests )
+( cd "${ROOT_DIR}" && ./mvnw -ntp "${REPOSITORY_ARGS[@]}" -pl cyrano-api,cyrano-core,cyrano-cdi-vauban -am install -DskipTests )
 
 echo "==> Étape 2/2 : exécution Maven sur cyrano-tck in-reactor (profils=tck,${profile})"
 mkdir -p "${TCK_DIR}/target"
@@ -58,7 +64,7 @@ mkdir -p "${TCK_DIR}/target"
 MVN="${ROOT_DIR}/mvnw"
 
 set +e
-( cd "${ROOT_DIR}" && "${MVN}" -ntp -P"tck,${profile}" -pl cyrano-tck test "$@" ) \
+( cd "${ROOT_DIR}" && "${MVN}" -ntp "${REPOSITORY_ARGS[@]}" -P"tck,${profile}" -pl cyrano-tck test "$@" ) \
     | tee "${REPORT_FILE}.raw"
 status=$?
 set -e

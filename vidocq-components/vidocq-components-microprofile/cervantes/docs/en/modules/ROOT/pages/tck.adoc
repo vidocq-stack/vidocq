@@ -57,6 +57,8 @@ The `run-official-tck-mp-jwt-2.2.sh` script in Cervantes' folder of the monorepo
 
 The runner uses Arquillian. The Surefire report lands in `cervantes-tck/target/surefire-reports/`.
 
+Every Maven call of the script reads and writes `.tck-repository/` in the Cervantes folder (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Cervantes snapshot the other builds of the machine resolve.
+
 == Runner architecture
 
 `cervantes-tck` is **in-reactor behind the `tck` Maven profile** of `cervantes-parent` (TCK harmonisation, `vidocq-runtime-tck-*` pattern): a plain `mvn install` never builds nor downloads it. Direct invocation: `./mvnw -P"tck,smoke" -pl cervantes-tck test` (smoke) or `./mvnw -P"tck,tck-official" -pl cervantes-tck test` (full suite). Template originally mirrored from `heisenberg-tck`.

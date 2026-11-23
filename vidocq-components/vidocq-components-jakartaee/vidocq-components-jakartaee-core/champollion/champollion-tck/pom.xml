@@ -52,6 +52,12 @@
         -->
         <jakarta.json.tck.version>2.1.1</jakarta.json.tck.version>
         <jakarta.json.bind.tck.version>3.0.0</jakarta.json.bind.tck.version>
+
+        <!--
+            The module's own tests compile only in the script-tests profile, which brings JUnit
+            Jupiter: the official runs compile and scan the TCK alone (the JSON-B TCK runs on TestNG).
+        -->
+        <script.tests.exclude>**/OfficialTckScriptTest.java</script.tests.exclude>
     </properties>
 
     <dependencies>
@@ -85,6 +91,30 @@
     </dependencies>
 
     <profiles>
+        <!--
+            The module's own tests (OfficialTckScriptTest: the run scripts, with a fake Maven), run by a
+            plain `-Ptck` build. Active by default, so it drops out as soon as jsonp-tck,
+            jsonp-tck-pluggability or jsonb-tck is named: JUnit Jupiter stays off the TestNG run of the
+            JSON-B TCK, and the official runs scan the TCK jars only.
+        -->
+        <profile>
+            <id>script-tests</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <!-- A pattern no file matches: OfficialTckScriptTest compiles here. -->
+                <script.tests.exclude>none</script.tests.exclude>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>junit-jupiter</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+
         <!--
             Profil JSON-P 2.1 TCK. Activé par run-official-tck-jsonp-2.1.sh.
             Le TCK officiel doit être installé en M2 local (cf. TCK.md).
@@ -136,8 +166,8 @@
                             <reportsDirectory>${project.build.directory}/tck-reports/jsonp</reportsDirectory>
                             <systemPropertyVariables>
                                 <jimage.dir>${project.build.directory}/jimage</jimage.dir>
-                                <signature.sigTestClasspath>${user.home}/.m2/repository/jakarta/json/jakarta.json-api/${jakarta.json.version}/jakarta.json-api-${jakarta.json.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
-                                <sigTestClasspath>${user.home}/.m2/repository/jakarta/json/jakarta.json-api/${jakarta.json.version}/jakarta.json-api-${jakarta.json.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
+                                <signature.sigTestClasspath>${project.build.directory}/signature-api/jakarta.json-api.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
+                                <sigTestClasspath>${project.build.directory}/signature-api/jakarta.json-api.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
                             </systemPropertyVariables>
                             <!--
                                 Le TCK contient JsonProviderTest.systemProperty() qui
@@ -258,8 +288,8 @@
                             <reportsDirectory>${project.build.directory}/tck-reports/jsonb</reportsDirectory>
                             <systemPropertyVariables>
                                 <jimage.dir>${project.build.directory}/jimage</jimage.dir>
-                                <signature.sigTestClasspath>${user.home}/.m2/repository/jakarta/json/bind/jakarta.json.bind-api/${jakarta.json.bind.version}/jakarta.json.bind-api-${jakarta.json.bind.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
-                                <sigTestClasspath>${user.home}/.m2/repository/jakarta/json/bind/jakarta.json.bind-api/${jakarta.json.bind.version}/jakarta.json.bind-api-${jakarta.json.bind.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
+                                <signature.sigTestClasspath>${project.build.directory}/signature-api/jakarta.json.bind-api.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
+                                <sigTestClasspath>${project.build.directory}/signature-api/jakarta.json.bind-api.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
                             </systemPropertyVariables>
                         </configuration>
                     </plugin>
@@ -275,7 +305,42 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>25</release>
+                    <testExcludes>
+                        <testExclude>${script.tests.exclude}</testExclude>
+                    </testExcludes>
                 </configuration>
+            </plugin>
+            <!-- The signature tests read the API jars from target/: the run scripts use a private
+                 local repository above ~/.m2/repository (BUG-20261123-57), so the jar Maven
+                 resolved may sit in either, never at a path known in advance. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-spec-apis-for-signature-tests</id>
+                        <phase>process-test-resources</phase>
+                        <goals><goal>copy</goal></goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>jakarta.json</groupId>
+                                    <artifactId>jakarta.json-api</artifactId>
+                                    <version>${jakarta.json.version}</version>
+                                    <destFileName>jakarta.json-api.jar</destFileName>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>jakarta.json.bind</groupId>
+                                    <artifactId>jakarta.json.bind-api</artifactId>
+                                    <version>${jakarta.json.bind.version}</version>
+                                    <destFileName>jakarta.json.bind-api.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}/signature-api</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

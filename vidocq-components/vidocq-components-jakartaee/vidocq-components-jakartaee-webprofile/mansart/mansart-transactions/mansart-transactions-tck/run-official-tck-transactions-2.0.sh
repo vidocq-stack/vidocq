@@ -23,6 +23,14 @@ TCK_DIR="../.tck-cache/transactions-tck"
 LOG="target/tck-transactions-output.log"
 REPORT="target/tck-report-transactions.txt"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it. The default sits
+# in the Mansart folder, shared with the Data runner. The TCK jars install-tck.sh installs stay in
+# ~/.m2/repository (TCK_JAR above), found through the tail.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$(cd ../.. && pwd)/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 # Activate Java 25 + Maven 4 toolchain pinned via ../.sdkmanrc
 if [ -z "${SDKMAN_DIR:-}" ] && [ -d "$HOME/.sdkman" ]; then
     SDKMAN_DIR="$HOME/.sdkman"
@@ -47,10 +55,10 @@ ensure_tck_extracted() {
 }
 
 run_smoke() {
-    echo ">>> Build mansart-transactions (skipTests)"
-    (cd .. && mvn -q -B -ntp install -DskipTests)
+    echo ">>> Build mansart-transactions (skipTests) into $LOCAL_REPOSITORY"
+    (cd .. && mvn -q -B -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests)
     echo ">>> Run smoke tests JUnit"
-    mvn -B -ntp test -Dtest='MansartTckSmoke*' 2>&1 | tee "$LOG" || true
+    mvn -B -ntp "${REPOSITORY_ARGS[@]}" test -Dtest='MansartTckSmoke*' 2>&1 | tee "$LOG" || true
 }
 
 run_tsharness() {
@@ -66,11 +74,11 @@ EOF
         return 78
     fi
 
-    echo ">>> Build mansart-transactions reactor (skipTests, install dans M2)"
-    (cd .. && mvn -q -B -ntp install -DskipTests)
+    echo ">>> Build mansart-transactions reactor (skipTests, install into $LOCAL_REPOSITORY)"
+    (cd .. && mvn -q -B -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests)
 
     echo ">>> Invoke profile full-tck (maven-antrun → tsharness build)"
-    mvn -B -ntp -Pfull-tck antrun:run@tsharness-build 2>&1 | tee "$LOG"
+    mvn -B -ntp "${REPOSITORY_ARGS[@]}" -Pfull-tck antrun:run@tsharness-build 2>&1 | tee "$LOG"
 }
 
 case "$MODE" in
@@ -81,8 +89,8 @@ case "$MODE" in
     -*)
         # Ciblé Surefire — laisse passer la flag à mvn (debug d'un smoke spécifique).
         echo ">>> Build mansart-transactions (skipTests)"
-        (cd .. && mvn -q -B -ntp install -DskipTests)
-        mvn -B -ntp test "$MODE" "$@" 2>&1 | tee "$LOG" || true
+        (cd .. && mvn -q -B -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests)
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" test "$MODE" "$@" 2>&1 | tee "$LOG" || true
         ;;
     *)
         echo "Usage: $0 [smoke|tsharness|all|-Dtest=…]"; exit 64 ;;

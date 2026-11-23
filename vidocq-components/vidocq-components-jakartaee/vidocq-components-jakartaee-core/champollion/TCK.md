@@ -97,11 +97,11 @@ The scripts check for the TCK JAR in the local M2 and **exit with code 78**
 (`EX_CONFIG`) if it is missing, so that a caller can tell a missing TCK (a
 skip) from a failing one.
 
-Pull requests are gated on both suites: the root `pom.xml` declares them in
-`ci.tck.command`, and the producer job of `pr.yml` runs that command (step "TCK
-declared by this repository"). `install-tck.sh` runs first, so a CI runner needs
-no pre-installed TCK. `main` itself runs no TCK: it builds, tests and deploys in
-one pass.
+A pull request runs no TCK. Champollion's root `pom.xml` declares both suites in
+`ci.tck.command`, and the `TCK nightly` workflow of the monorepo
+(`.forgejo/workflows/tck-nightly.yml`) runs that command from this folder once a
+day, on demand on a branch (tag `CHAMPOLLION`) and for a release. `install-tck.sh`
+runs first, so a CI runner needs no pre-installed TCK.
 
 A run takes about two minutes (JSON-P 179 + 18 pluggability tests, JSON-B 295 with
 5 skipped, 0 failures; measured locally on 2026-10-26, same counts on 2026-11-17).

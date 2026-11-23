@@ -53,7 +53,9 @@ Eclipse TCK against the Humboldt implementation.
 
 The script performs:
 1. `./mvnw clean install -Dmaven.test.skip=true` on the Humboldt reactor
-   (installs the SNAPSHOT artifacts that the runner consumes)
+   (installs the SNAPSHOT artifacts that the runner consumes into `.tck-repository/` of the Humboldt
+   folder: every Maven call of the script uses that private local repository above a read-only
+   `~/.m2/repository`; BUG-20261123-57, `TCK_LOCAL_REPOSITORY` moves it)
 2. `./mvnw -Ptck,<profile> -pl humboldt-tck clean test` (`tck-official` with
    `all`, `tck-smoke` otherwise)
 

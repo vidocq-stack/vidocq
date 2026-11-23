@@ -19,6 +19,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$SCRIPT_DIR/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 # Filtrage de l'argument "all"
 MVN_ARGS=()
 USE_ALL=false
@@ -54,9 +60,10 @@ if [[ ! -f "$EFTL_JAR" ]]; then
 fi
 
 echo "======================================="
-echo " Étape 1 — Install reactor en M2 local "
+echo " Step 1 — Install the reactor         "
 echo "======================================="
-mvn -q install -DskipTests
+echo "into $LOCAL_REPOSITORY"
+mvn -q "${REPOSITORY_ARGS[@]}" install -DskipTests
 
 echo ""
 echo "======================================="
@@ -66,8 +73,8 @@ echo "======================================="
 # cassini-tck est in-reactor, activé par le profil Maven `tck`
 # (harmonisation TCK, même pattern que les runners vidocq-runtime-tck-*).
 if $USE_ALL; then
-    mvn -P"tck,tck-official" -pl cassini-tck verify "${MVN_ARGS[@]}"
+    mvn "${REPOSITORY_ARGS[@]}" -P"tck,tck-official" -pl cassini-tck verify "${MVN_ARGS[@]}"
 else
     # Smoke : juste le test harness maison
-    mvn -P"tck,tck-official" -pl cassini-tck test -Dtest=CassiniHarnessSmokeTest "${MVN_ARGS[@]}"
+    mvn "${REPOSITORY_ARGS[@]}" -P"tck,tck-official" -pl cassini-tck test -Dtest=CassiniHarnessSmokeTest "${MVN_ARGS[@]}"
 fi

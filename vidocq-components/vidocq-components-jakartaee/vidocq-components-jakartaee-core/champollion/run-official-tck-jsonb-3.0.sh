@@ -38,8 +38,14 @@ if [ ! -f "$TCK_JAR" ]; then
     exit 78  # EX_CONFIG (skip)
 fi
 
-echo ">>> 1. Build Champollion reactor (skip tests)"
-./mvnw -ntp install -DskipTests >/dev/null 2>&1 || mvn -ntp install -DskipTests >/dev/null
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$PWD/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
+echo ">>> 1. Build Champollion reactor (skip tests) into $LOCAL_REPOSITORY"
+./mvnw -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests >/dev/null 2>&1 || mvn -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests >/dev/null
 
 # Static mode: recompile the TCK fixtures with champollion-codegen-apt
 if [ "$STATIC" = "--static" ]; then
@@ -62,13 +68,13 @@ tck_rc=0
 
 case "$MODE" in
     smoke)
-        mvn -B -ntp -P"tck,jsonb-tck" -pl champollion-tck test -Dtest=BasicSmokeTest 2>&1 | tee "$LOG" || tck_rc=1
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" -P"tck,jsonb-tck" -pl champollion-tck test -Dtest=BasicSmokeTest 2>&1 | tee "$LOG" || tck_rc=1
         ;;
     all)
-        mvn -B -ntp -P"tck,jsonb-tck" -pl champollion-tck test 2>&1 | tee "$LOG" || tck_rc=1
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" -P"tck,jsonb-tck" -pl champollion-tck test 2>&1 | tee "$LOG" || tck_rc=1
         ;;
     *)
-        mvn -B -ntp -P"tck,jsonb-tck" -pl champollion-tck test "$MODE" "$@" 2>&1 | tee "$LOG" || tck_rc=1
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" -P"tck,jsonb-tck" -pl champollion-tck test "$MODE" "$@" 2>&1 | tee "$LOG" || tck_rc=1
         ;;
 esac
 

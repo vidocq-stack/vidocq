@@ -4,13 +4,24 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")" && pwd)"
 cd "$repo_root"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+local_repository="${TCK_LOCAL_REPOSITORY:-$repo_root/.tck-repository}"
+repository_args=("-Dmaven.repo.local=$local_repository" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 echo "==> M9.2 smoke: build minimal modules"
-./mvnw -ntp -pl dirac-api,dirac-core -am clean install -DskipTests >/dev/null
+./mvnw -ntp "${repository_args[@]}" -pl dirac-api,dirac-core -am clean install -DskipTests >/dev/null
 
 # Globs — never hardcode the reactor version (issue #3 follow-up).
 api_jar="$(ls "$repo_root"/dirac-api/target/dirac-api-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
 core_jar="$(ls "$repo_root"/dirac-core/target/dirac-core-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
-mp_api_src="$HOME/.m2/repository/org/eclipse/microprofile/metrics/microprofile-metrics-api/5.1.1/microprofile-metrics-api-5.1.1.jar"
+# The released API jar: in the private repository when Maven downloaded it, else in the shared tail.
+mp_api_path="org/eclipse/microprofile/metrics/microprofile-metrics-api/5.1.1/microprofile-metrics-api-5.1.1.jar"
+mp_api_src="$local_repository/$mp_api_path"
+if [[ ! -f "$mp_api_src" ]]; then
+  mp_api_src="$HOME/.m2/repository/$mp_api_path"
+fi
 
 if [[ ! -f "$api_jar" || ! -f "$core_jar" || ! -f "$mp_api_src" ]]; then
   echo "[ERROR] Missing required jars for M9.2 smoke check."

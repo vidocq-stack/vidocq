@@ -77,8 +77,9 @@
         <cassini.version>${project.version}</cassini.version>
 
         <!--
-            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
-            the shared pr-validate workflow, which skips the step when this property is absent.
+            What the TCK workflow of the monorepo (.forgejo/workflows/tck-nightly.yml) runs for this
+            component, from its folder: once a day, on demand and for a release. A pull request runs
+            no TCK.
 
             The certification profile is named explicitly because a plain `-Ptck` would not run it:
             the root `tck` profile only adds knock-tck to the reactor, and inside knock-tck the

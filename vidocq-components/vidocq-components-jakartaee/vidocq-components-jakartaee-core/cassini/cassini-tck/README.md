@@ -59,7 +59,9 @@ From the root of the Vidocq project:
 ```
 
 The script:
-1. Installs the Vidocq modules into the local M2 (`mvn install` of the reactor).
+1. Installs the Vidocq modules (`mvn install` of the reactor) into `.tck-repository/` in the Cassini folder
+   (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which every Maven call of the script only reads:
+   the install of a branch never replaces the published snapshot the other builds of the machine resolve.
 2. Moves into `vidocq-core-extensions/vidocq-rest-cassini-tck-runner`.
 3. Runs `mvn -Ptck-official verify` (or `-Dtest=` if targeted).
 

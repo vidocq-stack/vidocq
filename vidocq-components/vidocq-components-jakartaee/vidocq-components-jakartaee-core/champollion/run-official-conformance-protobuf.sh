@@ -26,6 +26,12 @@ REPORT="$TCK_DIR/target/conformance-report.txt"
 
 MODE="${1:-smoke}"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$SCRIPT_DIR/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 # Charge sdkman si dispo pour avoir Java 25 + Maven 4 (sinon shell non-interactif
 # n'a pas la commande `sdk`).
 if [ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
@@ -41,14 +47,14 @@ if ! command -v java >/dev/null || ! command -v mvn >/dev/null; then
     exit 1
 fi
 
-echo ">>> Install local reactor (sans tests)..."
-(cd "$SCRIPT_DIR" && mvn -ntp install -DskipTests -q)
+echo ">>> Install the reactor (without tests) into $LOCAL_REPOSITORY..."
+(cd "$SCRIPT_DIR" && mvn -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests -q)
 
 echo ">>> Build champollion-protobuf-tck (standalone), with its unit tests..."
 # The wrapper's own tests run here: the module is outside the reactor, so no other build runs
 # them. They stayed red, unseen, from 2026-05-22 to 2026-11-17 (BUG-20261117-04). A wrapper
 # whose tests fail gives a conformance report nobody can read, so the script stops there.
-(cd "$TCK_DIR" && mvn -ntp package -q)
+(cd "$TCK_DIR" && mvn -ntp "${REPOSITORY_ARGS[@]}" package -q)
 
 RUNNER="${CONFORMANCE_TEST_RUNNER:-}"
 if [ -z "$RUNNER" ] || [ ! -x "$RUNNER" ]; then
@@ -74,7 +80,7 @@ EOF
     {
         echo "$(date) — Conformance Runner dégradé (sans test_runner Google)"
         cd "$TCK_DIR"
-        mvn -ntp exec:java -Dexec.mainClass=io.vidocq.champollion.protobuf.conformance.ConformanceRunner -q </dev/null 2>&1 || true
+        mvn -ntp "${REPOSITORY_ARGS[@]}" exec:java -Dexec.mainClass=io.vidocq.champollion.protobuf.conformance.ConformanceRunner -q </dev/null 2>&1 || true
     } | tee "$REPORT"
     exit 0
 fi
@@ -107,7 +113,7 @@ fi
 # Le `java -jar JAR` standard ne charge pas les deps externes (NoClassDefFoundError
 # sur Message, jakarta.json-api, etc.) — il faut `java -cp` explicite.
 CP_FILE="$TCK_DIR/target/conformance-classpath.txt"
-(cd "$TCK_DIR" && mvn -ntp dependency:build-classpath \
+(cd "$TCK_DIR" && mvn -ntp "${REPOSITORY_ARGS[@]}" dependency:build-classpath \
     "-Dmdep.outputFile=$CP_FILE" \
     -DincludeScope=runtime -q)
 FULL_CP="$JAR:$(cat "$CP_FILE")"

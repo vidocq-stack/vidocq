@@ -50,6 +50,8 @@ Run a single test class:
 ./run-official-tck-mp-config-3.1.sh -Dtest=ConfigProviderTest
 ----
 
+Every Maven call of the script reads and writes `.tck-repository/` in the Ravel folder (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Ravel snapshot the other builds of the machine resolve.
+
 == Expected results
 
 The current score is **378 PASS / 0 FAIL / 0 SKIP** out of 378 tests — 100 % conformance, the count WildFly runs on the same TCK. Until 2026-08-27 the runner's include patterns (`*Test`, `*Tests`, `*IT`) dropped `EmptyValuesTestProgrammaticLookup` and `TestCustomConfigProfile`, 29 tests, and the score read 349/349.

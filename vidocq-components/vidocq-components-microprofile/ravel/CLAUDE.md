@@ -163,8 +163,9 @@ The `run-official-tck-mp-config-3.1.sh` script:
 
 - supports `smoke` (default: `RavelTckSmokeTest`, the `smoke` profile of `ravel-tck`, outside
   Arquillian), `all` (the official suite, `tck-official` profile), and targeted `-Dtest=TestName`;
-- installs `ravel-api`, `ravel-core` and `ravel-cdi-vauban` locally (`mvn install -DskipTests`)
-  before invocation;
+- installs `ravel-api`, `ravel-core` and `ravel-cdi-vauban` (`mvn install -DskipTests`) into `.tck-repository/`
+  of this folder, a local repository private to the checkout above a read-only `~/.m2/repository`
+  (BUG-20261123-57; `TCK_LOCAL_REPOSITORY` moves it), before invocation;
 - produces a `ravel-tck/target/tck-report.txt` report with the Maven test counts and PASS/FAIL,
   and exits with Maven's status.
 

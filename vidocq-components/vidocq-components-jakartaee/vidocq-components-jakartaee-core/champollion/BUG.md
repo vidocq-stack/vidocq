@@ -6,6 +6,27 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 
 ---
 
+## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
+
+- **Date** : 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Mansart, Kerckhoffs and Noether)
+- **Statut** : FIXED (pending commit)
+- **Module touché** : `run-official-tck-jsonp-2.1.sh`, `run-official-tck-jsonb-3.0.sh`,
+  `run-official-conformance-protobuf.sh`, `champollion-tck/pom.xml`
+- **Symptôme** : the JSON-P and JSON-B scripts ran `./mvnw -ntp install -DskipTests` (or `mvn -ntp install
+  -DskipTests`), then the TCK, and the Protobuf conformance script `mvn -ntp install -DskipTests -q`, on the default
+  local repository, `~/.m2/repository`, which every build and session of the machine shares: a run from a branch
+  replaced the published Champollion snapshot there for every other build.
+- **Reproduction minimale** : `OfficialTckScriptTest` (`champollion-tck`, `-Ptck`): each script, copied next to a
+  `mvnw` and a `mvn` that log their arguments, made its Maven calls without `-Dmaven.repo.local`.
+- **Cause** : the scripts predate the workspace rule "never install into `~/.m2` from a branch build".
+- **Correction** : every Maven call of the three scripts takes
+  `-Dmaven.repo.local=<Champollion folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
+  (`TCK_LOCAL_REPOSITORY` moves the first); `install-tck.sh` still installs the released TCK jars into `~/.m2`,
+  found through the tail. The signature tests read the API jars from `target/signature-api/` (copied by
+  `maven-dependency-plugin`) instead of a fixed `~/.m2` path. `champollion-tck` gets a `script-tests` profile, active
+  by default, that brings JUnit Jupiter for its own test; the official profiles do not compile it. `.tck-repository/`
+  is git-ignored.
+
 ## BUG-20261121-02 — Codegen: an incremental build reorders the bindings files, and `vidocq dev` restarts the application at a save that changed nothing
 
 - **Date** : 2026-11-21

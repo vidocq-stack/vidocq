@@ -153,7 +153,9 @@ MicroProfile Health TCK — run from the `knock-tck` module (in-reactor, gated b
 The `run-official-tck-mp-health-4.0.sh` script:
 
 - supports `smoke` (default), `all`, and targeted `-Dtest=TestName`;
-- installs the reactor locally (`mvn install -DskipTests`) before invocation;
+- installs the reactor (`mvn install -DskipTests`) before invocation, into `.tck-repository/` of this folder:
+  every Maven call of the script uses that private local repository above a read-only `~/.m2/repository`
+  (BUG-20261123-57; `TCK_LOCAL_REPOSITORY` moves it);
 - produces a `target/tck-report.txt` report with the PASS/FAIL/SKIP score.
 
 **Release discipline:**

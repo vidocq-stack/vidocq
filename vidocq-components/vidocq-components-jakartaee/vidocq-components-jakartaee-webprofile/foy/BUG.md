@@ -22,6 +22,26 @@
   calls with method handles, as compiled code does.
   Verification: the reactor of `foy-api`, `cassini-chappe` and `chappe-cli` with every dependent (`-am -amd`),
   green.
+## BUG-20261123-57 — The Servlet TCK script installs the branch into the shared `~/.m2`
+
+- Date: 2026-11-23. The same bug, fixed the same way and recorded in each component's BUG.md, was in the run
+  scripts of Peano, Ibarra, Bodoni, Cassini, Champollion (JSON-P, JSON-B, protobuf conformance), Mansart (Data,
+  Transactions), Kerckhoffs, Noether (Persistence, Validation), Cervantes, Cyrano, Dirac (and its two jlink smoke
+  scripts), Grimm, Heisenberg, Humboldt, Knock, Ravel and the runtime's Security runner
+  (`vidocq-runtime-tck-kerckhoffs-security`). `vauban/run-tck.sh` is not affected: it runs `verify -am` and
+  installs nothing (left unchanged: a change under `vauban/` goes in a pull request of its own).
+- Symptom: `run-official-tck-servlet6.1.sh` ran `./mvnw -ntp install -DskipTests` and the TCK on the default local
+  repository, `~/.m2/repository`, which every build and session of the machine shares. A run from a branch replaced
+  the published Foy snapshot there: the other builds then resolved the branch's jars (an offline build, a runtime
+  that never asked for them), until the next snapshot download.
+- Repro: `OfficialTckScriptTest` (`foy-tck`, `-Ptck`): the script, copied next to a `mvnw` that logs its
+  arguments, made two Maven calls without `-Dmaven.repo.local`.
+- Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+- Status: FIXED (pending commit). Every Maven call of the script takes
+  `-Dmaven.repo.local=<Foy folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
+  (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there first, and only reads `~/.m2`, where
+  the non-public TCK artifacts stay. `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `foy-tck/README.md`.
+- Verification: `OfficialTckScriptTest` red (2 failures) before, green after (2 tests).
 
 ## BUG-20261118-62 — A servlet of `web.xml` whose class is a bean gets no injection
 

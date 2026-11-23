@@ -35,8 +35,14 @@ if [ ! -f "$TCK_JAR" ]; then
     exit 78  # EX_CONFIG (skip)
 fi
 
-echo ">>> 1. Build Champollion reactor (skip tests)"
-./mvnw -ntp install -DskipTests >/dev/null 2>&1 || mvn -ntp install -DskipTests >/dev/null
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$PWD/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
+echo ">>> 1. Build Champollion reactor (skip tests) into $LOCAL_REPOSITORY"
+./mvnw -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests >/dev/null 2>&1 || mvn -ntp "${REPOSITORY_ARGS[@]}" install -DskipTests >/dev/null
 
 echo ">>> 2. Run TCK JSON-P 2.1 ($MODE)"
 mkdir -p "$TCK_DIR/target"
@@ -52,19 +58,19 @@ tck_rc=0
 
 case "$MODE" in
     smoke)
-        mvn -B -ntp -P"tck,jsonp-tck" -pl champollion-tck test -Dtest=BasicSmokeTest 2>&1 | tee "$LOG" || tck_rc=1
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" -P"tck,jsonp-tck" -pl champollion-tck test -Dtest=BasicSmokeTest 2>&1 | tee "$LOG" || tck_rc=1
         ;;
     all)
         # Two separate invocations: api/* with the Champollion provider, then
         # pluggability/* with the third-party MyJsonProvider. The two suites cannot
         # share one classpath (ServiceLoader collision).
         echo "    [1/2] api suite with the Champollion provider"
-        mvn -B -ntp -P"tck,jsonp-tck" -pl champollion-tck test 2>&1 | tee "$LOG" || tck_rc=1
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" -P"tck,jsonp-tck" -pl champollion-tck test 2>&1 | tee "$LOG" || tck_rc=1
         echo "    [2/2] pluggability suite with MyJsonProvider"
-        mvn -B -ntp -P"tck,jsonp-tck-pluggability" -pl champollion-tck test 2>&1 | tee -a "$LOG" || tck_rc=1
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" -P"tck,jsonp-tck-pluggability" -pl champollion-tck test 2>&1 | tee -a "$LOG" || tck_rc=1
         ;;
     *)
-        mvn -B -ntp -P"tck,jsonp-tck" -pl champollion-tck test "$@" 2>&1 | tee "$LOG" || tck_rc=1
+        mvn -B -ntp "${REPOSITORY_ARGS[@]}" -P"tck,jsonp-tck" -pl champollion-tck test "$@" 2>&1 | tee "$LOG" || tck_rc=1
         ;;
 esac
 

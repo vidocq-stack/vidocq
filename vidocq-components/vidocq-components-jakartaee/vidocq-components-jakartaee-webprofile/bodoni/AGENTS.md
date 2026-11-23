@@ -201,9 +201,11 @@ bring it to **541/541**, both runs recorded in [bodoni-tck/BASELINE.md](bodoni-t
 reference only and is not run. A result is a compatibility measurement on Bodoni + Ibarra +
 Foy + Peano: **never claim certification** from it, nor from a partial or local run. A pull
 request runs no TCK. The `official-tags-tck-smoke` check of the former repository (a required
-check of its `main` since 2026-10-24) did not move into the monorepo, and Bodoni's root POM
-declares no `ci.tck.*` yet, so `TCK nightly` does not run it either: run
-`./run-official-tck-tags-3.0.sh smoke` (or `all`) by hand. Update `BASELINE.md` when a fix
+check of its `main` since 2026-10-24) did not move into the monorepo; instead `ci.tck.command`
+of Bodoni's root POM has the `TCK nightly` workflow run `./run-official-tck-tags-3.0.sh all`
+once a day, on demand on a branch (tag `BODONI`) and for a release. The script installs into
+a local repository private to the checkout (`.tck-repository/`, `TCK_LOCAL_REPOSITORY`), never
+into `~/.m2`. Update `BASELINE.md` when a fix
 changes the result. 100 % PASS of the full run is a merge gate; any challenge goes in a
 `TCK.md` with spec citation — created only if one is actually filed.
 

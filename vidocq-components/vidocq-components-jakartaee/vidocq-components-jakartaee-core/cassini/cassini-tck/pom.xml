@@ -275,6 +275,32 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <!-- The signature test reads the API jar from target/: the run script uses a private
+                         local repository above ~/.m2/repository (BUG-20261123-57), so the jar Maven
+                         resolved may sit in either, never at a path known in advance. -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>3.8.1</version>
+                        <executions>
+                            <execution>
+                                <id>copy-spec-api-for-signature-test</id>
+                                <phase>process-test-resources</phase>
+                                <goals><goal>copy</goal></goals>
+                                <configuration>
+                                    <artifactItems>
+                                        <artifactItem>
+                                            <groupId>jakarta.ws.rs</groupId>
+                                            <artifactId>jakarta.ws.rs-api</artifactId>
+                                            <version>4.0.0</version>
+                                            <destFileName>jakarta.ws.rs-api.jar</destFileName>
+                                        </artifactItem>
+                                    </artifactItems>
+                                    <outputDirectory>${project.build.directory}/signature-api</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-resources-plugin</artifactId>
@@ -329,11 +355,11 @@
                                 <authuser>javajoe</authuser>
                                 <authpassword>javajoe</authpassword>
                                 <jimage.dir>${project.build.directory}/jimage</jimage.dir>
-                                <sigTestClasspath>${user.home}/.m2/repository/jakarta/ws/rs/jakarta.ws.rs-api/4.0.0/jakarta.ws.rs-api-4.0.0.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
+                                <sigTestClasspath>${project.build.directory}/signature-api/jakarta.ws.rs-api.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
                                 <!-- JAXRSSigTestIT reads the prefixed name (SigTestData#getSigTestClasspath
                                      reads the plain one); both are set so the signature test resolves the API
                                      jar plus the JDK modules it extracts into jimage.dir. -->
-                                <signature.sigTestClasspath>${user.home}/.m2/repository/jakarta/ws/rs/jakarta.ws.rs-api/4.0.0/jakarta.ws.rs-api-4.0.0.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
+                                <signature.sigTestClasspath>${project.build.directory}/signature-api/jakarta.ws.rs-api.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
                                 <jakarta.ws.rs.ext.RuntimeDelegate>io.vidocq.cassini.chappe.ChappeRuntimeDelegate</jakarta.ws.rs.ext.RuntimeDelegate>
                             </systemPropertyVariables>
                             <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->

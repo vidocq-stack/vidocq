@@ -32,6 +32,10 @@ Options:
   -Dtest=<pattern>         Forwarded to surefire (class, class#method, ...).
   Any other -D... argument is forwarded to Maven.
 
+Environment:
+  TCK_LOCAL_REPOSITORY     The local repository every Maven call reads and writes, above the
+                           shared ~/.m2/repository it only reads (default: .tck-repository here).
+
 Examples:
   run-official-tck-servlet6.1.sh                               # smoke test
   run-official-tck-servlet6.1.sh --all                         # full suite
@@ -133,9 +137,15 @@ run() {
     fi
 }
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$SCRIPT_DIR/.tck-repository}"
+MAVEN=(./mvnw -ntp "-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 if [ "$DO_INSTALL" = true ]; then
-    echo "🚀 [1/3] Installing the Foy reactor into the local repository..."
-    run ./mvnw -ntp install -DskipTests
+    echo "🚀 [1/3] Installing the Foy reactor into $LOCAL_REPOSITORY..."
+    run "${MAVEN[@]}" install -DskipTests
 else
     echo "⏭️  [1/3] Skipping the reactor install (--no-install)"
 fi
@@ -143,4 +153,4 @@ fi
 echo "📂 [2/3] foy-tck is in-reactor, enabled by the 'tck' Maven profile"
 
 echo "🧪 [3/3] Running Maven with the tck-official profile..."
-run ./mvnw -ntp -Ptck,tck-official -pl foy-tck test "${EXTRA_ARGS[@]}" "${MVN_ARGS[@]}"
+run "${MAVEN[@]}" -Ptck,tck-official -pl foy-tck test "${EXTRA_ARGS[@]}" "${MVN_ARGS[@]}"

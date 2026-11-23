@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
 - The TCK `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1` resolves from Maven Central; the signature-test resources only ship in the EFTL bundle, which `run-official-tck-restful-4.0.sh` downloads into `cassini-tck/target/eftl` (see `cassini-tck/README.md`)
+- A pull request runs no TCK; the `TCK nightly` workflow of the monorepo runs `./run-official-tck-restful-4.0.sh all` (`ci.tck.command` of the root `pom.xml`) once a day, on demand on a branch and for a release
 
 ## Essential commands
 

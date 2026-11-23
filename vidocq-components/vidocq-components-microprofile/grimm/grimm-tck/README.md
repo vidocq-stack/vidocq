@@ -8,15 +8,17 @@ The runner is a standalone POM (model `4.0.0`, no `<parent>`, not a module of th
 
 ## In CI
 
-Every pull request runs the full suite: the root POM declares it in `ci.tck.command`, run by the
-shared `pr-validate` workflow after the reactor is installed at the pull request's version. The
-command sets `grimm.version` to that version, because `versions:set` does not reach this
-standalone POM; without it the run would test the grimm snapshot published on
-`central-snapshots`.
+A pull request runs no TCK. The `TCK nightly` workflow of the monorepo runs the full suite once a
+day, on demand on a branch (component tag `GRIMM`) and for a release: the root POM declares it in
+`ci.tck.command`, run from the Grimm folder after Grimm and its upstream are installed. The
+command sets `grimm.version` to the reactor's version, because this standalone POM does not
+inherit it; without it the run would test the grimm snapshot published on `central-snapshots`.
 
 ## Local prerequisites
 
-1. Install the reactor artifacts in your local repository.
+1. The script installs the reactor artifacts into `.tck-repository/` of the Grimm folder, a local repository private
+   to the checkout above a read-only `~/.m2/repository` (BUG-20261123-57; `TCK_LOCAL_REPOSITORY` moves it); this
+   runner resolves them there.
 2. Nothing to install for the TCK itself: `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` (like the 4.1 TCK)
    is published on Maven Central and resolved by Maven during the run.
 

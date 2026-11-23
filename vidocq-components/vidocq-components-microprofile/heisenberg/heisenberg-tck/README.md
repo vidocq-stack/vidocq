@@ -21,8 +21,10 @@ From the repository root:
 
 The script:
 
-1. Installs `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban` into the
-   local M2 (`./mvnw install -DskipTests`).
+1. Installs `heisenberg-api`, `heisenberg-core`, `heisenberg-cdi-vauban` into
+   `.tck-repository/` of the Heisenberg folder (`./mvnw install -DskipTests`): every Maven call of
+   the script uses that private local repository above a read-only `~/.m2/repository`
+   (BUG-20261123-57; `TCK_LOCAL_REPOSITORY` moves it).
 2. Invokes `mvn -f heisenberg-tck/pom.xml -Ptck-official test [args...]`.
 3. Produces `heisenberg-tck/target/tck-report.txt` (PASS/FAIL summary).
 

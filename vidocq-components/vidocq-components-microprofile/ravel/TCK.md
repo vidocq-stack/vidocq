@@ -122,9 +122,11 @@ was not bundled in the TCK ShrinkWrap archives and even if it had been, Weld onl
 ```
 
 The script:
-1. Installs `ravel-api` / `ravel-core` / `ravel-cdi-vauban` locally via `./mvnw install -DskipTests`;
-2. Invokes `./mvnw -f ravel-tck/pom.xml -P<profile> test` (the wrapper, not system `mvn`, to
-   guarantee Maven 3.9.16);
+1. Installs `ravel-api` / `ravel-core` / `ravel-cdi-vauban` via `mvn install -DskipTests` into `.tck-repository/`
+   of the Ravel folder, a local repository private to the checkout above a read-only `~/.m2/repository`
+   (BUG-20261123-57; `TCK_LOCAL_REPOSITORY` moves it);
+2. Invokes `mvn -P"tck,<profile>" -pl ravel-tck test` (the system `mvn`, not the wrapper: run it under
+   `sdk env` so that it is the Maven 3.10.0 of `.sdkmanrc`);
 3. Produces a summary report in `ravel-tck/target/tck-report.txt`.
 
 ## Bug #1 — `MalformedParameterizedTypeException` ✅ resolved

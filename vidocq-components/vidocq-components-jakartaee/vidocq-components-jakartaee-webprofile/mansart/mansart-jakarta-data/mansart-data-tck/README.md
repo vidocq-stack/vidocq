@@ -65,7 +65,7 @@ PG=1 ./run-official-tck-data-1.0.sh --full
 
 Prerequisites:
 - **Java 25** + **Maven 3.10.0** (sub-project `.sdkmanrc`; `cd mansart-jakarta-data && sdk env`)
-- `mansart-jakarta-data` built and installed (`mvn install -DskipTests` from `mansart-jakarta-data/` — the script does it automatically if needed)
+- `mansart-jakarta-data` built and installed (`mvn install -DskipTests` from `mansart-jakarta-data/` — the script does it automatically if needed). Every Maven call of the script reads and writes `.tck-repository/` in the Mansart folder (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Mansart snapshot the other builds of the machine resolve.
 - For `--pg`: **Docker** (Docker Desktop, OrbStack, colima…). Image `postgres:17-alpine` downloaded on first run.
 - TCK 1.0.1 resolved automatically from Maven Central (`jakarta.data:jakarta.data-tck:1.0.1`).
 

@@ -62,6 +62,8 @@ The `run-official-tck-mp-openapi-4.2.sh` script in Grimm's folder of the monorep
 
 The runner uses Arquillian + TestNG, invoking `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test` after a `clean install` of the reactor, so the harness is always compiled from scratch. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
 
+Every Maven call of the script reads and writes `.tck-repository/` in the Grimm folder (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Grimm snapshot the other builds of the machine resolve, and the standalone `grimm-tck` POM resolves the Grimm artefacts the script has just installed.
+
 == Runner architecture
 
 `grimm-tck` is **deliberately outside the reactor**: its `pom.xml` uses standalone `modelVersion 4.0.0`, with no `<parent>`.

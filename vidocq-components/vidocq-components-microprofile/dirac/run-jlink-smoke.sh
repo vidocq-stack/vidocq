@@ -4,8 +4,14 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")" && pwd)"
 cd "$repo_root"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+local_repository="${TCK_LOCAL_REPOSITORY:-$repo_root/.tck-repository}"
+repository_args=("-Dmaven.repo.local=$local_repository" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 echo "==> M9 smoke: install minimal modules (dirac-mp-metrics-api, dirac-api, dirac-core)"
-./mvnw -ntp -pl dirac-mp-metrics-api,dirac-api,dirac-core -am clean install -DskipTests >/dev/null
+./mvnw -ntp "${repository_args[@]}" -pl dirac-mp-metrics-api,dirac-api,dirac-core -am clean install -DskipTests >/dev/null
 
 # Globs — never hardcode the reactor version (issue #3 follow-up).
 mp_api_jar="$(ls "$repo_root"/dirac-mp-metrics-api/target/dirac-mp-metrics-api-*.jar 2>/dev/null | grep -vE '(sources|javadoc)' | head -n 1)"
