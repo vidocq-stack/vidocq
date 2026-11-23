@@ -90,10 +90,17 @@ import java.util.stream.Collectors;
  *       {@code provides}. For a runtime that turns the module's {@code META-INF/services}
  *       entries into {@code provides} when it loads the module, as Vidocq does, where the
  *       declaration is not needed (VAU-APT-004).</li>
+ *   <li>{@code -Avauban.mainOutput=<dir>} — for a test compilation in a layout the processor
+ *       does not recognise: the main sources' output directory (vauban#101).</li>
+ *   <li>{@code -Avauban.producerProxy=error|warn|note} and
+ *       {@code -Avauban.generationRound=early|last}: see the reference page of the documentation.</li>
  * </ul>
+ *
+ * <p>Each option read from {@code processingEnv.getOptions()} is declared below, or javac reports it as
+ * recognised by no processor (BUG-20261123-40).</p>
  */
 @javax.annotation.processing.SupportedOptions({"vauban.validation", "vauban.validation.scope",
-        "vauban.producerProxy", "vauban.providesHint", "vauban.generationRound"})
+        "vauban.producerProxy", "vauban.providesHint", "vauban.generationRound", "vauban.mainOutput"})
 public class VaubanProcessor extends AbstractProcessor {
 
     private static final Set<String> CDI_ANNOTATIONS = Set.of(

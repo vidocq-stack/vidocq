@@ -5,6 +5,23 @@ suspected cause, status. Updated on every investigation.
 
 ---
 
+## BUG-20261123-40 — javac reports `-Avauban.mainOutput` as recognised by no processor
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+- **Module**: `vauban-processor` (`VaubanProcessor`)
+- **Symptom**: a compilation that passes `-Avauban.mainOutput=<dir>`, the option of a test compilation in a layout the
+  processor does not recognise (vauban#101), prints `warning: The following options were not recognized by any
+  processor: '[vauban.mainOutput]'`, although the processor reads it and uses it.
+- **Minimal repro**: `SupportedOptionsTest`: `new VaubanProcessor().getSupportedOptions()` lacks `vauban.mainOutput`,
+  and a compilation of one `@ApplicationScoped` class through `ProcessorCompiler` with each `-Avauban.*` option the
+  processor reads reports that warning.
+- **Cause**: `findMainOutput()` reads `processingEnv.getOptions().get("vauban.mainOutput")`, but the option was never
+  added to `@SupportedOptions`, which listed the five others. It is the only option read and not declared:
+  `vauban.validation`, `vauban.validation.scope`, `vauban.producerProxy`, `vauban.providesHint` and
+  `vauban.generationRound` were declared; `WeavePlan`'s `vauban.weave.plan.*` are system properties, not options.
+- **Fix**: `@SupportedOptions` declares `vauban.mainOutput`; the class Javadoc lists it with the others.
+
 ## BUG-20261121-01 — The index lists its classes in another order at each JVM: a frozen record is never the same twice
 
 - **Date**: 2026-11-21
