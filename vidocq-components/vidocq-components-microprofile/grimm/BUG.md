@@ -623,6 +623,7 @@ Track reproducible bugs with:
 - **Root cause**: the set was made thread-safe with a monitor when the names moved from a static set to the extension
   instance (grimm#22).
 - **Fix**: a `ReentrantLock` guards a `LinkedHashSet` (discovery order kept), in both phases.
+
 ## BUG-20261123-57 — the TCK script installs the branch into the shared `~/.m2`
 - **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
 - **Symptom**: `run-official-tck-mp-openapi-4.2.sh` ran `./mvnw -ntp clean install -DskipTests`, then

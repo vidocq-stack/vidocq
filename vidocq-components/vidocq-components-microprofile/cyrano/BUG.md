@@ -563,6 +563,7 @@ with `vauban-processor` has. Where the extensions run at start (`vidocq:dev`, te
 builds a `java.lang.reflect.Proxy` and prints `RUNTIME CODE GENERATION FALLBACK` for each normal-scoped client
 (seen in `CyranoScopeConfigAtStartTest`). Closing that gap would need `cyrano-processor` (or Vauban's processor) to
 write the client proxy of a `@RegisterRestClient` interface that carries a normal scope at compile; not done here.
+
 ## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
 
 - **Opened**: 2026-11-23

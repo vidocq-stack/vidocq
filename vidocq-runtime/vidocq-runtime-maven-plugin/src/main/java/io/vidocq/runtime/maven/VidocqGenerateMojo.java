@@ -395,7 +395,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 classesDir, buildDirectory.toPath(), scannedByArtifactId, generated);
         for (var e : relocated.entrySet()) {
             getLog().info("Parked " + e.getValue() + " generated class(es) of '" + e.getKey()
-                    + "' in target/" + JpmsPatches.DIR_NAME + "/" + e.getKey()
+                    + "' in target/" + JavaModulePatches.DIR_NAME + "/" + e.getKey()
                     + " — packaging goals will enrich that jar");
         }
         return result.generatedProviders();

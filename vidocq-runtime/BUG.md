@@ -79,8 +79,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Fix**: the log lines drop the prefix (`Parked N generated class(es) …`, `N --patch-module option(s) added …`), the
   enrichment lines say `with the classes generated for its module`, and the Javadoc, comments and descriptors say
   "module directives" or "split package". `TerminologyTest` reads every file under a `src/main` of the runtime and fails
-  on the abbreviation. The class `JpmsPatches` and the module `vidocq-runtime-it-cyrano-jpms` keep their names: a
-  rename is left to the maintainer.
+  on the abbreviation. The maintainer then had the class `JpmsPatches` renamed `JavaModulePatches` and the module
+  `vidocq-runtime-it-cyrano-jpms` renamed `vidocq-runtime-it-cyrano-javamodule`.
 
 ---
 
@@ -135,6 +135,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   profile when Ravel is absent: BUG-20261123-64.
 
 ---
+
 ## BUG-20261123-57 — The Security TCK runner installs the branch into the shared `~/.m2`
 
 - **Date**: 2026-11-23 (same bug in the component scripts of Foy, Peano, Ibarra, Bodoni, Cassini, Champollion,

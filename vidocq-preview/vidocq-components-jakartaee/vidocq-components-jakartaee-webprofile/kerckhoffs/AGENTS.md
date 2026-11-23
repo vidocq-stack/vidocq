@@ -10,11 +10,12 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > and generated at build time, with only the credentials left secret.
 
 **Status: preview, K0 to K3 merged.** Identity stores and the `IdentityStoreHandler`, the
-built-in BASIC and FORM mechanisms and an application's own mechanism, `@AutoApplySession`,
+built-in BASIC, FORM and custom FORM mechanisms and an application's own mechanism, the built-in
+`Pbkdf2PasswordHash`, `@AutoApplySession`,
 `@RememberMe`, `SecurityContext.authenticate`, `*Expression` attributes through Jakarta Expression
 Language, a minimal Jakarta Authentication (Servlet Container Profile) and Jakarta Authorization (a
 `Policy` decides the access to web resources) run on Foy and on the assembled Vidocq runtime. Not
-done yet: the custom FORM mechanism, the database and LDAP identity stores (K4), the OpenID Connect
+done yet: the database and LDAP identity stores (K4), the OpenID Connect
 mechanism (K5: only the ID-token validation, `core.internal.openid`, exists), the mechanism
 decorator (needs CDI Full in Vauban) and the Open Liberty WAR (K6). Read
 [PLAN.md](PLAN.md) before any change: it is the design of record (spec scope, the
@@ -139,8 +140,8 @@ provides a shared UI bundle. **Never customise the UI per project.** Mirror **Va
 
 - `docs/en/antora.yml` → `name: kerckhoffs`, `prerelease: true` on `main`, `project-version`.
 - Canonical navigation: `index` → `getting-started` → `usage` → `concepts` → `internals` → `tck`
-  → `performance` → `reference` → `migration`. The component has `index`, `tck` and `reference`;
-  add the others with the first content they carry.
+  → `performance` → `reference` → `migration`, plus `whats-new`. The component has them all but
+  `performance`, which waits for a first entry in `BENCH.md`.
 - `performance` carries only figures that have an entry in `BENCH.md`; `tck` comes before it.
 - `index.adoc`: `= Kerckhoffs`, `:description:`, `[.lead]`, `== Origin of the name`,
   `== At a glance`, ecosystem links. The logo (`kerckhoffs-logo.png`) is a temporary one generated

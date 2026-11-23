@@ -22,6 +22,7 @@
   calls with method handles, as compiled code does.
   Verification: the reactor of `foy-api`, `cassini-chappe` and `chappe-cli` with every dependent (`-am -amd`),
   green.
+
 ## BUG-20261123-57 — The Servlet TCK script installs the branch into the shared `~/.m2`
 
 - Date: 2026-11-23. The same bug, fixed the same way and recorded in each component's BUG.md, was in the run

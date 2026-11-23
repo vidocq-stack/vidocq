@@ -1197,6 +1197,7 @@ The 500 is empty, and the log line names the exception's class only, with a mess
 - **Fix**: the server binds the requested host for either kind of port, `localhost` being `127.0.0.1` as on the
   Chappe transport, and the instance reports the requested host. `JdkHttpAdapter.serve(int)`, which applications
   call directly, is unchanged.
+
 ## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
 
 - **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Champollion, Mansart, Kerckhoffs and Noether)

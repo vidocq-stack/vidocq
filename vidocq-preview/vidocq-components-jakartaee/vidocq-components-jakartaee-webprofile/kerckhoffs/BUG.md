@@ -23,6 +23,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - **Minimal repro:** `PasswordHashCdiTest` (3 tests): `UnsatisfiedResolution No bean found for type: jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash`.
 - **Cause:** nothing registered `DefaultPbkdf2PasswordHash` as a bean.
 - **Status:** FIXED (pending commit): `KerckhoffsExtension` adds a `@Dependent` synthetic bean of type `Pbkdf2PasswordHash` (`Pbkdf2PasswordHashCreator`) for every application, so each injection point configures its own through `initialize(Map)`. Tested at start, frozen (`FrozenExtensionTest`) and on the assembled runtime (`KerckhoffsSecurityTest#theApplicationInjectsTheBuiltInPasswordHash`).
+
 ## BUG-20261123-57 · 2026-11-23 · The TCK scripts install the branch into the shared `~/.m2`
 
 - **Symptom:** `run-official-tck-security-4.0.sh` ran `./mvnw -ntp install -DskipTests`, the class path build and the TCK's own build on the default local repository, `~/.m2/repository`, which every build and session of the machine shares: a run from a branch replaced the published Kerckhoffs snapshot there for every other build. The runner of the assembled runtime (`vidocq-runtime-tck-kerckhoffs-security/run-official-tck-security-4.0.sh`) did the same with `VIDOCQ_TCK_INSTALL=1`. Both also failed under macOS's Bash 3.2 without `MVN_EXTRA` or `--` arguments (an empty array is unbound under `set -u`). Same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Mansart and Noether.
