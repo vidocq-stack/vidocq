@@ -28,7 +28,8 @@ import java.util.Optional;
  * or an embedding.
  *
  * <p>Only bytes cross the swap: nothing of the old application layer is kept, so the old layer can be collected. A
- * key starts with the extension's {@link VidocqExtension#id() id}, such as {@code servlet:sessions:/}. Keys the next
+ * key starts with a prefix the extension owns, such as {@code servlet:} in {@code servlet:sessions:/} (its
+ * {@link VidocqExtension#name() name}, or a short form of it, keeps two extensions apart). Keys the next
  * boot did not take once it started are dropped.
  */
 public interface DevHandover {

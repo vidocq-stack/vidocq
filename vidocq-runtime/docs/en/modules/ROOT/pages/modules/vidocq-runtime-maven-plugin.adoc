@@ -1252,8 +1252,10 @@ run always uses.
 The application runs in another JVM, so a `-D` of the Maven command line does not reach it by itself. The goal
 forwards the ones that configure the application: every `-Dvidocq.*` that is not a setting of this plugin
 (`vidocq.run.*`, `vidocq.dev.*`, `vidocq.idea.*`, `vidocq.docker.*`, `vidocq.jlink.*`, `vidocq.mainClass`,
-`vidocq.mainModule`, `vidocq.app.layer` and `vidocq.app.layer.keep` [.tag-new]#NEW#, and the other packaging
-settings). So `mvn vidocq:run
+`vidocq.mainModule`, `vidocq.app.layer` and `vidocq.app.layer.keep` [.tag-new]#NEW#, the settings of the other goals
+(`vidocq.generate.*`, `vidocq.test.*`, `vidocq.doctor.*`, `vidocq.vscode.*`, `vidocq.eclipse.*`,
+`vidocq.freezeExtensions`, `vidocq.startExtensions`, ...) [.tag-new]#NEW#, and the other packaging settings).
+`vidocq.profile` is forwarded: the application reads it too. So `mvn vidocq:run
 -Dvidocq.chappe.listener.default.port=8081` listens on 8081. Anything else goes through
 `vidocq.run.systemProperties`, and the forked JVM inherits Maven's environment as it is.
 

@@ -41,7 +41,7 @@ import java.util.Set;
 
 /**
  * Opt-in companion to {@code check-module-info}: rewrites {@code src/main/java/module-info.java} to add
- * the JPMS {@code opens} directives the application's Vidocq extensions require (from their
+ * the {@code opens} directives the application's Vidocq extensions require (from their
  * {@code META-INF/vidocq/module-requirements.properties} descriptors). Invoke explicitly:
  *
  * <pre>mvn vidocq:complete-module-info</pre>

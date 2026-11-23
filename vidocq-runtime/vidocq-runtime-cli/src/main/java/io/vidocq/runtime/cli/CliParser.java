@@ -575,8 +575,9 @@ public final class CliParser {
             }
             case "test" -> {
                 topic("test", "Continuous testing",
-                        "Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then",
-                        "again on each change of the main or test sources, without the application.",
+                        "Runs 'mvn process-classes vidocq:test' in the project (./mvnw when present):",
+                        "every test, then again on each change of the main or test sources, without",
+                        "the application.",
                         "Keys: r runs every test, f the failed ones, q quits.");
                 options(ONCE, "Run every test once and exit, with status 1 when one fails (for CI and scripts)",
                         MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);

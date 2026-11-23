@@ -80,6 +80,15 @@ class ExtensionConfigTest {
         assertTrue(text.contains("#vidocq.pool.password=library\n"), text);
     }
 
+    /** BUG-20261123-43: the comment names the CLI's command that runs the application, {@code vidocq start}. */
+    @Test
+    void thePoolCommentNamesACommandTheCliHas() {
+        String text = ExtensionConfig.append(BASE, List.of("mansart-pool"), "library");
+
+        assertTrue(text.contains("Everywhere else (vidocq start, the packaged application)"), text);
+        assertFalse(text.contains("vidocq run"), text);
+    }
+
     @Test
     void aBlockIsWrittenOnce() {
         String once = ExtensionConfig.append(BASE, List.of("humboldt-telemetry"), "library");

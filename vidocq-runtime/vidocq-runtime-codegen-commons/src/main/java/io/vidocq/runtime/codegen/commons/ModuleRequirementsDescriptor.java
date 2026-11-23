@@ -27,7 +27,7 @@ import java.util.Set;
 
 /**
  * Parses an extension's {@value #RESOURCE} descriptor into a set of {@link Requirement}s. Each Vidocq
- * extension ships this resource to declare the JPMS directives its <em>consumer</em> module must hold
+ * extension ships this resource to declare the module directives its <em>consumer</em> module must hold
  * at runtime — the {@code requires} / {@code opens} that are dependency-driven (needed merely by
  * depending on the extension), with no annotation to trigger an APT check.
  *

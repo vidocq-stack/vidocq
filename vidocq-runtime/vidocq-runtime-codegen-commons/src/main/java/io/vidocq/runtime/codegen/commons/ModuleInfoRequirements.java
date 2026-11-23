@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 
 /**
  * Verifies, at annotation-processing time, that the {@code module-info.java} of the module under
- * compilation declares the JPMS directives a Vidocq extension needs at runtime — the {@code requires}
+ * compilation declares the module directives a Vidocq extension needs at runtime — the {@code requires}
  * and {@code opens} that compile fine on the classpath/TCK but break only on the module path (a real
  * {@code docker compose up} / jlink boot).
  *

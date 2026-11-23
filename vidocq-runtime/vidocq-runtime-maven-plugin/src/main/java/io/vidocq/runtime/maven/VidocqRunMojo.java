@@ -83,17 +83,21 @@ public class VidocqRunMojo extends AbstractMojo {
     private static final String PREFIX = "Vidocq run: ";
 
     /**
-     * Command-line properties that configure the build, never the application: they stay in the Maven
-     * JVM. Everything else under {@code vidocq.} is forwarded to the child (see {@link #forwarded}).
+     * Command-line properties that configure a goal of this plugin, never the application: they stay in the
+     * Maven JVM. Everything else under {@code vidocq.} is forwarded to the child (see {@link #forwarded}).
+     * {@code VidocqRunMojoTest.noSettingOfThePluginIsForwarded} checks the plugin descriptor against both lists.
      */
     private static final List<String> BUILD_PREFIXES = List.of("vidocq.run.", "vidocq.dev.", "vidocq.idea.",
-            "vidocq.docker.", "vidocq.jlink.", "vidocq.checkpom.", "vidocq.moduleinfo.", "vidocq.package.");
+            "vidocq.docker.", "vidocq.jlink.", "vidocq.checkpom.", "vidocq.moduleinfo.", "vidocq.package.",
+            "vidocq.generate.", "vidocq.test.", "vidocq.doctor.", "vidocq.vscode.", "vidocq.eclipse.",
+            "vidocq.buildInfo.", "vidocq.extensions.");
 
     /** As {@link #BUILD_PREFIXES}; the two settings of the split, which the goal makes (Vidocq/vidocq#663), too. */
     private static final List<String> BUILD_KEYS = List.of("vidocq.mainModule", "vidocq.mainClass",
             "vidocq.appName", "vidocq.appVersion", "vidocq.appDescription", "vidocq.compress", "vidocq.distDir",
             "vidocq.distName", "vidocq.icon", "vidocq.installerDir", "vidocq.jpackageType", "vidocq.jvmArgs",
             "vidocq.launcher", "vidocq.runtimeImage", "vidocq.scriptName", "vidocq.stripDebug", "vidocq.vendor",
+            "vidocq.freezeExtensions", "vidocq.includeResources", "vidocq.startExtensions",
             LayerSplit.MODE_PROPERTY, LayerSplit.KEEP_PROPERTY);
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -264,7 +268,7 @@ public class VidocqRunMojo extends AbstractMojo {
             List<String> patchArgs = ApplicationLaunch.patchModuleArgs(project, build);
             if (!patchArgs.isEmpty()) {
                 jvmArgs.addAll(patchArgs);
-                getLog().info(PREFIX + "JPMS: " + patchArgs.size() / 2
+                getLog().info(PREFIX + patchArgs.size() / 2
                         + " --patch-module option(s) added for generated classes");
             }
         } catch (IOException e) {

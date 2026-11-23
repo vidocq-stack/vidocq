@@ -869,7 +869,7 @@
         <!-- vidocq:check-module-info -->
         <mojo>
             <goal>check-module-info</goal>
-            <description>Verify the application module-info.java declares the JPMS directives (requires/opens) its Vidocq extensions need at runtime, unioned from each extension's META-INF/vidocq/module-requirements.properties descriptor and checked against the compiled module-info.class. Fails with the exact, copy-pasteable fix when one is missing.</description>
+            <description>Verify the application module-info.java declares the module directives (requires/opens) its Vidocq extensions need at runtime, unioned from each extension's META-INF/vidocq/module-requirements.properties descriptor and checked against the compiled module-info.class. Fails with the exact, copy-pasteable fix when one is missing.</description>
             <requiresDependencyResolution>compile</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
