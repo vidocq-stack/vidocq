@@ -4,11 +4,6 @@
 [.lead]
 This page collects the API mappings and the typical pitfalls when migrating an existing HTTP service to Chappe. For measured figures, see link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/BENCH.md[BENCH.md].
 
-[CAUTION]
-====
-Chappe is at `{project-version}`. A production migration is premature. The tables below document the API mapping; validate every use case with your service's integration tests before switching.
-====
-
 [#upgrading]
 == Upgrading from 0.3.0
 

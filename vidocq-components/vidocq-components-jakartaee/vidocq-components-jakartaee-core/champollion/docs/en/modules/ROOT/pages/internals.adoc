@@ -105,7 +105,7 @@ tck    ..> jsonb
 
 == JSON-P pipeline — pull parser
 
-The parser implements an **RFC 8259 state machine** driven by plain `switch` dispatch, with a **bit-stack** tracking open containers (one bit per nesting level: object or array) and a **single-pass number scan** (validation and materialization in the same loop — the P13 optimization that overtook Parsson on MEDIUM/LARGE payloads).
+The parser implements an **RFC 8259 state machine** driven by plain `switch` dispatch, with a **bit-stack** tracking open containers (one bit per nesting level: object or array) and a **single-pass number scan** (validation and materialization in the same loop — the P13 optimization; its measurements are in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/BENCH.md[BENCH.md]).
 
 [mermaid]
 ....

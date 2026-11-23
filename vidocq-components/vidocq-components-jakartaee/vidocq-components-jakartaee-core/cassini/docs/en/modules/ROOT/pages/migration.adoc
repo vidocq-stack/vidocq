@@ -4,11 +4,6 @@
 [.lead]
 Cassini strictly implements Jakarta RESTful Web Services 4.0. If your application is already standard (spec annotations, no proprietary API), the migration is mostly a swap of the Maven runtime coordinates. This page documents the gotchas and the mappings.
 
-[CAUTION]
-====
-Cassini is at `{project-version}`. A production migration is premature until the first stable release ships. This page anticipates the path for evaluators.
-====
-
 == From Jersey
 
 [cols="2,2,3",options="header"]

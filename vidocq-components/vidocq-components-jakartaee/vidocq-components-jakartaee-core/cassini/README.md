@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/JDK-25-orange" alt="JDK">
   <img src="https://img.shields.io/badge/Maven-4.0--rc--5-purple" alt="Maven">
   <img src="https://img.shields.io/badge/Jakarta_REST-4.0-blue" alt="Jakarta REST">
-  <img src="https://img.shields.io/badge/TCK-2535%2F2535-brightgreen" alt="TCK">
+  <img src="https://img.shields.io/badge/TCK-2539%2F2539-brightgreen" alt="TCK">
   <img src="https://img.shields.io/badge/license-EPL--2.0%20OR%20EUPL--1.2%20OR%20GPL--2.0--or--later-blue.svg" alt="License">
 </p>
 
@@ -482,7 +482,7 @@ public class LoggingFilter implements ContainerRequestFilter, ContainerResponseF
 ## Jakarta REST 4.0 TCK
 
 ```
-Tests run: 2670 — Pass: 2535 — Skip: 135 — Fail: 0 — Error: 0
+Tests run: 2670 — Pass: 2539 — Skip: 131 — Fail: 0 — Error: 0
 ```
 
 Cassini conforms to the **Jakarta RESTful Web Services 4.0 / Core Profile / SE-Bootstrap** specification — certifiable TCK Process 1.4.1 score.

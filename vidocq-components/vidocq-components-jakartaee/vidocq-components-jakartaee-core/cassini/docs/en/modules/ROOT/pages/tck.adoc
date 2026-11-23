@@ -12,8 +12,8 @@ This page consolidates the status of the official TCK tests run against Cassini.
 | TCK | `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1`
 | JDK | Eclipse Temurin 25
 | `@Test` count in the TCK | **2670**
-| Tests applicable to the profile | **2538** (the rest excluded via `@Tag` or documented challenges)
-| Passed | **2538**
+| Tests applicable to the profile | **2539** (2670 run minus the 131 skipped)
+| Passed | **2539**
 | Failures + Errors | **0**
 | Skipped | **131** (out-of-profile `@Tag` exclusions + 3 challenged test methods; the signature test runs since 2026-08-27)
 | Conformance score | **100.00 %** of applicable tests

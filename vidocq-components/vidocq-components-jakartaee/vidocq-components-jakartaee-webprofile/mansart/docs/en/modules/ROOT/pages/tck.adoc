@@ -1,12 +1,8 @@
 = TCK: Jakarta Data 1.0 + Jakarta Transactions 2.0
-:repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Conformance status for the Jakarta Technology Compatibility Kits covered by Mansart.
 
-NOTE: Persistence and Validation now live in xref:noether::index.adoc[Noether], a component of its own in the monorepo (`vidocq-preview/`). Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to Noether's folder.
-
-
 [.lead]
-This page consolidates the status of the official TCK runs against Mansart. Day-to-day source of truth: the `BUG.md` files of Mansart and `mansart-transactions/TCK.md`. The Jakarta Persistence 3.2 rows and section below are Noether's, kept here as a record: the current status is on xref:noether::tck.adoc[Noether's TCK page].
+This page consolidates the status of the official TCK runs against Mansart. Day-to-day source of truth: the `BUG.md` files of Mansart and `mansart-transactions/TCK.md`. Jakarta Persistence is Noether's: its TCK status is on xref:{page-component-version}@noether::tck.adoc[Noether's TCK page].
 
 == Summary
 
@@ -27,7 +23,7 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | Jakarta Data 1.0 — `PersistenceTests`
 | —
 | —
-| ⏳ Deferred Data/JPA integration; Persistence is delivered, but Data remains frozen.
+| ⏳ Deferred Data/JPA integration; Persistence is provided by xref:{page-component-version}@noether::index.adoc[Noether], but Data remains frozen.
 
 | Jakarta Data 1.0 — `NoSQLTests`
 | —
@@ -45,57 +41,10 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | ⚠️ M6c in progress: drive `ant runclient` leaf-by-leaf + parse HTML report → `target/tck-report-transactions.txt`.
 
 | Jakarta Transactions 2.0 — Signature tests
-| delivered
-| ✅
-| Compiled against the Mansart classpath, `BUILD SUCCESSFUL`.
-
-| Jakarta Persistence 3.2 — locally patched 3.2.1 suite
-| 2135
-| 2131
-| ✅ P0–P12 delivered under a scope-based gate. Temurin 25.0.4+7-LTS, PostgreSQL 17; TCK-BUG-001: 2131 passes, no failures/errors, four official skips. Not an untouched official result or certification. The historical pre-P11 untouched baseline was 2096 passes, 35 errors and four skips; P11 subsequently fixed the ten cache errors. Vidocq Arquillian: 6/6 with the local Vauban snapshot used for those runs. See link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/TCK.md[TCK.md].
+| —
+| —
+| ⏳ M6c: compiled against the Mansart class path with the suite (`BUILD SUCCESSFUL`, M6b), not run yet; they run with the `ant runclient` leaves of M6c.
 |===
-
-== Jakarta Persistence 3.2 — Noether's status at the extraction
-
-Runner: `noether-persistence/noether-jpa-tck`, out of the reactor, using the official 3.2.1 suite and PostgreSQL 17
-DDL. By default it runs a derived copy of the spec-tests jar carrying the local fixture patch **TCK-BUG-001**: the
-byte-exact backport of upstream commit `1fea05e` (jakartaee/persistence#1175), which removes the
-`<delimited-identifiers/>` unit default from two `orm.xml` fixtures. Official artifacts are never modified and
-`TCK_FIXTURES=official` runs the untouched jar.
-The P8 full run passed **2013 tests**; compared test by test with the preserved P7 baseline (1063 passes),
-**950 tests newly pass**, with no regression or added/missing tests. This includes one earlier converted-literal
-query defect exposed and fixed during attribution, not later-milestone implementation.
-Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are delivered.
-At P7, the focused gates totalled 307 / 312 passed, four XML-mapping-dependent errors and one skipped.
-The XML-dependent errors were resolved in P10.
-The initial P10 baseline passed 2121 tests but ignored `<delimited-identifiers/>`.
-The pre-P11 untouched run with correct quotation reported **2096 passes, 35 errors, four skips / 2135**, with no added/missing tests:
-25 regressions are confined to `core.annotations.nativequery` (1 / 12) and `core.entitytest.apitests` (7 / 21),
-whose delimited-default mappings conflict with the unquoted PostgreSQL DDL.
-`core.override` 26 / 26, `core.callback` 66 / 66, `core.relationship.descriptors` 8 / 8,
-`se.descriptor` 1 / 1 and `core.StoredProcedureQuery` 40 / 40 retain their results.
-That historical run also contained ten second-level cache errors, subsequently fixed in P11.
-With TCK-BUG-001 (2026-10-10, provider unchanged) the P10 full run reported **2121 passes, 10 errors, four skips / 2135**;
-the 25 fixture errors passed with zero regressions and the same test identities. P11 subsequently fixed the cache assertions.
-The latest local patched full run reports **2131 passes, 0 failures/errors, four skips / 2135**, unchanged against
-the previous P11 run. These patched scores are local development results, not official results or formal certification.
-The P8 gate totals **925 tests: 924 passed, no failures/errors, one upstream skip**:
-metamodel 258 / 259, Criteria 650 / 650, entity graphs 13 / 13 and repeatable named graphs 3 / 3.
-The P8 runtime/processor/module-path reactor reported **470 passing tests**, including populated canonical fields
-in entity packages neither exported nor opened to the provider.
-Optional `TABLE_PER_CLASS` remains explicitly refused; decision D5 stays open. Schema/container contracts, XML,
-and caching/validation are delivered. Data's incompatible canonical plural field kinds need a maintainer-approved
-producer reconciliation; Data is unchanged. No formal certification or Web Profile is sought.
-
-[source,bash]
-----
-# from the root of the monorepo
-cd vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-tck
-./run-official-tck-persistence-3.2.sh
-----
-
-The script exits zero after a reported run even if tests failed, but nonzero on setup or fixture-provenance failures; inspect
-`target/tck-report-persistence.txt` and the failsafe XML counters.
 
 == Jakarta Data 1.0 — detail
 
@@ -162,7 +111,7 @@ Not run in CI. The official suite is not a Maven artifact: `install-tck.sh` down
 | Test | Reason
 
 | `PersistenceTests.*` (Jakarta Data)
-| Data/JPA integration is deferred; Persistence is implemented, but Data remains frozen.
+| Data/JPA integration is deferred; Persistence is provided by Noether, but Data remains frozen.
 
 | `NoSQLTests.*` (Jakarta Data)
 | Mansart targets SQL/JDBC exclusively in v1.

@@ -40,9 +40,29 @@ cd vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webpro
 `PersistenceConfiguration`, so the harness hands it the same unit as a `PersistenceUnitInfo` through
 `createContainerEntityManagerFactory`.
 
-The modular generated-access Leyden AOT cache smoke is
-`noether-persistence/noether-jpa-processor-module-it/run-aot-smoke.sh`, in Noether's folder.
-It is not a GraalVM native-image claim.
+The harness is a standalone Maven project, outside the reactor: each provider's dependencies are test-scoped and sit
+behind its own profile, so none reaches a Noether module. The runner activates one provider profile per run and builds
+it in `target/<provider>` (POM property `bench.build.directory`), so cleaning one provider never wipes another's
+build. JMH runs with `-foe true`: a failing setup, preflight or benchmark stops the run with a non-zero exit, where JMH
+would otherwise report the error and exit 0.
+
+Every run keeps its raw evidence in `target/bench-reports/<run-id>/<provider>/` — `jmh.log`, `jmh.json`,
+`maven.log`, `java-version.txt`, `test-dependencies.txt` and `test-classpath.txt` — which the runner never cleans and
+refuses to overwrite. `BENCH_RUN_ID` groups the providers of one comparison; it defaults to a UTC timestamp.
+
+Each provider uses its own connection pool for `jakarta.persistence.jdbc.*` units: Noether `noether-jpa-pool-mansart`
+(the runner checks it is on the class path), Hibernate its built-in `DriverManagerConnectionProvider`, EclipseLink its
+internal pool. Internal statement and metadata caches stay at each provider's defaults.
+
+=== Leyden AOT cache smoke
+
+`noether-persistence/noether-jpa-processor-module-it/run-aot-smoke.sh`, in Noether's folder, builds a small named
+application module that uses the APT-generated managed access, and checks CRUD and JPQL results, that the generated
+service provider is part of the application module, and that the entity package is neither opened nor exported to
+Noether. It records a JDK AOT cache, runs the same application again with that cache, and checks that the log reports
+the cache in use. It deletes its own cache (`target/noether-jpa-smoke.aot`) and logs (`target/aot-record.log`,
+`target/aot-cache-use.log`) first, so a stale cache cannot satisfy the checks; a JVM that exits non-zero prints its
+log and fails the script with the same status. Run it with Temurin 25. It is not a GraalVM native-image claim.
 
 == Pre-optimization baseline after D43
 

@@ -34,7 +34,10 @@ they are not fresh Noether measurements.
 
 | P4: entity operations, identifiers, callbacks, locks | 609 / 2135, no failure left that P4 owns
 | P5: relationships and collections | 635 / 2135, no failure left that P5 owns
-| P8: dedicated official metamodel and Criteria gate | 924 passes, no failures/errors and one upstream skip / 925
+| P7: focused gates | 307 / 312 passed, four XML-mapping errors (resolved in P10) and one skip
+| P8: full suite | 2013 / 2135 passed; against the P7 baseline (1063 passes), 950 tests newly pass, with no regression and no added or missing test
+| P8: dedicated official metamodel and Criteria gate | 924 passes, no failures/errors and one upstream skip / 925 (metamodel 258 / 259, Criteria 650 / 650, entity graphs 13 / 13, repeatable named graphs 3 / 3)
+| P8: provider runtime, processor and module-path reactor | 470 passing tests, including canonical metamodel fields populated in entity packages neither exported nor opened to the provider
 | Pre-P11 untouched PostgreSQL 17 run | 2096 / 2135 passed, 35 errors and four official skips
 | P10 run with the TCK-BUG-001 fixture | 2121 / 2135 passed
 | P10 targeted official embeddable-metamodel regression gate | restored to 51/51; not a new full-suite score
@@ -42,7 +45,8 @@ they are not fresh Noether measurements.
 |===
 
 Of the 35 pre-P11 errors, ten were second-level cache assertions fixed in P11, and 25 were confined to the two
-delimited-default fixtures that TCK-BUG-001 covers. The milestones P0 to P12 are described in
+delimited-default fixtures that TCK-BUG-001 covers (`core.annotations.nativequery`, 1 / 12, and
+`core.entitytest.apitests`, 7 / 21). The milestones P0 to P12 are described in
 link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/ROADMAP.md[`noether-persistence/ROADMAP.md`].
 
 [#tck-bug-001]
@@ -74,6 +78,9 @@ noether-persistence/check-validation-neutrality.sh   # with and without Bean Val
 ----
 
 The runner needs Docker (a throw-away `postgres:17-alpine` container), or an existing PostgreSQL with `--external`.
+The script exits zero once the TCK ran and was reported, whatever its score, and non-zero when it could not run or a
+report did not run on exactly the prepared spec-tests jar: read `target/tck-report-persistence.txt` and the failsafe XML
+counters, not the exit status.
 The TCK is not on Maven Central: `noether-persistence/noether-jpa-tck/install-tck.sh` downloads it and installs it first; see the
 link:{repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-tck/README.md[runner README].
 

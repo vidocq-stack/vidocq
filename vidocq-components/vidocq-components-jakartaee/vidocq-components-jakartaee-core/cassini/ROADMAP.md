@@ -14,10 +14,10 @@ jdk-http). Optional DI via `BeanProvider` SPI (Vauban adapter provided).
 | TCK | `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1` |
 | JDK | Temurin 25 |
 | TCK `@Test` tests | **2670** |
-| Tests applicable to profile | **2535** |
-| **PASS** | **2535** (100 %) |
+| Tests applicable to profile | **2539** |
+| **PASS** | **2539** (100 %) |
 | Failures + Errors | **0** |
-| Skipped | **135** (134 out-of-profile tags + 6 challenges + 1 internal exemption) |
+| Skipped | **131** (out-of-profile tags + 3 official challenges) |
 
 ✅ **Conformant** on the Core Profile / SE-Bootstrap profile. Details on exclusions
 and official challenges: see [`TCK.md`](TCK.md).

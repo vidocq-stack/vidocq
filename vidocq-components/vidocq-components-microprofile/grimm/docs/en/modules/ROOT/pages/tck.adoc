@@ -2,7 +2,7 @@
 :description: Status, runner execution, out-of-reactor architecture, documented exclusions.
 
 [.lead]
-The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm's TCK run passes at *367 / 367* on TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot), run on 2026-10-04; the run will be repeated on the 4.2 final. The 367 tests are the 364 tests of the official TCK plus 3 Grimm harness tests (`GrimmTckSmokeTest`, 1 test; `DotNameCompatibilityTest`, 2 tests). For reference, the same run counted 349 tests on the 4.1 TCK (passed 349 / 349 in May 2026). 4.2-RC5 adds 18: `ExternalDocumentationAnnotationTest` (1 method, run once per JSON and YAML format: 2), `SchemaExtensionPropertyTest` (6 plain model tests, run once each: 6), the 4 new `@Digits` methods of `BeanValidationTest` (run once per format: 8) and `testExamplesInHeaders` (run once per format: 2).
+The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm passes the *364 / 364* tests of the official TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot), run on 2026-10-04; the run will be repeated on the 4.2 final. The runner executes 367 tests: those 364 plus 3 Grimm harness tests (`GrimmTckSmokeTest`, 1 test; `DotNameCompatibilityTest`, 2 tests). For reference, the same run counted 349 tests on the 4.1 TCK (passed 349 / 349 in May 2026). 4.2-RC5 adds 18: `ExternalDocumentationAnnotationTest` (1 method, run once per JSON and YAML format: 2), `SchemaExtensionPropertyTest` (6 plain model tests, run once each: 6), the 4 new `@Digits` methods of `BeanValidationTest` (run once per format: 8) and `testExamplesInHeaders` (run once per format: 2).
 
 == Status
 
@@ -14,7 +14,7 @@ The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produc
 | 367 (364 official TCK tests + 3 Grimm harness tests)
 
 | Passed
-| 367 ✅
+| 367 ✅ (364 / 364 official TCK tests)
 
 | Failed
 | 0
@@ -116,11 +116,11 @@ The readiness probe is parameterisable:
 
 == Documented exclusions
 
-None to date: the full suite runs and passes at 367/367. Should an exclusion ever be added, it would be declared as a Surefire exclusion in `grimm-tck/pom.xml` and tracked in `TCK.md`.
+None to date: the full suite runs and passes, 364/364 official tests (367/367 with the harness tests). Should an exclusion ever be added, it would be declared as a Surefire exclusion in `grimm-tck/pom.xml` and tracked in `TCK.md`.
 
 == Quality contract
 
-Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 367/367 score before merge.
+Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 364/364 official score (367/367 with the harness tests) before merge.
 
 A pull request runs no TCK. Grimm's root `pom.xml` declares the full suite in `ci.tck.command`, which the `TCK nightly` workflow of the monorepo (`.forgejo/workflows/tck-nightly.yml`) runs in Grimm's folder once a day, on demand on a branch (dispatched with the `GRIMM` tag), and for a release, which requires it green: `mvn -f grimm-tck/pom.xml -Ptck-official test`, with `grimm.version` set to the version of the build, since `grimm-tck` is outside the reactor and would otherwise test the published snapshot. A single failing test fails the run. A pull request that changes Grimm dispatches it on its branch before merging.
 

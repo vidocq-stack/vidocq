@@ -1,57 +1,66 @@
 = Performance
-:description: What Vauban costs at run time — qualifier resolution, injection, events and interception — and how it is measured.
+:description: What Vauban costs at run time — qualifier resolution, injection, events, interception, client proxies and the start — and how it is measured.
 
 [.lead]
 Vauban does at build time what a runtime container does on every lookup, so the numbers that matter
 are the ones on the hot path: resolving a qualified injection point, a programmatic lookup, firing a
-qualified event, and an intercepted call. *Every run, with its raw output and its caveats*, is kept
-in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BENCH.md[BENCH.md] — this page is the reading of it.
+qualified event, an intercepted call and a call through a client proxy. *Every run, with its raw output and its caveats*, is kept
+in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BENCH.md[BENCH.md] — this page is the reading of it, and each figure names its entry.
 
 == TL;DR
 
-Between 2026-09-14 and the close of
-vauban#70, qualifier matching, injection and
-interceptor binding comparison stopped reading annotations at run time. Same benchmark, same machine,
-before and after:
+The latest runs of the container's hot path are BENCH-20261028-02 and BENCH-20261028-07, measured on
+2026-10-28. Against the reference taken before vauban#70 (BENCH-20260914-01, 2026-09-14), same
+benchmark (`QualifierResolutionBenchmark`), same machine:
 
 [cols="2,2,2,1,1",options="header"]
 |===
-| Benchmark | before | after | time | allocation
+| Benchmark | 2026-09-14, before vauban#70 | 2026-10-28 | time | allocation
 
 | `dependentCreation`
 | 41561 ns, 65245 B
-| 13627 ns, 34565 B
-| *3.05× faster*
-| *−47 %*
+| 10449 ns, 36184 B (BENCH-20261028-02)
+| *3.98× faster*
+| *−45 %*
 
 | `programmaticLookup`
 | 6590 ns, 11691 B
-| 1869 ns, 6965 B
-| *3.53× faster*
-| *−40 %*
+| 1189 ns, 7075 B (BENCH-20261028-02)
+| *5.54× faster*
+| *−39 %*
 
 | `interceptedCall`
 | 651 ns, 3251 B
-| 360 ns, 768 B
-| *1.81× faster*
-| *−76 %*
+| 14.1 ns, 96 B (BENCH-20261028-07)
+| *46× faster*
+| *−97 %*
 
 | `qualifiedEvent`
 | 4673 ns, 6941 B
-| 4512 ns, 7792 B
-| flat
-| +12 %
+| 3576 ns, 7861 B (BENCH-20261028-02)
+| 1.31× faster
+| +13 %
 |===
 
 *Pragmatic read*: creating a bean with qualified injection points and looking one up programmatically
-— the two operations an application performs constantly — cost about a third of what they did, for
-roughly half the garbage. An intercepted call allocates a quarter of what it did.
+— the two operations an application performs constantly — cost a quarter and a fifth of what they did,
+for roughly half the garbage. An intercepted call is now a few nanoseconds and 96 bytes.
 
-`qualifiedEvent` did not move, and the table says so. See <<what-did-not-move>>.
+Two campaigns did this: vauban#70 (September) stopped reading annotations at run time, and vauban#227
+(October) took the reflection out of the generated code. The table spans both. BENCH.md attributes to
+each only what it measured on its own: between the end of vauban#70 (BENCH-20260914-04) and
+BENCH-20261028-02, `dependentCreation`, `programmaticLookup` and `qualifiedEvent` moved by −23 %, −36 %
+and −21 %, with six weeks of `main` in between, and those deltas are recorded, not claimed for vauban#227.
+
+`qualifiedEvent` still allocates more than before vauban#70, and the table says so. See <<what-did-not-move>>.
 
 == Where the time went
 
-Three things were removed, in this order.
+=== Qualifier resolution and interceptor bindings (vauban#70)
+
+Three things were removed, in this order. Their effect, measured at the end of the campaign
+(BENCH-20260914-04, 2026-09-14), was `dependentCreation` 3.05× faster, `programmaticLookup` 3.53×,
+`interceptedCall` 1.81× with 76 % less allocation.
 
 Matching on keys::
 Resolution used to rebuild every candidate bean's qualifiers as `java.lang.reflect.Proxy` instances
@@ -68,17 +77,57 @@ The interceptor chain worked out once::
 The generated subclass asks for its interceptor chain on every call, and the container answered by
 walking the class hierarchy, resolving the method reflectively and re-reading every binding
 annotation. Which interceptors apply depends on declarations alone, so it is computed once per
-(bean class, method). That is the whole of `interceptedCall`: 768 B/op is what building the chain's
-invocations costs, and the 2.5 KB above it was the answer being recomputed.
+(bean class, method).
+
+=== Generated code (vauban#227)
+
+`GeneratedCodeBenchmark` measures the classes Vauban generates, one at a time: `plainCall` a
+`@Dependent` bean with nothing around it (the floor), `clientProxyCall` an `@ApplicationScoped` bean
+through its client proxy, `interceptedCall` a `@Dependent` bean through its intercepted subclass,
+`proxiedInterceptedCall` both, and the creation of an intercepted bean, by `new` or emitted as bytecode.
+From the reference before the campaign (BENCH-20261028-01, and BENCH-20261028-05 for the bytecode
+creation) to the latest run (BENCH-20261028-07, `main` f6c809c4), all on 2026-10-28:
+
+[cols="2,2,2,1",options="header"]
+|===
+| Benchmark | before vauban#227 | BENCH-20261028-07 | time
+
+| `plainCall` | 0.34 ns | 0.31 ns | flat
+| `clientProxyCall` | 276 ns, 0 B | 5.03 ns, 0 B | *55× faster*
+| `interceptedCall` | 84.4 ns, 768 B | 12.1 ns, 96 B | *7× faster*
+| `proxiedInterceptedCall` | 382 ns, 768 B | 14.2 ns, 96 B | *27× faster*
+| `interceptedCreation` | 3540 ns, 7630 B | 2487 ns, 7845 B | −30 %
+| `bytecodeInterceptedCreation` | 3624 ns, 9208 B | 2542 ns, 8387 B | −30 %
+|===
+
+The client proxy looked its bean's scope annotation up by name (`Class.forName`) on every call
+(BUG-20261028-01); the scope is now resolved once. The intercepted subclass read its interceptor
+callbacks and its bridge `Method` on every call; they are read once per class, and the chain is kept per
+bean instance. The intercepted call goes through one `InterceptorManager.intercept` call, calls the
+target directly when the chain is empty, and no longer copies its arguments. A class emitted as bytecode
+is created through a constructor handle looked up once instead of a reflective lookup per creation.
+What an intercepted call still allocates, 96 B with one interceptor, is the invocation context, the
+context handed to the interceptor and the argument array of the `@AroundInvoke` call.
+
+=== The start
+
+* *Extensions frozen at build* — with ten build compatible extensions frozen by `vidocq:generate`
+  instead of run at start, the start of a Vidocq application is 30 to 40 ms shorter, about 8 % of
+  425 ms, in the quiet series of BENCH-20261113-01 (2026-11-13, vauban#288).
+* *Classes the start loads* — BENCH-20261118-01 (2026-11-18, vauban#347) counts the classes the start
+  of the Cassini bench application loads, and how loops on the start path brought them down: see
+  xref:internals.adoc#start-classes[Internals — classes the start loads].
 
 [#what-did-not-move]
 == What did not move
 
 `qualifiedEvent` is `orders.select(literal).fire(event)` with a fresh `Event` per iteration, so its
 qualifiers are converted on every measurement. BENCH-20260914-02 predicted that the generated
-readers of PR 4 would remove that conversion cost. *They did not*: allocation fell 7 %, the time did
-not move, and allocation is still 12 % above the pre-#70 baseline. The generated reader makes the
-conversion cheaper, not free, and what is left is in the dispatch rather than in the annotations.
+readers of vauban#70 would remove that conversion cost. *They did not*: at the end of that campaign
+(BENCH-20260914-04) allocation had fallen 7 %, the time had not moved, and allocation was still 12 %
+above the pre-#70 baseline. The generated reader makes the conversion cheaper, not free, and what is
+left is in the dispatch rather than in the annotations. The latest run (BENCH-20261028-02) is faster,
+for reasons not attributed to a change, and still allocates 13 % more than before vauban#70.
 An `Event` injected once and fired many times pays the conversion once.
 
 That prediction is recorded in BENCH.md as having failed, on purpose: a benchmark history is only
@@ -87,14 +136,14 @@ useful if it keeps the guesses that did not hold.
 == Methodology
 
 * *Harness*: JMH, in `vauban-bench` — a module of the reactor, not a published artefact.
-* *Hardware*: Apple M5 Max, 18 cores (6 performance, 12 efficiency), 128 GB RAM, macOS 26.6.2
-  (arm64).
+* *Hardware*: Apple M5 Max, 18 cores (6 performance, 12 efficiency), 128 GB RAM; macOS 26.6.2 (arm64)
+  for the September runs, macOS 27.0.1 for the October runs.
 * *JVM*: Temurin 25+36-LTS, default flags.
 * *Mode*: average time per operation, with `-prof gc` for allocation per operation.
 * *Machine state*: the runs were made on a machine that was **not idle** — load average between 2.6
-  and 5. Each entry records its own, and only runs made under comparable load are compared. Changes
-  of the same order as that difference, or as the error bars (0.8 % to 2.8 % of each score), are read
-  as flat rather than as gains.
+  and 5.2 where it was recorded. Each entry records its own, and only runs made under comparable load are
+  compared. Changes of the same order as that difference, or as the error bars (under 3.5 % of each
+  score), are read as flat rather than as gains.
 
 [WARNING]
 ====
@@ -107,9 +156,11 @@ entirely on how much of its time it spends in the container.
 
 [source,bash]
 ----
-# The numbers above come from this exact command
-mvn -ntp clean install
-java -jar vauban-bench/target/benchmarks.jar -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+# The latest numbers above come from these commands, from the root of the monorepo
+./mvnw -ntp -pl vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-bench -am clean package -DskipTests
+cd vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban
+java -jar vauban-bench/target/benchmarks.jar QualifierResolutionBenchmark -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+java -jar vauban-bench/target/benchmarks.jar GeneratedCodeBenchmark -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
 ----
 
 Compare against the entries in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BENCH.md[BENCH.md], which carry

@@ -19,6 +19,21 @@ Consolidated reference for the Maven artifacts, Java modules, supported annotati
 | `io.vidocq.champollion:champollion-jsonb`
 | JSON-B 3.0 implementation (`Jsonb`, `JsonbBuilder`, `JsonbConfig`). Depends on `champollion-jsonp`.
 
+| `io.vidocq.champollion:champollion-jsonb-cdi`
+| The CDI side of the JSON-B implementation, kept out of the core: a build compatible extension that validates the adapters, serializers and deserializers JSON-B annotations name, and a registry that hands their CDI instances to the bindings. Container-neutral: CDI and JSON-B APIs only (see <<jsonb-cdi>>).
+
+| `io.vidocq.champollion:champollion-jsonb-cdi-vauban`
+| Engine adapter for Vauban: lets Vauban create the registry of `champollion-jsonb-cdi`, call its observers and proxy it, without reflection and without an `opens`. The Vidocq REST extension adds it; another CDI container runs `champollion-jsonb-cdi` alone.
+
+| `io.vidocq.champollion:champollion-protobuf`
+| Protocol Buffers: proto3 binary wire format and canonical JSON mapping, well-known types, on `champollion-jsonp`; no third-party dependency.
+
+| `io.vidocq.champollion:champollion-protobuf-codegen`
+| Annotation processor (`@ProtobufStatic`), `.proto` parser and Java emitter: generates the parser of each `@ProtobufStatic` record at compile time.
+
+| `io.vidocq.champollion:champollion-protobuf-maven-plugin`
+| `generate` Mojo bound to `generate-sources`: reads the `.proto` files of `src/main/proto` (`sourceDirectory`) and writes Java sources to `target/generated-sources/protobuf` (`outputDirectory`), in the package of each file or `javaPackage`; `staticParser` (`false` by default) also generates static parsers. Delegates to `champollion-protobuf-codegen`.
+
 | `io.vidocq.champollion:champollion-codegen-apt`
 | Annotation Processor (scope `provided`) generating `JsonbBinding<T>` at compile time.
 
@@ -55,6 +70,22 @@ Consolidated reference for the Maven artifacts, Java modules, supported annotati
 | `io.vidocq.champollion.jsonb`
 | `io.vidocq.champollion.jsonb.spi` (`JsonbBinding`, `@JsonbStatic`, `PrimedJsonParser`, `JsonbLeaf`, `JsonbContexts`)
 | `provides jakarta.json.bind.spi.JsonbProvider with io.vidocq.champollion.jsonb.internal.ChampollionJsonbProvider`; `uses io.vidocq.champollion.jsonb.spi.JsonbBinding`
+
+| `io.vidocq.champollion.jsonb.cdi`
+| `io.vidocq.champollion.jsonb.cdi`; `io.vidocq.champollion.jsonb.cdi.registry` to `io.vidocq.champollion.jsonb.cdi.vauban` only
+| `provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension with io.vidocq.champollion.jsonb.cdi.JsonbCdiExtension`
+
+| `io.vidocq.champollion.jsonb.cdi.vauban`
+| No exports
+| `provides io.vidocq.vauban.api.VaubanComponentProvider with io.vidocq.champollion.jsonb.cdi.vauban.JsonbCdiVaubanComponents`
+
+| `io.vidocq.champollion.protobuf`
+| `io.vidocq.champollion.protobuf`, `io.vidocq.champollion.protobuf.wkt`; `requires transitive io.vidocq.champollion.jsonp`
+| `uses io.vidocq.champollion.protobuf.ParserProvider`
+
+| `io.vidocq.champollion.protobuf.codegen`
+| `io.vidocq.champollion.protobuf.codegen`, `io.vidocq.champollion.protobuf.codegen.cli`
+| `provides javax.annotation.processing.Processor with io.vidocq.champollion.protobuf.codegen.ProtobufStaticProcessor`
 
 | `io.vidocq.champollion.codegen.apt`
 | `io.vidocq.champollion.codegen.apt` (the processor)

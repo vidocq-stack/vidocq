@@ -38,7 +38,7 @@ to work around ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0.
 ### TCK
 ```bash
 ./run-official-tck-restful-4.0.sh           # smoke (CassiniHarnessSmokeTest)
-./run-official-tck-restful-4.0.sh all       # 2670 tests, expected: 2535 PASS / 135 SKIP / 0 ERR
+./run-official-tck-restful-4.0.sh all       # 2670 tests, expected: 2539 PASS / 131 SKIP / 0 ERR
 ./run-official-tck-restful-4.0.sh -Dtest=X  # targeted
 ```
 
