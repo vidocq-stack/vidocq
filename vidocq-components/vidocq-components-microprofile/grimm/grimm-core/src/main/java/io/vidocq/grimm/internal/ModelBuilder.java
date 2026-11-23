@@ -125,7 +125,7 @@ public final class ModelBuilder {
         }
         // The resources are served under the @ApplicationPath: so are the paths their annotations describe
         // (spec §5.4, BUG-20261123-49). The reader's and the static file's paths are the application's, as written.
-        ApplicationPathPrefix.applyTo(annotationModel, ApplicationPathPrefix.of(annotatedTypes));
+        ApplicationPathPrefix.applyTo(annotationModel, applicationPath(annotatedTypes));
         sources.add(new AnnotationSource(annotationModel));
 
         // Step 4 — merge with spec priority (§4.4)
@@ -158,6 +158,21 @@ public final class ModelBuilder {
         if (info.getVersion() == null || info.getVersion().isBlank()) {
             info.setVersion("1.0");
         }
+    }
+
+    /**
+     * The normalized {@code @ApplicationPath} of {@code classes} ({@code /api}), or the empty string for the root or
+     * none: the first {@code Application} subclass by class name, as the Vidocq runtime mounts it
+     * (BUG-20261123-49). Read here, in the annotation scan that is the documented reflective fallback.
+     */
+    static String applicationPath(Collection<Class<?>> classes) {
+        return classes.stream()
+                .filter(type -> jakarta.ws.rs.core.Application.class.isAssignableFrom(type)
+                        && type.isAnnotationPresent(jakarta.ws.rs.ApplicationPath.class))
+                .min(java.util.Comparator.comparing(Class::getName))
+                .map(type -> ApplicationPathPrefix.normalize(
+                        type.getAnnotation(jakarta.ws.rs.ApplicationPath.class).value()))
+                .orElse("");
     }
 }
 
