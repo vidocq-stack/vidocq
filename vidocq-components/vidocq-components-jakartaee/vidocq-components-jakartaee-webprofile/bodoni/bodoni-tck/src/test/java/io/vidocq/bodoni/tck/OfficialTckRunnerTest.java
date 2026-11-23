@@ -71,9 +71,8 @@ class OfficialTckRunnerTest {
             PACKAGE + "spec.fmt.i18n.param" + CLIENT,
             PACKAGE + "spec.sql.setdatasource" + CLIENT,
             PACKAGE + "spec.xml.xmlcore.bindings" + CLIENT);
-    private static final List<String> RUNNER_TESTS = List.of("-ntp", "-Ptck", "-pl", "bodoni-tck", "test");
-    private static final List<String> OFFICIAL_SUITE =
-            List.of("-ntp", "-Ptck,tck-official", "-pl", "bodoni-tck", "test");
+    private static final String TCK_LOCAL_REPOSITORY = "TCK_LOCAL_REPOSITORY";
+    private static final String SHARED_REPOSITORY = "-Dmaven.repo.local.tail=" + System.getenv("HOME") + "/.m2/repository";
     private static final FileTime AN_HOUR_AGO = FileTime.from(Instant.now().minus(Duration.ofHours(1)));
 
     @TempDir
@@ -127,8 +126,36 @@ class OfficialTckRunnerTest {
 
         assertEquals(0, run.exitCode(), run.output());
         assertEquals(3, run.invocations().size(), run.output());
-        assertEquals(List.of("-ntp", "clean", "install", "-pl", "bodoni-core,bodoni-peano", "-am"),
-                run.invocations().getFirst());
+        assertEquals(maven("clean", "install", "-pl", "bodoni-core,bodoni-peano", "-am"), run.invocations().getFirst());
+    }
+
+    // BUG-20261123-57: an install into ~/.m2 shadows the published snapshot for every other build of the machine.
+    @Test
+    void theRepositoryIsPrivateToTheCheckoutByDefault() throws Exception {
+        Run run = run(Map.of(TCK_LOCAL_REPOSITORY, ""), NO_PREPARE);
+
+        assertEquals(0, run.exitCode(), run.output());
+        assertEquals(3, run.invocations().size(), run.output());
+        for (List<String> invocation : run.invocations()) {
+            assertEquals(List.of("-ntp", "-Dmaven.repo.local=" + checkout.resolve(".tck-repository"), SHARED_REPOSITORY),
+                    invocation.subList(0, 3));
+        }
+    }
+
+    @Test
+    void noInstallChecksTheSnapshotsOfThePrivateRepository() throws Exception {
+        // Fresh snapshots in the shared repository only: the official suite would resolve the private one first.
+        Path home = work.resolve("home");
+        for (String module : List.of("bodoni-core", "bodoni-peano")) {
+            Path jar = home.resolve(".m2/repository").resolve(repository.relativize(snapshotJar(module)));
+            Files.createDirectories(jar.getParent());
+            Files.writeString(jar, "jar");
+        }
+
+        Run run = run(Map.of(TCK_LOCAL_REPOSITORY, "", "HOME", home.toString()), NO_PREPARE, NO_INSTALL);
+
+        assertEquals(2, run.exitCode(), run.output());
+        assertTrue(run.output().contains("run without --no-install"), run.output());
     }
 
     @Test
@@ -137,8 +164,9 @@ class OfficialTckRunnerTest {
 
         assertEquals(0, run.exitCode(), run.output());
         assertEquals(2, run.invocations().size(), run.output());
-        assertEquals(RUNNER_TESTS, run.invocations().get(0));
-        assertEquals(OFFICIAL_SUITE, run.invocations().get(1).subList(0, OFFICIAL_SUITE.size()));
+        List<String> officialSuite = maven("-Ptck,tck-official", "-pl", "bodoni-tck", "test");
+        assertEquals(maven("-Ptck", "-pl", "bodoni-tck", "test"), run.invocations().get(0));
+        assertEquals(officialSuite, run.invocations().get(1).subList(0, officialSuite.size()));
     }
 
     @Test
@@ -405,8 +433,11 @@ class OfficialTckRunnerTest {
         env.remove(TAGS_TCK_ZIP);
         env.put("JAVA_HOME", System.getProperty("java.home"));
         env.put("MAVEN_ARGS_LOG", argumentLog.toString());
-        env.put("BODONI_M2_REPOSITORY", repository.toString());
+        env.put(TCK_LOCAL_REPOSITORY, repository.toString());
         env.putAll(environment);
+        if (env.get(TCK_LOCAL_REPOSITORY).isEmpty()) {
+            env.remove(TCK_LOCAL_REPOSITORY);
+        }
         Process process = builder.start();
         String output;
         try (var in = process.getInputStream()) {
@@ -415,6 +446,13 @@ class OfficialTckRunnerTest {
         int exitCode = process.waitFor();
         String log = Files.exists(argumentLog) ? Files.readString(argumentLog) : "";
         return new Run(exitCode, output, log, invocations(log));
+    }
+
+    /** A Maven call of the script: -ntp, the private repository above the shared one, then {@code arguments}. */
+    private List<String> maven(String... arguments) {
+        List<String> call = new ArrayList<>(List.of("-ntp", "-Dmaven.repo.local=" + repository, SHARED_REPOSITORY));
+        call.addAll(List.of(arguments));
+        return call;
     }
 
     private static List<List<String>> invocations(String log) {

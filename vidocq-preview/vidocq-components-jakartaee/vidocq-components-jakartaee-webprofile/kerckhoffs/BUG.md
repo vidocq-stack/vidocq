@@ -3,6 +3,13 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## BUG-20261123-57 · 2026-11-23 · The TCK scripts install the branch into the shared `~/.m2`
+
+- **Symptom:** `run-official-tck-security-4.0.sh` ran `./mvnw -ntp install -DskipTests`, the class path build and the TCK's own build on the default local repository, `~/.m2/repository`, which every build and session of the machine shares: a run from a branch replaced the published Kerckhoffs snapshot there for every other build. The runner of the assembled runtime (`vidocq-runtime-tck-kerckhoffs-security/run-official-tck-security-4.0.sh`) did the same with `VIDOCQ_TCK_INSTALL=1`. Both also failed under macOS's Bash 3.2 without `MVN_EXTRA` or `--` arguments (an empty array is unbound under `set -u`). Same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Mansart and Noether.
+- **Minimal repro:** `OfficialTckScriptTest` (`kerckhoffs-tck`, `-Ptck`): the script, copied next to a `mvnw` that logs its arguments, on a stand-in distribution, made its three Maven calls without `-Dmaven.repo.local`. The runtime runner has no test (its module holds none).
+- **Cause:** the scripts predate the workspace rule "never install into `~/.m2` from a branch build".
+- **Status:** FIXED (pending commit). Every Maven call takes `-Dmaven.repo.local=<folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first), the Kerckhoffs folder for the brick's script and `vidocq-runtime/` for the runtime's; the empty arrays expand as `${a[@]+"${a[@]}"}`. `.tck-repository/` is git-ignored.
+
 ## KERCK-20261118-03 · 2026-11-18 · A BASIC mechanism's qualifiers differ from Soteria's
 
 - **Symptom:** `KerckhoffsExtension.qualify` gives a `@BasicAuthenticationMechanismDefinition` other qualifiers than Soteria 4.0.2, the reference implementation, in two cases. (1) With `qualifiers` left to its default `{BasicAuthenticationMechanism.class}`, or written out the same, the mechanism is `@BasicAuthenticationMechanism` and `@Default`; on Soteria a mechanism with a non-empty `qualifiers` has those qualifiers alone, without `@Default`. (2) With an explicit `qualifiers = {}`, the mechanism is `@BasicAuthenticationMechanism` and `@Default`; on Soteria it has no `@BasicAuthenticationMechanism`, so it is `@Default` alone.

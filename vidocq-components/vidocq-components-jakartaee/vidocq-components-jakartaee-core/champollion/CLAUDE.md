@@ -5,9 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Prerequisites
 
 - **Java 25** + **Maven 3.10.0** (`.sdkmanrc` provided — use `sdk env`)
-- Official TCKs must be installed in the local M2 (non-public artifacts):
+- Official TCKs must be installed in the local M2 (not on Maven Central); `./install-tck.sh`
+  downloads the official ZIPs and installs them:
   - `jakarta.json:jakarta.json-tck:2.1.x` (JSON-P 2.1)
   - `jakarta.json.bind:jakarta.json.bind-tck:3.0.x` (JSON-B 3.0)
+- A pull request runs no TCK; the `TCK nightly` workflow of the monorepo runs both suites
+  (`ci.tck.command` of the root `pom.xml`) once a day, on demand on a branch and for a release.
 
 ## Essential Commands
 
@@ -139,7 +142,9 @@ The `run-official-tck-jsonp-2.1.sh` and `run-official-tck-jsonb-3.0.sh` scripts:
   the `smoke` mode is still accepted but fails, because the `BasicSmokeTest` it names does
   not exist in the repository;
 - exit non-zero when the TCK fails;
-- install the reactor locally (`mvn install -DskipTests`) before invocation;
+- install the reactor (`mvn install -DskipTests`) before invocation into `.tck-repository/` in this folder
+  (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which every Maven call of the scripts only reads,
+  so a branch never replaces the published snapshot there (BUG-20261123-57);
 - produce a `champollion-tck/target/tck-report-jsonp.txt` / `tck-report-jsonb.txt` report with the PASS/FAIL/SKIP score.
 
 **Release discipline:**

@@ -65,6 +65,15 @@
         <jakarta.el.version>6.0.1</jakarta.el.version>
 
         <!--
+            The official Expression Language 6.0.1 TCK, run from this folder by the TCK workflow of
+            the monorepo (.forgejo/workflows/tck-nightly.yml): once a day, on demand and for a
+            release; a pull request runs no TCK. The script downloads the Eclipse distribution,
+            installs the TCK jar and the reactor into its private local repository, then runs the
+            whole suite, signature test included; it exits non-zero on a red suite (set -e).
+        -->
+        <ci.tck.command>./run-official-tck-el-6.0.sh all</ci.tck.command>
+
+        <!--
             SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
             peano-coverage (quality profile), so the tests of one module count for the code they
             exercise in the others.

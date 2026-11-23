@@ -5,6 +5,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261123-57 — The Security TCK runner installs the branch into the shared `~/.m2`
+
+- **Date**: 2026-11-23 (same bug in the component scripts of Foy, Peano, Ibarra, Bodoni, Cassini, Champollion,
+  Mansart, Kerckhoffs and Noether; the Kerckhoffs entry describes both Security runners)
+- **Status**: FIXED (pending commit)
+- **Module**: `vidocq-runtime-integration-tests/vidocq-runtime-tck-kerckhoffs-security/run-official-tck-security-4.0.sh`
+- **Symptom**: with `VIDOCQ_TCK_INSTALL=1`, the script ran `mvnw -ntp install -DskipTests -Dgpg.skip -Ptck -pl <module>
+  -am`, then the class path build and the TCK's own build, on the default local repository, `~/.m2/repository`,
+  shared by every build and session of the machine: a run from a branch replaced the published runtime snapshots
+  there for every other build. Without `MVN_EXTRA` or `--` arguments it also stopped under macOS's Bash 3.2 (an empty
+  array is unbound under `set -u`).
+- **Repro**: reading the script (the module holds no test of its own).
+- **Cause**: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+- **Fix**: every Maven call takes `-Dmaven.repo.local=vidocq-runtime/.tck-repository
+  -Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first): the runtime root, where
+  the install runs from. Without `VIDOCQ_TCK_INSTALL` the runtime still comes from `~/.m2` (through the tail) or
+  maven.vidocq.dev. `.tck-repository/` is git-ignored.
+
 ## BUG-20261121-03 — `vidocq-runtime-cassini-rest-example` does not start from its own folder: Maven cannot read its library
 
 - **Date**: 2026-11-21

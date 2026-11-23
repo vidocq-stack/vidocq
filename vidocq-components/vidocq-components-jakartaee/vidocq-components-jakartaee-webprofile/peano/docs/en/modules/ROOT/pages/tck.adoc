@@ -22,9 +22,10 @@ A successful build of that profile is not a TCK pass.
 | Test framework | JUnit Jupiter, with explicit `*IT` discovery and failure when no tests are found.
 | Provider selection | Suite sources call `ExpressionFactory.newInstance()`; the harness selects Peano through the Jakarta provider property.
 | Container | Inspected standalone suite sources do not use Arquillian.
-| Signature test | ELSigTestIT uses `jakarta.tck:sigtest-maven-plugin:2.3`, the API jar and JDK classes extracted by the upstream harness.
+| Signature test | ELSigTestIT uses `jakarta.tck:sigtest-maven-plugin:2.3`, the API jar (copied into `peano-tck/target/signature-api/`) and JDK classes extracted by the upstream harness.
 | Script | `run-official-tck-el-6.0.sh` with `smoke` / `all` / `-Dtest=` modes. Default: full suite.
-| Merge gate | 100 % PASS is required; a pull request runs no TCK: the script runs the full suite.
+| CI | A pull request runs no TCK. The `TCK nightly` workflow of the monorepo runs `./run-official-tck-el-6.0.sh all` (`ci.tck.command` of Peano's root POM) once a day, on demand on a branch (tag `PEANO`) and for a release.
+| Merge gate | 100 % PASS is required.
 |===
 
 == Tracking
@@ -70,6 +71,11 @@ The script downloads the official distribution if needed. Set EL_TCK_ZIP to an
 existing 6.0.1 archive to avoid downloading it. It installs the unmodified jar with
 controlled local metadata, builds the provider, then runs the selected official cases.
 The full runner is never activated by a normal Maven build.
+
+Every Maven call of the script reads and writes `.tck-repository/` in the Peano folder
+(`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the
+install of a branch never replaces the published Peano snapshot the other builds of the
+machine resolve.
 
 The upstream TCK is non-modular, so only its unpublished harness uses the classpath.
 Independent named-consumer tests remain the authority for Java module encapsulation.

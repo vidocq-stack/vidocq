@@ -85,6 +85,15 @@
              ibarra-api in bodoni-it-ibarra, the ibarra-arquillian TCK adapter in
              bodoni-tck). One value for both, so they never drift apart. -->
         <ibarra.version>${project.version}</ibarra.version>
+
+        <!--
+            The official Tags tests, run from this folder by the TCK workflow of the monorepo
+            (.forgejo/workflows/tck-nightly.yml): once a day, on demand and for a release; a pull
+            request runs no TCK. The script fetches the official zip for the Derby DDL (SHA-256
+            checked), installs bodoni-core and bodoni-peano into its private local repository, runs
+            the runner tests, then every official class; it exits non-zero on a red suite.
+        -->
+        <ci.tck.command>./run-official-tck-tags-3.0.sh all</ci.tck.command>
     </properties>
 
     <!--

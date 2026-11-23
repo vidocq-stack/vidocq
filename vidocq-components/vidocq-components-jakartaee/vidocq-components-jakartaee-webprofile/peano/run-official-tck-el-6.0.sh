@@ -34,6 +34,12 @@ if [[ ! "$java_version" =~ version\ \"25[.\"] ]]; then
     exit 2
 fi
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+local_repository="${TCK_LOCAL_REPOSITORY:-$PWD/.tck-repository}"
+maven=(./mvnw -ntp "-Dmaven.repo.local=$local_repository" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 distribution_dir="peano-tck/target/official-distribution"
 mkdir -p "$distribution_dir"
 distribution_zip="${EL_TCK_ZIP:-$distribution_dir/jakarta-expression-language-tck-6.0.1.zip}"
@@ -50,10 +56,11 @@ fi
 unzip -q -o "$distribution_zip" \
     "el-tck/artifacts/jakarta-expression-language-tck-6.0.1.jar" \
     -d "$distribution_dir"
-./mvnw -N -ntp install:install-file \
+"${maven[@]}" -N install:install-file \
     "-Dfile=$distribution_dir/el-tck/artifacts/jakarta-expression-language-tck-6.0.1.jar" \
     -DpomFile=peano-tck/official-artifact.pom
-./mvnw -ntp install -DskipTests
+"${maven[@]}" install -DskipTests
 # Clear old reports so partial selections cannot be mistaken for a full run.
 rm -rf peano-tck/target/surefire-reports
-./mvnw -ntp -Ptck,tck-official -pl peano-tck test "${selector[@]}"
+# Bash 3.2 (macOS) treats an empty "${selector[@]}" as unbound under set -u.
+"${maven[@]}" -Ptck,tck-official -pl peano-tck test ${selector[@]+"${selector[@]}"}

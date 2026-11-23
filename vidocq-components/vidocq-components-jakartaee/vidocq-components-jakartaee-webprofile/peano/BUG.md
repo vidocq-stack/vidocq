@@ -3,6 +3,40 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## BUG-20261123-58 · 2026-11-23 · The TCK nightly ran no Peano TCK
+
+- Symptom: since the monorepo, the `TCK nightly` workflow (`.forgejo/workflows/tck-nightly.yml`) runs for a
+  component only what its root POM names in `ci.tck.modules` / `ci.tck.command`. Peano's root POM named neither:
+  no job `tck / PEANO`, no TCK run before a release. Same for Ibarra and Bodoni (their BUG.md); Noether is not wired
+  on purpose (see its TCK page).
+- Minimal reproduction: the workflow's `plan` step, run on `components.json` with `COMPONENTS=PEANO`, produced an
+  empty matrix.
+- Cause: the per-repository workflow `tck-official.yml` of the former Peano repository did not move into the
+  monorepo, and nothing replaced it.
+- Status: FIXED (pending commit). `ci.tck.command` = `./run-official-tck-el-6.0.sh all` (what the former workflow
+  ran); the plan step now gives the job `tck / PEANO` with that command. Not run in CI yet.
+
+## BUG-20261123-57 · 2026-11-23 · The EL TCK script installs the branch into the shared `~/.m2`
+
+- Symptom: `run-official-tck-el-6.0.sh` installed the official TCK jar (`install:install-file`) and the Peano reactor
+  (`install -DskipTests`) into `~/.m2/repository`, which every build and session of the machine shares: a run from a
+  branch replaced the published Peano snapshot there for everyone. Same bug in the scripts of Foy, Ibarra and Bodoni.
+- Minimal reproduction: `OfficialTckScriptTest` (`peano-tck`, `-Ptck`): the script, run in a fake checkout whose
+  `mvnw` logs its arguments, made three Maven calls without `-Dmaven.repo.local`. The same test showed a second
+  fault: `all` (the default) stopped on `selector[@]: unbound variable` under the Bash 3.2 of macOS (`set -u` and an
+  empty array).
+- Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build". The signature test
+  also read `jakarta.el-api` at `${settings.localRepository}/jakarta/el/...`, a path that a private repository above
+  `~/.m2` does not fill (the jar may come from the tail).
+- Status: FIXED (pending commit). Every Maven call takes `-Dmaven.repo.local=<Peano folder>/.tck-repository
+  -Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first; the folder is git-ignored);
+  the selector expands as `${selector[@]+...}`; `peano-tck`'s `tck-official` profile copies `jakarta.el-api` into
+  `target/signature-api/` (`maven-dependency-plugin:copy`, as Ibarra's runner does) and the signature class path
+  reads it there.
+- Verification: `OfficialTckScriptTest` red (2 failures) before, green after (2 tests); the copy execution alone
+  (`dependency:copy@copy-spec-api-for-signature-test`, private repository) wrote the jar. The official suite was not
+  run.
+
 ## EL-025 · 2026-11-17 · A proxy unwrapper brought by an application layer kept that layer reachable
 
 - Symptom: latent leak listed by the layer audit (Vidocq/vidocq#631). When an application jar names a

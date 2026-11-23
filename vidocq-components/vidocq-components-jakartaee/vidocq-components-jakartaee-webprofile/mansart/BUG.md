@@ -9,6 +9,25 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
+
+- **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Kerckhoffs and Noether)
+- **Status**: FIXED (pending commit)
+- **Symptom**: `mansart-data-tck/run-official-tck-data-1.0.sh` ran `(cd .. && mvn -ntp install -DskipTests)`
+  whenever `~/.m2` lacked `mansart-data-core-1.0.0-SNAPSHOT.jar` (always: the reactor is at 0.4.0-SNAPSHOT), and
+  `mansart-transactions-tck/run-official-tck-transactions-2.0.sh` ran `(cd .. && mvn -q -B -ntp install -DskipTests)`
+  in every mode, then the TCK, on the default local repository, `~/.m2/repository`, shared by every build and
+  session of the machine: a run from a branch replaced the published Mansart snapshots there for every other build.
+- **Minimal repro**: reading the scripts (both runners are standalone POMs, outside the reactor: no test runs them).
+- **Cause**: the scripts predate the workspace rule "never install into `~/.m2` from a branch build".
+- **Fix**: every Maven call of both scripts takes
+  `-Dmaven.repo.local=<Mansart folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
+  (`TCK_LOCAL_REPOSITORY` moves the first); the Data script looks for its install marker there. The `full-tck`
+  profile of `mansart-transactions-tck` reads the Mansart jars under `${settings.localRepository}` (the private
+  repository in a script run) instead of `~/.m2`; the Jakarta API jars and the TCK jar `install-tck.sh` installs stay
+  in `~/.m2`. `.tck-repository/` is git-ignored.
+- **Left as is**: the Data script's marker names version `1.0.0-SNAPSHOT`, so it installs on every run.
+
 ## MANSART-068 — A repository on a named data store cannot be injected by its parameterized supertype
 
 - **Date**: 2026-11-17

@@ -57,6 +57,14 @@ DB_NAME=jpatck
 DB_USER=cts1
 DB_PASSWORD=cts1
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it. The default sits
+# in the Noether folder, where the provider is installed from. The TCK jars install-tck.sh installs stay
+# in ~/.m2/repository (OFFICIAL_SPEC_JAR above), found through the tail.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$(cd ../.. && pwd)/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 case "$TCK_VALIDATION" in on|off) ;; *) echo "TCK_VALIDATION must be on or off" >&2; exit 64 ;; esac
 case "$TCK_FIXTURES" in patched|official) ;; *) echo "TCK_FIXTURES must be patched or official" >&2; exit 64 ;; esac
 
@@ -71,12 +79,12 @@ SPEC_JAR="$(python3 -I tools/tck_fixture_patch.py prepare --mode "$TCK_FIXTURES"
     --work-dir "$FIXTURES_DIR")"
 echo "    spec-tests jar: $SPEC_JAR"
 
-echo ">>> Build and install the provider under test (noether-jpa-core, its pool and its dialect)"
-(cd ../.. && ./mvnw -q -B -ntp -pl noether-persistence/noether-jpa-core,noether-persistence/noether-jpa-pool-mansart,noether-persistence/noether-jpa-dialects/noether-jpa-dialect-postgresql -am install -DskipTests)
+echo ">>> Build and install the provider under test (noether-jpa-core, its pool and its dialect) into $LOCAL_REPOSITORY"
+(cd ../.. && ./mvnw -q -B -ntp "${REPOSITORY_ARGS[@]}" -pl noether-persistence/noether-jpa-core,noether-persistence/noether-jpa-pool-mansart,noether-persistence/noether-jpa-dialects/noether-jpa-dialect-postgresql -am install -DskipTests)
 
 if [ "$TCK_VALIDATION" = on ]; then
     echo ">>> Build and install noether-validation-core (Bean Validation on the class path of execution 1)"
-    (cd ../.. && ./mvnw -q -B -ntp -pl noether-validation/noether-validation-core -am install -DskipTests)
+    (cd ../.. && ./mvnw -q -B -ntp "${REPOSITORY_ARGS[@]}" -pl noether-validation/noether-validation-core -am install -DskipTests)
 fi
 
 # ---- the database --------------------------------------------------------------------------------------------
@@ -155,7 +163,7 @@ if [ -n "$AREA" ]; then
 fi
 
 echo ">>> Running the Jakarta Persistence $TCK_VER TCK (Bean Validation: $TCK_VALIDATION${AREA:+, area: $AREA})"
-"$MVNW" -B -ntp verify "-Dtck.jdbc.url=$JDBC_URL" "-Dtck.jdbc.user=$JDBC_USER" "-Dtck.jdbc.password=$JDBC_PASSWORD" \
+"$MVNW" -B -ntp "${REPOSITORY_ARGS[@]}" verify "-Dtck.jdbc.url=$JDBC_URL" "-Dtck.jdbc.user=$JDBC_USER" "-Dtck.jdbc.password=$JDBC_PASSWORD" \
     "-Dtck.validation=$TCK_VALIDATION" "-Dtck.spec.tests.jar=$SPEC_JAR" ${SELECTION[@]+"${SELECTION[@]}"} ${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"} 2>&1 | tee "$LOG" || true
 
 # ---- the report ----------------------------------------------------------------------------------------------

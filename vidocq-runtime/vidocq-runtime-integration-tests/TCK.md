@@ -216,7 +216,9 @@ The TCK is published as sources only, so the runner is a script, not a test clas
 Arquillian tests on the embedded Vidocq container with this module's class path. The deviations from an unmodified run
 are on the command line only (the default `glassfish-ci-managed` profile off, the class path and Arquillian
 configuration of this module, `sigtest.api.*`); the script header lists them. With no argument it runs the smoke set
-of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`).
+of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`). Every Maven call of the script, the install of `VIDOCQ_TCK_INSTALL=1`
+included, reads and writes `vidocq-runtime/.tck-repository/` (`TCK_LOCAL_REPOSITORY` moves it), above
+`~/.m2/repository`, which it only reads: a branch never replaces the published runtime snapshot there.
 
 | Application | Result (2026-11-16) |
 |---|---|

@@ -23,7 +23,9 @@ usage='Usage: ./run-official-tck-tags-3.0.sh [smoke|all|-Dtest=...] [--no-prepar
 Environment:
   TAGS_TCK_ZIP          a local copy of the distribution zip instead of the download
                         (a relative path is resolved against the current directory)
-  BODONI_M2_REPOSITORY  the local repository --no-install checks (default: $HOME/.m2/repository)'
+  TCK_LOCAL_REPOSITORY  the local repository every Maven call reads and writes, above the shared
+                        $HOME/.m2/repository it only reads, and the one --no-install checks
+                        (default: .tck-repository in this checkout)'
 zip_url='https://download.eclipse.org/jakartaee/tags/3.0/jakarta-tags-tck-3.0.0.zip'
 zip_sha256='996c9abc6561134cea986107da0648c2a33277d2f765475994ff9b16da70cb5a'
 distribution_dir='bodoni-tck/target/tags-tck-distribution'
@@ -62,6 +64,11 @@ if [[ ! -f bodoni-tck/pom.xml || ! -x ./mvnw ]]; then
     exit 2
 fi
 
+# A local repository private to this checkout: an install from a branch never shadows the published
+# snapshot every other build of the machine resolves from ~/.m2/repository (BUG-20261123-57).
+local_repository="${TCK_LOCAL_REPOSITORY:-$PWD/.tck-repository}"
+maven=(./mvnw -ntp "-Dmaven.repo.local=$local_repository" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
+
 java_bin="java"
 if [[ -n "${JAVA_HOME:-}" ]]; then
     java_bin="$JAVA_HOME/bin/java"
@@ -75,7 +82,7 @@ fi
 
 # --no-install runs against the snapshots already in the local repository: refuse stale ones.
 check_installed_snapshots() {
-    local repository="${BODONI_M2_REPOSITORY:-$HOME/.m2/repository}"
+    local repository="$local_repository"
     local version
     version="$(awk '/<artifactId>bodoni-parent<\/artifactId>/ { found = 1 }
         found && /<version>/ { gsub(/.*<version>|<\/version>.*/, ""); print; exit }' pom.xml)"
@@ -153,15 +160,15 @@ if [[ ! -f "$ddl" ]]; then
     echo "The official Derby DDL is missing; run without --no-prepare." >&2
     exit 2
 fi
-if "$install"; then ./mvnw -ntp clean install -pl bodoni-core,bodoni-peano -am; fi
+if "$install"; then "${maven[@]}" clean install -pl bodoni-core,bodoni-peano -am; fi
 
 # Clear old reports so a partial selection cannot be mistaken for a full run. No module clean:
 # target/tags-tck-distribution must survive.
 rm -rf bodoni-tck/target/surefire-reports bodoni-tck/target/pages-deployments
-./mvnw -ntp -Ptck -pl bodoni-tck test
+"${maven[@]}" -Ptck -pl bodoni-tck test
 # Bash 3.2 (macOS) treats an empty "${extra[@]}" as unbound under set -u.
 if ((${#extra[@]})); then
-    ./mvnw -ntp -Ptck,tck-official -pl bodoni-tck test "$selection" "${extra[@]}"
+    "${maven[@]}" -Ptck,tck-official -pl bodoni-tck test "$selection" "${extra[@]}"
 else
-    ./mvnw -ntp -Ptck,tck-official -pl bodoni-tck test "$selection"
+    "${maven[@]}" -Ptck,tck-official -pl bodoni-tck test "$selection"
 fi

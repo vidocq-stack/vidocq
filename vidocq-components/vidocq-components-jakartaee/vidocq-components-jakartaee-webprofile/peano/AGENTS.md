@@ -168,7 +168,10 @@ coercions").
 ## TCK — Technology Compatibility Kit
 
 EL 6.0.1 passes 361/361 tests on Temurin 25 (2026-10-10). 100 % PASS is a merge gate; any challenge goes
-in a `TCK.md` with spec citation — created only if one is actually filed.
+in a `TCK.md` with spec citation — created only if one is actually filed. A pull request runs no TCK:
+`ci.tck.command` of the root POM has the `TCK nightly` workflow run `./run-official-tck-el-6.0.sh all` once
+a day, on demand on a branch (tag `PEANO`) and for a release. The script installs into a local repository
+private to the checkout (`.tck-repository/`, `TCK_LOCAL_REPOSITORY`), never into `~/.m2`.
 
 ## AI Principles — Collaboration on This Repository
 

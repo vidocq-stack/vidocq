@@ -63,20 +63,20 @@ Six tests are disabled via the class
 
 ---
 
-## 3. Reproduction from the Cassini repo
+## 3. Reproduction from Cassini's folder in the monorepo
 
 ### Prerequisites
 
-1. **Java 25** + **Maven 3.9.16** (see `.sdkmanrc`)
-2. **TCK officially installed locally**:
-   ```bash
-   mvn install:install-file \
-     -Dfile=jakarta-restful-ws-tck-4.0.1.jar \
-     -DgroupId=jakarta.ws.rs \
-     -DartifactId=jakarta-restful-ws-tck \
-     -Dversion=4.0.1 \
-     -Dpackaging=jar
-   ```
+1. **Java 25** + **Maven 3.10.0** (see `.sdkmanrc`)
+2. Nothing to install by hand: `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1` resolves from Maven
+   Central, and the script downloads the EFTL bundle for the signature test (see
+   `cassini-tck/README.md`).
+
+### In CI
+
+A pull request runs no TCK. Cassini's root `pom.xml` declares `./run-official-tck-restful-4.0.sh all`
+in `ci.tck.command`, and the `TCK nightly` workflow of the monorepo (`.forgejo/workflows/tck-nightly.yml`)
+runs it from this folder once a day, on demand on a branch (tag `CASSINI`) and for a release.
 
 ### Running
 
@@ -94,6 +94,10 @@ Six tests are disabled via the class
 The script:
 1. `mvn install -DskipTests` of the reactor (cassini-api/core/cdi/chappe/jdk-http)
 2. `mvn -Ptck,tck-official -pl cassini-tck verify` (in-reactor, gated by the `tck` Maven profile)
+
+Both calls read and write `.tck-repository/` in the Cassini folder (`TCK_LOCAL_REPOSITORY` moves it), above
+`~/.m2/repository`, which they only read: the install of a branch never replaces the published Cassini snapshot
+the other builds of the machine resolve (BUG-20261123-57).
 
 ---
 

@@ -38,9 +38,16 @@ there are no outstanding official TCK failures.
 
 == Smoke and CI
 
-In the monorepo a pull request runs no TCK. The `smoke` selection of the script is a
-bounded regression subset and does not replace the full `all` run. The complete
-command above, run from Ibarra's folder, is the acceptance check for milestone I8.
+In the monorepo a pull request runs no TCK. The `TCK nightly` workflow of the monorepo runs
+`./run-official-tck-pages-4.0.sh --no-install all` (`ci.tck.command` of Ibarra's root POM) once a
+day, on demand on a branch (tag `IBARRA`) and for a release, after installing Ibarra and its
+upstream. The `smoke` selection of the script is a bounded regression subset and does not replace
+the full `all` run. The complete command above, run from Ibarra's folder, is the acceptance check
+for milestone I8.
+
+Every Maven call of the script reads and writes `.tck-repository/` in Ibarra's folder
+(`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the install of
+a branch never replaces the published Ibarra snapshot the other builds of the machine resolve.
 
 == Runner
 

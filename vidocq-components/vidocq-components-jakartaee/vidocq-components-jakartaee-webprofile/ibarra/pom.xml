@@ -79,6 +79,17 @@
         <shrinkwrap.version>1.2.6</shrinkwrap.version>
 
         <!--
+            The official Pages 4.0 TCK, run from this folder by the TCK workflow of the monorepo
+            (.forgejo/workflows/tck-nightly.yml): once a day, on demand and for a release; a pull
+            request runs no TCK. prepare-tck.py downloads the two Eclipse distributions and installs
+            the TCK and JavaTest jars into the script's private local repository; the runner tests,
+            then every official class. The install step is skipped (no-install option): the workflow
+            has just installed Ibarra and its upstream into the runner's local repository, which the
+            script reads below its own.
+        -->
+        <ci.tck.command>./run-official-tck-pages-4.0.sh --no-install all</ci.tck.command>
+
+        <!--
             SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
             ibarra-coverage (quality profile), so the tests of one module count for the code they
             exercise in the others.

@@ -232,7 +232,11 @@ methods of the 92 official classes, with no class-level deployment error (see
 certification: formal Jakarta certification is a separate process, so never claim it.
 Do not treat class-level deployment errors as executed test methods. 100 % PASS is a
 merge gate; any challenge goes in a `TCK.md` with spec citation — created only if one
-is actually filed.
+is actually filed. A pull request runs no TCK: `ci.tck.command` of the root POM has the
+`TCK nightly` workflow run `./run-official-tck-pages-4.0.sh --no-install all` once a day,
+on demand on a branch (tag `IBARRA`) and for a release. The script installs into a local
+repository private to the checkout (`.tck-repository/`, `TCK_LOCAL_REPOSITORY`), never
+into `~/.m2`.
 
 ## AI Principles — Collaboration on This Repository
 

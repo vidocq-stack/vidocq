@@ -22,11 +22,19 @@
 #   with no application, runs the smoke set of Kerckhoffs (its kerckhoffs-tck/BASELINE.md).
 # Environment: MVN_EXTRA  extra Maven arguments (for example -s /path/settings.xml)
 #              VIDOCQ_TCK_INSTALL=1  install this checkout (and what it needs) before the run
+#              TCK_LOCAL_REPOSITORY  the local repository every Maven call reads and writes, above the shared
+#                                    ~/.m2/repository it only reads (default: .tck-repository in vidocq-runtime/)
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 module="vidocq-runtime-integration-tests/vidocq-runtime-tck-kerckhoffs-security"
+
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-$root/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=$LOCAL_REPOSITORY" "-Dmaven.repo.local.tail=$HOME/.m2/repository")
 
 zip_url='https://download.eclipse.org/jakartaee/security/4.0/jakarta-security-tck-4.0.0.zip'
 zip_sha256='e21a3d8251bf954c99a3f9a5f71911696509a1ed40c23673760785a3b88e4172'
@@ -48,10 +56,11 @@ done
 
 # shellcheck disable=SC2206
 mvn_extra=(${MVN_EXTRA:-})
-mvn=("$root/mvnw" -ntp "${mvn_extra[@]}")
+# Bash 3.2 (macOS) treats an empty "${a[@]}" as unbound under set -u.
+mvn=("$root/mvnw" -ntp "${REPOSITORY_ARGS[@]}" ${mvn_extra[@]+"${mvn_extra[@]}"})
 
-echo "[1/4] The class path of the container (the runtime comes from the local repository or maven.vidocq.dev;"
-echo "      VIDOCQ_TCK_INSTALL=1 builds and installs this checkout first)"
+echo "[1/4] The class path of the container (the runtime comes from $LOCAL_REPOSITORY, ~/.m2/repository"
+echo "      or maven.vidocq.dev; VIDOCQ_TCK_INSTALL=1 builds and installs this checkout into the first)"
 (
     cd "$root"
     if [ "${VIDOCQ_TCK_INSTALL:-}" = 1 ]; then
@@ -97,13 +106,13 @@ arq_xml="$here/src/test/resources/arquillian.xml"
 echo "[4/4] Running the Arquillian tests on the Vidocq container"
 (
     cd "$tck_dir"
-    "$root/mvnw" -ntp "${mvn_extra[@]}" -P'!glassfish-ci-managed' -pl "$modules" verify \
+    "$root/mvnw" -ntp "${REPOSITORY_ARGS[@]}" ${mvn_extra[@]+"${mvn_extra[@]}"} -P'!glassfish-ci-managed' -pl "$modules" verify \
         -Dsigtest.api.groupId=jakarta.security \
         -Dsigtest.api.artifactId=jakarta.security.enterprise-api \
         -Dsigtest.api.version=4.0.0 \
         -Dmaven.test.additionalClasspath="$additional" \
         -DargLine="-Darquillian.launch=vidocq -Darquillian.xml=$arq_xml" \
-        --fail-at-end "${extra[@]}"
+        --fail-at-end ${extra[@]+"${extra[@]}"}
 )
 
 # Reached only when every selected application passed: a failing run exits non-zero above.

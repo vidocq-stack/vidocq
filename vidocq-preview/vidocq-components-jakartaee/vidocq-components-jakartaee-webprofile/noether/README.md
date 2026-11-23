@@ -10,7 +10,7 @@ work transformed abstract algebra and connected symmetries with conservation law
 
 | Directory | Maven coordinates | Role |
 | --- | --- | --- |
-| `.` | `io.vidocq.noether:noether-root` | Independent reactor, parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT` |
+| `.` | `io.vidocq.noether:noether-root` | Noether's aggregator in the monorepo reactor (`vidocq-preview/`), parent `io.vidocq:vidocq-parent` at the monorepo version |
 | `noether-persistence` | `io.vidocq.noether:noether-jpa` | Persistence provider, dialects, APT, CDI/JTA integration, the optional connection pool (`noether-jpa-pool-mansart`) and Java module integration tests |
 | `noether-validation` | `io.vidocq.noether:noether-validation` | Validation stopgap, not a complete implementation; published since 0.4.0 because Persistence's tests use it, not a conformant provider |
 | `noether-it-other-containers` | `io.vidocq.noether:noether-it-other-containers` | Noether, unchanged, on other containers (`noether-it-openliberty`, `noether-it-quarkus`); test vehicles, **not published** |
@@ -41,20 +41,21 @@ of `<scope>` (Vidocq/noether#72). The Persistence TCK does not cover this; the g
 
 ## Build
 
-Java 25 (Temurin) and Maven 3.10.0 are pinned in `.sdkmanrc`. From this repository:
+Java 25 (Temurin) and Maven 3.10.0 are pinned in `.sdkmanrc`. Noether is part of the
+monorepo's single Maven reactor and version. From the monorepo root:
 
 ```sh
 sdk env
-./mvnw -ntp test
-./mvnw -ntp install
-./mvnw -ntp -pl noether-persistence/noether-jpa-core -am test
+./mvnw -ntp -pl vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether -am verify
+./mvnw -ntp -pl vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/noether-jpa-core -am test
 ```
 
-Install the required Mansart pool/transaction and Vauban snapshots first when
-working locally. `mansart.version` pins the independent Mansart dependency version.
-The Vauban integration baseline uses the local snapshot carrying the pending
-upstream injection fix. Production remains on the Java module path; the official
-TCK uses its separate classpath harness.
+Mansart and Vauban are taken at `${project.version}` (the `mansart.version` and
+`vauban.version` properties of this folder's `pom.xml`), so `-am` builds them in the same
+reactor: no snapshot to install first. Never install into `~/.m2` from a branch build
+(`-Dmaven.repo.local=<scratch>/m2 -Dmaven.repo.local.tail=$HOME/.m2/repository`).
+Production remains on the Java module path; the official TCK uses its separate
+classpath harness.
 
 ## TCK and performance
 
@@ -689,6 +690,6 @@ existing staged loader; broader shapes retain their previous loading paths.
 Comparative results and the original JPQL materialization diagnosis are
 recorded in `noether-persistence/BENCH.md`.
 
-Noether has no independent published release yet. `0.4.0-SNAPSHOT` is the
-current development version; older Mansart versions in historical evidence
+Noether has no published release yet; it follows the monorepo's single version, and
+`0.4.0-SNAPSHOT` is the current development version; older Mansart versions in historical evidence
 are not Noether releases.

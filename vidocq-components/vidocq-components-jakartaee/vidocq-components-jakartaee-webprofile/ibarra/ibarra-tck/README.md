@@ -2,7 +2,7 @@
 
 The runner uses the unmodified `jakarta.tck:jakarta-pages-tck:4.0.0` artifact
 from the [official Eclipse distribution](https://download.eclipse.org/jakartaee/pages/4.0/jakarta-pages-tck-4.0.0.zip).
-The first smoke subset passes; the full suite does **not** pass. See
+The recorded full run passes all 682 methods of the 92 official classes. See
 [BASELINE.md](BASELINE.md) for measured results and deployment limitations.
 
 The runner deploys the TCK WARs through the published Arquillian adapter
@@ -25,11 +25,23 @@ builds the current Ibarra reactor with `clean install` (which runs the adapter
 regression tests of `ibarra-arquillian`), runs the runner tests with
 `-Ptck -pl ibarra-tck`, then runs the requested official classes. The default smoke
 selects three `JspFactory` tests, one `JspEngineInfo` test and fourteen descriptor
-character-sequence/EL/encoding tests (18 total). CI runs this smoke
-on pull requests and `main`; it does not claim full-suite certification.
+character-sequence/EL/encoding tests (18 total).
+
+Every Maven call of the script, `prepare-tck.py`'s included, reads and writes
+`.tck-repository/` in the Ibarra folder (`TCK_LOCAL_REPOSITORY` moves it), above
+`~/.m2/repository`, which it only reads: the install of a branch never replaces
+the published Ibarra snapshot the other builds of the machine resolve
+(BUG-20261123-57).
+
+A pull request runs no TCK. The `TCK nightly` workflow of the monorepo runs
+`./run-official-tck-pages-4.0.sh --no-install all` (`ci.tck.command` of Ibarra's
+root POM) once a day, on demand on a branch (tag `IBARRA`) and for a release,
+after installing Ibarra and its upstream into the runner's local repository.
+A result is a measurement, never a certification.
 
 `--no-install` skips the reactor build only when its current artifacts have
-already been installed. `--no-prepare` skips artifact preparation. Ordinary
+already been installed (in the private repository, or in `~/.m2/repository`
+below it). `--no-prepare` skips artifact preparation. Ordinary
 Maven properties are forwarded to the official run. Run modes are processed
 left to right; the last `smoke`/`all`/`-Dtest=` selection takes precedence.
 

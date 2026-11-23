@@ -82,8 +82,10 @@
         <!-- Test scope only: the JSON-P provider the tests of the OpenID Connect token validation run on. -->
         <champollion.version>${project.version}</champollion.version>
 
-        <!-- The official TCK the pull requests are gated on: the smoke set of the runner (the applications
-             that are green, see kerckhoffs-tck/BASELINE.md). A measurement, never a certification. -->
+        <!-- The official TCK the TCK workflow of the monorepo (.forgejo/workflows/tck-nightly.yml) runs from
+             this folder, once a day, on demand and for a release (a pull request runs no TCK): the smoke set of
+             the runner (the applications that are green, see kerckhoffs-tck/BASELINE.md). A measurement, never
+             a certification. -->
         <ci.tck.command>./run-official-tck-security-4.0.sh</ci.tck.command>
     </properties>
 

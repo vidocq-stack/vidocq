@@ -3,6 +3,31 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## BUG-20261123-58 · 2026-11-23 · The TCK nightly ran no Bodoni TCK
+
+- Symptom: the `TCK nightly` workflow of the monorepo runs for a component only what its root POM names in
+  `ci.tck.modules` / `ci.tck.command`; Bodoni's named neither (AGENTS.md said so), so no job `tck / BODONI` ran,
+  nightly or before a release. Same for Peano and Ibarra.
+- Minimal repro: the workflow's `plan` step with `COMPONENTS=BODONI` gave an empty matrix.
+- Cause: the former repository's `tck-tags.yml` (smoke, a required check of its `main`) did not move into the
+  monorepo.
+- Status: FIXED (pending commit). `ci.tck.command` = `./run-official-tck-tags-3.0.sh all`. Not run in CI yet.
+
+## BUG-20261123-57 · 2026-11-23 · The Tags TCK script installs the branch into the shared `~/.m2`
+
+- Symptom: `run-official-tck-tags-3.0.sh` ran `./mvnw -ntp clean install -pl bodoni-core,bodoni-peano -am` on
+  `~/.m2/repository`, which every build and session of the machine shares: a run from a branch replaced the
+  published Bodoni snapshot there. `--no-install` checked the snapshots of `BODONI_M2_REPOSITORY`, `~/.m2` by
+  default. Same bug in Foy, Peano and Ibarra.
+- Minimal repro: `OfficialTckRunnerTest.theRepositoryIsPrivateToTheCheckoutByDefault` and
+  `noInstallChecksTheSnapshotsOfThePrivateRepository` (`bodoni-tck`, `-Ptck`).
+- Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+- Status: FIXED (pending commit). Every Maven call takes `-Dmaven.repo.local=<Bodoni folder>/.tck-repository
+  -Dmaven.repo.local.tail=$HOME/.m2/repository`; `TCK_LOCAL_REPOSITORY` moves the first and replaces
+  `BODONI_M2_REPOSITORY`; `--no-install` checks the snapshots of that private repository, the one the official run
+  resolves first. `.tck-repository/` is git-ignored.
+- Verification: red before (18 of 25 tests, the variable renamed), green after (`OfficialTckRunnerTest`, 25 tests).
+
 ## BOD-001 · 2026-10-22 · `varStatus` and `Map.Entry` properties are unreadable in Ibarra pages with Peano reflection denied
 
 - Symptom: a page precompiled by Ibarra and run on Foy with `-Dpeano.reflection=deny`

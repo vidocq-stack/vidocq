@@ -30,7 +30,13 @@ def distribution(url, checksum, override):
 
 
 def install(*arguments):
-    subprocess.run([str(ROOT / "mvnw"), "-ntp", "install:install-file", *arguments], cwd=ROOT, check=True)
+    # The private local repository of run-official-tck-pages-4.0.sh, never the shared ~/.m2/repository
+    # (BUG-20261123-57).
+    repository = os.environ.get("TCK_LOCAL_REPOSITORY") or str(ROOT / ".tck-repository")
+    shared = Path.home() / ".m2" / "repository"
+    subprocess.run([str(ROOT / "mvnw"), "-ntp", "-Dmaven.repo.local=" + repository,
+                    "-Dmaven.repo.local.tail=" + str(shared), "install:install-file", *arguments],
+                   cwd=ROOT, check=True)
 
 
 def main():

@@ -21,6 +21,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TCK_DIR="${ROOT_DIR}/ravel-tck"
 REPORT_FILE="${TCK_DIR}/target/tck-report.txt"
 
+# Every Maven call reads and writes a local repository private to this checkout, above the shared
+# ~/.m2/repository it only reads: an install from a branch never shadows the published snapshot every
+# other build of the machine resolves (BUG-20261123-57). TCK_LOCAL_REPOSITORY moves it.
+LOCAL_REPOSITORY="${TCK_LOCAL_REPOSITORY:-${ROOT_DIR}/.tck-repository}"
+REPOSITORY_ARGS=("-Dmaven.repo.local=${LOCAL_REPOSITORY}" "-Dmaven.repo.local.tail=${HOME}/.m2/repository")
+
 mode="${1:-smoke}"
 shift || true
 
@@ -46,7 +52,7 @@ case "${mode}" in
 esac
 
 echo "==> Step 1/2: local install of the Ravel artifacts (mvn install -DskipTests)"
-( cd "${ROOT_DIR}" && mvn -ntp -pl ravel-api,ravel-core,ravel-cdi-vauban -am install -DskipTests )
+( cd "${ROOT_DIR}" && mvn -ntp "${REPOSITORY_ARGS[@]}" -pl ravel-api,ravel-core,ravel-cdi-vauban -am install -DskipTests )
 
 echo "==> Step 2/2: Maven run on the in-reactor ravel-tck (profiles=tck,${profile})"
 mkdir -p "${TCK_DIR}/target"
@@ -55,7 +61,7 @@ mkdir -p "${TCK_DIR}/target"
 # same pattern as the vidocq-runtime-tck-* runners, see CLAUDE.md).
 
 set +e
-( cd "${ROOT_DIR}" && mvn -ntp -P"tck,${profile}" -pl ravel-tck test "$@" ) \
+( cd "${ROOT_DIR}" && mvn -ntp "${REPOSITORY_ARGS[@]}" -P"tck,${profile}" -pl ravel-tck test "$@" ) \
     | tee "${REPORT_FILE}.raw"
 status=$?
 set -e

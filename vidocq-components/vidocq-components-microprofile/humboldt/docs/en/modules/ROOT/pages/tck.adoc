@@ -56,6 +56,7 @@ The script:
 . Uses the Maven wrapper `mvnw` (Maven 3.10.0) when present, otherwise falls back to system `mvn`.
 . Passes `maven.test.skip=true` (instead of `-DskipTests`) — required since M7c.12 because `humboldt-rest` test-compile fails (`microprofile.rest.client.api` outside the module path under strict Java Modules).
 . `humboldt-rest` tests remain manually runnable through `mvn test -pl humboldt-rest`.
+. Reads and writes `.tck-repository/` in the Humboldt folder in every Maven call (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Humboldt snapshot the other builds of the machine resolve.
 
 == Fast profile (a single targeted test)
 

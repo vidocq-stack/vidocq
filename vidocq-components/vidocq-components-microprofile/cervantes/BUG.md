@@ -442,3 +442,64 @@ Cassini asks for a resource with `BeanProvider.getRequestBean`, which returns it
 ### Fix
 
 The harness's provider delegates `getRequestBean` too. Its delegate is typed `BeanProvider`, which the test fills.
+
+---
+
+## BUG-20261123-59 — The TCK script keeps a pre-monorepo block, and the root POM says pull requests run the TCK
+
+- **Opening date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+
+### Symptom
+
+`run-official-tck-mp-jwt-2.2.sh` tested for `../cassini/cassini-tck` (the layout of the former repositories, side by
+side in the workspace) and, when found, installed `cassini-tck` into the local repository. In the monorepo Cervantes
+sits in `vidocq-components/vidocq-components-microprofile/`, so the test is always false: dead code that, in an old
+workspace layout, would still install a Cassini artifact into `~/.m2`. The comment above `ci.tck.command` in
+`cervantes/pom.xml` said "The TCK this repository's pull requests are gated on ... Read by the shared pr-validate
+workflow": a pull request of the monorepo runs no TCK; the `TCK nightly` workflow reads the property.
+
+### Minimal repro
+
+`test -d vidocq-components/vidocq-components-microprofile/cassini/cassini-tck` is false in the monorepo, and
+`cervantes-tck` does not depend on `cassini-tck` (removed with Vidocq/cassini#36).
+
+### Cause
+
+Left over from the migration into the monorepo (2026-11-20).
+
+### Fix
+
+The block is removed from the script (`bash -n` passes); the POM comment names the `TCK nightly` workflow and says a
+pull request runs no TCK. Not fixed here: the script still runs `clean install -DskipTests` on the default local
+repository (the BUG-20261123-57 pattern of Foy, Peano, Ibarra and Bodoni).
+
+---
+
+## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
+
+- **Opening date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+
+### Symptom
+
+`run-official-tck-mp-jwt-2.2.sh` ran `./mvnw -ntp clean install -DskipTests`, then the TCK, on the default local
+repository, `~/.m2/repository`, which every build and session of the machine shares. A run from a branch replaced the
+published Cervantes snapshot there: the other builds then resolved the branch's jars until the next snapshot
+download. Same bug in the TCK scripts of Foy, Peano, Ibarra, Bodoni, Cyrano, Dirac, Grimm, Heisenberg, Humboldt, Knock
+and Ravel.
+
+### Minimal repro
+
+`OfficialTckScriptTest` (`cervantes-tck`, default `-Ptck` run): the script, copied next to a `mvnw` that logs its
+arguments, made two Maven calls without `-Dmaven.repo.local`.
+
+### Cause
+
+The script predates the workspace rule "never install into `~/.m2` from a branch build".
+
+### Fix
+
+Every Maven call of the script takes `-Dmaven.repo.local=<Cervantes folder>/.tck-repository
+-Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there
+first, and only reads `~/.m2`. `.tck-repository/` is git-ignored. Docs: `tck.adoc`.

@@ -37,9 +37,13 @@ sdk env
 | `all` | `-Dtest=com.sun.ts.tests.jstl.**.*IT`: every official class.
 | `-Dtest=…` | A Surefire selection of official classes or methods.
 | `--no-prepare` | Reuses the DDL already extracted; refused (exit 2) when it is absent, so that the `sql` and compatibility classes cannot fail in their setup unnoticed.
-| `--no-install` | Skips the `./mvnw clean install` of `bodoni-core` and `bodoni-peano` (the only modules the runner needs, so the Open Liberty IT is not run); refused (exit 2) when the installed `bodoni-core` or `bodoni-peano` snapshot is missing or older than its sources, its `pom.xml` or the root `pom.xml`.
+| `--no-install` | Skips the `./mvnw clean install` of `bodoni-core` and `bodoni-peano` (the only modules the runner needs, so the Open Liberty IT is not run); refused (exit 2) when the `bodoni-core` or `bodoni-peano` snapshot of the script's local repository is missing or older than its sources, its `pom.xml` or the root `pom.xml`.
 | Other arguments starting with `-` | Passed to the last Maven call (write an option value attached to it: `-T4`, `-Dkey=value`).
 |===
+
+Every Maven call of the script reads and writes `.tck-repository/` in Bodoni's folder (the `TCK_LOCAL_REPOSITORY` environment variable moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Bodoni snapshot the other builds of the machine resolve.
+
+A pull request runs no TCK. The `TCK nightly` workflow of the monorepo runs `./run-official-tck-tags-3.0.sh all` (`ci.tck.command` of Bodoni's root POM) once a day, on demand on a branch (tag `BODONI`) and for a release.
 
 The script first runs the runner's own tests (`./mvnw -ntp -Ptck -pl bodoni-tck test`), then the official classes (`-Ptck,tck-official`). Before Maven runs it deletes `bodoni-tck/target/surefire-reports` and `bodoni-tck/target/pages-deployments`, so a partial selection cannot be mistaken for a full run. The Surefire reports land in `bodoni-tck/target/surefire-reports/`; each deployment keeps its `server.log` and `translation-errors.txt` under `bodoni-tck/target/pages-deployments/war-*/`.
 

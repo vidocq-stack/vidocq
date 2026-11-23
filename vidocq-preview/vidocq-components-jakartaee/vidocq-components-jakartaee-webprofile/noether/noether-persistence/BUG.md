@@ -6,6 +6,37 @@
 
 Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED → CLOSED.
 
+## BUG-20261123-58 — The TCK nightly runs no Noether TCK
+
+- **Date**: 2026-11-23 (same bug in Peano, Ibarra and Bodoni, fixed there)
+- **Status**: OPEN, needs the maintainer's decision
+- **Symptom**: Noether's root POM names no `ci.tck.modules` / `ci.tck.command`, so the `TCK nightly` workflow of
+  the monorepo has no job `tck / NOETHER`, and a release runs no Noether TCK.
+- **Why it is not wired as is**: `run-official-tck-persistence-3.2.sh` needs Docker (a PostgreSQL container) or an
+  external PostgreSQL with `psql`, and not every CI runner has Docker; it exits 0 whatever the score once its report
+  is written; it reads the official jar in `~/.m2` (the provider now installs into the private local repository of
+  BUG-20261123-57). The Validation runner keeps
+  `testFailureIgnore` (308/981 at V2, a stopgap). Both would give a green job on a red suite.
+- **What a fix needs**: a runner label with Docker (or a PostgreSQL service) and a non-zero exit on a failure or an
+  error of the TCK. Documented in `docs/en/.../tck.adoc`.
+
+## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
+
+- **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Mansart and Kerckhoffs, fixed
+  there; for Validation, see `noether-validation/BUG.md`)
+- **Status**: FIXED (pending commit)
+- **Symptom**: `noether-jpa-tck/run-official-tck-persistence-3.2.sh` ran
+  `(cd ../.. && ./mvnw -q -B -ntp -pl noether-persistence/noether-jpa-core,... -am install -DskipTests)` (and the
+  same for `noether-validation-core` with `TCK_VALIDATION=on`), then the TCK, on the default local repository,
+  `~/.m2/repository`, which every build and session of the machine shares: a run from a branch replaced the
+  published Noether snapshots there for every other build.
+- **Repro**: reading the script (the runner is a standalone POM, outside the reactor: no test runs it).
+- **Cause**: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+- **Fix**: every Maven call of the script (the installs and the run) takes
+  `-Dmaven.repo.local=<Noether folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
+  (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there first, and only reads `~/.m2`, where
+  `install-tck.sh` still installs the official TCK jars (released, unchanged). `.tck-repository/` is git-ignored.
+
 ## BUG-20261009-01 — A nullable foreign key to a primitive identifier loads identifier zero
 
 - **Date**: 2026-10-09

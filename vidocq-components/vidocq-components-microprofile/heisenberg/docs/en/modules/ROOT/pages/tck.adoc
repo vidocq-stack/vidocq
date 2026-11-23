@@ -63,6 +63,8 @@ The runner uses Arquillian + TestNG. The Surefire report lands in `heisenberg-tc
 ./mvnw -Ptck,tck-official -pl heisenberg-tck test     # full suite
 ----
 
+Every Maven call of the script reads and writes `.tck-repository/` in the Heisenberg folder (`TCK_LOCAL_REPOSITORY` moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Heisenberg snapshot the other builds of the machine resolve.
+
 == `no-observability` mode
 
 The `run-tck-no-observability.sh` script wraps the main runner and **excludes** every test depending on MP Metrics §9 and OpenTelemetry §10:

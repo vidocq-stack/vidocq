@@ -87,6 +87,10 @@ cd vidocq-components/vidocq-components-microprofile/knock
 ./run-official-tck-mp-health-4.0.sh -Dtest=TestName
 ----
 
+Every Maven call of the script reads and writes `.tck-repository/` in the Knock folder (`TCK_LOCAL_REPOSITORY` moves
+it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published Knock
+snapshot the other builds of the machine resolve.
+
 The runner can also be invoked directly through the reactor, from the root of the monorepo once the reactor is
 installed:
 

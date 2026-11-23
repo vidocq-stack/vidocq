@@ -1,5 +1,31 @@
 # BUG.md — Ibarra
 
+## BUG-20261123-58 · 2026-11-23 · The TCK nightly ran no Ibarra TCK
+
+- Symptom: the `TCK nightly` workflow of the monorepo runs for a component only what its root POM names in
+  `ci.tck.modules` / `ci.tck.command`; Ibarra's named neither, so no job `tck / IBARRA` ran, nightly or before a
+  release. Same for Peano and Bodoni.
+- Repro: the workflow's `plan` step with `COMPONENTS=IBARRA` gave an empty matrix.
+- Cause: the former repository's `tck-pages.yml` (smoke on each pull request) did not move into the monorepo.
+- Status: FIXED (pending commit). `ci.tck.command` = `./run-official-tck-pages-4.0.sh --no-install all`: the whole
+  suite; the job has just installed Ibarra and its upstream into the runner's local repository, so the script skips
+  its own `clean install` (with tests) and reads them below its private repository. Not run in CI yet.
+
+## BUG-20261123-57 · 2026-11-23 · The Pages TCK script installs the branch into the shared `~/.m2`
+
+- Symptom: `run-official-tck-pages-4.0.sh` ran `./mvnw -ntp clean install` and `prepare-tck.py` ran
+  `install:install-file` (Pages TCK and JavaTest jars) on `~/.m2/repository`, which every build and session of the
+  machine shares: a run from a branch replaced the published Ibarra snapshot there. Same bug in Foy, Peano, Bodoni.
+- Repro: `OfficialTckRunnerTest.everyMavenCallUsesAPrivateLocalRepositoryAboveTheSharedOne` and
+  `thePreparationAndTheBuildsShareTheRepositoryTheEnvironmentNames` (`ibarra-tck`, `-Ptck`): no `-Dmaven.repo.local`
+  in the three calls; the preparation saw no `TCK_LOCAL_REPOSITORY`.
+- Cause: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+- Status: FIXED (pending commit). The script exports `TCK_LOCAL_REPOSITORY` (default `<Ibarra folder>/.tck-repository`,
+  git-ignored) and every Maven call, `prepare-tck.py`'s too, takes `-Dmaven.repo.local=$TCK_LOCAL_REPOSITORY
+  -Dmaven.repo.local.tail=$HOME/.m2/repository`.
+- Verification: the two tests red before, green after (`OfficialTckRunnerTest`, 4 tests). `prepare-tck.py` is
+  checked through the variable it receives, not run (it downloads the distributions).
+
 ## IBARRA-159 · 2026-11-17 · A precompilation that changes no page moved the page index to the end of the module's services
 
 - Symptom: `vidocq:dev` reloaded an application whose recompile had compiled nothing:

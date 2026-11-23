@@ -84,7 +84,9 @@ sdk env
 - The TCK always goes through the root script, which first installs the reactor then invokes
   `./mvnw -Ptck,tck-official -pl knock-tck test` (knock-tck is in-reactor behind the `tck` profile).
 - The TCK script explicitly installs `knock-api,knock-core,knock-cdi-vauban,knock-jaxrs`
-  via `./mvnw -pl ... -am install -DskipTests` before executing `knock-tck`.
+  via `./mvnw -pl ... -am install -DskipTests` before executing `knock-tck`, into `.tck-repository/` of this
+  folder: every Maven call of the script uses that private local repository above a read-only
+  `~/.m2/repository` (BUG-20261123-57; `TCK_LOCAL_REPOSITORY` moves it).
 - The TCK is not "for later": it serves as continuous verification from M2/M3 onward.
 
 ## Observed Contribution Conventions

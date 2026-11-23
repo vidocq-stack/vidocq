@@ -113,6 +113,10 @@ sdk env
 ./run-official-tck-restful-4.0.sh -Dtest=ResourceTests     # targeted class
 ----
 
+Every Maven call of the script reads and writes `.tck-repository/` in the Cassini folder (`TCK_LOCAL_REPOSITORY`
+moves it), above `~/.m2/repository`, which it only reads: the install of a branch never replaces the published
+Cassini snapshot the other builds of the machine resolve.
+
 Expected output on `all`:
 
 [source,text]

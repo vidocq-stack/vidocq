@@ -6,6 +6,39 @@ minimal repro, cause hypothesis, status.
 
 ---
 
+## BUG-20261123-57 — The TCK and jlink smoke scripts install the branch into the shared `~/.m2`
+
+- **Opening date**: 2026-11-23
+- **Status**: FIXED (pending commit)
+
+### Symptom
+
+`run-official-tck-mp-metrics-5.1.sh` ran `./mvnw -ntp -pl dirac-api,dirac-core,dirac-cdi-vauban -am install
+-DskipTests`, then the TCK, on the default local repository, `~/.m2/repository`, which every build and session of the
+machine shares; `run-jlink-smoke.sh` and `run-jlink-smoke-m92.sh` ran `clean install -DskipTests` there too. A run
+from a branch replaced the published Dirac snapshot: the other builds then resolved the branch's jars until the next
+snapshot download. Same bug in the TCK scripts of Foy, Peano, Ibarra, Bodoni, Cervantes, Cyrano, Grimm, Heisenberg,
+Humboldt, Knock and Ravel.
+
+### Minimal repro
+
+`OfficialTckScriptTest` (`dirac-tck`, default `-Ptck` run): the TCK script, copied next to a `mvnw` that logs its
+arguments, made two Maven calls without `-Dmaven.repo.local`. The jlink smoke scripts: reading them.
+
+### Cause
+
+The scripts predate the workspace rule "never install into `~/.m2` from a branch build".
+
+### Fix
+
+Every Maven call of the three scripts takes `-Dmaven.repo.local=<Dirac folder>/.tck-repository
+-Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first): they install and resolve there
+first, and only read `~/.m2`. `run-jlink-smoke-m92.sh` takes `microprofile-metrics-api-5.1.1.jar` from that
+repository, else from `~/.m2/repository`. `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `TCK.md`, `JLINK.md`,
+`README.md`, `AGENTS.md` (the `MAVEN_ARGS` workaround of `TCK.md` and `JLINK.md` is gone).
+
+---
+
 ## DRC-019 — A bean is scanned for a metric an interface names, and every superclass is read twice
 
 - **Opening date**: 2026-11-18

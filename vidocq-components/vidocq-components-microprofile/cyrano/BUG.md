@@ -512,3 +512,31 @@ The instantiator (one per client) keeps one instance per interceptor, as for any
 interceptor chain of each method. `ProviderInstantiator.release()` (no-op by default) is called by `markClosed` and
 releases the creational contexts, so `@PreDestroy` runs; a closed client creates no interceptor again. A sub-resource
 proxy shares its client's instantiator. Containers other than Vauban go through the same portable `BeanManager` calls.
+
+## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
+
+- **Opened**: 2026-11-23
+- **Status**: FIXED (pending commit)
+
+### Symptom
+
+`run-official-tck-mp-rest-client-4.0.sh` ran `./mvnw -ntp -pl cyrano-api,cyrano-core,cyrano-cdi-vauban -am install
+-DskipTests`, then the TCK, on the default local repository, `~/.m2/repository`, which every build and session of the
+machine shares. A run from a branch replaced the published Cyrano snapshot there: the other builds then resolved the
+branch's jars until the next snapshot download. Same bug in the TCK scripts of Foy, Peano, Ibarra, Bodoni, Cervantes,
+Dirac, Grimm, Heisenberg, Humboldt, Knock and Ravel.
+
+### Minimal Repro
+
+`OfficialTckScriptTest` (`cyrano-tck`, default `-Ptck` run): the script, copied next to a `mvnw` that logs its
+arguments, made two Maven calls without `-Dmaven.repo.local`.
+
+### Root Cause
+
+The script predates the workspace rule "never install into `~/.m2` from a branch build".
+
+### Resolution
+
+Every Maven call of the script takes `-Dmaven.repo.local=<Cyrano folder>/.tck-repository
+-Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there
+first, and only reads `~/.m2`. `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `AGENTS.md`, `CLAUDE.md`.

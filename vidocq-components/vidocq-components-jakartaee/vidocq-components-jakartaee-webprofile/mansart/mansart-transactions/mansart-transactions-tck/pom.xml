@@ -87,7 +87,8 @@
 
             What this does :
               1. Renders mansart-ts-overrides.properties into a self-contained ts.jte fragment with
-                 the absolute paths of the Mansart artefacts in ~/.m2 substituted in.
+                 the absolute paths of the Mansart artefacts in the local repository the build uses (the
+                 run script's private one, BUG-20261123-57) and of the Jakarta APIs in ~/.m2 substituted in.
               2. Appends the rendered fragment to a copy of the original ts.jte (kept under target/)
                  so the original TCK distribution is not mutated.
               3. Invokes `ant -f bin/build.xml build.all.tests` against the TCK with our ts.jte —
@@ -103,7 +104,7 @@
                 <tck.target>${project.build.directory}/tck</tck.target>
                 <tck.jte>${tck.target}/ts.jte</tck.jte>
 
-                <mansart.m2.base>${user.home}/.m2/repository/io/vidocq/mansart</mansart.m2.base>
+                <mansart.m2.base>${settings.localRepository}/io/vidocq/mansart</mansart.m2.base>
                 <jakarta.m2.base>${user.home}/.m2/repository/jakarta</jakarta.m2.base>
 
                 <mansart.tx.core.jar>${mansart.m2.base}/mansart-transactions-core/${project.version}/mansart-transactions-core-${project.version}.jar</mansart.tx.core.jar>

@@ -36,8 +36,9 @@ sdk env          # Java 25-tem + Maven 3.10.0
 ./run-official-tck-mp-metrics-5.1.sh -Dtest=CounterTest
 ```
 
-The TCK runner first installs the required Dirac artifacts into the local M2 via
-`run-official-tck-mp-metrics-5.1.sh`.
+The TCK runner first installs the required Dirac artifacts via
+`run-official-tck-mp-metrics-5.1.sh`, into `.tck-repository/` of this folder: a local repository
+private to the checkout, above a read-only `~/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves it).
 
 ## Java Modules / jlink (M9)
 

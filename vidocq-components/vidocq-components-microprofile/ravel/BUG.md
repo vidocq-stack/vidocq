@@ -1,3 +1,19 @@
+## BUG-20261123-57 — The TCK script installs the branch into the shared `~/.m2`
+
+- **Date**: 2026-11-23
+- **Status**: FIXED (pending commit). Every Maven call of the script takes
+  `-Dmaven.repo.local=<Ravel folder>/.tck-repository -Dmaven.repo.local.tail=$HOME/.m2/repository`
+  (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there first, and only reads `~/.m2`.
+  `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `TCK.md`, `CLAUDE.md`.
+- **Symptom**: `run-official-tck-mp-config-3.1.sh` ran `mvn -ntp -pl ravel-api,ravel-core,ravel-cdi-vauban -am
+  install -DskipTests`, then the TCK, on the default local repository, `~/.m2/repository`, which every build and
+  session of the machine shares. A run from a branch replaced the published Ravel snapshot there: the other builds
+  then resolved the branch's jars until the next snapshot download. Same bug in the TCK scripts of Foy, Peano,
+  Ibarra, Bodoni, Cervantes, Cyrano, Dirac, Grimm, Heisenberg, Humboldt and Knock.
+- **Minimal repro**: `OfficialTckScriptTest` (`ravel-tck`, default `-Ptck` run): the script, run with a `mvn` first
+  on the `PATH` that logs its arguments, made two Maven calls without `-Dmaven.repo.local`.
+- **Cause**: the script predates the workspace rule "never install into `~/.m2` from a branch build".
+
 ## BUG-20261113-01 — The check of the required configuration values depended on the extension running again at start (ravel#50)
 
 - **Date**: 2026-11-13

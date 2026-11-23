@@ -90,12 +90,12 @@
     <version.jakarta.validation>3.1.1</version.jakarta.validation>
 
     <!--
-      The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by the
-      shared pr-validate workflow, which runs it after the reactor is installed at the pull
-      request's version, and skips the step when this property is absent.
+      What the TCK workflow of the monorepo (.forgejo/workflows/tck-nightly.yml) runs for Grimm,
+      from its folder, after installing Grimm and its upstream: once a day, on demand and for a
+      release. A pull request runs no TCK.
 
       grimm-tck is a standalone pom outside the reactor, so versions:set does not reach it: its
-      grimm.version is set here to the reactor's version, the pull request's, or the run would
+      grimm.version is set here to the reactor's version, the branch's, or the run would
       certify the grimm SNAPSHOT published on central-snapshots instead of the change. The official
       suite (`tck-official`) is microprofile-openapi-tck 4.2-RC5, public on Maven Central; the
       runtime it boots (vidocq-runtime-core, the Cassini and Chappe extensions) comes from
