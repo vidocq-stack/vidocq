@@ -12,10 +12,9 @@ specification Kerckhoffs does not provide yet, and one deviation from the refere
 Check the application against xref:usage.adoc#not-supported-yet[Not supported yet]. The points most likely to stop a
 move:
 
-* `@CustomFormAuthenticationMechanismDefinition`, `@LoginToContinue` on a mechanism of the application, or Jakarta
-Faces login pages.
+* `@LoginToContinue` on a mechanism of the application, or Jakarta Faces login pages.
 * `@DatabaseIdentityStoreDefinition`, `@LdapIdentityStoreDefinition`, `@OpenIdAuthenticationMechanismDefinition`.
-* An injected `Pbkdf2PasswordHash`, `SecurityContext.hasAccessToWebResource` or `getAllDeclaredCallerRoles`.
+* `SecurityContext.hasAccessToWebResource` or `getAllDeclaredCallerRoles`.
 * An Expression Language expression, other than a string literal, in a mechanism definition or in `priorityExpression`
 and `useForExpression` of an in-memory store. The `*Expression` attributes of `@RememberMe` are evaluated.
 * `@RolesAllowed` decided by Jakarta Authorization, and EJB.
