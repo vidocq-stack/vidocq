@@ -22,10 +22,10 @@
 
     <dependencies>
         <!--
-            La spec officielle est récupérée en 'provided' uniquement pour permettre
-            l'unpack de ses .class dans target/classes ; elle n'est pas exposée
-            transitivement aux consommateurs, qui reçoivent à la place le jar repackagé
-            avec son module-info explicite.
+            The official spec is fetched as 'provided' only so that its .class files
+            can be unpacked into target/classes; it is not exposed
+            transitively to consumers, who receive instead the repackaged jar
+            with its explicit module-info.
         -->
         <dependency>
             <groupId>org.eclipse.microprofile.config</groupId>
@@ -36,7 +36,7 @@
 
     <build>
         <plugins>
-            <!-- 1) Décompresse les .class de microprofile-config-api dans target/classes -->
+            <!-- 1) Unpacks the .class files of microprofile-config-api into target/classes -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -56,16 +56,16 @@
                                     <version>${microprofile.config.version}</version>
                                     <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                                     <!--
-                                        On exclut le manifest et les méta Maven d'origine ;
-                                        maven-jar-plugin réécrira un manifest propre pour
-                                        notre artefact (sans Automatic-Module-Name, désormais
-                                        superflu : le module est explicite).
+                                        The original manifest and Maven metadata are excluded;
+                                        maven-jar-plugin writes a clean manifest for
+                                        our artifact (without Automatic-Module-Name, now
+                                        redundant: the module is explicit).
 
-                                        META-INF/LICENSE et META-INF/NOTICE ne sont
-                                        volontairement PAS exclus : les .class dépaquetés
-                                        restent sous Apache-2.0, dont les sections 4(a) et
-                                        4(d) imposent de joindre la licence et le NOTICE
-                                        amont à toute redistribution.
+                                        META-INF/LICENSE and META-INF/NOTICE are
+                                        deliberately NOT excluded: the unpacked .class files
+                                        stay under Apache-2.0, whose sections 4(a) and
+                                        4(d) require the upstream license and NOTICE
+                                        to accompany any redistribution.
                                     -->
                                     <excludes>META-INF/MANIFEST.MF,META-INF/maven/**</excludes>
                                 </artifactItem>
@@ -78,9 +78,9 @@
             </plugin>
 
             <!--
-                2) Compile uniquement notre src/main/java/module-info.java en le patchant
-                   dans le module 'org.eclipse.microprofile.config' (les .class unpackés
-                   plus haut fournissent les packages exportés).
+                2) Compiles only our src/main/java/module-info.java, patching it
+                   into the module 'org.eclipse.microprofile.config' (the .class files
+                   unpacked above provide the exported packages).
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

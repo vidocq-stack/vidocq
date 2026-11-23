@@ -78,14 +78,14 @@
                                     <version>${microprofile.rest.client.version}</version>
                                     <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                                     <!--
-                                        Aligné sur ravel-mp-config-api / heisenberg-mp-ft-api :
-                                        on exclut le manifest et les méta Maven d'origine plutôt
-                                        que de whitelister l'arbre des classes.
+                                        Aligned with ravel-mp-config-api / heisenberg-mp-ft-api:
+                                        exclude the original manifest and Maven metadata rather
+                                        than whitelist the class tree.
 
-                                        L'ancienne whitelist <includes> écartait silencieusement
-                                        META-INF/LICENSE, alors que les .class dépaquetés restent
-                                        sous Apache-2.0 — dont la section 4(a) impose de joindre
-                                        la licence amont à toute redistribution.
+                                        The former <includes> whitelist silently dropped
+                                        META-INF/LICENSE, although the unpacked .class files remain
+                                        under Apache-2.0 — whose section 4(a) requires shipping
+                                        the upstream license with any redistribution.
                                     -->
                                     <excludes>META-INF/MANIFEST.MF,META-INF/maven/**</excludes>
                                 </artifactItem>

@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    POM auxiliaire en Model Version 4.0.0 pour ShrinkWrap Maven Resolver.
+    Auxiliary POM in Model Version 4.0.0 for ShrinkWrap Maven Resolver.
 
-    Le TCK Servlet 6.1 (classe CommonServlets) lit pom.xml du workingDir via
-    ShrinkWrap Maven Resolver, qui ne supporte pas Model Version 4.1.0 (POM
-    principal du projet). Ce POM minimal déclare uniquement les dépendances
-    nécessaires à la construction des archives de tests TCK.
+    The Servlet 6.1 TCK (class CommonServlets) reads the workingDir's pom.xml through
+    ShrinkWrap Maven Resolver, which does not support Model Version 4.1.0 (the project's
+    main POM). This minimal POM declares only the dependencies
+    needed to build the TCK test archives.
 
-    Surefire fork dans target/tck-workdir (cf. maven-resources-plugin) avec
-    une copie de ce fichier nommée pom.xml.
+    Surefire forks in target/tck-workdir (see maven-resources-plugin) with
+    a copy of this file named pom.xml.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"

@@ -12,7 +12,7 @@
 
     <artifactId>ravel-bench</artifactId>
     <name>Ravel :: Bench JMH</name>
-    <description>Benchmarks JMH — comparatif Ravel vs Smallrye Config sur lookup, conversion, expression resolution</description>
+    <description>JMH benchmarks — Ravel compared with SmallRye Config on lookup, conversion and expression resolution</description>
 
     <properties>
         <!--
@@ -43,7 +43,7 @@
             <artifactId>ravel-mp-config-api</artifactId>
         </dependency>
 
-        <!-- Concurrent : Smallrye Config (référence MP Config) -->
+        <!-- Competitor: Smallrye Config (MP Config reference) -->
         <dependency>
             <groupId>io.smallrye.config</groupId>
             <artifactId>smallrye-config</artifactId>

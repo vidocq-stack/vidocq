@@ -30,17 +30,17 @@
             <artifactId>jakarta.annotation-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- CDI en provided : foy-core délègue à BeanManager via WebAppDiscovery
-             pour résoudre @WebServlet/@WebFilter/@WebListener. À abstraire via
-             la SPI BeanProvider en M2. -->
+        <!-- CDI as provided: foy-core delegates to BeanManager through WebAppDiscovery
+             to resolve @WebServlet/@WebFilter/@WebListener. To be abstracted behind
+             the BeanProvider SPI in M2. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- Couplage transport HTTP temporaire (M1) : ChappeServletBridge et
-             les impls HttpServletRequest/Response référencent chappe-api. À
-             découpler en M2 via FoyHttpExchange dans foy-api. -->
+        <!-- Temporary HTTP transport coupling (M1): ChappeServletBridge and
+             the HttpServletRequest/Response impls reference chappe-api. To be
+             decoupled in M2 through FoyHttpExchange in foy-api. -->
         <dependency>
             <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-api</artifactId>

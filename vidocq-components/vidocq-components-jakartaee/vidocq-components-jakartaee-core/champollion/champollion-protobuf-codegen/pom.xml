@@ -16,9 +16,9 @@
 
     <dependencies>
         <!--
-            Dépendance build-time vers champollion-protobuf : l'APT importe
-            les annotations @ProtobufField/@ProtobufMessage et les classes
-            CodedInput/OutputStream pour produire les bindings.
+            Build-time dependency on champollion-protobuf: the APT imports
+            the @ProtobufField/@ProtobufMessage annotations and the
+            CodedInput/OutputStream classes to produce the bindings.
         -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>

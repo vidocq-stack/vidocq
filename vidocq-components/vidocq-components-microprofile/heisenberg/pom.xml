@@ -66,17 +66,17 @@
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
 
         <!--
-            MicroProfile Config 3.1.1 — version avec Automatic-Module-Name:
-            "org.eclipse.microprofile.config" ajouté dans le manifest depuis 2026-04-22.
+            MicroProfile Config 3.1.1 — version with Automatic-Module-Name:
+            "org.eclipse.microprofile.config" added to the manifest since 2026-04-22.
         -->
         <microprofile.config.version>3.1.1</microprofile.config.version>
 
-        <!-- Implémentations Vidocq upstream -->
+        <!-- Upstream Vidocq implementations -->
         <vauban.version>${project.version}</vauban.version>
         <ravel.version>${project.version}</ravel.version>
         <dirac.version>${project.version}</dirac.version>
 
-        <!-- JMH pour heisenberg-bench -->
+        <!-- JMH for heisenberg-bench -->
         <jmh.version>1.37</jmh.version>
 
         <!--
@@ -136,13 +136,13 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- MicroProfile Fault Tolerance 4.1 API — version modularisée (named module, jlink-compatible) -->
+            <!-- MicroProfile Fault Tolerance 4.1 API — modularised version (named module, jlink-compatible) -->
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-mp-ft-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- API officielle conservée pour le TCK hors-reactor uniquement -->
+            <!-- Official API kept for the out-of-reactor TCK only -->
             <dependency>
                 <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
                 <artifactId>microprofile-fault-tolerance-api</artifactId>
@@ -173,27 +173,27 @@
                 <version>${jakarta.interceptor.version}</version>
             </dependency>
 
-            <!-- MicroProfile Config — version modularisée Ravel (named module, jlink-compatible) -->
+            <!-- MicroProfile Config — Ravel's modularised version (named module, jlink-compatible) -->
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-mp-config-api</artifactId>
                 <version>${ravel.version}</version>
             </dependency>
 
-            <!-- MicroProfile Metrics API — version modularisée Dirac (named module, jlink-compatible) -->
+            <!-- MicroProfile Metrics API — Dirac's modularised version (named module, jlink-compatible) -->
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-mp-metrics-api</artifactId>
                 <version>${dirac.version}</version>
             </dependency>
-            <!-- API officielle conservée pour le TCK hors-reactor uniquement -->
+            <!-- Official API kept for the out-of-reactor TCK only -->
             <dependency>
                 <groupId>org.eclipse.microprofile.config</groupId>
                 <artifactId>microprofile-config-api</artifactId>
                 <version>${microprofile.config.version}</version>
             </dependency>
 
-            <!-- Implémentations Vidocq (utilisées en test scope ou runtime) -->
+            <!-- Vidocq implementations (used in test or runtime scope) -->
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-core</artifactId>
@@ -222,7 +222,7 @@
                 <version>${jmh.version}</version>
             </dependency>
 
-            <!-- Modules internes Heisenberg -->
+            <!-- Heisenberg internal modules -->
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-api</artifactId>

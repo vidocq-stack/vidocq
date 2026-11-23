@@ -73,9 +73,9 @@
             <scope>test</scope>
         </dependency>
         <!--
-            Vauban — CDI 4.1 Lite container natif Vidocq. Utilisé pour valider que l'interceptor
-            @Transactional et le contexte @TransactionScoped fonctionnent dans le container ciblé
-            par les apps Vidocq. Test scope uniquement.
+            Vauban — Vidocq's native CDI 4.1 Lite container. Used to check that the @Transactional
+            interceptor and the @TransactionScoped context work in the container that Vidocq
+            apps target. Test scope only.
         -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
@@ -84,9 +84,9 @@
             <scope>test</scope>
         </dependency>
         <!--
-            vauban-core a un `requires` (runtime) sur io.vidocq.vauban.classloader.spi, mais le
-            déclare en <optional> dans son pom (non transitif). On l'ajoute donc explicitement
-            pour que le module-path de test résolve la boot layer modulaire de vauban-core.
+            vauban-core has a (runtime) `requires` on io.vidocq.vauban.classloader.spi, but
+            declares it <optional> in its pom (not transitive). So it is added explicitly here,
+            for the test module path to resolve vauban-core's modular boot layer.
         -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>

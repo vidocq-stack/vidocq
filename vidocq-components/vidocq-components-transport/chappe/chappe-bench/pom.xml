@@ -58,7 +58,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Serveurs de référence pour le benchmark comparatif -->
+        <!-- Reference servers for the comparative benchmark -->
         <dependency>
             <groupId>io.helidon.webserver</groupId>
             <artifactId>helidon-webserver</artifactId>

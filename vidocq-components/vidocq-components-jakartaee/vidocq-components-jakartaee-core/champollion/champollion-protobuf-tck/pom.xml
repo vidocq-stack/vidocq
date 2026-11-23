@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    champollion-protobuf-tck est volontairement HORS reactor (POM Model 4.0.0
-    standalone, sans <parent>) — même contrainte que cassini-tck / foy-tck /
-    champollion-tck : ShrinkWrap Maven Resolver 3.3 ne sait pas parser les
-    POMs Maven Model 4.1.0, et il scanne tout reactor courant.
+    champollion-protobuf-tck is deliberately OUTSIDE the reactor (standalone
+    Model 4.0.0 POM, no <parent>) — same constraint as cassini-tck / foy-tck /
+    champollion-tck: ShrinkWrap Maven Resolver 3.3 cannot parse Maven
+    Model 4.1.0 POMs, and it scans any current reactor.
 
-    Invocation : ./run-official-conformance-protobuf.sh (depuis champollion/).
+    Invocation: ./run-official-conformance-protobuf.sh (from champollion/).
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"

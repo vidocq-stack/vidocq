@@ -14,12 +14,12 @@
     foy.version property MUST follow reactor bumps, otherwise the TCK silently
     validates stale jars (same trap as cassini-tck).
 
-    Le lancement passe par le script :
+    Runs go through the script:
         ./run-official-tck-servlet6.1.sh                     (smoke test)
-        ./run-official-tck-servlet6.1.sh all                 (suite complète ; option all en double-tiret)
-        ./run-official-tck-servlet6.1.sh -Dtest=ServletTests (classe ciblée)
+        ./run-official-tck-servlet6.1.sh all                 (full suite; the all option with a double dash)
+        ./run-official-tck-servlet6.1.sh -Dtest=ServletTests (one targeted class)
 
-    Détails dans README.md de ce module.
+    Details in this module's README.md.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -294,10 +294,10 @@
                                 <javax.net.ssl.trustStoreType>PKCS12</javax.net.ssl.trustStoreType>
                                 <foy.tck.tls.dir>${project.build.directory}/tls</foy.tck.tls.dir>
                             </systemPropertyVariables>
-                            <!-- Certains tests TCK injectent Cookie/Host/etc. que
-                                 Java HttpClient refuse par défaut (JDK-8203771).
-                                 La propriété doit être passée en argLine car elle
-                                 est lue au static init de jdk.internal.net.http. -->
+                            <!-- Some TCK tests inject Cookie/Host/etc., which the
+                                 Java HttpClient refuses by default (JDK-8203771).
+                                 The property must be passed in argLine because it
+                                 is read in the static init of jdk.internal.net.http. -->
                             <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
                             <argLine>@{argLine} -Djdk.httpclient.allowRestrictedHeaders=host,connection,content-length,expect,upgrade,origin,date,via,cookie</argLine>
                         </configuration>
@@ -329,7 +329,7 @@
                     <version>2.0.16</version>
                     <scope>test</scope>
                 </dependency>
-                <!-- JUnit 4 requis par org.jboss.arquillian.junit.State (result tracker) -->
+                <!-- JUnit 4 required by org.jboss.arquillian.junit.State (result tracker) -->
                 <dependency>
                     <groupId>junit</groupId>
                     <artifactId>junit</artifactId>

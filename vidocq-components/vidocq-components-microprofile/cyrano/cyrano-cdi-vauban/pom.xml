@@ -59,7 +59,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Container CDI pour les tests d'intégration -->
+        <!-- CDI container for the integration tests -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>

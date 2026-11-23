@@ -18,7 +18,7 @@
     <properties>
         <build.timestamp>${maven.build.timestamp}</build.timestamp>
         <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
-        <!-- Default si git-commit-id ne s'exécute pas (build hors d'un repo git). -->
+        <!-- Default when git-commit-id does not run (build outside a git repository). -->
         <git.commit.id>unknown</git.commit.id>
         <git.commit.id.abbrev>unknown</git.commit.id.abbrev>
         <japicmp.skip>false</japicmp.skip>
@@ -69,7 +69,7 @@
         </resources>
 
         <plugins>
-            <!-- Build-only, pas de dépendance runtime. -->
+            <!-- Build-only, no runtime dependency. -->
             <plugin>
                 <groupId>io.github.git-commit-id</groupId>
                 <artifactId>git-commit-id-maven-plugin</artifactId>

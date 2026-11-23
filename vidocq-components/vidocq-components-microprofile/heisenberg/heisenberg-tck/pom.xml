@@ -42,7 +42,7 @@
     <packaging>jar</packaging>
 
     <name>Heisenberg :: TCK Runner</name>
-    <description>Harness de conformance MicroProfile Fault Tolerance 4.1 — TCK officiel TestNG/Arquillian</description>
+    <description>MicroProfile Fault Tolerance 4.1 conformance harness — official TestNG/Arquillian TCK</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -62,8 +62,8 @@
     <dependencyManagement>
         <dependencies>
             <!--
-                Aligner arquillian sur 1.10.1.Final pour éviter MalformedParameterizedTypeException
-                sous JDK 25 (même contournement que knock-tck / cassini-tck / cyrano-tck).
+                Align arquillian on 1.10.1.Final to avoid MalformedParameterizedTypeException
+                under JDK 25 (same workaround as knock-tck / cassini-tck / cyrano-tck).
             -->
             <dependency>
                 <groupId>org.jboss.arquillian.container</groupId>
@@ -80,7 +80,7 @@
                 <artifactId>arquillian-core-impl-base</artifactId>
                 <version>1.10.1.Final</version>
             </dependency>
-            <!-- Force CDI API 4.1.0 finale -->
+            <!-- Force the final CDI API 4.1.0 -->
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -122,7 +122,7 @@
             <artifactId>ravel-core</artifactId>
         </dependency>
 
-        <!-- JUnit Jupiter pour smoke test -->
+        <!-- JUnit Jupiter for the smoke test -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -187,8 +187,8 @@
 
     <profiles>
         <!--
-            Profil par défaut : smoke test JUnit — vérifie que les modules Heisenberg
-            se chargent correctement et que la spec MP FT 4.1 est sur le classpath.
+            Default profile: JUnit smoke test — checks that the Heisenberg modules
+            load correctly and that the MP FT 4.1 spec is on the classpath.
         -->
         <profile>
             <id>smoke</id>
@@ -221,9 +221,9 @@
         </profile>
 
         <!--
-            Profil TCK officiel : Arquillian TestNG + container Heisenberg custom
-            (HeisenbergDeployableContainer démarrant Vauban embedded — voir ROADMAP.md M9).
-            Cible : 100 % PASS.
+            Official TCK profile: Arquillian TestNG + custom Heisenberg container
+            (HeisenbergDeployableContainer starting an embedded Vauban — see ROADMAP.md M9).
+            Target: 100 % PASS.
         -->
         <profile>
             <id>tck-official</id>
@@ -252,10 +252,10 @@
                             <systemPropertyVariables>
                                 <arquillian.launch>heisenberg</arquillian.launch>
                                 <!--
-                                    Multiplicateur de timeout : scale tous les délais TCK
-                                    pour les environnements CI lents.
-                                    Valeur par défaut : 1.0 — augmenter à 2.0 ou 3.0 si
-                                    les tests @Timeout échouent par faux positifs.
+                                    Timeout multiplier: scales every TCK delay
+                                    for slow CI environments.
+                                    Default value: 1.0 — raise it to 2.0 or 3.0 if
+                                    the @Timeout tests fail with false positives.
                                 -->
                                 <org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier>1.0</org.eclipse.microprofile.fault.tolerance.tck.timeout.multiplier>
                             </systemPropertyVariables>

@@ -134,7 +134,7 @@
                 <version>${jakarta.annotation.version}</version>
             </dependency>
 
-            <!-- Chappe (transport HTTP par défaut, optionnel) -->
+            <!-- Chappe (default HTTP transport, optional) -->
             <dependency>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-api</artifactId>
@@ -146,7 +146,7 @@
                 <version>${chappe.version}</version>
             </dependency>
 
-            <!-- Vauban (compile scope pour foy-cdi-vauban) -->
+            <!-- Vauban (compile scope for foy-cdi-vauban) -->
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-api</artifactId>
@@ -158,7 +158,7 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- Foy modules internes -->
+            <!-- Internal Foy modules -->
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-api</artifactId>

@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    HORS reactor — modelVersion 4.0.0 standalone (pas de <parent>) pour rester compatible avec
-    le ShrinkWrap Maven Resolver 3.3 du TCK officiel (qui ne sait pas parser les POMs Maven
-    Model 4.1.0). Cf. CLAUDE.md racine du workspace : « tant qu'upstream ShrinkWrap ne supporte
-    pas Model 4.1, ces modules doivent rester détachés ».
+    OUTSIDE the reactor — standalone modelVersion 4.0.0 (no <parent>) to stay compatible with
+    the official TCK's ShrinkWrap Maven Resolver 3.3 (which cannot parse Maven Model 4.1.0
+    POMs). See the workspace root CLAUDE.md: "as long as upstream ShrinkWrap does not support
+    Model 4.1, these modules must stay detached".
 
-    NOTE — Le TCK Jakarta Transactions 2.0 n'est PAS un TCK Surefire-scannable : c'est un
-    standalone tsharness Sun-style (tsant + ts.jte). Ce module n'héberge donc QUE :
-      - l'adaptateur Mansart côté Java (MansartTckProvider, MansartUserTransaction) ;
-      - les smoke tests JUnit locaux qui valident le wiring ;
-    La suite TCK complète est lancée hors-Maven via tsant — voir README.md.
+    NOTE — The Jakarta Transactions 2.0 TCK is NOT a Surefire-scannable TCK: it is a
+    standalone Sun-style tsharness (tsant + ts.jte). This module therefore hosts ONLY:
+      - the Java-side Mansart adapter (MansartTckProvider, MansartUserTransaction);
+      - the local JUnit smoke tests that check the wiring;
+    The full TCK suite runs outside Maven through tsant — see README.md.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"

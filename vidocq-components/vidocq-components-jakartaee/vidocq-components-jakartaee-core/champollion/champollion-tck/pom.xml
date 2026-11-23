@@ -47,8 +47,8 @@
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
 
         <!--
-            Versions des TCK officiels Eclipse Foundation. Non publiées sur
-            Maven Central public — voir TCK.md pour l'installation manuelle.
+            Versions of the official Eclipse Foundation TCKs. Not published on
+            the public Maven Central — see TCK.md for the manual installation.
         -->
         <jakarta.json.tck.version>2.1.1</jakarta.json.tck.version>
         <jakarta.json.bind.tck.version>3.0.0</jakarta.json.bind.tck.version>
@@ -116,14 +116,14 @@
         </profile>
 
         <!--
-            Profil JSON-P 2.1 TCK. Activé par run-official-tck-jsonp-2.1.sh.
-            Le TCK officiel doit être installé en M2 local (cf. TCK.md).
+            JSON-P 2.1 TCK profile. Activated by run-official-tck-jsonp-2.1.sh.
+            The official TCK must be installed in the local M2 (see TCK.md).
         -->
         <!--
-            Profil API : tests api/* avec Champollion comme JsonProvider.
-            Le jar -tck-tests-pluggability est volontairement exclu (il fournit
-            un MyJsonProvider concurrent via META-INF/services qui pollue
-            JsonProvider.provider() au runtime et casse les tests api).
+            API profile: api/* tests with Champollion as the JsonProvider.
+            The -tck-tests-pluggability jar is deliberately excluded (it provides
+            a competing MyJsonProvider through META-INF/services that pollutes
+            JsonProvider.provider() at run time and breaks the api tests).
         -->
         <profile>
             <id>jsonp-tck</id>
@@ -170,11 +170,11 @@
                                 <sigTestClasspath>${project.build.directory}/signature-api/jakarta.json-api.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
                             </systemPropertyVariables>
                             <!--
-                                Le TCK contient JsonProviderTest.systemProperty() qui
-                                set System.setProperty("jakarta.json.provider", DummyJsonProvider)
-                                sans cleanup. Fork par classe pour isoler chaque test
-                                dans une JVM neuve, sinon DummyJsonProvider pollue tous
-                                les tests suivants.
+                                The TCK holds JsonProviderTest.systemProperty(), which
+                                calls System.setProperty("jakarta.json.provider", DummyJsonProvider)
+                                without cleanup. Fork per class to isolate each test
+                                in a fresh JVM, otherwise DummyJsonProvider pollutes every
+                                following test.
                             -->
                             <forkCount>1</forkCount>
                             <reuseForks>false</reuseForks>
@@ -185,10 +185,10 @@
         </profile>
 
         <!--
-            Profil pluggability : exécuté séparément, classpath pluggability + tck-common
-            uniquement (Champollion non chargé). MyJsonProvider du jar pluggability
-            sert d'oracle pour les tests qui vérifient le comportement par défaut de
-            JsonProvider.provider() face à des providers tiers.
+            Pluggability profile: run separately, with only pluggability + tck-common on
+            the classpath (Champollion not loaded). MyJsonProvider from the pluggability jar
+            serves as the oracle for the tests that check the default behaviour of
+            JsonProvider.provider() against third-party providers.
         -->
         <profile>
             <id>jsonp-tck-pluggability</id>
@@ -242,8 +242,8 @@
         </profile>
 
         <!--
-            Profil JSON-B 3.0 TCK. Activé par run-official-tck-jsonb-3.0.sh.
-            Utilise TestNG + Arquillian (selon le format officiel Eclipse).
+            JSON-B 3.0 TCK profile. Activated by run-official-tck-jsonb-3.0.sh.
+            Uses TestNG + Arquillian (following the official Eclipse format).
         -->
         <profile>
             <id>jsonb-tck</id>
@@ -261,12 +261,12 @@
                     <scope>test</scope>
                 </dependency>
                 <!--
-                    Vauban — CDI 4.1 maison Vidocq (politique "zéro dépendance
-                    externe Vidocq stack" : pas de Weld). Fournit
-                    SeContainerInitializer + CDIProvider. Démarre le container
-                    pour les 2 tests Adapters/SerializersCustomizationCDITest
-                    qui résolvent leurs adapters/serializers comme CDI beans
-                    (cf. spec JSON-B §5).
+                    Vauban — Vidocq's own CDI 4.1 (policy "zero external
+                    dependency in the Vidocq stack": no Weld). Provides
+                    SeContainerInitializer + CDIProvider. Starts the container
+                    for the 2 tests Adapters/SerializersCustomizationCDITest,
+                    which resolve their adapters/serializers as CDI beans
+                    (see JSON-B spec §5).
                 -->
                 <dependency>
                     <groupId>io.vidocq.vauban</groupId>

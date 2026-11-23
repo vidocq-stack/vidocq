@@ -15,12 +15,12 @@
     <description>Controlled re-export of the MicroProfile Fault Tolerance 4.1 spec, plus the Heisenberg SPI</description>
 
     <dependencies>
-        <!-- Spec MP FT 4.1 — version modularisée, re-exposée transitivement -->
+        <!-- MP FT 4.1 spec — modularised version, re-exported transitively -->
         <dependency>
             <groupId>io.vidocq.heisenberg</groupId>
             <artifactId>heisenberg-mp-ft-api</artifactId>
         </dependency>
-        <!-- Interceptors API : InvocationContext exposé dans la SPI publique PolicyContext -->
+        <!-- Interceptors API: InvocationContext is exposed in the public SPI PolicyContext -->
         <dependency>
             <groupId>jakarta.interceptor</groupId>
             <artifactId>jakarta.interceptor-api</artifactId>

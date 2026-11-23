@@ -23,7 +23,7 @@
             <artifactId>jakarta.ws.rs-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- JSON-B (sérialisation corps requête/réponse — implémentation runtime : champollion) -->
+        <!-- JSON-B (request/response body serialization — runtime implementation: champollion) -->
         <dependency>
             <groupId>jakarta.json.bind</groupId>
             <artifactId>jakarta.json.bind-api</artifactId>
@@ -61,13 +61,13 @@
             <artifactId>jakarta.annotation-api</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation JSON-B (Jakarta JSON Binding) pour les tests d'intégration -->
+        <!-- JSON-B (Jakarta JSON Binding) implementation for the integration tests -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonb</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation JSON-P (Jakarta JSON Processing) — transitive de champollion-jsonb -->
+        <!-- JSON-P (Jakarta JSON Processing) implementation — transitive from champollion-jsonb -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonp</artifactId>

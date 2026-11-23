@@ -16,9 +16,9 @@
 
     <dependencies>
         <!--
-            Dépendance build-time vers champollion-jsonb : l'APT a besoin
-            d'importer JsonbBinding et @JsonbStatic. La SPI jsonb ne dépend pas
-            de codegen — pas de circularité.
+            Build-time dependency on champollion-jsonb: the APT needs to
+            import JsonbBinding and @JsonbStatic. The jsonb SPI does not depend
+            on codegen — no cycle.
         -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>

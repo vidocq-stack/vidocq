@@ -46,8 +46,8 @@
                     <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
-            <!-- Indexe src/main/resources/static/** → META-INF/chappe-static-index.properties
-                 pour que StaticFileHandler résolve en O(1) sans URLConnection.openConnection(). -->
+            <!-- Indexes src/main/resources/static/** → META-INF/chappe-static-index.properties
+                 so that StaticFileHandler resolves in O(1) without URLConnection.openConnection(). -->
             <plugin>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-static-index-maven-plugin</artifactId>

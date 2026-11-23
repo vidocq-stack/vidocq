@@ -53,18 +53,18 @@
     </scm>
 
     <properties>
-        <!-- Spec MicroProfile Config — 3.1.1 ajoute Automatic-Module-Name (publiée 2026-04-22) -->
+        <!-- MicroProfile Config spec — 3.1.1 adds Automatic-Module-Name (released 2026-04-22) -->
         <microprofile.config.version>3.1.1</microprofile.config.version>
 
-        <!-- Specs Jakarta (uniquement utilisées par ravel-cdi-vauban) -->
+        <!-- Jakarta specs (used by ravel-cdi-vauban only) -->
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
-        <!-- Vidocq upstream — utilisé par ravel-cdi-vauban -->
+        <!-- Upstream Vidocq — used by ravel-cdi-vauban -->
         <vauban.version>${project.version}</vauban.version>
 
-        <!-- JMH pour ravel-bench -->
+        <!-- JMH for ravel-bench -->
         <jmh.version>1.37</jmh.version>
 
         <!--
@@ -112,10 +112,10 @@
     <dependencyManagement>
         <dependencies>
             <!--
-                MicroProfile Config API — spec officielle Eclipse. N'est référencée
-                directement que par 'ravel-mp-config-api' qui la repackage avec un
-                module-info explicite (compatibilité jlink). Les autres modules Ravel
-                doivent dépendre de 'ravel-mp-config-api' à la place.
+                MicroProfile Config API — official Eclipse spec. Referenced
+                directly only by 'ravel-mp-config-api', which repackages it with an
+                explicit module-info (jlink compatibility). The other Ravel modules
+                must depend on 'ravel-mp-config-api' instead.
             -->
             <dependency>
                 <groupId>org.eclipse.microprofile.config</groupId>
@@ -123,14 +123,14 @@
                 <version>${microprofile.config.version}</version>
             </dependency>
 
-            <!-- MicroProfile Config API repackagée avec module-info explicite (jlink-ready) -->
+            <!-- MicroProfile Config API repackaged with an explicit module-info (jlink-ready) -->
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-mp-config-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- Jakarta APIs (utilisés par ravel-cdi-vauban uniquement) -->
+            <!-- Jakarta APIs (used by ravel-cdi-vauban only) -->
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -159,7 +159,7 @@
                 <version>${jmh.version}</version>
             </dependency>
 
-            <!-- Ravel modules internes -->
+            <!-- Ravel internal modules -->
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-api</artifactId>

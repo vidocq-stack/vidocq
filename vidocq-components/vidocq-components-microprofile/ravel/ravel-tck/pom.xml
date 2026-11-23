@@ -54,10 +54,10 @@
     <dependencyManagement>
         <dependencies>
             <!--
-                Aligne weld-lite-extension-translator avec weld-core-impl 6.0.2+.
-                La version transitive 6.0.0.Alpha1 (amenée par arquillian-weld-embedded)
-                appelle AfterBeanDiscoveryImpl.addBean(Class) qui n'existe plus dans
-                weld-core-impl 6.0.2 — ce qui casse la phase @Synthesis des BCE :
+                Aligns weld-lite-extension-translator with weld-core-impl 6.0.2+.
+                The transitive version 6.0.0.Alpha1 (brought by arquillian-weld-embedded)
+                calls AfterBeanDiscoveryImpl.addBean(Class), which no longer exists in
+                weld-core-impl 6.0.2 — this breaks the @Synthesis phase of the BCEs:
 
                     java.lang.NoSuchMethodError:
                       'WeldBeanConfigurator AfterBeanDiscoveryImpl.addBean(Class)'
@@ -70,11 +70,11 @@
             </dependency>
 
             <!--
-                Le TCK MP Config tire transitivement cdi-api 4.1.0-M1 (Milestone)
-                qui ne contient pas InvokerFactory. weld-lite-extension-translator
-                6.0.1.Final référence cette classe au chargement statique de
-                ExtensionMethodParameterType : NoClassDefFoundError pendant la
-                phase @Registration. On force la 4.1.0 finale.
+                The MP Config TCK pulls in cdi-api 4.1.0-M1 (Milestone) transitively,
+                which does not contain InvokerFactory. weld-lite-extension-translator
+                6.0.1.Final references that class when ExtensionMethodParameterType
+                is statically loaded: NoClassDefFoundError during the
+                @Registration phase. We force the final 4.1.0.
             -->
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
@@ -88,18 +88,18 @@
             </dependency>
 
             <!--
-                arquillian-weld-embedded:4.0.0.Final tire transitivement
-                arquillian-container-spi:1.8.0.Final dans laquelle l'interface
-                Container N'EST PAS générique. Sous JDK 23+, la validation stricte de
-                ParameterizedTypeImpl déclenche alors :
+                arquillian-weld-embedded:4.0.0.Final pulls in, transitively,
+                arquillian-container-spi:1.8.0.Final, in which the Container
+                interface is NOT generic. Under JDK 23+, the strict validation of
+                ParameterizedTypeImpl then triggers:
 
                     java.lang.reflect.MalformedParameterizedTypeException:
                       Mismatch of count of formal and actual type arguments in
                       constructor of org.jboss.arquillian.container.spi.Container
 
-                À partir de 1.10.1.Final, Container est déclarée
-                Container<T extends ContainerConfiguration> ; on force donc le trio
-                spi/impl-base/core-impl-base sur 1.10.1.
+                From 1.10.1.Final on, Container is declared as
+                Container<T extends ContainerConfiguration>; so we force the trio
+                spi/impl-base/core-impl-base to 1.10.1.
             -->
             <dependency>
                 <groupId>org.jboss.arquillian.container</groupId>
@@ -171,8 +171,8 @@
 
     <profiles>
         <!--
-            Profil par défaut : smoke test sans Arquillian — vérifie que le ServiceLoader
-            charge bien RavelConfigProviderResolver, sans dépendance Weld/TestNG.
+            Default profile: smoke test without Arquillian — checks that the ServiceLoader
+            does load RavelConfigProviderResolver, with no Weld/TestNG dependency.
         -->
         <profile>
             <id>smoke</id>
@@ -182,8 +182,8 @@
         </profile>
 
         <!--
-            Profil TCK officiel : Arquillian TestNG + Weld SE embedded, dépendances
-            scannées du JAR microprofile-config-tck. Cible : 100 % PASS (contrat M5).
+            Official TCK profile: Arquillian TestNG + embedded Weld SE, dependencies
+            scanned from the microprofile-config-tck JAR. Target: 100 % PASS (M5 contract).
         -->
         <profile>
             <id>tck-official</id>
@@ -208,7 +208,7 @@
                                 <include>**/TestCustomConfigProfile.class</include>
                             </includes>
                             <excludes>
-                                <!-- Le smoke test JUnit est réservé au profil 'smoke'. -->
+                                <!-- The JUnit smoke test is reserved for the 'smoke' profile. -->
                                 <exclude>**/RavelTckSmokeTest.class</exclude>
                             </excludes>
                             <trimStackTrace>false</trimStackTrace>
@@ -223,9 +223,9 @@
                                 <mp.tck.prop.dummy>dummy</mp.tck.prop.dummy>
                             </systemPropertyVariables>
                             <environmentVariables>
-                                <!-- DefaultConfigSourceOrdinalTest.checkSetup : env
-                                     config_ordinal doit valoir 45 pour vérifier
-                                     l'override d'ordinal du ConfigSource env. -->
+                                <!-- DefaultConfigSourceOrdinalTest.checkSetup: env
+                                     config_ordinal must be 45 to check
+                                     the ordinal override of the env ConfigSource. -->
                                 <config_ordinal>45</config_ordinal>
                                 <customer_name>Bob</customer_name>
                                 <!-- ConfigProviderTest.testEnvironmentConfigSource -->
@@ -239,9 +239,9 @@
                         </configuration>
                         <dependencies>
                             <!--
-                                Force Surefire à utiliser le provider TestNG : le TCK MP Config
-                                est TestNG-driven, et junit-platform-engine est aussi présent
-                                en classpath via la dep racine du module (smoke test).
+                                Forces Surefire to use the TestNG provider: the MP Config TCK
+                                is TestNG-driven, and junit-platform-engine is also on the
+                                classpath through the module's root dependency (smoke test).
                             -->
                             <dependency>
                                 <groupId>org.apache.maven.surefire</groupId>
@@ -260,7 +260,7 @@
                     <scope>test</scope>
                 </dependency>
 
-                <!-- Arquillian TestNG container — version explicite ; BOM aligne les transitives -->
+                <!-- Arquillian TestNG container — explicit version; the BOM aligns the transitive ones -->
                 <dependency>
                     <groupId>org.jboss.arquillian.testng</groupId>
                     <artifactId>arquillian-testng-container</artifactId>
@@ -268,7 +268,7 @@
                     <scope>test</scope>
                 </dependency>
 
-                <!-- Container CDI : Weld SE embedded (CDI 4.1, BCE compatible avec ravel-cdi-vauban) -->
+                <!-- CDI container: embedded Weld SE (CDI 4.1, BCE compatible with ravel-cdi-vauban) -->
                 <dependency>
                     <groupId>org.jboss.arquillian.container</groupId>
                     <artifactId>arquillian-weld-embedded</artifactId>

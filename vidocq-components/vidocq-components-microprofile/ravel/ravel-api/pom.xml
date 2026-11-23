@@ -16,9 +16,9 @@
 
     <dependencies>
         <!--
-            On référence le repackage modularisé (module-info explicite) au lieu de
-            la spec officielle, afin que ravel-api et ses consommateurs soient
-            compatibles jlink. Le nom de module reste 'org.eclipse.microprofile.config'.
+            We reference the modularised repackage (explicit module-info) instead of
+            the official spec, so that ravel-api and its consumers are
+            jlink-compatible. The module name stays 'org.eclipse.microprofile.config'.
         -->
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
