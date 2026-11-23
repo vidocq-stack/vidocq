@@ -33,5 +33,6 @@ it (§2.2.1).
 
 WARNING: Kerckhoffs is not tested on an application server yet. Jakarta Security is a feature
 of such servers: keep their own security feature on only if you do not ship Kerckhoffs, and do
-not ship both. The tested `<exclusions>` and the Open Liberty WAR arrive with the
-`kerckhoffs-it-other-containers` module.
+not ship both. Its only container adapter, `kerckhoffs-foy`, plugs it into Foy: on another server
+nothing places its mechanisms in service. The tested `<exclusions>` and the Open Liberty WAR arrive with the
+`kerckhoffs-it-other-containers` module (milestone K6); there is no `kerckhoffs-it-openliberty` module yet.

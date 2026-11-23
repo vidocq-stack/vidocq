@@ -1,0 +1,137 @@
+= Concepts
+:description: How a request is authenticated and authorized by Kerckhoffs on Foy, and which CDI beans take part.
+
+[.lead]
+Kerckhoffs places the application's `HttpAuthenticationMechanism` in service through Jakarta Authentication, and
+decides the access to web resources through Jakarta Authorization, as Jakarta Security 4.0 section 2.5 asks. This
+page follows one request through the pieces, then lists the beans an application sees.
+
+[#three-specifications]
+== Three specifications, five modules
+
+Jakarta Security stands on two other specifications, and Kerckhoffs carries the slices of them it needs as modules
+of their own:
+
+* **Jakarta Security 4.0** (`kerckhoffs-core`, `kerckhoffs-cdi`): mechanisms, identity stores, the security context,
+and the CDI wiring that turns the definition annotations into beans.
+* **Jakarta Authentication 3.1** (`kerckhoffs-authentication`): the Servlet Container Profile, which drives one server
+authentication module for one request. It knows no servlet container and no Jakarta Security type.
+* **Jakarta Authorization 3.0** (`kerckhoffs-authorization`): the policy factory and the default policy, which answers
+web resource permissions from the security constraints.
+
+`kerckhoffs-foy` connects them to Foy. Foy defines two neutral hooks, `RequestAuthentication` and `AccessControl`,
+and knows nothing of Kerckhoffs: the dependency goes from Kerckhoffs to Foy, never the reverse
+(xref:{page-component-version}@foy::reference.adoc#security[Foy, Security]). The Vidocq runtime extension installs
+the two hooks.
+
+[#request-flow]
+== The path of a request
+
+[mermaid]
+....
+sequenceDiagram
+  participant C as Client
+  participant F as Foy
+  participant RA as MechanismRequestAuthentication
+  participant P as ServletContainerProfile
+  participant M as HttpAuthenticationMechanism
+  participant H as IdentityStoreHandler
+  participant AC as PolicyAccessControl
+  participant PO as Policy
+  C->>F: request
+  F->>RA: validateRequest(request, response, mandatory)
+  RA->>P: validateRequest
+  P->>M: validateRequest(request, response, HttpMessageContext)
+  M->>H: validate(credential)
+  H-->>M: CredentialValidationResult
+  M-->>P: notifyContainerAboutLogin / doNothing / responseUnauthorized
+  P-->>RA: AUTHENTICATED / ANONYMOUS / RESPONSE_SENT
+  RA-->>F: Outcome (identity, authType)
+  F->>AC: permits(path, method, caller, constraints)
+  AC->>PO: implies(WebResourcePermission, Subject)
+  PO-->>AC: true / false
+  AC-->>F: run the target, or 403
+....
+
+. **Authentication.** Foy asks the `RequestAuthentication` hook for *every* request, with `mandatory` set when a
+constraint protects the resource. `MechanismRequestAuthentication` asks the container for the mechanism (so a
+request-scoped or dependent mechanism is a new one when its scope says so), wraps it in a server authentication
+module, `HttpAuthenticationMechanismModule`, and runs it through the `ServletContainerProfile`.
+. **The mechanism.** It reads the request, asks the `IdentityStoreHandler` when it holds credentials, and answers
+through its `HttpMessageContext`: `notifyContainerAboutLogin` reports the caller and its groups to the profile through
+the callback handler of Jakarta Authentication; `responseUnauthorized`, `redirect` or `forward` answer the request
+themselves; `doNothing` leaves the caller anonymous.
+. **The outcome.** The profile turns that into `AUTHENTICATED` (caller, groups, authentication type), `ANONYMOUS`, or
+`RESPONSE_SENT`, in which case Foy stops: the mechanism already answered. A built-in mechanism names its type,
+`BASIC` or `FORM`; any other is `HTTP`.
+. **Authorization.** Once the caller is known, Foy asks the `AccessControl` hook. `PolicyAccessControl` builds a
+`WebResourcePermission` from the path and the method, and a `Subject` that holds a `CallerPrincipal` and one
+`RolePrincipal` per group, and asks `Policy.implies` of the `PolicyFactory`. `false` is `403`.
+. **The target.** The servlet runs; `HttpServletRequest.getUserPrincipal`, `isUserInRole` and `getAuthType` answer
+with the identity, and so does the injected `SecurityContext`.
+
+Every step fails closed: a mechanism or a profile that throws, a status that has no meaning for a request, a callback
+the profile does not know, a caller without a name, are a failed request, never a login, and Foy does not run the
+target.
+
+[#default-policy]
+== The default policy
+
+`ConstraintPolicy` grants a `WebResourcePermission` when the security constraints of the application let the caller
+reach the resource, and refuses every other permission. It reads the constraints through a `ScopedValue` that
+`PolicyAccessControl` binds around the check: a check made outside a request finds none and grants nothing.
+
+An application replaces it with `PolicyFactory.getPolicyFactory().setPolicy(...)`; its policy may ask the default one
+in turn. `PolicyContext.getContext(PolicyContext.PRINCIPAL_MAPPER)` answers a `PrincipalMapper` that reads the caller
+and the roles of the subjects Kerckhoffs builds.
+
+[#identity]
+== Groups and roles
+
+An identity store answers a caller and its groups; the default `IdentityStoreHandler` merges the groups of the stores
+(xref:usage.adoc#identity-store-handler[How the stores answer together]). Kerckhoffs maps no group to a role: a group
+is a role of the same name for `isCallerInRole`, `isUserInRole` and the constraints.
+
+[#beans]
+== The beans of an application
+
+Two build compatible extensions register synthetic beans, computed from the classes of the deployment only:
+
+[cols="2,1,3"]
+|===
+| Bean type | Scope | Registered by
+
+| `IdentityStore`, one per `@InMemoryIdentityStoreDefinition` | `@Singleton` | `KerckhoffsExtension` (`kerckhoffs-cdi`)
+| `HttpAuthenticationMechanism`, one per `@BasicAuthenticationMechanismDefinition` or `@FormAuthenticationMechanismDefinition` | `@Singleton` | `KerckhoffsExtension`
+| `IdentityStoreHandler`, the default one, unless the application has its own | `@Singleton` | `KerckhoffsExtension`
+| `SecurityContext` | `@Singleton` | `FoySecurityContextExtension` (`kerckhoffs-foy`)
+| `Principal`, the caller of the current request | `@Dependent` | `FoySecurityContextExtension`
+|===
+
+`SecurityContext` and `Principal` are single objects that read the request of the moment when they are asked, so they
+need no normal scope and no client proxy. The default handler reads the identity store beans again at each
+validation.
+
+The interceptors of `@AutoApplySession` and `@RememberMe` wrap `validateRequest` and `cleanSubject` of the mechanism
+they are bound to and let every other call through. `@AutoApplySession` is the outer one (priority
+`PLATFORM_BEFORE + 200`), `@RememberMe` runs inside it (`PLATFORM_BEFORE + 210`).
+
+[#build-and-start]
+== What happens at build, and what at start
+
+The extensions work at build. `vidocq:generate` runs them once and freezes what they did; the start of a packaged
+application loads that record instead of running them. What depends on the start, and not on the classes, is checked
+in an observer of `Startup`: every identity store not bound to a request, a session or a conversation is created
+there, and one that cannot be created fails the start with a `DeploymentException`; an in-memory store with an
+`*Expression` attribute is one of them. A mechanism definition with an expression where a literal is required fails
+wherever the extension runs: the build that freezes it, or the start of a deployment that runs it at start.
+
+[#vidocq-runtime]
+== Under the Vidocq runtime
+
+The Security extension (`vidocq-runtime-kerckhoffs-security-extension`, priority 580, before the Servlet extension)
+gives Foy the two hooks through the `ServletAuthentication` SPI of the Servlet extension, when the application has an
+`HttpAuthenticationMechanism` or an `HttpAuthenticationMechanismHandler` bean; without one, Foy keeps the
+`login-config` of the application. A handler of the application, when there is one, is put in front of the request as
+the mechanism. Two extensions that both take over the authentication fail the start. See
+xref:{page-component-version}@vidocq::modules/vidocq-runtime-extensions.adoc#kerckhoffs-security[Jakarta Security (Kerckhoffs)].

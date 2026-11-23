@@ -1,0 +1,150 @@
+= Getting started
+:description: Protect a servlet of a Vidocq application with Jakarta Security 4.0 on Kerckhoffs.
+
+[.lead]
+This page protects a servlet of a Vidocq application with the built-in BASIC mechanism and an identity store of the
+application, then runs it with `mvn vidocq:dev`. The code is the one of the runtime's integration test
+`vidocq-runtime-it-kerckhoffs-security`, which runs it on every build.
+
+== Prerequisites
+
+* **Java 25** and **Maven 3.10.0**, as for any Vidocq application.
+* A Vidocq application, created with `vidocq create` as in
+xref:{page-component-version}@vidocq::getting-started.adoc[the runtime's Getting started].
+
+== Maven coordinates
+
+The application declares the Vidocq runtime extension for Security, and nothing else of Kerckhoffs:
+
+[source,bash]
+----
+vidocq extension add kerckhoffs-security
+----
+
+The command adds the extension with the Servlet extension it runs on (`foy-servlet`), and the `requires` it needs in
+`module-info.java`. Written by hand, the dependency is:
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-kerckhoffs-security-extension</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+Its version comes from `vidocq-runtime-bom`, which manages the extension, its `-codegen` bundle and the five
+`io.vidocq.kerckhoffs` artifacts. The extension brings them: `kerckhoffs-core` (with the Jakarta Security API, at
+`compile` scope, so the application never declares that API), `kerckhoffs-cdi`, `kerckhoffs-authentication`,
+`kerckhoffs-authorization` and `kerckhoffs-foy`, plus the Servlet extension, the Expression Language extension
+(Peano) and the Jakarta Authentication 3.1 and Authorization 3.0 APIs, which Kerckhoffs leaves `provided`. The Vidocq Maven plugin puts the `-codegen` bundle,
+`vidocq-runtime-kerckhoffs-security-extension-codegen`, on the compiler's processor path: it carries the build
+compatible extensions of Kerckhoffs.
+
+== A protected servlet
+
+Declare a mechanism. `@BasicAuthenticationMechanismDefinition` on any bean class makes Kerckhoffs register the BASIC
+mechanism as the application's `HttpAuthenticationMechanism`:
+
+[source,java]
+----
+@BasicAuthenticationMechanismDefinition(realmName = "vidocq")
+@Dependent
+public class SecurityApplication {
+}
+----
+
+Declare an identity store, the bean that says who a caller is:
+
+[source,java]
+----
+@ApplicationScoped
+public class UserStore implements IdentityStore {
+
+    @Override
+    public CredentialValidationResult validate(Credential credential) {
+        if (credential instanceof UsernamePasswordCredential login
+                && "alice".equals(login.getCaller()) && login.getPassword().compareTo("wonderland")) {
+            return new CredentialValidationResult("alice", Set.of("admin"));
+        }
+        return CredentialValidationResult.INVALID_RESULT;
+    }
+}
+----
+
+Protect a servlet with a security constraint, and read the caller from the injected `SecurityContext` and
+`Principal`:
+
+[source,java]
+----
+@WebServlet("/secured")
+@ServletSecurity(@HttpConstraint(rolesAllowed = "admin"))
+public class WhoAmIServlet extends HttpServlet {
+
+    @Inject
+    SecurityContext security;
+
+    @Inject
+    Principal caller;
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        resp.setContentType("text/plain");
+        resp.getWriter().write(String.join("|", security.getCallerPrincipal().getName(),
+                String.valueOf(security.isCallerInRole("admin")), caller.getName(),
+                String.valueOf(req.isUserInRole("admin")), req.getAuthType()));
+    }
+}
+----
+
+`SecurityContext` is `jakarta.security.enterprise.SecurityContext`. A servlet without a constraint is reached by
+everybody; there `security.getCallerPrincipal()` is `null` for a request that sends no credentials.
+
+The module descriptor of the integration test reads the same modules as an application does:
+
+[source,java]
+----
+module com.acme.shop {
+    requires jakarta.cdi;
+    requires jakarta.inject;
+    requires jakarta.servlet;
+    requires jakarta.security;
+    requires io.vidocq.runtime.extensions.jakartaee.web.foy;
+    requires io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs;
+}
+----
+
+== Configuration
+
+Kerckhoffs reads no configuration key: the mechanisms and the identity stores are declared in the code, and the
+build compatible extensions read them from the classes of the application. The port is the HTTP server's, as for any
+Vidocq web application.
+
+== Run it
+
+[source,bash]
+----
+mvn vidocq:dev
+----
+
+Then, in another terminal (port 8080 in a project made by `vidocq create`):
+
+[source,bash]
+----
+curl -i http://localhost:8080/secured                        # 401, WWW-Authenticate: Basic realm="vidocq"
+curl -i -u alice:nope http://localhost:8080/secured          # 401
+curl -u alice:wonderland http://localhost:8080/secured       # alice|true|alice|true|BASIC
+----
+
+The integration test asserts the same three answers (`KerckhoffsSecurityTest`).
+
+== Other starting points
+
+* `@InMemoryIdentityStoreDefinition` declares the callers in the annotation, for tests and demos, in place of
+`UserStore`. See xref:usage.adoc#identity-stores[Identity stores].
+* `@FormAuthenticationMechanismDefinition` gives a login page instead of the browser's BASIC dialog. See
+xref:usage.adoc#form[FORM].
+* A bean of the application that implements `HttpAuthenticationMechanism` is used as it is. See
+xref:usage.adoc#your-own-mechanism[Your own mechanism].
+* REST resources are protected the same way once they are served as a servlet of Foy. See
+xref:usage.adoc#rest-resources[REST resources].

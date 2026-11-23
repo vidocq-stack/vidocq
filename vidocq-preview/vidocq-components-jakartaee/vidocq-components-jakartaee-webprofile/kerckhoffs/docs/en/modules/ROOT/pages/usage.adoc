@@ -1,0 +1,259 @@
+= Usage
+:description: The authentication mechanisms, identity stores and security context Kerckhoffs provides, and what it does not provide yet.
+
+[.lead]
+What an application can declare with Kerckhoffs in this release, how each piece behaves, and what is not there
+yet. Every behaviour on this page is held by a test of the component or by an application of the official TCK
+(xref:tck.adoc[TCK]).
+
+[#mechanisms]
+== Authentication mechanisms
+
+An application has one mechanism in service: the `HttpAuthenticationMechanism` bean it declares, the one Kerckhoffs
+registers for a definition annotation, or an `HttpAuthenticationMechanismHandler` of its own that chooses among
+several. Without any of them, Kerckhoffs stays out of the way and Foy keeps the `login-config` of the application
+(xref:{page-component-version}@foy::usage.adoc#application-security[Foy, Application security]).
+
+The mechanism is asked for *every* request, protected or not, before the constraint of the resource is applied. On a
+resource without a constraint, a mechanism that finds no credentials leaves the caller anonymous.
+
+[#basic]
+=== BASIC
+
+[source,java]
+----
+@BasicAuthenticationMechanismDefinition(realmName = "shop")
+@Dependent
+public class ShopSecurity {
+}
+----
+
+* The challenge is `401` with `WWW-Authenticate: Basic realm="shop"`; a realm name loses its control characters and
+its quotes are escaped.
+* Whatever cannot be read as a valid `Authorization: Basic` header proves nobody; credentials that the identity stores
+do not validate are challenged again.
+* After a login, `HttpServletRequest.getAuthType()` is `BASIC`.
+* `realmName` is a literal, or an Expression Language string literal such as `${'shop'}`. Any other expression fails
+the deployment.
+* The definition is repeatable (`@BasicAuthenticationMechanismDefinition.List`), each with its own `qualifiers`, for
+an application whose handler picks one (TCK `app-custom-authentication-mechanism-handler2`). The qualifiers a
+definition gives its mechanism differ from Soteria's: see
+xref:reference.adoc#deviations-from-the-reference-implementation[Deviations from the reference implementation].
+
+[#form]
+=== FORM
+
+[source,java]
+----
+@FormAuthenticationMechanismDefinition(
+        loginToContinue = @LoginToContinue(loginPage = "/login-servlet", errorPage = "/login-error-servlet"))
+@Dependent
+public class FormApplication {
+}
+----
+
+* A request of nobody to a protected resource leads to `loginPage` (default `/login`). The request is forwarded to
+it, read as a `GET` whatever was sent; with `useForwardToLogin = false`, the browser is redirected instead.
+* The page posts `j_username` and `j_password` to `j_security_check`. Credentials are read from a `POST` only.
+* A login renews the session id, keeps the caller in the session (later requests of the session are authenticated
+from it) and redirects the browser to the page it asked for with a `GET`, or to the root of the application. A failed
+login keeps nothing and goes to `errorPage` (default `/login-error`) the way the login page is reached; an empty
+`errorPage` answers `401`.
+* After a login, `getAuthType()` is `FORM`.
+* `loginPage` and `errorPage` are literals, or Expression Language string literals. `useForwardToLoginExpression`
+fails the deployment: only `useForwardToLogin` is read.
+
+[#your-own-mechanism]
+=== Your own mechanism
+
+A bean of the application that implements `HttpAuthenticationMechanism` is the mechanism, whatever its scope: it is
+asked of the container for each request, so a `@RequestScoped` or `@Dependent` mechanism behaves as the
+specification says. It reports a caller through `HttpMessageContext.notifyContainerAboutLogin(...)`, usually after
+asking the `IdentityStoreHandler`, as in this sketch (the TCK applications `app-custom` and `app-custom-session` run
+mechanisms of this kind):
+
+[source,java]
+----
+@ApplicationScoped
+public class TokenMechanism implements HttpAuthenticationMechanism {
+
+    @Inject
+    IdentityStoreHandler identityStores;
+
+    @Override
+    public AuthenticationStatus validateRequest(HttpServletRequest request, HttpServletResponse response,
+                                                HttpMessageContext context) {
+        String name = request.getParameter("name");
+        String password = request.getParameter("password");
+        if (name == null || password == null) {
+            return context.doNothing();
+        }
+        return context.notifyContainerAboutLogin(
+                identityStores.validate(new UsernamePasswordCredential(name, password)));
+    }
+}
+----
+
+* A caller without a name is a failure, never a login.
+* `getAuthType()` is `HTTP` after a login by a mechanism that names no type.
+* A mechanism that throws fails the request: the target is not run.
+
+[#mechanism-handler]
+=== A handler that chooses the mechanism
+
+An application bean that implements `HttpAuthenticationMechanismHandler` takes precedence over the mechanisms: it is
+put in front of every request and chooses among the mechanisms it injects (TCK
+`app-custom-authentication-mechanism-handler`).
+
+[#auto-apply-session]
+=== `@AutoApplySession`
+
+On a mechanism class, `@AutoApplySession` keeps the caller the mechanism established in the HTTP session. A later
+request of that session is authenticated again from it, and the mechanism is not asked; a request that carries a new
+authentication always reaches the mechanism, and a login never keeps the session id it found. Only the name and the
+groups are kept, so a caller restored from the session is a `CallerPrincipal`.
+
+[#remember-me]
+=== `@RememberMe`
+
+On a mechanism class, `@RememberMe` sets a cookie after a login and accepts it instead of asking the mechanism again
+while the `RememberMeIdentityStore` of the application validates its token. A token the store refuses is never a
+login, and the client is told to drop the cookie; a logout removes the token and the cookie.
+
+* The application provides the `RememberMeIdentityStore`. A mechanism with `@RememberMe` and no such store fails when
+it is called; it never runs silently without the remember-me.
+* The `*Expression` attributes are Jakarta Expression Language, evaluated when they are needed, with the mechanism
+as `self` and the context of the call as `httpMessageContext`. An expression that cannot be evaluated is refused,
+never read as a default. Under Vidocq the engine is Peano, which the Security extension brings.
+* It runs inside `@AutoApplySession`: a caller kept in the session is not asked for the cookie.
+
+The TCK application `app-custom-rememberme` (25 of 25) covers the cookie, its flags and the expressions.
+
+[#identity-stores]
+== Identity stores
+
+[#in-memory-store]
+=== `@InMemoryIdentityStoreDefinition`
+
+[source,java]
+----
+@InMemoryIdentityStoreDefinition({
+        @Credentials(callerName = "reza", password = "secret1", groups = {"foo", "bar"}),
+        @Credentials(callerName = "alex", password = "secret2", groups = {"foo", "kaz"})
+})
+@Dependent
+public class MemoryApplication {
+}
+----
+
+It is meant for tests, demos and debugging: the passwords are in the annotation. Each definition is one identity
+store. An unknown caller, a wrong password and a cleared credential are `INVALID`; the password is compared in
+constant time. A caller declared twice, a caller without a name, `priorityExpression` and `useForExpression` refuse
+the store, so the start fails. `priority` and `useFor` are read.
+
+[#application-stores]
+=== Stores of the application
+
+Any bean that implements `IdentityStore` is a store: an `@ApplicationScoped` one as in
+xref:getting-started.adoc[Getting started], or a `@RequestScoped` one (TCK `app-multiple-store-backup`).
+
+[#identity-store-handler]
+=== How the stores answer together
+
+The default `IdentityStoreHandler` makes every store act as one (Jakarta Security 4.0, section 3.2.4):
+
+. The stores are read again at each validation and sorted by `priority()`, lowest first.
+. The stores whose `validationTypes()` contain `VALIDATE` are asked in that order, until one answers `VALID`.
+. The groups of the caller are those of that store, if it also declares `PROVIDE_GROUPS`, plus the `getCallerGroups`
+of every store that declares `PROVIDE_GROUPS` alone.
+. Without a `VALID` answer, the result is `INVALID` when a store refused the credential, `NOT_VALIDATED` when none had
+an opinion.
+
+An application bean that implements `IdentityStoreHandler` replaces the default handler.
+
+Every store is created when the container starts, so a store that cannot be created stops the start with a
+`DeploymentException`, not the first login. A store bound to the request, the session or the conversation is left to
+its first use.
+
+[#security-context]
+== The security context
+
+`@Inject SecurityContext` and `@Inject Principal` answer for the caller of the request being served; outside a
+request, nobody is the caller.
+
+* `getCallerPrincipal()` is the principal of the request, `null` for an anonymous caller.
+* `isCallerInRole(role)` answers as `HttpServletRequest.isUserInRole`.
+* `getPrincipalsByType(type)` gives the caller principal when it is of that type, nothing otherwise.
+* `authenticate(request, response, parameters)` runs the mechanism in service for this request, with the
+`AuthenticationParameters` given (TCK `app-securitycontext-auth`). It answers `SUCCESS` when a caller is
+authenticated, `SEND_CONTINUE` when the mechanism committed the response with a status below `400` (a redirect to a
+login page, for instance), `SEND_FAILURE` otherwise; a mechanism that throws is a `SEND_FAILURE`.
+* `hasAccessToWebResource(...)` answers `false` in this release, whatever the resource.
+* `getAllDeclaredCallerRoles()` throws `UnsupportedOperationException` in this release.
+
+`HttpServletRequest.authenticate`, `getUserPrincipal`, `isUserInRole` and `logout` answer with the same caller;
+`logout` calls the `cleanSubject` of the mechanism.
+
+[#authorization]
+== Access to web resources
+
+The access to each request is decided by the `Policy` of Jakarta Authorization 3.0, as a `WebResourcePermission`
+of the path and the method, for a `Subject` that holds the caller and its roles.
+
+* The default policy answers with the security constraints of the application: `@ServletSecurity`,
+`<security-constraint>` in `web.xml`. Every other permission is refused.
+* A policy the application sets with `PolicyFactory.getPolicyFactory().setPolicy(...)` decides in its place, and may
+delegate to the default one (TCK `app-mem-policy`).
+* `PolicyContext.getContext(PolicyContext.PRINCIPAL_MAPPER)` gives a policy the caller and the roles of the subject
+(TCK `app-mem-policy2`).
+* Kerckhoffs installs its policy factory unless the platform already has one.
+
+[#rest-resources]
+== REST resources
+
+Kerckhoffs authenticates what Foy serves. Under Vidocq, REST resources are mounted on Chappe by default, outside Foy,
+so neither the mechanism nor the constraints see their requests. To protect them, serve them as a servlet of Foy:
+add `cassini-servlet` next to the REST, Servlet and Security extensions.
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.cassini</groupId>
+    <artifactId>cassini-servlet</artifactId>
+</dependency>
+----
+
+`vidocq.rest.mode` chooses where the resources are served:
+
+[cols="1,3"]
+|===
+| Value | Effect
+
+| `auto` (default) | As a servlet of Foy when the Foy Servlet extension and `cassini-servlet` are both there, on Chappe otherwise.
+| `servlet` | As a servlet of Foy; the start fails when the Foy Servlet extension or `cassini-servlet` is missing.
+| `chappe` | On Chappe, whatever is there: the resources are not protected by Kerckhoffs.
+|===
+
+In servlet mode, the context path, the filters, the mechanism and the constraints apply to the resources, and both
+`jakarta.security.enterprise.SecurityContext` and `jakarta.ws.rs.core.SecurityContext` answer with the caller Foy
+authenticated. The official TCK application `app-jaxrs` runs that way on the Vidocq runtime (8 of 8). See
+xref:{page-component-version}@vidocq::modules/vidocq-runtime-extensions.adoc#rest-as-servlet[the REST and Servlet extensions].
+
+[#not-supported-yet]
+== Not supported yet
+
+[cols="2,3"]
+|===
+| What | State
+
+| `@CustomFormAuthenticationMechanismDefinition` | Not read: no mechanism is registered for it.
+| `@LoginToContinue` on a mechanism of the application, and its `*Expression` attributes | The interceptor is not written; TCK `AppMemFormImmediateIT` is set aside.
+| Expressions other than a string literal in the mechanism definitions, `priorityExpression` and `useForExpression` of the in-memory store | Refused at deployment.
+| `@DatabaseIdentityStoreDefinition`, `@LdapIdentityStoreDefinition` | Milestone K4.
+| `@OpenIdAuthenticationMechanismDefinition`, `OpenIdContext` | Milestone K5, which the roadmap builds before K4. `kerckhoffs-core` already validates an ID token internally (RS256 signature against the provider's JSON Web Key Set, issuer, audience, expiry, nonce); no mechanism uses it yet.
+| The built-in `Pbkdf2PasswordHash` bean | `kerckhoffs-core` implements PBKDF2 (`PBKDF2WithHmacSHA224` to `SHA512`, `SHA256` by default), but no bean is registered for it: an injection of `Pbkdf2PasswordHash` does not resolve.
+| `SecurityContext.hasAccessToWebResource`, `getAllDeclaredCallerRoles` | `false` and `UnsupportedOperationException`, see <<security-context>>.
+| `@RolesAllowed` through Jakarta Authorization | Not there; protect servlets with security constraints.
+| A CDI decorator on a mechanism | Vauban applies no `@Decorator` (CDI Lite); TCK `app-mem-basic-decorate` is 1 of 2 (KERCK-20261116-01).
+| Jakarta Faces (JSF) and EJB | Out of scope for now; see xref:tck.adoc#out-of-scope-for-now[TCK, Out of scope for now].
+|===

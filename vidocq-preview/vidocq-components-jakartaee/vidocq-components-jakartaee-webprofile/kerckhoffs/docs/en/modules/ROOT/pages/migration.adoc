@@ -1,0 +1,77 @@
+= Migration
+:description: Moving a Jakarta Security application to Kerckhoffs, and running Kerckhoffs outside Vidocq.
+
+[.lead]
+An application written against the Jakarta Security 4.0 API keeps its code: the mechanisms, identity stores and
+`SecurityContext` it uses are the specification's. What changes is how security is switched on, the parts of the
+specification Kerckhoffs does not provide yet, and one deviation from the reference implementation.
+
+[#before-you-move]
+== Before you move
+
+Check the application against xref:usage.adoc#not-supported-yet[Not supported yet]. The points most likely to stop a
+move:
+
+* `@CustomFormAuthenticationMechanismDefinition`, `@LoginToContinue` on a mechanism of the application, or Jakarta
+Faces login pages.
+* `@DatabaseIdentityStoreDefinition`, `@LdapIdentityStoreDefinition`, `@OpenIdAuthenticationMechanismDefinition`.
+* An injected `Pbkdf2PasswordHash`, `SecurityContext.hasAccessToWebResource` or `getAllDeclaredCallerRoles`.
+* An Expression Language expression, other than a string literal, in a mechanism definition or in `priorityExpression`
+and `useForExpression` of an in-memory store. The `*Expression` attributes of `@RememberMe` are evaluated.
+* `@RolesAllowed` decided by Jakarta Authorization, and EJB.
+* A CDI decorator on a mechanism.
+
+[#from-soteria]
+== From Soteria (GlassFish, Payara)
+
+Soteria is the reference implementation of Jakarta Security, and the TCK applications Kerckhoffs passes are written
+for it (xref:tck.adoc[TCK]). One difference shows in application code: the qualifiers of a BASIC mechanism. With
+`qualifiers` left to its default, or written out the same, Kerckhoffs gives the mechanism
+`@BasicAuthenticationMechanism` and `@Default`; with `qualifiers = {}`, `@BasicAuthenticationMechanism` and `@Default`
+too. A portable application selects the mechanism with `@BasicAuthenticationMechanism` when `qualifiers` is left to
+its default, with `@Default` when it writes `qualifiers = {}`, or lets the default handler find it. Details:
+xref:reference.adoc#deviations-from-the-reference-implementation[Deviations from the reference implementation]
+(KERCK-20261118-03).
+
+[#from-an-application-server]
+== From WildFly (Elytron) or Open Liberty (`appSecurity`)
+
+On those servers, Jakarta Security is switched on and bound to the server's security subsystem by the server's
+configuration (a feature to enable, a security domain to map). Under Vidocq there is no server configuration: the
+Security extension is the switch, and Kerckhoffs reads no configuration key.
+
+* **Enable** — declare `vidocq-runtime-kerckhoffs-security-extension`, or run
+`vidocq extension add kerckhoffs-security` (xref:getting-started.adoc[Getting started]).
+* **Users** — a user registry or realm of the server has no equivalent. Declare the users in the application: an
+`IdentityStore` bean, or `@InMemoryIdentityStoreDefinition` for tests and demos
+(xref:usage.adoc#identity-stores[Identity stores]).
+* **Groups and roles** — Kerckhoffs maps no group to a role: a group a store answers is the role of the same name.
+A group-to-role mapping of the server must be moved into the identity store.
+* **Constraints** — `@ServletSecurity` and `<security-constraint>` of `web.xml` are read as on the server; the access
+is decided by the Jakarta Authorization policy of Kerckhoffs (xref:usage.adoc#authorization[Access to web resources]).
+* **REST resources** — they are protected only when served as a servlet of Foy, with `cassini-servlet`
+(xref:usage.adoc#rest-resources[REST resources]).
+
+[#from-foy-login-config]
+== From Foy's own `login-config`
+
+A Vidocq application that authenticates with Foy alone (a `<login-config>` in `web.xml`, users declared with Foy's
+`IdentityStore` SPI) keeps working when the Security extension is added and declares no mechanism: Foy keeps its
+`login-config`. As soon as the application has an `HttpAuthenticationMechanism`, it replaces the `login-config`, and
+the users come from the Jakarta Security identity stores, not from Foy's
+(xref:{page-component-version}@foy::reference.adoc#request-authentication[Foy, the `RequestAuthentication` hook]).
+
+[#deploying-on-an-application-server]
+== Deploying on an application server
+
+WARNING: Kerckhoffs is not tested on an application server yet: no `kerckhoffs-it-openliberty` module (planned as
+`kerckhoffs-it-other-containers`, milestone K6) builds a WAR with it, so no `<exclusions>` block is tested. Its only
+container adapter, `kerckhoffs-foy`, plugs it into Foy; on another server nothing places its mechanisms in service.
+Jakarta Security is a feature of such servers: in a WAR for a server, keep the server's own Jakarta Security and do not
+ship Kerckhoffs; never ship both. See
+xref:reference.adoc#deploying-on-an-application-server[Reference, Deploying on an application server].
+
+[#upgrading]
+== Upgrading
+
+0.4.0 is the first release of Kerckhoffs: there is nothing to upgrade from. See xref:whats-new.adoc[What's new].

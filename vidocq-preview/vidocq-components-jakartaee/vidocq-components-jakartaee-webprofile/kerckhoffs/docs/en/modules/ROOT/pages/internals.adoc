@@ -1,0 +1,121 @@
+= Internals
+:description: The Java modules of Kerckhoffs, what is decided at build, what still reflects, and how it uses threads.
+
+[.lead]
+How Kerckhoffs is built inside: its Java modules and what each exports, what the build decides, where reflection
+would have been and is not, how the Vidocq runtime extension compiles its pieces ahead of time, and the threading
+model.
+
+[#modules]
+== Java modules
+
+[cols="2,2,3"]
+|===
+| Module | Requires | Exports
+
+| `io.vidocq.kerckhoffs.core`
+| `transitive jakarta.security`, `jakarta.el`
+| Nothing to everybody. Its `internal.*` packages are exported to the Kerckhoffs modules that instantiate them only: `identitystore` to `cdi`; `mechanism` to `authentication`, `cdi` and `foy`; `expression` to `cdi` and `foy`; `context` to `foy`. `internal.openid` is not exported.
+
+| `io.vidocq.kerckhoffs.cdi`
+| `core`; `static` `jakarta.cdi`, `jakarta.inject`, `jakarta.interceptor`, `jakarta.annotation`
+| `io.vidocq.kerckhoffs.cdi`, for the container that instantiates its creators, interceptors and start check. Provides `BuildCompatibleExtension` with `KerckhoffsExtension`.
+
+| `io.vidocq.kerckhoffs.authentication`
+| `transitive jakarta.security.auth.message`, `jakarta.servlet`
+| `io.vidocq.kerckhoffs.authentication` (`ServletContainerProfile`).
+
+| `io.vidocq.kerckhoffs.authorization`
+| `transitive jakarta.security.jacc`
+| `io.vidocq.kerckhoffs.authorization` (the policy factory, the default policy, the principals).
+
+| `io.vidocq.kerckhoffs.foy`
+| `core`, `authentication`, `authorization`, `io.vidocq.foy.api`, `jakarta.servlet`; `static` `jakarta.cdi`, `jakarta.inject`
+| `io.vidocq.kerckhoffs.foy`. Provides `BuildCompatibleExtension` with `FoySecurityContextExtension`.
+|===
+
+No module `opens` a package. Each `provides` of a module is also listed in its `META-INF/services`, so the two
+extensions are found on the class path too, where the TCK container runs.
+
+At the Maven level, `kerckhoffs-core` ships the Jakarta Security API at `compile` scope; the Authentication,
+Authorization, Servlet, CDI, Interceptor and Expression Language APIs are `provided`. No module depends on an
+implementation of Foy, Vauban, Peano or Champollion, except `kerckhoffs-foy`, the engine adapter, on `foy-api`.
+
+[#build-time]
+== What the build decides
+
+`KerckhoffsExtension` reads the definition annotations in `@Enhancement` and registers the beans in `@Synthesis`
+(xref:concepts.adoc#beans[the beans of an application]). What it found travels in the parameters of the synthetic
+beans (`withParam`), never in fields read at run time, so `vidocq:generate` can freeze it:
+
+* the attributes of a definition, checked at build: an expression where a literal is required fails there;
+* the qualifiers a BASIC definition names, given to the bean by their declaration: the extension never loads the
+qualifier class;
+* the class that declared a definition, as an `origin` parameter, so that two definitions of equal attributes stay two
+beans.
+
+`FoySecurityContextExtension` computes from nothing but its own classes. `FrozenExtensionTest` (`kerckhoffs-cdi`)
+holds both sides: an application without a record runs the extension at start; the start of a frozen application
+loads the record and behaves the same; a frozen BASIC definition still puts its mechanism in service; and a frozen
+application with an invalid definition still stops the start, because the check of the identity stores is an observer
+of `Startup`, which runs whatever the build froze.
+
+The synthetic beans are `@Singleton` or `@Dependent`, never of a normal scope, so they need no client proxy and no
+`@ClientProxies` entry.
+
+[#reflection]
+== Reflection
+
+The main code of the five modules uses no reflection: no `java.lang.reflect` call, no `Class.forName`, no dynamic
+proxy. The interceptors read the name of the intercepted method from `InvocationContext.getMethod()` to tell
+`validateRequest` and `cleanSubject` from other calls; they invoke nothing reflectively. Kerckhoffs has no
+architecture test module yet, so no `REFLECTIVE_FALLBACKS` list either: nothing enforces this rule but review.
+
+The Vidocq runtime extension declares four classes of its own for what Vauban cannot compile ahead of time from
+another module: `VidocqIdentityStoreStartCheck`, `VidocqAutoApplySessionInterceptor` and
+`VidocqRememberMeInterceptor` are beans of the extension's module, compiled by `vauban-processor` with it, which
+delegate to the classes of `kerckhoffs-cdi`; `KerckhoffsServletAuthentication` hands the mechanism to Foy. The
+module's beans are created by its generated `_VaubanComponents`, so it needs no `opens` either.
+
+[#security-engineering]
+== Security engineering
+
+* Passwords are compared in constant time (the in-memory store, the PBKDF2 hash).
+* Every `UsernamePasswordCredential` a built-in mechanism builds is cleared once validated, and the decoded bytes of a
+BASIC header are wiped.
+* No class of Kerckhoffs logs: no credential, no token, no caller name reaches a log.
+* A FORM login, and a login under `@AutoApplySession`, renew the session id. The page a FORM login redirects to is
+the one kept in the session when the protected page was asked, never a parameter of the login request.
+* The PBKDF2 hash stores its algorithm, iterations and salt with the key
+(`algorithm:iterations:base64(salt):base64(hash)`), accepts `PBKDF2WithHmacSHA224` to `SHA512` with at least 1024
+iterations, a 16-byte salt and a 16-byte key, and answers `false` for a stored hash outside that range, never an
+exception.
+* The internal ID token validator, ready for OpenID Connect, accepts RS256 only and RSA signature keys only, so a
+token cannot choose `none` or a symmetric algorithm that would take the public key for a secret.
+
+[#threading]
+== Threading
+
+Kerckhoffs starts no thread and owns no executor: every call runs on the thread that serves the request, a virtual
+thread under Foy on Chappe.
+
+* The request of the moment reaches the security context through Foy's `CurrentRequest`, a `ScopedValue`, and the
+constraints reach the default policy through `ConstraintPolicy.CONSTRAINTS`, another one bound for the duration of one
+check. Neither is a `ThreadLocal`, and a thread the application starts itself sees no caller.
+* The state of a caller lives in the request and, for FORM and `@AutoApplySession`, in the HTTP session.
+* The policy factory keeps its policies in an `AtomicReference` and a `ConcurrentHashMap`. Its `install()` is
+`synchronized`; it runs when the access control is created, once per deployment, not per request.
+* `PolicyFactory` and `PolicyContext` are the static registries of Jakarta Authorization: one policy factory per JVM.
+
+[#testing]
+== How it is tested
+
+* Unit tests per module hold the refusals as well as the logins: a wrong password, an unknown caller, a status or a
+callback the profile does not know, an expression that cannot be evaluated, a caller without the role.
+* `kerckhoffs-cdi` and `kerckhoffs-foy` start Vauban in their tests (test scope only); `kerckhoffs-cdi` also freezes
+its extension (`FrozenExtensionTest`).
+* `kerckhoffs-tck` is an Arquillian container on Foy, Chappe and Vauban that runs the official TCK applications; the
+Vidocq repository runs them on the assembled runtime too (`vidocq-runtime-tck-kerckhoffs-security`). See
+xref:tck.adoc[TCK].
+* `vidocq-runtime-it-kerckhoffs-security` boots a Vidocq application with the BASIC mechanism
+(xref:getting-started.adoc[Getting started]).

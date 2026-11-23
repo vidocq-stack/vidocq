@@ -1,0 +1,44 @@
+= What's new
+:description: What the first release of Kerckhoffs provides.
+
+[.lead]
+Kerckhoffs is released for the first time with Vidocq 0.4.0, at the preview level: usable, not complete, not
+certified. This page lists what that first release provides; the following releases add their changes here.
+
+[#first-release]
+== 0.4.0 — First release
+
+* **Five modules** — `kerckhoffs-core` (Jakarta Security 4.0), `kerckhoffs-cdi` (its CDI wiring, as build compatible
+extensions), `kerckhoffs-authentication` (the Servlet Container Profile of Jakarta Authentication 3.1, minimal slice),
+`kerckhoffs-authorization` (the policy of Jakarta Authorization 3.0 for web resources, minimal slice) and
+`kerckhoffs-foy` (the adapter to Foy). See xref:reference.adoc#modules[Modules].
+* **A Vidocq runtime extension** — `vidocq-runtime-kerckhoffs-security-extension`, added with
+`vidocq extension add kerckhoffs-security`, assembles Kerckhoffs with Foy, Vauban and Peano. See
+xref:getting-started.adoc[Getting started].
+* **Authentication mechanisms** — the built-in BASIC and FORM mechanisms of
+`@BasicAuthenticationMechanismDefinition` (repeatable, with qualifiers) and `@FormAuthenticationMechanismDefinition`,
+a mechanism of the application, and an `HttpAuthenticationMechanismHandler` of the application. See
+xref:usage.adoc#mechanisms[Authentication mechanisms].
+* **`@AutoApplySession` and `@RememberMe`** — the caller kept in the session, and the remember-me cookie with its
+`*Expression` attributes evaluated through Jakarta Expression Language. See
+xref:usage.adoc#auto-apply-session[`@AutoApplySession`] and xref:usage.adoc#remember-me[`@RememberMe`].
+* **Identity stores** — `@InMemoryIdentityStoreDefinition`, the stores of the application, and the default
+`IdentityStoreHandler` over all of them; the stores are created at start, so a broken one stops the start. See
+xref:usage.adoc#identity-stores[Identity stores].
+* **The security context** — `SecurityContext` and the `Principal` bean for the caller of the request, and
+`SecurityContext.authenticate`. See xref:usage.adoc#security-context[The security context].
+* **Jakarta Authorization for web resources** — the access to each request is asked of the `Policy` as a
+`WebResourcePermission`; an application may set its own policy, and `PolicyContext.PRINCIPAL_MAPPER` gives it the
+caller and the roles. See xref:usage.adoc#authorization[Access to web resources].
+* **REST resources protected** — with `cassini-servlet`, the REST resources are served as a servlet of Foy and
+authenticated like any servlet (`vidocq.rest.mode`). See xref:usage.adoc#rest-resources[REST resources].
+* **Frozen at build** — the extensions of `kerckhoffs-cdi` and `kerckhoffs-foy` are frozen by `vidocq:generate`; the
+check of the identity stores still runs at every start. See
+xref:concepts.adoc#build-and-start[What happens at build, and what at start].
+* **Official TCK, measured** — thirteen applications of the Jakarta Security 4.0 TCK (81 tests) pass on the Vidocq
+runtime, twelve of them on the Kerckhoffs container too; a compatibility measurement, not a certification. See
+xref:tck.adoc[TCK].
+
+Not in this release: the custom FORM mechanism, the database and LDAP identity stores, OpenID Connect, the built-in
+`Pbkdf2PasswordHash` bean, and a CDI decorator on a mechanism. See
+xref:usage.adoc#not-supported-yet[Not supported yet].

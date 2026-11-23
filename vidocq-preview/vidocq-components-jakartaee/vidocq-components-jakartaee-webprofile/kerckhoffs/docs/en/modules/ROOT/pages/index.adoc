@@ -28,6 +28,33 @@ NOTE: "Kerckhoffs" names the component. Besides Jakarta Security 4.0 it carries,
 | Specification | Jakarta Security 4.0 (Jakarta EE 11)
 | Group id | `io.vidocq.kerckhoffs`
 | Version | {project-version}
+| Java modules | `io.vidocq.kerckhoffs.core`, `io.vidocq.kerckhoffs.cdi`, `io.vidocq.kerckhoffs.authentication`, `io.vidocq.kerckhoffs.authorization`, `io.vidocq.kerckhoffs.foy`
 | Depends on | The Jakarta Security API at `compile`; Authentication, Authorization, Servlet, CDI and EL APIs `provided`
+| Under Vidocq | `vidocq-runtime-kerckhoffs-security-extension` (`vidocq extension add kerckhoffs-security`)
 | Status | Preview: milestones K0 to K3 (identity stores, HTTP authentication mechanisms, `@RememberMe`, Jakarta Authorization); not certified
+| Jakarta Security 4.0 TCK | 13 applications, 81 tests, green on the Vidocq runtime; a measurement, not a certification — see xref:tck.adoc[detailed status]
 |===
+
+== Position in the ecosystem
+
+Kerckhoffs depends on the Jakarta APIs only. Under Vidocq, its runtime extension assembles it with
+xref:{page-component-version}@foy::index.adoc[Foy] (Servlet), xref:{page-component-version}@vauban::index.adoc[Vauban]
+(CDI) and xref:{page-component-version}@peano::index.adoc[Peano] (Expression Language); REST resources are protected
+when xref:{page-component-version}@cassini::index.adoc[Cassini] serves them as a servlet of Foy. See
+xref:concepts.adoc[Concepts] for how a request goes through them.
+
+== Quick links
+
+* xref:whats-new.adoc[What's new]
+* xref:getting-started.adoc[Getting started]
+* xref:usage.adoc[Usage]
+* xref:concepts.adoc[Concepts]
+* xref:internals.adoc[Internals]
+* xref:tck.adoc[TCK status]
+* xref:reference.adoc[Reference]
+* xref:migration.adoc[Migration]
+
+[NOTE]
+====
+No performance figure is published for Kerckhoffs: `BENCH.md` has no entry yet, so there is no Performance page.
+====
