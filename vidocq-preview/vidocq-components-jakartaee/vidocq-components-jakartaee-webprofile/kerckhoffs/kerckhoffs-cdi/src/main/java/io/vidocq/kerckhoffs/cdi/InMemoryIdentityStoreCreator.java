@@ -26,11 +26,24 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.security.enterprise.identitystore.IdentityStore;
 import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition;
 
-/** Creates the in-memory identity store of one {@link InMemoryIdentityStoreDefinition}. */
+/**
+ * Creates the in-memory identity store of one {@link InMemoryIdentityStoreDefinition}, and warns that it exists: its
+ * callers and their passwords are written in the code of the application, which the specification allows for
+ * development and tests (PLAN.md section 6). The store is a singleton the start check creates, so the warning is given
+ * once per definition, at start.
+ */
 public class InMemoryIdentityStoreCreator implements SyntheticBeanCreator<IdentityStore> {
+
+    /** The logger of the warning an in-memory store gives at start. */
+    static final String LOGGER_NAME = "io.vidocq.kerckhoffs.identitystore";
+    private static final System.Logger LOGGER = System.getLogger(LOGGER_NAME);
 
     @Override
     public IdentityStore create(Instance<Object> lookup, Parameters params) {
-        return InMemoryIdentityStore.of(params.get("definition", InMemoryIdentityStoreDefinition.class));
+        IdentityStore store = InMemoryIdentityStore.of(params.get("definition", InMemoryIdentityStoreDefinition.class));
+        LOGGER.log(System.Logger.Level.WARNING, () -> "The in-memory identity store declared by "
+                + params.get("origin", String.class) + " is in service: its callers and passwords are written in the"
+                + " application's code. Use it for development and tests, never in production.");
+        return store;
     }
 }

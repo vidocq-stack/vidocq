@@ -22,6 +22,7 @@ package io.vidocq.kerckhoffs.core.internal.mechanism;
 import jakarta.security.enterprise.AuthenticationStatus;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpMessageContext;
+import jakarta.security.enterprise.credential.Credential;
 import jakarta.security.enterprise.credential.Password;
 import jakarta.security.enterprise.credential.UsernamePasswordCredential;
 import jakarta.security.enterprise.identitystore.CredentialValidationResult;
@@ -41,7 +42,7 @@ import java.util.function.Supplier;
  * Security 4.0, sections 3.8.1.2 and 3.8.5). A protected resource of nobody leads to the login page; the form is posted
  * to {@code j_security_check}; the caller is remembered in the session and the browser goes back to the page it asked
  * for. It fails closed: credentials are read from a POST only, a failed login remembers nothing, and a login renews the
- * session id.
+ * session id. {@link #customForm} gives the custom FORM mechanism, whose login page is the application's.
  */
 public final class FormAuthenticationMechanism implements HttpAuthenticationMechanism {
 
@@ -62,19 +63,45 @@ public final class FormAuthenticationMechanism implements HttpAuthenticationMech
     private final String errorPage;
     private final boolean forwardToLogin;
     private final Supplier<IdentityStoreHandler> handler;
+    /** Whether the login page is the application's, which hands the credential to {@code SecurityContext}. */
+    private final boolean custom;
 
     public FormAuthenticationMechanism(String loginPage, String errorPage, boolean forwardToLogin,
                                        Supplier<IdentityStoreHandler> handler) {
+        this(loginPage, errorPage, forwardToLogin, handler, false);
+    }
+
+    private FormAuthenticationMechanism(String loginPage, String errorPage, boolean forwardToLogin,
+                                        Supplier<IdentityStoreHandler> handler, boolean custom) {
         this.loginPage = Objects.requireNonNull(loginPage, "loginPage");
         this.errorPage = errorPage == null ? "" : errorPage;
         this.forwardToLogin = forwardToLogin;
         this.handler = Objects.requireNonNull(handler, "handler");
+        this.custom = custom;
+    }
+
+    /**
+     * The built-in custom FORM mechanism of {@code @CustomFormAuthenticationMechanismDefinition} (section 3.8.1): the
+     * same login to continue, but the login page belongs to the application, which validates nothing itself and hands
+     * the credential to {@code SecurityContext.authenticate}; {@code j_security_check} is no login. A credential that
+     * is not valid fails the call ({@code SEND_FAILURE}) and the application's page tells the caller: there is no error
+     * page. A valid one logs the caller in on that same request ({@code SUCCESS}), or sends the browser back to the
+     * page it asked for when a protected page led to the login ({@code SEND_CONTINUE}).
+     */
+    public static FormAuthenticationMechanism customForm(String loginPage, boolean forwardToLogin,
+                                                         Supplier<IdentityStoreHandler> handler) {
+        return new FormAuthenticationMechanism(loginPage, "", forwardToLogin, handler, true);
     }
 
     @Override
     public AuthenticationStatus validateRequest(HttpServletRequest request, HttpServletResponse response,
                                                 HttpMessageContext context) {
-        if (isLogin(request)) return login(request, context);
+        if (custom) {
+            Credential given = context.isAuthenticationRequest() ? context.getAuthParameters().getCredential() : null;
+            if (given != null) return callerLogin(request, context, given);
+        } else if (isLogin(request)) {
+            return login(request, context);
+        }
         if (remembered(request) instanceof Remembered(var caller, var groups)) {
             return context.notifyContainerAboutLogin(caller, groups);
         }
@@ -103,15 +130,43 @@ public final class FormAuthenticationMechanism implements HttpAuthenticationMech
         try {
             CredentialValidationResult result = handler.get().validate(credential);
             if (result.getStatus() != CredentialValidationResult.Status.VALID) return failed(request, context);
-            HttpSession session = request.getSession();
-            request.changeSessionId();
-            String back = session.getAttribute(REQUESTED) instanceof String page ? page : request.getContextPath() + "/";
-            session.removeAttribute(REQUESTED);
-            session.setAttribute(IDENTITY, new Remembered(result.getCallerPrincipal().getName(), result.getCallerGroups()));
-            return context.redirect(back);
+            String back = remember(request, result);
+            return context.redirect(back == null ? request.getContextPath() + "/" : back);
         } finally {
             credential.clear();
         }
+    }
+
+    /** The login of a custom form: the credential the application handed to {@code SecurityContext.authenticate}. */
+    private AuthenticationStatus callerLogin(HttpServletRequest request, HttpMessageContext context,
+                                             Credential credential) {
+        try {
+            CredentialValidationResult result = handler.get().validate(credential);
+            // Fail closed: a credential no store validated is no login either.
+            if (result.getStatus() != CredentialValidationResult.Status.VALID) return AuthenticationStatus.SEND_FAILURE;
+            String back = remember(request, result);
+            return back == null ? context.notifyContainerAboutLogin(result) : context.redirect(back);
+        } finally {
+            credential.clear();
+        }
+    }
+
+    /**
+     * Remembers the caller of a valid login in the session, under a new session id, and answers the page the login
+     * must go back to, or {@code null} when no protected page led to it.
+     */
+    private static String remember(HttpServletRequest request, CredentialValidationResult result) {
+        HttpSession session = request.getSession();
+        request.changeSessionId();
+        String back = session.getAttribute(REQUESTED) instanceof String page ? page : null;
+        session.removeAttribute(REQUESTED);
+        session.setAttribute(IDENTITY, new Remembered(result.getCallerPrincipal().getName(), result.getCallerGroups()));
+        return back;
+    }
+
+    @Override
+    public String toString() {
+        return (custom ? "custom FORM" : "FORM") + " mechanism, login page " + loginPage;
     }
 
     private AuthenticationStatus failed(HttpServletRequest request, HttpMessageContext context) {

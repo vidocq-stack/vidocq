@@ -93,7 +93,21 @@ class MechanismCdiTest {
     @Test
     void aFormDefinitionPutsTheFormMechanismInService() {
         try (var container = start(MemoryApplication.class, FormApplication.class)) {
-            assertInstanceOf(FormAuthenticationMechanism.class, container.select(HttpAuthenticationMechanism.class));
+            var mechanism = assertInstanceOf(FormAuthenticationMechanism.class,
+                    container.select(HttpAuthenticationMechanism.class));
+
+            assertEquals("FORM mechanism, login page /login-servlet", mechanism.toString());
+        }
+    }
+
+    /** A custom FORM definition is never ignored (BUG-20261123-61): its login page is the application's. */
+    @Test
+    void aCustomFormDefinitionPutsTheCustomFormMechanismInService() {
+        try (var container = start(MemoryApplication.class, CustomFormApplication.class)) {
+            var mechanism = assertInstanceOf(FormAuthenticationMechanism.class,
+                    container.select(HttpAuthenticationMechanism.class));
+
+            assertEquals("custom FORM mechanism, login page /login.jsf", mechanism.toString());
         }
     }
 }

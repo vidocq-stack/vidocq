@@ -98,4 +98,13 @@ class KerckhoffsSecurityTest {
         assertEquals(200, response.statusCode());
         assertEquals("anonymous", response.body());
     }
+
+    /** The built-in password hash is a bean the application injects (BUG-20261123-60). */
+    @Test
+    void theApplicationInjectsTheBuiltInPasswordHash() throws Exception {
+        HttpResponse<String> response = get("/hash", null);
+
+        assertEquals(200, response.statusCode());
+        assertEquals("PBKDF2WithHmacSHA256|true|false", response.body());
+    }
 }

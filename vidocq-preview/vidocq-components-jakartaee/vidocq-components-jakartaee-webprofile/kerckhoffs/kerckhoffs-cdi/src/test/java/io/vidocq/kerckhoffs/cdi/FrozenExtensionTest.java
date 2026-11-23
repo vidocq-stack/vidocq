@@ -26,6 +26,7 @@ import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticat
 import jakarta.security.enterprise.credential.UsernamePasswordCredential;
 import jakarta.security.enterprise.identitystore.CredentialValidationResult.Status;
 import jakarta.security.enterprise.identitystore.IdentityStoreHandler;
+import jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -91,7 +92,8 @@ class FrozenExtensionTest {
 
     private void application(Class<?>... definitions) throws Exception {
         copy(KerckhoffsExtension.class, KerckhoffsExtension.Declared.class, InMemoryIdentityStoreCreator.class,
-                IdentityStoreHandlerCreator.class, BasicMechanismCreator.class, IdentityStoreStartCheck.class);
+                IdentityStoreHandlerCreator.class, BasicMechanismCreator.class, Pbkdf2PasswordHashCreator.class,
+                IdentityStoreStartCheck.class);
         copy(definitions);
         Files.createDirectories(classes.resolve(SERVICE).getParent());
         Files.writeString(classes.resolve(SERVICE), KerckhoffsExtension.class.getName() + "\n");
@@ -138,6 +140,9 @@ class FrozenExtensionTest {
 
             assertEquals(Status.VALID, handler.validate(new UsernamePasswordCredential("reza", "secret1")).getStatus());
             assertEquals(Status.INVALID, handler.validate(new UsernamePasswordCredential("reza", "wrong")).getStatus());
+            var hash = container.select(Pbkdf2PasswordHash.class);
+            assertTrue(hash.verify("secret1".toCharArray(), hash.generate("secret1".toCharArray())),
+                    "the built-in password hash is frozen with the rest");
         }
     }
 

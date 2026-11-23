@@ -19,6 +19,7 @@
  */
 package io.vidocq.kerckhoffs.cdi;
 
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
@@ -31,11 +32,13 @@ import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.inject.Singleton;
 import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
+import jakarta.security.enterprise.authentication.mechanism.http.CustomFormAuthenticationMechanismDefinition;
 import jakarta.security.enterprise.authentication.mechanism.http.FormAuthenticationMechanismDefinition;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import jakarta.security.enterprise.identitystore.IdentityStore;
 import jakarta.security.enterprise.identitystore.IdentityStoreHandler;
 import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition;
+import jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -45,7 +48,8 @@ import java.util.Map;
 /**
  * Makes the identity stores of an application reach the {@link IdentityStoreHandler} (Jakarta
  * Security 4.0, sections 3.2.4 and 3.4.3): one {@link IdentityStore} bean per
- * {@link InMemoryIdentityStoreDefinition}, and the default handler over every store bean.
+ * {@link InMemoryIdentityStoreDefinition}, and the default handler over every store bean. It registers the mechanisms
+ * of the BASIC, FORM and custom FORM definitions, and the built-in {@link Pbkdf2PasswordHash}.
  *
  * <p>It works at build, from the classes of the deployment only; what it found travels in the
  * parameters of the synthetic beans.
@@ -62,6 +66,7 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
     private final List<Declared> inMemoryDefinitions = new ArrayList<>();
     private final List<Declared> basicDefinitions = new ArrayList<>();
     private final List<Declared> formDefinitions = new ArrayList<>();
+    private final List<Declared> customFormDefinitions = new ArrayList<>();
     private boolean applicationHandler;
 
     /** A handler the application provides replaces the default one (section 3.4.3): there is only ever one. */
@@ -96,8 +101,21 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
         formDefinitions.add(new Declared(declaring.name(), declaring.annotation(FormAuthenticationMechanismDefinition.class)));
     }
 
+    /** A custom FORM definition: the login to continue of FORM, with the application's own login page (3.8.1). */
+    @Enhancement(types = Object.class, withSubtypes = true,
+            withAnnotations = CustomFormAuthenticationMechanismDefinition.class)
+    public void collectCustomFormDefinition(ClassInfo declaring) {
+        customFormDefinitions.add(new Declared(declaring.name(),
+                declaring.annotation(CustomFormAuthenticationMechanismDefinition.class)));
+    }
+
     @Synthesis
     public void synthesizeBeans(SyntheticComponents components) {
+        // The built-in password hash, for every application: a new one per injection, which initialize(Map) configures.
+        components.addBean(Pbkdf2PasswordHash.class)
+                .type(Pbkdf2PasswordHash.class)
+                .scope(Dependent.class)
+                .createWith(Pbkdf2PasswordHashCreator.class);
         for (Declared declared : inMemoryDefinitions) {
             components.addBean(IdentityStore.class)
                     .type(IdentityStore.class)
@@ -116,29 +134,34 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
             qualify(builder, declared, BasicAuthenticationMechanismDefinition.BasicAuthenticationMechanism.class);
             builder.createWith(BasicMechanismCreator.class);
         }
-        for (Declared declared : formDefinitions) {
-            AnnotationInfo login = declared.definition().hasMember("loginToContinue")
-                    ? declared.definition().member("loginToContinue").asNestedAnnotation() : null;
-            if (!text(login, "useForwardToLoginExpression", "").isEmpty()) {
-                throw new DeploymentException("useForwardToLoginExpression of " + declared.origin()
-                        + " is an expression: only useForwardToLogin is supported yet");
-            }
-            components.addBean(HttpAuthenticationMechanism.class)
-                    .type(HttpAuthenticationMechanism.class)
-                    .scope(Singleton.class)
-                    .withParam(ORIGIN, declared.origin())
-                    .withParam("loginPage", literal(declared, text(login, "loginPage", "/login")))
-                    .withParam("errorPage", literal(declared, text(login, "errorPage", "/login-error")))
-                    .withParam("forwardToLogin",
-                            login == null || !login.hasMember("useForwardToLogin") || login.member("useForwardToLogin").asBoolean())
-                    .createWith(FormMechanismCreator.class);
-        }
+        for (Declared declared : formDefinitions) addFormMechanism(components, declared, false);
+        for (Declared declared : customFormDefinitions) addFormMechanism(components, declared, true);
         if (!applicationHandler) {
             components.addBean(IdentityStoreHandler.class)
                     .type(IdentityStoreHandler.class)
                     .scope(Singleton.class)
                     .createWith(IdentityStoreHandlerCreator.class);
         }
+    }
+
+    /** The FORM mechanism of a definition, or the custom FORM one: both read their {@code @LoginToContinue}. */
+    private static void addFormMechanism(SyntheticComponents components, Declared declared, boolean custom) {
+        AnnotationInfo login = declared.definition().hasMember("loginToContinue")
+                ? declared.definition().member("loginToContinue").asNestedAnnotation() : null;
+        if (!text(login, "useForwardToLoginExpression", "").isEmpty()) {
+            throw new DeploymentException("useForwardToLoginExpression of " + declared.origin()
+                    + " is an expression: only useForwardToLogin is supported yet");
+        }
+        components.addBean(HttpAuthenticationMechanism.class)
+                .type(HttpAuthenticationMechanism.class)
+                .scope(Singleton.class)
+                .withParam(ORIGIN, declared.origin())
+                .withParam("custom", custom)
+                .withParam("loginPage", literal(declared, text(login, "loginPage", "/login")))
+                .withParam("errorPage", literal(declared, text(login, "errorPage", "/login-error")))
+                .withParam("forwardToLogin",
+                        login == null || !login.hasMember("useForwardToLogin") || login.member("useForwardToLogin").asBoolean())
+                .createWith(FormMechanismCreator.class);
     }
 
     /**
