@@ -3,6 +3,27 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## BUG-20261123-62 · 2026-11-23 · An in-memory identity store starts without a word
+
+- **Symptom:** an application with `@InMemoryIdentityStoreDefinition` starts silently, though PLAN.md §6 asks for a warning at start so that callers and passwords written in the code do not reach production unnoticed.
+- **Minimal repro:** `InMemoryStoreWarningTest#the_start_warns_once_of_each_in_memory_store_and_names_its_declaration`: a container with `MemoryApplication` logs no `WARNING` (`expected: <1> but was: <0>`).
+- **Cause:** `InMemoryIdentityStoreCreator` created the store and logged nothing.
+- **Status:** FIXED (pending commit): the creator logs one `WARNING` on `io.vidocq.kerckhoffs.identitystore`, naming the declaring class. The store is a singleton the start check creates, so the warning comes once per definition, at start. No message id: the `[VIDOCQ-…]` codes are the runtime core's startup anomalies (`StartupAnomalies`, which nothing else logs), and no brick has codes of its own. The opt-in to refuse the start in production (PLAN.md §6) is not done.
+
+## BUG-20261123-61 · 2026-11-23 · `@CustomFormAuthenticationMechanismDefinition` is silently ignored
+
+- **Symptom:** an application that declares the custom FORM mechanism gets no `HttpAuthenticationMechanism` and no deployment error: its protected pages are served as with no mechanism at all. The Javadoc of `KerckhoffsServletAuthentication` (runtime extension) said Kerckhoffs registers one.
+- **Minimal repro:** `MechanismCdiTest#aCustomFormDefinitionPutsTheCustomFormMechanismInService` (`CustomFormApplication`): `UnsatisfiedResolution No bean found for type: HttpAuthenticationMechanism`.
+- **Cause:** `KerckhoffsExtension` collected the BASIC and FORM definitions only.
+- **Status:** FIXED (pending commit): implemented (PLAN.md K2 lists the custom FORM mechanism). `FormAuthenticationMechanism.customForm` keeps the login to continue of FORM, takes the credential the application hands to `SecurityContext.authenticate` instead of `j_security_check`, and answers `SEND_FAILURE`, `SUCCESS` or `SEND_CONTINUE` with a redirect to the page asked for (`CustomFormAuthenticationMechanismTest`, 8 tests). The TCK application `app-mem-customform` stays out: its login page is a Jakarta Faces page.
+
+## BUG-20261123-60 · 2026-11-23 · `@Inject Pbkdf2PasswordHash` does not resolve
+
+- **Symptom:** an application that injects the built-in `Pbkdf2PasswordHash` fails to start: no bean has that type, though `DefaultPbkdf2PasswordHash` exists in `kerckhoffs-core`.
+- **Minimal repro:** `PasswordHashCdiTest` (3 tests): `UnsatisfiedResolution No bean found for type: jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash`.
+- **Cause:** nothing registered `DefaultPbkdf2PasswordHash` as a bean.
+- **Status:** FIXED (pending commit): `KerckhoffsExtension` adds a `@Dependent` synthetic bean of type `Pbkdf2PasswordHash` (`Pbkdf2PasswordHashCreator`) for every application, so each injection point configures its own through `initialize(Map)`. Tested at start, frozen (`FrozenExtensionTest`) and on the assembled runtime (`KerckhoffsSecurityTest#theApplicationInjectsTheBuiltInPasswordHash`).
+
 ## KERCK-20261118-03 · 2026-11-18 · A BASIC mechanism's qualifiers differ from Soteria's
 
 - **Symptom:** `KerckhoffsExtension.qualify` gives a `@BasicAuthenticationMechanismDefinition` other qualifiers than Soteria 4.0.2, the reference implementation, in two cases. (1) With `qualifiers` left to its default `{BasicAuthenticationMechanism.class}`, or written out the same, the mechanism is `@BasicAuthenticationMechanism` and `@Default`; on Soteria a mechanism with a non-empty `qualifiers` has those qualifiers alone, without `@Default`. (2) With an explicit `qualifiers = {}`, the mechanism is `@BasicAuthenticationMechanism` and `@Default`; on Soteria it has no `@BasicAuthenticationMechanism`, so it is `@Default` alone.

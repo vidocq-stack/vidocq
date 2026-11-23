@@ -7,8 +7,8 @@
 |===
 | Artifact | Java module | Role
 
-| `kerckhoffs-core` | `io.vidocq.kerckhoffs.core` | `IdentityStoreHandler` chain, in-memory identity store, PBKDF2 password hash, the built-in BASIC and FORM mechanisms, `SecurityContext`. No CDI.
-| `kerckhoffs-cdi` | `io.vidocq.kerckhoffs.cdi` | Build compatible extension: declares the identity stores of `@InMemoryIdentityStoreDefinition`, the handler and the mechanisms of `@BasicAuthenticationMechanismDefinition` and `@FormAuthenticationMechanismDefinition` as beans, and fails the start on an invalid definition.
+| `kerckhoffs-core` | `io.vidocq.kerckhoffs.core` | `IdentityStoreHandler` chain, in-memory identity store, PBKDF2 password hash, the built-in BASIC, FORM and custom FORM mechanisms, `SecurityContext`. No CDI.
+| `kerckhoffs-cdi` | `io.vidocq.kerckhoffs.cdi` | Build compatible extension: declares the identity stores of `@InMemoryIdentityStoreDefinition`, the handler, the mechanisms of `@BasicAuthenticationMechanismDefinition`, `@FormAuthenticationMechanismDefinition` and `@CustomFormAuthenticationMechanismDefinition`, and the built-in `Pbkdf2PasswordHash` as beans, and fails the start on an invalid definition.
 | `kerckhoffs-authentication` | `io.vidocq.kerckhoffs.authentication` | Jakarta Authentication 3.1: the Servlet Container Profile that drives a mechanism (minimal slice).
 | `kerckhoffs-authorization` | `io.vidocq.kerckhoffs.authorization` | Jakarta Authorization 3.0: the policy factory and the default policy that answers web resource permissions from the security constraints (minimal slice).
 | `kerckhoffs-foy` | `io.vidocq.kerckhoffs.foy` | Engine adapter: places a mechanism and the policy in service on the request authentication and access control hooks of Foy.
@@ -16,6 +16,34 @@
 
 The extension works at build and is frozen by `vidocq:generate`; the check of the definitions
 runs in an observer of `Startup`, so an invalid definition still stops a frozen application.
+
+== Built-in beans
+
+[cols="1,1,3"]
+|===
+| Bean type | Scope | Registered when
+
+| `IdentityStoreHandler` | `@Singleton` | Always, unless the application provides its own handler.
+| `IdentityStore` | `@Singleton` | One per `@InMemoryIdentityStoreDefinition`.
+| `HttpAuthenticationMechanism` | `@Singleton` | One per `@BasicAuthenticationMechanismDefinition`, `@FormAuthenticationMechanismDefinition` or `@CustomFormAuthenticationMechanismDefinition`.
+| `Pbkdf2PasswordHash` | `@Dependent` | Always: each injection point gets its own instance, which `initialize(Map)` configures with the `Pbkdf2PasswordHash.*` parameters.
+|===
+
+The custom FORM mechanism leads a caller who asks for a protected page to the `loginPage` of its
+`@LoginToContinue`, a page of the application. That page hands the credential to
+`SecurityContext.authenticate(request, response, AuthenticationParameters.withParams().credential(...))`:
+`SEND_FAILURE` when no identity store validates it (the page tells the caller: the `errorPage`
+attribute is not used), `SEND_CONTINUE` and a redirect to the protected page the caller asked for,
+or `SUCCESS` when no protected page led to the login. The caller is then remembered in the
+session, under a new session id, as with FORM. A post to `j_security_check` is no login for it.
+
+[#in-memory-store-warning]
+=== The in-memory identity store warns at start
+
+An `@InMemoryIdentityStoreDefinition` writes callers and passwords in the code of the
+application. Each one in service logs one `WARNING` at start on the logger
+`io.vidocq.kerckhoffs.identitystore`, naming the class that declares it. It is meant for
+development and tests; use another identity store in production.
 
 == Deviations from the reference implementation
 

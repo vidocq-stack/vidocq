@@ -34,6 +34,7 @@ module io.vidocq.runtime.it.kerckhoffs {
     // (Vauban). The test boots the runtime without the application layer that `Vidocq.run` creates, so the module
     // declares the providers itself.
     provides io.vidocq.foy.spi.gen.WebComponent with
+            io.vidocq.runtime.it.kerckhoffs.PasswordHashServlet$$FoyComponent,
             io.vidocq.runtime.it.kerckhoffs.PublicServlet$$FoyComponent,
             io.vidocq.runtime.it.kerckhoffs.WhoAmIServlet$$FoyComponent;
     provides io.vidocq.vauban.api.VaubanComponentProvider

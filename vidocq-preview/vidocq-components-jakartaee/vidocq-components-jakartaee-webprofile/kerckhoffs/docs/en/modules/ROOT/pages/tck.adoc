@@ -69,7 +69,7 @@ none of them is counted against the figures above.
 |===
 | Application | Why
 
-| `app-mem-customform` | The only application that uses Jakarta Faces (JSF), with `@LoginToContinue`. Kerckhoffs has no JSF.
+| `app-mem-customform` | The only application that uses Jakarta Faces (JSF), with `@LoginToContinue`: its login page is a Faces page, and Kerckhoffs has no JSF. The custom FORM mechanism it declares is in, tested by Kerckhoffs' own unit and CDI tests.
 | `app-mem-form` (`AppMemFormImmediateIT` only) | `@LoginToContinue` with `*Expression` attributes. The interceptor is not written; no JSF is involved, the class is set aside with the annotation.
 | `app-securitycontext`, `app-securitycontext-customprincipal` | The application uses an EJB.
 | `app-db` | An EJB and a `@DataSourceDefinition` on an embedded database.

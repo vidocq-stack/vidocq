@@ -9,7 +9,7 @@ Kerckhoffs implements {spec-security-4-0}[Jakarta Security 4.0]: HTTP authentica
 mechanisms, identity stores and the security context of a Jakarta EE application, with zero
 third-party dependency and strict Java Modules.
 
-NOTE: Kerckhoffs is a preview component: released, not complete and not certified. Identity stores, the built-in BASIC and FORM mechanisms, an application's own mechanism, `SecurityContext.authenticate`, `@RememberMe` and Jakarta Authorization for web resources are in (milestones K0 to K3); the custom FORM mechanism, the database and LDAP identity stores and OpenID Connect are not. The TCK figures are on the xref:tck.adoc[TCK] page; the design of
+NOTE: Kerckhoffs is a preview component: released, not complete and not certified. Identity stores, the built-in `Pbkdf2PasswordHash`, the built-in BASIC, FORM and custom FORM mechanisms, an application's own mechanism, `SecurityContext.authenticate`, `@RememberMe` and Jakarta Authorization for web resources are in (milestones K0 to K3); the database and LDAP identity stores and OpenID Connect are not. The TCK figures are on the xref:tck.adoc[TCK] page; the design of
 record is `PLAN.md` in the {repo-vidocq}/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs[repository].
 
 == Origin of the name

@@ -67,10 +67,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- Test-only: the tests build a VaubanContainer (a test-scope module this module does not read). -->
+                    <!-- Test-only: the tests build a VaubanContainer (a test-scope module this module does not read),
+                         and capture the warnings of the start through java.util.logging. -->
                     <argLine>
                         @{argLine}
                         --add-reads io.vidocq.kerckhoffs.cdi=io.vidocq.vauban.core
+                        --add-reads io.vidocq.kerckhoffs.cdi=java.logging
                         --add-opens io.vidocq.kerckhoffs.cdi/io.vidocq.kerckhoffs.cdi=io.vidocq.vauban.core
                         --add-opens io.vidocq.kerckhoffs.cdi/io.vidocq.kerckhoffs.cdi=jakarta.el
                     </argLine>

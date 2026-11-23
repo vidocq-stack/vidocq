@@ -25,7 +25,7 @@ import io.vidocq.runtime.spi.VidocqExtension;
  * Jakarta Security 4.0 on the Vidocq runtime, with Kerckhoffs.
  *
  * <p>The build compatible extensions of {@code kerckhoffs-cdi} (identity store handler, stores and mechanisms declared
- * by annotation) and of {@code kerckhoffs-foy} (the {@code SecurityContext} and {@code Principal} beans) are found by
+ * by annotation, the built-in {@code Pbkdf2PasswordHash}) and of {@code kerckhoffs-foy} (the {@code SecurityContext} and {@code Principal} beans) are found by
  * Vauban, and frozen by the build with the others. Two beans of this module, which Vauban compiles ahead of time,
  * carry the rest of the runtime: {@link VidocqIdentityStoreStartCheck} checks the identity stores on {@code Startup},
  * and {@link VidocqAutoApplySessionInterceptor} weaves {@code @AutoApplySession}.

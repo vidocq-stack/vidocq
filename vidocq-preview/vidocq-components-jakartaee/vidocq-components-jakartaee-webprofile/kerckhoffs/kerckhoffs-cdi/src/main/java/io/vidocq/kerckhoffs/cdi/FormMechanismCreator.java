@@ -26,13 +26,22 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import jakarta.security.enterprise.identitystore.IdentityStoreHandler;
 
-/** Creates the FORM mechanism of a {@code @FormAuthenticationMechanismDefinition}. */
+import java.util.function.Supplier;
+
+/**
+ * Creates the FORM mechanism of a {@code @FormAuthenticationMechanismDefinition}, or the custom FORM one of a
+ * {@code @CustomFormAuthenticationMechanismDefinition}, whose application's login page shows the failures itself.
+ */
 public class FormMechanismCreator implements SyntheticBeanCreator<HttpAuthenticationMechanism> {
 
     @Override
     public HttpAuthenticationMechanism create(Instance<Object> lookup, Parameters params) {
-        return new FormAuthenticationMechanism(params.get("loginPage", String.class),
-                params.get("errorPage", String.class), params.get("forwardToLogin", Boolean.class),
-                () -> lookup.select(IdentityStoreHandler.class).get());
+        String loginPage = params.get("loginPage", String.class);
+        boolean forwardToLogin = params.get("forwardToLogin", Boolean.class);
+        Supplier<IdentityStoreHandler> handler = () -> lookup.select(IdentityStoreHandler.class).get();
+        if (params.get("custom", Boolean.class, false)) {
+            return FormAuthenticationMechanism.customForm(loginPage, forwardToLogin, handler);
+        }
+        return new FormAuthenticationMechanism(loginPage, params.get("errorPage", String.class), forwardToLogin, handler);
     }
 }
