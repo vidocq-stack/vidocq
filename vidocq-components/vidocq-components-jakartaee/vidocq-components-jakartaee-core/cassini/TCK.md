@@ -8,8 +8,8 @@
 | TCK | `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1` |
 | JDK | Eclipse Temurin 25 |
 | TCK `@Test` tests | **2670** |
-| Tests applicable to profile | **2538** (134 excluded via `@Tag`, 3 official challenges) |
-| **Passed** | **2538** |
+| Tests applicable to profile | **2539** (2670 run minus the 131 skipped: out-of-profile `@Tag`s and the 3 official challenges) |
+| **Passed** | **2539** |
 | Failures + Errors | **0** |
 | Skipped | **131** (out-of-profile tags + 3 challenges; the signature test runs since 2026-08-27) |
 | **Conformance score** | **100.00 %** of applicable tests |
@@ -163,5 +163,5 @@ Two transports are provided:
 | Mode | TCK scope | Status |
 |------|-----------|--------|
 | **A** Cassini "pure" + cassini-jdk-http | REST 4.0 excluding CDI tests | immediate target |
-| **B** Cassini + Vauban (full CDI) | REST 4.0 complete | **2538/2538 ✅ achieved** |
+| **B** Cassini + Vauban (full CDI) | REST 4.0 complete | **2539/2539 ✅ achieved** |
 | **C** Full Vidocq MPS | Core Profile 11 + MicroProfile | post-M2h |

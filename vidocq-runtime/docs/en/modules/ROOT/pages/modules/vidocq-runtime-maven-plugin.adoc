@@ -816,6 +816,65 @@ target/
 
 The image starts on the extensions frozen at build, as the ZIP distribution does (<<frozen-extensions,the record of `vidocq:generate`>>). `stripDebug` removes the source file, the line numbers, the local variables and the parameter names from the classes it links, and the fingerprint of the deployment leaves all of them out. The startup report says so: `cdi extensions  10 extensions frozen at build`.
 
+[#jlink-parameters]
+=== Goal parameters
+
+Every one of them is a property as well as a `<configuration>` element of the same name as the field
+(`vidocq.mainModule` is `<mainModule>`).
+
+[cols="2,1,3"]
+|===
+| Property (element) | Default | Meaning
+
+| `vidocq.mainModule` (`mainModule`)
+| _(required)_
+| The Java module of the application.
+
+| `vidocq.mainClass` (`mainClass`)
+| _(none)_
+| The application main class, a `@VidocqMain` trampoline. Optional: without one, the launcher runs the runtime's own main (<<jlink-without-main-class>>).
+
+| `vidocq.launcher` (`launcher`)
+| `${project.artifactId}`
+| The name of the launcher written in `dist/bin/`.
+
+| `vidocq.jvmArgs` (`jvmArgs`)
+| _(empty)_
+| JVM arguments baked into the image, the ones the `vidocq:package` scripts carry (for example `-Dvaadin.productionMode=true`): every launch of the image gets them, the launcher script, `bin/java`, the `vidocq:jpackage` application and the Docker image built on it. `JDK_JAVA_OPTIONS` at start comes after them.
+
+| `vidocq.distDir` (`distDir`)
+| `target/dist`
+| The directory of the image.
+
+| `vidocq.stripDebug` (`stripDebug`)
+| `true`
+| Removes the debug information from the linked classes.
+
+| `vidocq.compress` (`compress`)
+| `zip-6`
+| The jlink compression level, `zip-0` to `zip-9`.
+
+| `vidocq.includeResources` (`includeResources`)
+| `vidocq.properties` and `logging.properties`, when they exist
+| The resources of `target/classes/` copied to `dist/conf/`, where the application reads them at start.
+
+| `vidocq.jlink.addModules` (`addModules`)
+| _(empty)_
+| JDK modules to add to the image besides those `jdeps` finds, comma separated: `jdk.jcmd,jdk.attach` for a CRaC image whose checkpoint is taken with `jcmd`. `jdk.crac` needs no mention: the image carries it as soon as a module of the application requires it.
+
+| `vidocq.jlink.modularize` (`modularize`)
+| `true`
+| Gives the automatic modules of the dependencies a module descriptor before staging, as `vauban:modularize` does in its `all-automatic` mode: jlink refuses an automatic module, and Flyway or a JDBC driver are one. Skipped when the project ran `vauban:modularize` itself.
+
+| `vidocq.jlink.mergeSharedResources` (`mergeSharedResources`)
+| `false`
+| Moves the files of a resource directory that several staged jars hold into one module of the image: such a directory is a split package, which jlink refuses (Vaadin's `flow-server` and `flow-react` share `com/vaadin/flow/server/frontend/`). Only the staged copies change. Without it, the goal fails before jlink, naming the jars and the directory.
+
+| `vidocq.jlink.skip` (`skip`)
+| `false`
+| Skips the goal, for instance in a CI job while a dependency is still an automatic module.
+|===
+
 [#jlink-without-main-class]
 === Without an application main class
 
@@ -1012,7 +1071,55 @@ application layer off, and `--add-modules` naming the modules of the image that 
 its `release` file, minus the modules of the JDK that runs the build). An image built by `vidocq:jlink` already holds
 them; one given through `runtimeImage` may not.
 
-See `vidocq-runtime/JLINK.md` §3 for the exhaustive parameter list.
+[#jpackage-parameters]
+=== Goal parameters
+
+Every one of them is a property as well as a `<configuration>` element of the same name as the field.
+
+[cols="2,1,3"]
+|===
+| Property (element) | Default | Meaning
+
+| `vidocq.mainModule` (`mainModule`)
+| _(required)_
+| The Java module of the application.
+
+| `vidocq.mainClass` (`mainClass`)
+| _(none)_
+| The application main class. Optional: without one, the runtime's own main starts (<<jlink-without-main-class>>).
+
+| `vidocq.appName` (`appName`)
+| `${project.artifactId}`
+| The name of the application and of its installer.
+
+| `vidocq.appVersion` (`appVersion`)
+| `${project.version}`
+| The version of the application. jpackage takes digits only: the goal strips `-SNAPSHOT` and any other qualifier.
+
+| `vidocq.jpackageType` (`type`)
+| `app-image`
+| What jpackage builds: `app-image`, `dmg`, `pkg`, `deb`, `rpm`, `msi` or `exe`.
+
+| `vidocq.runtimeImage` (`runtimeImage`)
+| `target/dist`
+| The runtime image to package, what `vidocq:jlink` wrote. The goal fails, naming `vidocq:jlink`, when it is missing.
+
+| `vidocq.installerDir` (`installerDir`)
+| `target/installer`
+| The output directory. The goal empties it first.
+
+| `vidocq.icon` (`icon`)
+| _(none)_
+| The icon of the application: `.icns` on macOS, `.ico` on Windows, `.png` on Linux. Ignored when the file does not exist.
+
+| `vidocq.vendor` (`vendor`)
+| `${project.groupId}`
+| The vendor written in the installer's metadata.
+
+| `vidocq.appDescription` (`description`)
+| `${project.description}`
+| The short description written in the installer's metadata.
+|===
 
 == `vidocq:docker` goal
 
@@ -1132,6 +1239,60 @@ script of `bin/`: the distroless base has no shell to run it. The JVM options th
 image (`jlink --add-options`). An image linked again in the container is the same as `target/dist`: it links the
 staged modules, to which the goal already added their `provides` (<<jlink-provides>>), with the recipe's
 `--add-options`.
+
+[#docker-parameters]
+=== Goal parameters
+
+Every one of them is a property as well as a `<configuration>` element of the same name as the field.
+
+[cols="2,1,3"]
+|===
+| Property (element) | Default | Meaning
+
+| `vidocq.docker.kind` (`kind`)
+| `jlink`
+| What the image is built on: `jlink`, the runtime image of `vidocq:jlink`, or `jdk`, the distribution of `vidocq:package` (see the table above).
+
+| `vidocq.docker.baseImage` (`baseImage`)
+| `gcr.io/distroless/base-debian12:nonroot` (`jlink`), `eclipse-temurin:<build JDK version>-jre` (`jdk`)
+| The base image.
+
+| `vidocq.docker.imageTag` (`imageTag`)
+| `<artifactId>:<version>`
+| The tag of the image.
+
+| `vidocq.docker.exposedPort` (`exposedPort`)
+| `8080`
+| The port the `Dockerfile` exposes (`EXPOSE`), and the one of the `docker run` line the goal prints. Set it to the HTTP port the application listens on.
+
+| `vidocq.docker.build` (`build`)
+| `false`
+| Also runs `docker build`; by default the goal only writes the `Dockerfile`.
+
+| `vidocq.runtimeImage` (`runtimeImage`)
+| `target/dist`
+| The runtime image of the `jlink` kind, what `vidocq:jlink` wrote. A path under `target/`: the `Dockerfile` copies it with a relative `COPY`.
+
+| `vidocq.launcher` (`launcher`)
+| `${project.artifactId}`
+| The launcher name in `dist/bin/`, for the `jlink` kind.
+
+| `vidocq.distName` (`distName`)
+| `${project.artifactId}-${project.version}`
+| The directory of the `vidocq:package` distribution under `target/`, for the `jdk` kind.
+
+| `vidocq.scriptName` (`scriptName`)
+| `${project.artifactId}`
+| The launcher of that distribution, `bin/<name>.sh`, for the `jdk` kind.
+
+| `vidocq.docker.linkInContainer` (`linkInContainer`)
+| `auto`
+| Whether the `Dockerfile` links the runtime image again in a Linux JDK image (<<docker-linux-image>>): `auto`, `true` or `false`.
+
+| `vidocq.docker.jdkImage` (`jdkImage`)
+| `eclipse-temurin:<build JDK version>-jdk`
+| The Linux JDK image that links the runtime image when the `Dockerfile` does.
+|===
 
 [#run]
 == `vidocq:run` goal

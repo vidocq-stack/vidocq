@@ -2,7 +2,7 @@
 :description: First JAX-RS resource served by Cassini standalone — one complete project, one bootstrap, three minutes.
 
 [.lead]
-Three minutes to serve a `@Path` resource over HTTP with Cassini standalone. One complete Maven project, one bootstrap — the standard `SeBootstrap` of the REST 4.0 spec. Every snippet below is copy-pasteable and tested end to end against the released *0.2.x* artifacts.
+Three minutes to serve a `@Path` resource over HTTP with Cassini standalone. One complete Maven project, one bootstrap — the standard `SeBootstrap` of the REST 4.0 spec. Every snippet below is copy-pasteable, at version `{project-version}`.
 
 [TIP]
 ====

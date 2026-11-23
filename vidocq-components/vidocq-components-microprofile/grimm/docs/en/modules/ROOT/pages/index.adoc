@@ -47,7 +47,7 @@ The Grimms gathered scattered oral tradition — tales, legends, word roots — 
 | Public packages | `io.vidocq.grimm.spi.gen` (compile-time contribution SPI), `io.vidocq.grimm.internal.reader` (static-document readers), `io.vidocq.grimm.cdi` (CDI integration)
 | Runtime dependencies | `microprofile-openapi-api` 4.2 (the build pins `4.2-RC5` until the final reaches Maven Central), `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`, `io.vidocq.vauban:vauban-api` (API types only, for `grimm-cdi-vauban`)
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback.
-| MP OpenAPI 4.2 TCK | ✅ 367 / 367 (TCK 4.2-RC5) — see xref:tck.adoc[detailed status]
+| MP OpenAPI 4.2 TCK | ✅ 364 / 364 official tests (TCK 4.2-RC5) — see xref:tck.adoc[detailed status]
 |===
 
 == Three identifying traits

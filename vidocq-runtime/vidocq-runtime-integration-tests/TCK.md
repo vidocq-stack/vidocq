@@ -5,8 +5,9 @@ Unlike the per-brick TCK runners that live in each implementation repository
 (knock-tck, dirac-tck, …) and certify one implementation in isolation, these runners
 certify **the assembled Vidocq runtime**: the exact boot path a real application uses.
 
-Status: **1868 official TCK tests green** (2026-08-27), all 8 runners on the
-embedded Vidocq container, no suite exclusion.
+Status: **1888 official TCK tests green** (full re-run 2026-10-04, see the results below), all 8
+runners on the embedded Vidocq container, with one documented exclusion: the `ee-security-optional`
+TestNG group of the JWT suite.
 
 ## How the TCKs run
 

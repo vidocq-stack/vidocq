@@ -1,11 +1,6 @@
 = Migration
 :description: From Quarkus, Helidon, Spring Boot, Open Liberty, Payara Micro.
 
-[CAUTION]
-====
-Vidocq Runtime is at **{project-version}**. Any real-world migration is premature — this page documents the mappings ahead of time.
-====
-
 == Side-by-side comparison
 
 [cols="2,1,1,1,1,1,1"]

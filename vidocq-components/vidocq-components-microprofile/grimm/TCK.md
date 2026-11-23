@@ -5,8 +5,8 @@ Track MicroProfile OpenAPI 4.2 TCK progress here.
 ## Current score
 
 - Status: M10 completed
-- Full suite: **367 tests, 0 failures, 0 errors, 0 skipped** (2026-10-04): the 364 tests of the official TCK plus
-  3 Grimm harness tests (`GrimmTckSmokeTest`, 1 test; `DotNameCompatibilityTest`, 2 tests).
+- Official TCK: **364/364**. Full suite: **367 tests, 0 failures, 0 errors, 0 skipped** (2026-10-04): the 364 tests of the
+  official TCK plus 3 Grimm harness tests (`GrimmTckSmokeTest`, 1 test; `DotNameCompatibilityTest`, 2 tests).
 - Run against TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot); re-run on the 4.2 final.
 - Count: 349 on the 4.1 TCK, 367 on 4.2-RC5 (+18):
   - `ExternalDocumentationAnnotationTest` (+2: 1 method, run once per format, JSON and YAML);

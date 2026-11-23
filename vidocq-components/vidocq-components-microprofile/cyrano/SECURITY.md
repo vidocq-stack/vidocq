@@ -57,10 +57,11 @@ Vidocq is an open source project run by its maintainers on a best-effort basis. 
    0.1-3.9) and list the affected versions. The reporter is told the outcome, including a
    refusal with its reason.
 3. **Fix.** The fix is prepared in private, with a regression test written first (red, then
-   green), on a branch that is not published before the release. If another Vidocq repository
-   is affected or has to follow, the maintainers coordinate the companion branches (see
-   `docs/changes-across-repositories.md` in the workspace) so that the fixed releases go out
-   together.
+   green), on a branch that is not published before the release. A fix that touches several components of the
+   monorepo is one pull request. If a repository outside it (erasmus, tassis, verne, a VCU
+   extension) has to follow, the monorepo's fix merges first and the maintainers coordinate the
+   follower's (see `docs/changes-across-repositories.md` in the workspace), so that the fixed
+   releases go out together.
 4. **Advisory and CVE request.** The maintainers write the advisory: description, impact,
    affected and fixed versions, workaround, credit. When the issue deserves one, they request a
    CVE identifier and fill the advisory with it.

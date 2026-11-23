@@ -7,26 +7,6 @@ image::peano-logo.png[Peano,300,role=module-logo]
 [.lead]
 Peano is the Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem, in pure Java 25: zero third-party dependency (only the `jakarta.el` spec jar), strict Java Modules, and — like every Vidocq brick — property accessors and expressions generated at build time where others reflect at run time.
 
-[IMPORTANT]
-====
-Peano is **released** (first shipped with 0.4.0-RC1): grammar, operators, coercions and the `ExpressionFactory`
-provider are implemented. Resolver-backed value expressions now navigate models,
-capture variables and expose get/set/metadata with imports and static fields.
-Functions, method expressions, method references and assignments are implemented.
-Lambda execution, list/set/map construction and lazy chapter 2 collection
-pipelines and compiled adapters for all java.util.function interfaces, Runnable,
-Callable and Comparator are implemented. Selected application interfaces use generated
-adapters; known API limitations
-are recorded in BUG.md.
-Evaluation listeners and expression serialization are implemented.
-The peano-api accessor-table service and direct resolver dispatch are implemented.
-APT property generation supports @ELAccessible and explicit selected types.
-Direct public method calls and generated signatures/runtime annotations are implemented.
-All 361 official EL 6.0.1 TCK tests pass on Temurin 25, including signatures.
-This is a test result, not a certification announcement.
-This documentation describes Peano `{project-version}`; every page states what exists today.
-====
-
 == Origin of the name
 
 Giuseppe Peano (1858–1932), the Turin logician who gave mathematics a rigorous formal notation — the `∈` symbol, the axioms of arithmetic that bear his name, the _Formulario mathematico_. See https://en.wikipedia.org/wiki/Giuseppe_Peano[the Wikipedia article].
@@ -46,6 +26,21 @@ Peano wanted expressions written in a notation without ambiguity, so that evalua
 | Official TCK | 361/361 tests pass, including signatures — see xref:tck.adoc[TCK status]
 |===
 
+== What Peano implements
+
+* *The language* — the grammar, operators and coercions of EL 6.0, functions, method expressions, method references,
+  assignments, lambdas, list, set and map construction, and the lazy collection operations of chapter 2.
+* *The API* — the `ExpressionFactory` provider, value expressions backed by resolvers (variables, imports, static
+  fields), evaluation listeners and expression serialization.
+* *Build-time code* — accessor tables written by an annotation processor (`@ELAccessible` or explicitly selected
+  types), with direct resolver dispatch and direct public method calls, and adapters compiled for the
+  `java.util.function` interfaces, `Runnable`, `Callable`, `Comparator` and selected application interfaces.
+
+The known API limitations are recorded in
+link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/BUG.md[BUG.md].
+All 361 official EL 6.0.1 TCK tests pass on Temurin 25, signatures included: a test result, not a certification
+(see xref:tck.adoc[TCK status]).
+
 == Three identifying traits
 
 . **Zero third-party dependency** — the `jakarta.el` spec jar only. No Expressly, no Jakarta EL reference implementation, no parser generator: a hand-written lexer and recursive-descent parser.
@@ -54,7 +49,7 @@ Peano wanted expressions written in a notation without ambiguity, so that evalua
 
 == Position in the ecosystem
 
-Peano is a foundational brick: it depends on no other Vidocq module. Ibarra (Jakarta Pages 4.0) uses it to evaluate page expressions and compiles page expressions with it at build time; a future `vauban-el` module of Vauban will expose CDI `@Named` beans to it through the standard `ELResolver` extension point.
+Peano is a foundational brick: it depends on no other Vidocq module. Ibarra (Jakarta Pages 4.0) uses it to evaluate page expressions and compiles page expressions with it at build time. In the Vidocq runtime, the Pages extension adds a resolver of CDI bean names to the pages' EL context, so a page reads a `@Named` bean by its name (xref:{page-component-version}@vidocq::modules/vidocq-runtime-extensions.adoc#pages-cdi-beans[Vidocq Runtime — extensions]).
 
 == Quick links
 

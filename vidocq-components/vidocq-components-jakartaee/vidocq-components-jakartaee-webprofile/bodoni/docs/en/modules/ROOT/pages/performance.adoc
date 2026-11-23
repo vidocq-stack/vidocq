@@ -25,6 +25,6 @@ What it shows:
 
 * **No time gain.** The difference is inside the noise of the measurement.
 * **Less allocation.** The handlers allocate about 72 bytes per item, and the JIT's escape analysis does not remove them. Whether that matters under concurrent load is not measured yet.
-* **Where the time goes.** Two thirds of the time is EL resolution, tracked as Vidocq/peano#63. The lever for faster pages is the EL implementation, for every page with or without JSTL.
+* **Where the time goes.** Two thirds of the time is EL resolution, about 176 ns per item (BENCH-20261024-01). The lever for faster pages is the EL implementation, for every page with or without JSTL.
 
 Build-time inlining (`bodoni-ibarra`, milestone B6) is therefore on standby. The standard handlers are the code path on every container. See xref:concepts.adoc[Concepts].

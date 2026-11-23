@@ -15,10 +15,10 @@ This page consolidates the state of the official CDI 4.1 TCK runs against Vauban
 | Subset of the 4.1 TCK
 | The Full profile is not in scope.
 
-| Last run
-| 2026-11-18
-| Vauban `main`, the 0.4.0 development line
-| Profile `-Ptck` on `vauban-tck-runner` (CDI Lite 774/774) and `vauban-atinject-tck-runner` (AtInject 1/1).
+| Where it runs
+| `TCK nightly`
+| Once a day on `main`, on demand on a branch, and for a release
+| Vauban's `ci.tck.modules`: `vauban-tck-runner` (CDI Lite 774/774) and `vauban-atinject-tck-runner` (AtInject 1/1), each under `-Ptck`. The workflow's runs are the record of the latest result: Vauban keeps no `TCK.md`.
 
 | Language model TCK
 | 63 run
@@ -167,9 +167,10 @@ None is listed: the last two, `BUG-20261117-42` (no inherited members) and `BUG-
     -Dtest=LangModelTckTest -Dsurefire.failIfNoSpecifiedTests=false
 ----
 
-== Open bugs impacting coverage
+== Bugs that affected coverage
 
-Tracked in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md]:
+No open bug affects TCK coverage. The ones that did are fixed, and kept here for the record; details in
+link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md]:
 
 [cols="1,3,1"]
 |===
@@ -177,7 +178,7 @@ Tracked in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-component
 
 | `VAU-PRX-002`
 | Drift between `ClientProxyGenerator` (compile time) and `RuntimeClientProxyGenerator` (runtime)
-| Fixed
+| Fixed (2026-05-07)
 
 | `VAU-INJ-001`
 | Field injection eagerly resolves normal-scoped beans (loses the client proxy)

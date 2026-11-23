@@ -65,7 +65,7 @@
 
 | `vidocq-runtime-bodoni-jstl-extension`
 | `jakartaee-web`
-| Gives the pages compiled by Ibarra the Jakarta Standard Tag Library 3.0 of link:xref:{page-component-version}@bodoni::index.adoc[Bodoni] (`c:`, `fmt:`, `fn:`, `x:`, `sql:`), with Ibarra, the Servlet extension and Peano. See <<bodoni-jstl>>.
+| Gives the pages compiled by Ibarra the Jakarta Standard Tag Library 3.0 of xref:{page-component-version}@bodoni::index.adoc[Bodoni] (`c:`, `fmt:`, `fn:`, `x:`, `sql:`), with Ibarra, the Servlet extension and Peano. See <<bodoni-jstl>>.
 
 | `vidocq-runtime-naming-extension`
 | `jakartaee-web`
@@ -404,7 +404,7 @@ The `pages` section of the startup report counts the compiled pages and lists th
 [[bodoni-jstl]]
 == Jakarta Standard Tag Library (Bodoni)
 
-`vidocq-runtime-bodoni-jstl-extension` lets the pages of <<ibarra-pages>> use the standard tags: `c:` (core), `fmt:` (formatting and internationalisation), `fn:` (functions), `x:` (XML) and `sql:` (relational database access). link:xref:{page-component-version}@bodoni::index.adoc[Bodoni] implements Jakarta Standard Tag Library 3.0 and depends on its APIs only; this extension assembles the rest. It brings with it the Pages extension (<<ibarra-pages>>, which brings the Servlet extension and <<peano-el>>) and `bodoni-peano`, the accessor tables Peano needs under `-Dpeano.reflection=deny` to read the `varStatus` of `c:forEach`, the items of a `Map` and the `Result` of `sql:query`. An application declares the extension, nothing else of that chain.
+`vidocq-runtime-bodoni-jstl-extension` lets the pages of <<ibarra-pages>> use the standard tags: `c:` (core), `fmt:` (formatting and internationalisation), `fn:` (functions), `x:` (XML) and `sql:` (relational database access). xref:{page-component-version}@bodoni::index.adoc[Bodoni] implements Jakarta Standard Tag Library 3.0 and depends on its APIs only; this extension assembles the rest. It brings with it the Pages extension (<<ibarra-pages>>, which brings the Servlet extension and <<peano-el>>) and `bodoni-peano`, the accessor tables Peano needs under `-Dpeano.reflection=deny` to read the `varStatus` of `c:forEach`, the items of a `Map` and the `Result` of `sql:query`. An application declares the extension, nothing else of that chain.
 
 [source,xml]
 ----

@@ -28,7 +28,7 @@ The metaphor holds in two ways:
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.chappe.api`, `io.vidocq.chappe.http`, `io.vidocq.chappe.core`, `io.vidocq.chappe.cli`
 | Runtime dependencies | none (JDK only)
-| Conformance | 53 RFC tests in `chappe-conformance`; 183 integration tests in `chappe-tests`
+| Conformance | `chappe-conformance` checks the wire behaviour against RFC 9110/9112 (HTTP/1.1 request line, headers, bodies, keep-alive, status codes, request smuggling), RFC 9113 (HTTP/2 preface, settings, streams, flow control) and RFC 6455 (WebSocket); `chappe-tests` runs the server end to end (TLS, HTTP/2, gRPC, WebSocket, static files, timeouts, filters)
 | TCK | not applicable (no official HTTP TCK)
 |===
 

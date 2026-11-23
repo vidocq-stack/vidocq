@@ -23,10 +23,10 @@ This page is the canonical Chappe reference: Maven artifacts, exported Java modu
 | Standalone `chappe serve` launcher (fat jar + scripts).
 
 | `io.vidocq.chappe:chappe-tests:{project-version}`
-| Integration tests (183 tests). Not published.
+| End-to-end integration tests: TLS, HTTP/2, gRPC and gRPC-Web, WebSocket, static files, timeouts, filters. Not published.
 
 | `io.vidocq.chappe:chappe-conformance:{project-version}`
-| HTTP conformance (53 tests against RFC 9110/9112/9113/6455). Not published.
+| HTTP conformance tests against RFC 9110/9112 (HTTP/1.1), RFC 9113 (HTTP/2) and RFC 6455 (WebSocket). Not published.
 
 | `io.vidocq.chappe:chappe-bench:{project-version}`
 | Comparative benchmarks (Jetty, Helidon, JDK HttpServer). Not published.
@@ -554,7 +554,8 @@ Served zero-copy by `StaticFileHandler.preferPrecompressed(true)`.
 == Bugs and benchmarks
 
 * link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/BUG.md[BUG.md] — reproducible bugs, status, minimal repro.
-* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/BENCHMARKS.md[BENCHMARKS.md] — performance numbers, hardware, JVM, command.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/BENCH.md[BENCH.md] — performance numbers, hardware, JVM, command.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/BENCHMARKS.md[BENCHMARKS.md] — earlier shootout runs, kept as history.
 
 == Source
 

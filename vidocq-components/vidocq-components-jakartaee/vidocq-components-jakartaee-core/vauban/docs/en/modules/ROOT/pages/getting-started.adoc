@@ -47,6 +47,24 @@ This page shows how to write a first `@ApplicationScoped` bean, wire it via `@In
         </execution>
       </executions>
     </plugin>
+    <!-- Copies the runtime dependencies to target/modules, the module path of the run below -->
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-dependency-plugin</artifactId>
+      <executions>
+        <execution>
+          <id>copy-modules</id>
+          <phase>package</phase>
+          <goals>
+            <goal>copy-dependencies</goal>
+          </goals>
+          <configuration>
+            <outputDirectory>${project.build.directory}/modules</outputDirectory>
+            <includeScope>runtime</includeScope>
+          </configuration>
+        </execution>
+      </executions>
+    </plugin>
   </plugins>
 </build>
 ----
@@ -125,8 +143,8 @@ public static void main(String[] args) {
 [source,bash]
 ----
 sdk env
-./mvnw -ntp install -DskipTests
-java --module-path target/modules --module io.example/io.example.Main
+./mvnw -ntp package -DskipTests
+java --module-path target/classes:target/modules --module io.example/io.example.Main
 ----
 
 [TIP]
@@ -135,7 +153,7 @@ To run the application inside a Vauban layer instead of the boot layer — which
 
 [source,bash]
 ----
-java --module-path target/modules --add-modules ALL-MODULE-PATH \
+java --module-path target/classes:target/modules --add-modules ALL-MODULE-PATH \
      --module io.vidocq.vauban.classloader/io.vidocq.vauban.classloader.Launch io.example/io.example.Main
 ----
 

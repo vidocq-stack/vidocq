@@ -2,9 +2,9 @@
 :description: Precompile an application module with Ibarra and deploy it in Foy.
 
 [.lead]
-Ibarra compiles JSP/JSPX into application modules during the build. The initial
-Foy binding serves those pages over HTTP without a runtime compiler. Build-time
-EL, TLD functions, listeners and initial tag-handler invocations are generated at build time.
+Ibarra compiles JSP/JSPX pages into application modules during the build. Its Foy
+binding serves those pages over HTTP without a compiler at run time: the EL, the TLD
+functions, the listeners and the tag-handler invocations of a page are generated at build time.
 
 == Prerequisites
 
@@ -12,7 +12,7 @@ EL, TLD functions, listeners and initial tag-handler invocations are generated a
 * **Maven 3.10.0** — pinned via `.sdkmanrc` at the root of the monorepo, which builds with its wrapper `./mvnw`.
 * Strict Java Modules: one `module-info.java` per Maven module.
 
-== Maven setup (initial I4)
+== Maven setup
 
 [source,xml,subs=attributes+]
 ----
@@ -36,8 +36,9 @@ EL, TLD functions, listeners and initial tag-handler invocations are generated a
 
 The application module requires `io.vidocq.ibarra.api`; generated packages need
 no exports or opens. Put pages in `src/main/webapp` and run `mvn package`.
-See xref:modules/maven-plugin.adoc[the plugin reference] and the repository's
-`examples/precompiled-pages` for a complete buildable example. On the Vidocq runtime,
+See xref:modules/maven-plugin.adoc[the plugin reference] and
+link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/examples/precompiled-pages[`examples/precompiled-pages`]
+in Ibarra's folder for a complete buildable example. On the Vidocq runtime,
 the Pages extension (`vidocq-runtime-ibarra-pages-extension`) replaces this plugin:
 `vidocq:generate` compiles the pages the application keeps under `META-INF/resources/`.
 

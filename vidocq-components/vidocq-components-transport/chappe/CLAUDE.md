@@ -40,7 +40,7 @@ Vauban for component lifecycle. Chappe itself uses `ServiceLoader` (not CDI).
 | `chappe-cli` | Standalone `chappe serve` CLI launcher (mini-YAML, fat jar, jlink) — see `chappe-cli/README.md` |
 | `chappe-tests` | Integration tests |
 | `chappe-bench` | Benchmarks: Jetty/Helidon/JDK comparison, throughput/latency |
-| `chappe-conformance` | HTTP/WS conformance suite (53 RFC 9110/9112/9113/6455 tests); gRPC tests in `chappe-tests/Http2GrpcTransportTest` |
+| `chappe-conformance` | HTTP/WS conformance suite (RFC 9110/9112/9113/6455); gRPC tests in `chappe-tests/Http2GrpcTransportTest` |
 | `chappe-examples` | Usage examples |
 | `chappe-static-index-maven-plugin` | Maven plugin: O(1) index + `.gz` sidecars at build time (`<compress>gzip</compress>`) |
 

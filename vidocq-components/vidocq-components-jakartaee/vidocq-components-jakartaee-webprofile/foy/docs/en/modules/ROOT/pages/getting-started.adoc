@@ -8,7 +8,7 @@ First servlet, Foy container, Chappe transport: under fifty lines of Java, no ma
 
 * **Java 25** (Temurin) and **Maven 3.10.0** — `.sdkmanrc` is checked in at the root of the monorepo, run `sdk env` there first; the monorepo builds with its wrapper `./mvnw`.
 * Familiarity with the Jakarta Servlet 6.1 API.
-* For the CDI flavour: a Vauban `BeanManager` (see xref:vauban::getting-started.adoc[Vauban — getting started]).
+* For annotated components (`@WebServlet`, `@WebFilter`, `@WebListener`), as in the example below: a CDI `BeanManager`, here Vauban's (see xref:{page-component-version}@vauban::getting-started.adoc[Vauban — getting started]). Without one, Foy deploys what `web.xml` declares.
 
 == Maven coordinates
 
@@ -34,7 +34,8 @@ The Jakarta Servlet API comes transitively with Foy: the application does not de
         <version>{project-version}</version>
         <scope>runtime</scope>
     </dependency>
-    <!-- Optional CDI through Vauban -->
+    <!-- CDI through Vauban: finds the annotated components of the example below.
+         Leave it out for an application that declares its components in web.xml only. -->
     <dependency>
         <groupId>io.vidocq.foy</groupId>
         <artifactId>foy-cdi-vauban</artifactId>

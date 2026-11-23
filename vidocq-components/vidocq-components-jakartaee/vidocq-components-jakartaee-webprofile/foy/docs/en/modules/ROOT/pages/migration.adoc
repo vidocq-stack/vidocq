@@ -4,9 +4,9 @@
 [.lead]
 Foy honours the Jakarta Servlet 6.1 spec to the letter — your `web.xml`, your `@WebServlet`, your filters and listeners are ported as-is. This page lists the points where the environment differs.
 
-[CAUTION]
+[NOTE]
 ====
-Foy is at **{project-version}** and the official TCK passes **99.6 %** over the full suite: 1707 passing / 1714 run, 7 skipped (`api.*` 859/859, `pluggability.*` 646/646, `spec.*` 200/207, `compat.*` 2/2); every test that runs passes, the JSP tests with Ibarra as the page engine (see xref:tck.adoc[TCK status]). Migration is not recommended in production until the listed gaps are closed.
+Foy is at **{project-version}** and the official TCK passes **99.6 %** over the full suite: 1707 passing / 1714 run, 7 skipped (`api.*` 859/859, `pluggability.*` 646/646, `spec.*` 200/207, `compat.*` 2/2); every test that runs passes, the JSP tests with Ibarra as the page engine (see xref:tck.adoc[TCK status]).
 ====
 
 == From Tomcat
@@ -208,9 +208,10 @@ The multipart and request body work (Servlet 6.1 sections 3.1, 3.2 and 3.12) cha
 
 See xref:usage.adoc#file-upload[File upload] and xref:reference.adoc#request-body-limits[Request body limits].
 
-== Behaviour changes in the next version
+[#upgrading-from-0-3-0]
+== Upgrading from 0.3.0
 
-These changes may need attention:
+These changes of {project-version} may need attention:
 
 * [[servlet-built-in-beans]]**`HttpServletRequest`, `HttpSession` and `ServletContext` are beans on Vauban.** `foy-cdi-vauban` now produces them, as CDI requires of a Servlet container (xref:usage.adoc#servlet-built-in-beans[Usage]). An application that declares its own producer of one of these types, without a qualifier, as the workaround of the previous versions, now fails at start with an ambiguous dependency on that type: remove the producer, the injection points get Foy's bean. A producer with a qualifier of its own keeps working.
 
