@@ -33,6 +33,8 @@ import jakarta.enterprise.inject.Produces;
 @ApplicationScoped
 public class Integrations {
 
+    private static final System.Logger AUDIT = System.getLogger(Integrations.class.getName());
+
     /** A producer of a fully-public class from another module (Stage 1: build-time proxy, zero opens). */
     @Produces
     @ApplicationScoped
@@ -44,7 +46,7 @@ public class Integrations {
     @Produces
     @ApplicationScoped
     public AuditLog auditLog() {
-        return event -> System.out.println("[audit] " + event);
+        return event -> AUDIT.log(System.Logger.Level.INFO, "[audit] {0}", event);
     }
 
     /**
