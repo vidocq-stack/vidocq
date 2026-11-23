@@ -109,7 +109,11 @@ jobs:
         with:
           java-setup: 'false'
           maven-version: '3.10.0'
-          release-profile: release,crac,!incubator
+          # repackaged-api is active in every Maven build (only the IntelliJ import turns it off), but
+          # release.sh reads the modules of the profiles named here alone: without it, the *-mp-*-api
+          # modules are not its own and every dependency on them stops the release as a residual
+          # SNAPSHOT.
+          release-profile: release,crac,!incubator,repackaged-api
           release-version: ${{ inputs.release_version }}
           next-dev-version: ${{ inputs.next_dev_version }}
           dry-run: ${{ inputs.dry_run }}
