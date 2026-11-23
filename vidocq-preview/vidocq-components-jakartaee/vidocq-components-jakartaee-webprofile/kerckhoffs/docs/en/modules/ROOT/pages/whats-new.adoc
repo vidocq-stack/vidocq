@@ -39,6 +39,13 @@ xref:concepts.adoc#build-and-start[What happens at build, and what at start].
 runtime, twelve of them on the Kerckhoffs container too; a compatibility measurement, not a certification. See
 xref:tck.adoc[TCK].
 
-Not in this release: the custom FORM mechanism, the database and LDAP identity stores, OpenID Connect, the built-in
-`Pbkdf2PasswordHash` bean, and a CDI decorator on a mechanism. See
+* **Custom FORM** — `@CustomFormAuthenticationMechanismDefinition` is supported: the login page of the application
+calls `SecurityContext.authenticate` with the credential. See xref:usage.adoc#custom-form[Custom FORM].
+* **`Pbkdf2PasswordHash`** — `@Inject Pbkdf2PasswordHash` resolves to the built-in PBKDF2 hash, one instance per
+injection point. See xref:usage.adoc#password-hash[Hashing passwords].
+* **The in-memory store warns** — an in-memory identity store logs a `WARNING` at start, naming the class that
+declares it: it is for development and tests. See
+xref:reference.adoc#in-memory-store-warning[The in-memory identity store warns at start].
+
+Not in this release: the database and LDAP identity stores, OpenID Connect, and a CDI decorator on a mechanism. See
 xref:usage.adoc#not-supported-yet[Not supported yet].

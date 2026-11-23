@@ -141,7 +141,9 @@ The integration test asserts the same three answers (`KerckhoffsSecurityTest`).
 == Other starting points
 
 * `@InMemoryIdentityStoreDefinition` declares the callers in the annotation, for tests and demos, in place of
-`UserStore`. See xref:usage.adoc#identity-stores[Identity stores].
+`UserStore`; it is for development only and warns at start. See xref:usage.adoc#identity-stores[Identity stores].
+* Inject `Pbkdf2PasswordHash` to hash the passwords a store keeps. See
+xref:usage.adoc#password-hash[Hashing passwords].
 * `@FormAuthenticationMechanismDefinition` gives a login page instead of the browser's BASIC dialog. See
 xref:usage.adoc#form[FORM].
 * A bean of the application that implements `HttpAuthenticationMechanism` is used as it is. See

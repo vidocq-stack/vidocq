@@ -63,6 +63,26 @@ login keeps nothing and goes to `errorPage` (default `/login-error`) the way the
 * `loginPage` and `errorPage` are literals, or Expression Language string literals. `useForwardToLoginExpression`
 fails the deployment: only `useForwardToLogin` is read.
 
+[#custom-form]
+=== Custom FORM [.tag-new]#NEW#
+
+[source,java]
+----
+@CustomFormAuthenticationMechanismDefinition(
+        loginToContinue = @LoginToContinue(loginPage = "/login.jsp"))
+@Dependent
+public class CustomFormApplication {
+}
+----
+
+* A request of nobody to a protected resource leads to `loginPage`, as with FORM.
+* The login page reads the credential itself and hands it to the security context:
+`securityContext.authenticate(request, response, AuthenticationParameters.withParams().credential(new UsernamePasswordCredential(user, password)))`.
+* On `SEND_FAILURE` the page shows the failure itself: `errorPage` is not used. On `SEND_CONTINUE` the browser is
+redirected to the page it asked for. A post to `j_security_check` is no login for this mechanism.
+* The caller is kept in the session under a new session id, as with FORM. Details:
+xref:reference.adoc#built-in-beans[Built-in beans].
+
 [#your-own-mechanism]
 === Your own mechanism
 
@@ -149,13 +169,22 @@ public class MemoryApplication {
 It is meant for tests, demos and debugging: the passwords are in the annotation. Each definition is one identity
 store. An unknown caller, a wrong password and a cleared credential are `INVALID`; the password is compared in
 constant time. A caller declared twice, a caller without a name, `priorityExpression` and `useForExpression` refuse
-the store, so the start fails. `priority` and `useFor` are read.
+the store, so the start fails. `priority` and `useFor` are read. Each in-memory store logs one `WARNING` at start
+[.tag-new]#NEW#, see xref:reference.adoc#in-memory-store-warning[The in-memory identity store warns at start].
 
 [#application-stores]
 === Stores of the application
 
 Any bean that implements `IdentityStore` is a store: an `@ApplicationScoped` one as in
 xref:getting-started.adoc[Getting started], or a `@RequestScoped` one (TCK `app-multiple-store-backup`).
+
+[#password-hash]
+=== Hashing passwords: `Pbkdf2PasswordHash` [.tag-new]#NEW#
+
+A store of the application that keeps hashed passwords injects the built-in `Pbkdf2PasswordHash`. Each injection
+point gets its own instance; `initialize(Map)` takes the `Pbkdf2PasswordHash.*` parameters (`PBKDF2WithHmacSHA224`
+to `SHA512`, `SHA256` by default). `generate(char[])` gives `algorithm:iterations:base64(salt):base64(hash)`, and
+`verify(char[], String)` compares in constant time.
 
 [#identity-store-handler]
 === How the stores answer together
@@ -246,12 +275,10 @@ xref:{page-component-version}@vidocq::modules/vidocq-runtime-extensions.adoc#res
 |===
 | What | State
 
-| `@CustomFormAuthenticationMechanismDefinition` | Not read: no mechanism is registered for it.
 | `@LoginToContinue` on a mechanism of the application, and its `*Expression` attributes | The interceptor is not written; TCK `AppMemFormImmediateIT` is set aside.
 | Expressions other than a string literal in the mechanism definitions, `priorityExpression` and `useForExpression` of the in-memory store | Refused at deployment.
 | `@DatabaseIdentityStoreDefinition`, `@LdapIdentityStoreDefinition` | Milestone K4.
 | `@OpenIdAuthenticationMechanismDefinition`, `OpenIdContext` | Milestone K5, which the roadmap builds before K4. `kerckhoffs-core` already validates an ID token internally (RS256 signature against the provider's JSON Web Key Set, issuer, audience, expiry, nonce); no mechanism uses it yet.
-| The built-in `Pbkdf2PasswordHash` bean | `kerckhoffs-core` implements PBKDF2 (`PBKDF2WithHmacSHA224` to `SHA512`, `SHA256` by default), but no bean is registered for it: an injection of `Pbkdf2PasswordHash` does not resolve.
 | `SecurityContext.hasAccessToWebResource`, `getAllDeclaredCallerRoles` | `false` and `UnsupportedOperationException`, see <<security-context>>.
 | `@RolesAllowed` through Jakarta Authorization | Not there; protect servlets with security constraints.
 | A CDI decorator on a mechanism | Vauban applies no `@Decorator` (CDI Lite); TCK `app-mem-basic-decorate` is 1 of 2 (KERCK-20261116-01).
