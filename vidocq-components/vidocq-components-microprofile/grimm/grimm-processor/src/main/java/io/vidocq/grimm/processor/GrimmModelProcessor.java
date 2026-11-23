@@ -56,6 +56,7 @@ import javax.tools.Diagnostic;
 import javax.tools.StandardLocation;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -92,13 +93,17 @@ public final class GrimmModelProcessor extends AbstractProcessor {
     private boolean servicesWritten;
 
     private static final String OPENAPI_DEFINITION = "org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition";
+    private static final String APPLICATION_PATH = "jakarta.ws.rs.ApplicationPath";
 
-    /** The classes carrying {@code @OpenAPIDefinition}, by binary name (grimm BUG-20261030-02). */
+    /**
+     * The classes carrying {@code @OpenAPIDefinition} (grimm BUG-20261030-02) or {@code @ApplicationPath}
+     * (BUG-20261123-49), by binary name.
+     */
     private final Set<String> definitionClasses = new TreeSet<>();
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return Set.of("jakarta.ws.rs.Path", OPENAPI_DEFINITION);
+        return Set.of("jakarta.ws.rs.Path", OPENAPI_DEFINITION, APPLICATION_PATH);
     }
 
     @Override
@@ -507,18 +512,21 @@ public final class GrimmModelProcessor extends AbstractProcessor {
     }
 
     private void collectDefinitionClasses(RoundEnvironment roundEnv) {
-        TypeElement definitionAnnotation = processingEnv.getElementUtils().getTypeElement(OPENAPI_DEFINITION);
-        if (definitionAnnotation == null) return;
-        for (Element e : roundEnv.getElementsAnnotatedWith(definitionAnnotation)) {
-            if (e instanceof TypeElement type) {
-                definitionClasses.add(processingEnv.getElementUtils().getBinaryName(type).toString());
+        for (String annotationName : List.of(OPENAPI_DEFINITION, APPLICATION_PATH)) {
+            TypeElement annotation = processingEnv.getElementUtils().getTypeElement(annotationName);
+            if (annotation == null) continue;
+            for (Element e : roundEnv.getElementsAnnotatedWith(annotation)) {
+                if (e instanceof TypeElement type) {
+                    definitionClasses.add(processingEnv.getElementUtils().getBinaryName(type).toString());
+                }
             }
         }
     }
 
     /**
-     * Lists the classes carrying {@code @OpenAPIDefinition} for the run time: in {@code annotated} discovery mode an
-     * {@code Application} subclass is no bean, and a class with a fragment is not scanned (grimm BUG-20261030-02).
+     * Lists the classes carrying {@code @OpenAPIDefinition} or {@code @ApplicationPath} for the run time: in
+     * {@code annotated} discovery mode an {@code Application} subclass is no bean, and a class with a fragment is not
+     * scanned (grimm BUG-20261030-02, BUG-20261123-49).
      */
     private void writeDefinitionsFile() {
         if (definitionClasses.isEmpty()) return;

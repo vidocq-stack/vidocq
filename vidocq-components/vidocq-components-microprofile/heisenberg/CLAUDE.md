@@ -91,8 +91,9 @@ the application starts with stays out of `HeisenbergExtension`. Each extension i
 `BeanArchiveTest` checks that both lists agree. Under Vauban the priority is applied since the fix
 of Vauban's BUG-20261113-12 (BUG-019 here).
 
-**Policy composition order** (MP FT spec §2.5, from outermost to innermost):
-`@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → actual method.
+**Policy composition order** (from outermost to innermost; it follows from the "Interactions" sections
+of the MP FT spec, BUG-20261123-51):
+`@Fallback` → `@Retry` → `@CircuitBreaker` → `@Timeout` → `@Bulkhead` → actual method.
 
 **State management:** `StateRegistryBean` + `BulkheadStateRegistryBean` (CDI `@ApplicationScoped`
 singletons) maintain the state of `CircuitBreaker` and `Bulkhead` identified by

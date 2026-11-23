@@ -512,3 +512,54 @@ The instantiator (one per client) keeps one instance per interceptor, as for any
 interceptor chain of each method. `ProviderInstantiator.release()` (no-op by default) is called by `markClosed` and
 releases the creational contexts, so `@PreDestroy` runs; a closed client creates no interceptor again. A sub-resource
 proxy shares its client's instantiator. Containers other than Vauban go through the same portable `BeanManager` calls.
+
+## BUG-20261123-47 — `<interface>/mp-rest/scope` set at start is ignored in a frozen application
+
+- **Opened**: 2026-11-23
+- **Status**: OPEN — the design waits for the maintainer
+
+### Symptom
+
+`CyranoRestClientCdiExtension.discoverRegisterRestClient`, an `@Enhancement` phase, reads
+`<fqn>/mp-rest/scope` and `<configKey>/mp-rest/scope` from MicroProfile Config (`resolveConfigScope`) and gives the
+synthetic `@RestClient` bean that scope at `@Synthesis`. Since Vidocq/vauban#288 a packaged application does not run
+its build compatible extensions: `vidocq:generate` runs them once at build and the start loads the record. The scope
+is then the one the build machine's configuration gave (the application's `microprofile-config.properties`, the build
+machine's environment and system properties); a key set at start (environment variable, `-D`, an outside config
+source) does nothing, with no message. It breaks the workspace rule "compute from the classes of the deployment only".
+
+### Minimal Repro
+
+`CyranoScopeConfigAtStartTest`: the key set after `freezeExtensions` and before the start gives a `Dependent` bean
+instead of `ApplicationScoped` (`scopeKeySetAtStartAppliesWhenTheStartReadsAFrozenRecord`, `@Disabled` while this
+entry is open; red when run with `-Djunit.jupiter.conditions.deactivate=org.junit.*DisabledCondition`). The same key
+applies when the start runs the extension (`scopeKeySetAtStartAppliesWhenTheStartRunsTheExtension`, green).
+
+### Root Cause
+
+The scope of a synthetic bean is fixed when `@Synthesis` registers it: at build in a frozen application. The
+specification makes it a configuration value, which belongs to the start.
+
+### Options
+
+1. **Scope from the annotation at build, the key checked at start.** The extension decides the scope from the
+   interface's annotations only and hands the interface names and their build-time scopes to a `Startup` observer
+   (`withParam`), which throws a `DeploymentException` when a `/mp-rest/scope` key names another scope: the start
+   fails with a message (put the scope on the interface, or rebuild) instead of ignoring the key. Follows every rule;
+   a start-time key never changes the scope of a frozen application, which departs from the specification there.
+2. **Run Cyrano's extension at each start.** It asks `ExtensionPhase.isBuildTime()` (as Heisenberg's
+   `InterceptorPriorityExtension`) and the start runs it again, alone. Specification behaviour everywhere; costs a
+   `@RegisterRestClient` scan at each start, and the "last resort" of the rules.
+3. **Document the limitation** (what this change does in `reference.adoc`), keep the behaviour.
+
+Options 1 and 3 can be combined: 3 now, 1 as the fix.
+
+### Client proxies of an `@ApplicationScoped` client (checked with this entry)
+
+The finding that the extension lists no `@ClientProxies` does not apply: the client interfaces are the
+application's, which the brick cannot name. In a frozen application, the freeze writes the client proxy of a
+synthetic bean whose interface sits next to a component provider (Vidocq/vauban#342), which an application compiled
+with `vauban-processor` has. Where the extensions run at start (`vidocq:dev`, tests, a TCK deployment) Vauban still
+builds a `java.lang.reflect.Proxy` and prints `RUNTIME CODE GENERATION FALLBACK` for each normal-scoped client
+(seen in `CyranoScopeConfigAtStartTest`). Closing that gap would need `cyrano-processor` (or Vauban's processor) to
+write the client proxy of a `@RegisterRestClient` interface that carries a normal scope at compile; not done here.

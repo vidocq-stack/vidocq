@@ -33,12 +33,16 @@ import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenExce
 import org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException;
 
 /**
- * Entry point of the Heisenberg engine — builds and executes the policy chain
- * in the order defined by the MicroProfile Fault Tolerance 4.1 spec §2.5:
- * {@code @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry → method}.
+ * Entry point of the Heisenberg engine — builds and executes the policy chain, from the outside in:
+ * {@code @Fallback → @Retry → @CircuitBreaker → @Timeout → @Bulkhead → method}, the whole chain run on a
+ * virtual thread when the method is {@code @Asynchronous}.
  *
- * <p>Complete implemented chain (M1-M7): @Fallback → @CircuitBreaker → @Bulkhead → @Timeout → @Retry,
- * optionally wrapped by @Asynchronous (virtual thread).</p>
+ * <p>MicroProfile Fault Tolerance 4.1 states no single order; this one follows from the interactions each
+ * policy's chapter describes: the fallback is invoked "after all other Fault Tolerance processing has taken
+ * place" (Fallback); "each retry attempt is processed by the circuit breaker" (Circuit Breaker, Interactions);
+ * "the circuit breaker is checked before attempting to enter the bulkhead" (same section); a retried invocation
+ * "first leaves the bulkhead" and enters it again (Bulkhead, Interactions). The timeout wraps the bulkhead, so it
+ * measures each attempt, the time an asynchronous call spends queued in the bulkhead included.</p>
  */
 public final class PolicyComposer {
 
@@ -127,8 +131,9 @@ public final class PolicyComposer {
     /**
      * Builds and runs the policy chain of one invocation of a guarded method.
      *
-     * <p>The chain is built from the inside out.
-     * Outer→inner : Fallback → Retry → CB → Timeout → Bulkhead → method.</p>
+     * <p>The chain is built from the inside out: {@link #build} wraps the method in the bulkhead, then the
+     * timeout, the circuit breaker and the retry; the fallback wraps the result of {@link #build}.
+     * Outer→inner: Fallback → Retry → CB → Timeout → Bulkhead → method.</p>
      */
     private static final class Chain {
         private final Method method;

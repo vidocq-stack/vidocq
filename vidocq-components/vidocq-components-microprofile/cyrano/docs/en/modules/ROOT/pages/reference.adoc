@@ -164,7 +164,7 @@ All keys follow the `<key>/mp-rest/<attribute>` pattern, where `<key>` is either
 | Full base URI. High priority (wins over `url`).
 
 | `<key>/mp-rest/scope`
-| CDI scope of the synthesised bean (`jakarta.enterprise.context.Dependent` by default, spec §6.3; a scope annotation on the interface or this key overrides it).
+| CDI scope of the synthesised bean (`jakarta.enterprise.context.Dependent` by default, spec §6.3; a scope annotation on the interface or this key overrides it). Known limitation (BUG-20261123-47): the key is read while the build compatible extensions run. In an application packaged by Vidocq they run at build, so the value the build sees (`META-INF/microprofile-config.properties` of the application, the build machine's environment) is the one that counts; a value set when the application starts, by an environment variable or a system property, is ignored. Under `vidocq:dev` and in tests the extensions run at start and the key applies. Put the scope on the interface, or in the application's `microprofile-config.properties`.
 
 | `<key>/mp-rest/providers`
 | Comma-separated list of provider FQNs.

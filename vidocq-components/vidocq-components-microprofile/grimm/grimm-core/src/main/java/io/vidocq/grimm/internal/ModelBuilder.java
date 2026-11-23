@@ -123,6 +123,9 @@ public final class ModelBuilder {
         for (OpenAPI fragment : fragments) {
             io.vidocq.grimm.internal.merger.FragmentMerger.mergeInto(annotationModel, fragment);
         }
+        // The resources are served under the @ApplicationPath: so are the paths their annotations describe
+        // (spec §5.4, BUG-20261123-49). The reader's and the static file's paths are the application's, as written.
+        ApplicationPathPrefix.applyTo(annotationModel, ApplicationPathPrefix.of(annotatedTypes));
         sources.add(new AnnotationSource(annotationModel));
 
         // Step 4 — merge with spec priority (§4.4)

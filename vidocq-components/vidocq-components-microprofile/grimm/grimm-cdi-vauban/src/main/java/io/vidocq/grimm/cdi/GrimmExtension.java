@@ -27,9 +27,9 @@ import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.ws.rs.Path;
 
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * MicroProfile OpenAPI 4.2 integration as a CDI 4.1
@@ -80,8 +80,10 @@ public final class GrimmExtension implements BuildCompatibleExtension {
         return true;
     }
 
-    // One extension instance per container start: the classes of this deployment only.
-    private final Set<String> discoveredNames = Collections.synchronizedSet(new LinkedHashSet<>());
+    // One extension instance per container start: the classes of this deployment only, in discovery order. A lock
+    // guards them, not a monitor: the project rules forbid `synchronized` (BUG-20261123-50).
+    private final ReentrantLock lock = new ReentrantLock();
+    private final Set<String> discoveredNames = new LinkedHashSet<>();
 
     /**
      * Records every application class found by the CDI scanner — spec §4.4: the
@@ -95,7 +97,12 @@ public final class GrimmExtension implements BuildCompatibleExtension {
     public void registerApplicationClass(ClassConfig classConfig) {
         String name = classConfig.info().name();
         if (documented(name)) {
-            discoveredNames.add(name);
+            lock.lock();
+            try {
+                discoveredNames.add(name);
+            } finally {
+                lock.unlock();
+            }
         }
     }
 
@@ -106,8 +113,11 @@ public final class GrimmExtension implements BuildCompatibleExtension {
     @Synthesis
     public void registerScannedTypes(SyntheticComponents components) {
         String[] names;
-        synchronized (discoveredNames) {
+        lock.lock();
+        try {
             names = discoveredNames.toArray(String[]::new);
+        } finally {
+            lock.unlock();
         }
         components.addBean(ScannedTypes.class)
                 .type(ScannedTypes.class)

@@ -184,8 +184,9 @@ java -jar heisenberg-bench/target/benchmarks.jar
   `<className>/<AnnotationName>/<parameter>` >
   `<AnnotationName>/<parameter>`.
   Resolution through `ConfigProvider.getConfig()` (Ravel in the Vidocq ecosystem).
-- Policy composition order (§2.5) from outermost to innermost:
-  `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → method.
+- Policy composition order, from outermost to innermost (it follows from the "Interactions" sections
+  of the spec; BUG-20261123-51):
+  `@Fallback` → `@Retry` → `@CircuitBreaker` → `@Timeout` → `@Bulkhead` → method.
   Follow this order strictly in `PolicyComposer`.
 - `@Asynchronous` changes the return type: `CompletionStage<T>` or `Future<T>`.
   Execution is done through `Executors.newVirtualThreadPerTaskExecutor()` — no platform pool.

@@ -73,8 +73,9 @@ public class ScannedTypesCreator implements SyntheticBeanCreator<ScannedTypes> {
     }
 
     /**
-     * Adds the classes grimm-processor listed for their {@code @OpenAPIDefinition}: in {@code annotated} discovery
-     * mode an {@code Application} subclass is no bean, so the extension never sees it (BUG-20261030-02).
+     * Adds the classes grimm-processor listed for their {@code @OpenAPIDefinition} or {@code @ApplicationPath}: in
+     * {@code annotated} discovery mode an {@code Application} subclass is no bean, so the extension never sees it
+     * (BUG-20261030-02, BUG-20261123-49).
      */
     private static void addDefinitionClasses(ClassLoader loader, Set<Class<?>> classes) {
         try {
