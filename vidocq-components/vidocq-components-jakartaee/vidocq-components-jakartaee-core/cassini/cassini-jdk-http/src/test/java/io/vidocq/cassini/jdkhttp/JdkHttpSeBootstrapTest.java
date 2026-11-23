@@ -160,6 +160,39 @@ class JdkHttpSeBootstrapTest {
         }
     }
 
+    /**
+     * The configured host reaches the server (BUG-20261123-63): {@code host("0.0.0.0")} listens on every address,
+     * and the instance reports that host. The server listened on {@code 127.0.0.1} whatever the host.
+     */
+    @Test
+    void the_configured_host_is_the_address_the_server_listens_on() throws Exception {
+        SeBootstrap.Configuration config = SeBootstrap.Configuration.builder()
+                .host("0.0.0.0").port(SeBootstrap.Configuration.FREE_PORT).build();
+        SeBootstrap.Instance instance = start(new PlainApplication(), config);
+        try {
+            InetSocketAddress bound = instance.unwrap(HttpServer.class).getAddress();
+            assertTrue(bound.getAddress().isAnyLocalAddress(), "listens on " + bound);
+            assertEquals("0.0.0.0", instance.configuration().host());
+            assertEquals(HELLO, get(instance, "/hello"));
+        } finally {
+            stop(instance);
+        }
+    }
+
+    /** The default host, {@code localhost}, keeps a given port on the loopback address of {@code 127.0.0.1}. */
+    @Test
+    void the_default_host_keeps_a_given_port_on_the_loopback_address() throws Exception {
+        SeBootstrap.Configuration config = SeBootstrap.Configuration.builder()
+                .port(nextEphemeralLoopbackPort()).build();
+        SeBootstrap.Instance instance = start(new PlainApplication(), config);
+        try {
+            assertEquals(LOOPBACK, instance.unwrap(HttpServer.class).getAddress().getAddress().getHostAddress());
+            assertEquals("localhost", instance.configuration().host());
+        } finally {
+            stop(instance);
+        }
+    }
+
     /** No port at all ({@code DEFAULT_PORT}) is served on a free port too, and reported as such. */
     @Test
     void without_a_port_the_instance_listens_on_a_free_loopback_port() throws Exception {
