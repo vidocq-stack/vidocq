@@ -62,9 +62,22 @@ public final class JdkHttpRuntimeDelegate extends CassiniRuntimeDelegate {
 
     private static final class JdkSeBootstrapInstance implements SeBootstrap.Instance {
         private static final String LOOPBACK = "127.0.0.1";
+        private static final String LOCALHOST = "localhost";
 
         private final SeBootstrap.Configuration config;
         private final HttpServer server;
+        private final String host;
+
+        /** The requested host, or {@code localhost} (the default of Jakarta REST §5.2) when none is requested. */
+        private static String hostOf(SeBootstrap.Configuration requested) {
+            return requested.property(SeBootstrap.Configuration.HOST) instanceof String h && !h.isBlank()
+                    ? h : LOCALHOST;
+        }
+
+        /** The address the server binds for {@code host}: {@code localhost} is {@code 127.0.0.1}, any other as given. */
+        private static String bindAddressOf(String host) {
+            return LOCALHOST.equalsIgnoreCase(host) ? LOOPBACK : host;
+        }
 
         JdkSeBootstrapInstance(Application application, SeBootstrap.Configuration requested) {
             Object p = requested.property(SeBootstrap.Configuration.PORT);
@@ -72,12 +85,14 @@ public final class JdkHttpRuntimeDelegate extends CassiniRuntimeDelegate {
             try {
                 var stack = CassiniStack.builder().application(application).build();
                 var adapter = new JdkHttpAdapter(stack.adapter());
-                // No port, or FREE_PORT: the server binds a free port itself, on the loopback address of the
-                // "localhost" the configuration reports (CASSINI-049). A port picked beforehand could be taken
-                // before the bind. And on macOS a bind of every address, even on port 0, can land beside a
-                // listener on 127.0.0.1, which then keeps the clients of 127.0.0.1.
-                this.server = port > 0 ? adapter.serve(port)
-                        : adapter.serve(new InetSocketAddress(LOOPBACK, SeBootstrap.Configuration.FREE_PORT));
+                // No port, or FREE_PORT: the server binds a free port itself (CASSINI-049). A port picked
+                // beforehand could be taken before the bind. The address is the configured host: "localhost", the
+                // default, is the loopback address of 127.0.0.1, since on macOS a bind of every address, even on
+                // port 0, can land beside a listener on 127.0.0.1, which then keeps the clients of 127.0.0.1; any
+                // other host is bound as given, 0.0.0.0 on every address (BUG-20261123-63).
+                this.host = hostOf(requested);
+                this.server = adapter.serve(new InetSocketAddress(bindAddressOf(host),
+                        port > 0 ? port : SeBootstrap.Configuration.FREE_PORT));
             } catch (java.io.IOException e) {
                 throw new java.io.UncheckedIOException(e);
             }
@@ -90,7 +105,7 @@ public final class JdkHttpRuntimeDelegate extends CassiniRuntimeDelegate {
                 if (v != null) effective.put(k, v);
             }
             effective.put(SeBootstrap.Configuration.PORT, actualPort);
-            effective.put(SeBootstrap.Configuration.HOST, "localhost");
+            effective.put(SeBootstrap.Configuration.HOST, host);
             this.config = new SeBootstrap.Configuration() {
                 final java.util.Map<String, Object> props = java.util.Map.copyOf(effective);
                 @Override public Object property(String name) { return props.get(name); }

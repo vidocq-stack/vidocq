@@ -1179,6 +1179,21 @@ The 500 is empty, and the log line names the exception's class only, with a mess
 - **Fix**: the server binds the requested host; `localhost`, the default of Jakarta REST §5.2, stays the loopback
   address `127.0.0.1` (the clients of `localhost` and `127.0.0.1` reach it whatever the name resolves to first, as
   CASSINI-049 requires for a free port). The instance's configuration reports the requested host.
-  `ChappeSeBootstrapTest.the_default_host_listens_on_the_loopback_address` keeps the default. The JDK transport
-  (`JdkHttpRuntimeDelegate`) is unchanged: it still listens on `127.0.0.1` for a free port and on every address for a
-  given port, as the reference page states.
+  `ChappeSeBootstrapTest.the_default_host_listens_on_the_loopback_address` keeps the default. The JDK transport had
+  the same fault: BUG-20261123-63.
+
+## BUG-20261123-63 — `SeBootstrap` on the JDK transport ignores the configured host
+
+- **Date**: 2026-11-23 — **Status**: FIXED (pending commit)
+- **Severity**: medium. Found while fixing BUG-20261123-52.
+- **Symptom**: with the JDK transport (`JdkHttpRuntimeDelegate`), `host("0.0.0.0")` has no effect: the server listens
+  on `127.0.0.1` for a free port, and on every address for a port it is given, whatever the host; the instance's
+  configuration reports `localhost`.
+- **Minimal repro**: `JdkHttpSeBootstrapTest.the_configured_host_is_the_address_the_server_listens_on` (listened on
+  `/127.0.0.1`) and `the_default_host_keeps_a_given_port_on_the_loopback_address` (listened on every address). Both
+  red before the fix.
+- **Cause**: `JdkSeBootstrapInstance` never read `SeBootstrap.Configuration.HOST`: a free port was bound on
+  `127.0.0.1`, a given port through `JdkHttpAdapter.serve(int)`, on every address.
+- **Fix**: the server binds the requested host for either kind of port, `localhost` being `127.0.0.1` as on the
+  Chappe transport, and the instance reports the requested host. `JdkHttpAdapter.serve(int)`, which applications
+  call directly, is unchanged.
