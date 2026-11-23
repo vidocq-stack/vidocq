@@ -37,8 +37,12 @@ import java.util.List;
 @Produces(MediaType.APPLICATION_JSON)
 public class AuthorResource {
 
+    private final Library library;
+
     @Inject
-    Library library;
+    public AuthorResource(Library library) {
+        this.library = library;
+    }
 
     @GET
     public List<AuthorView> list() {

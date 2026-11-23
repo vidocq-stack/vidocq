@@ -22,6 +22,11 @@
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
         <gpg.skip>true</gpg.skip>
+        <!-- SonarQube: no coverage gate on the examples, as vidocq-runtime/pom.xml intends with
+             **/vidocq-runtime-examples/**. That pattern never matches an example's own files: the scanner reads it
+             in each example module, against paths relative to the module (src/main/java/...). An example's tests
+             mostly start it in another JVM (@VidocqTest), which JaCoCo does not measure. Issues are still reported. -->
+        <sonar.coverage.exclusions>**/*</sonar.coverage.exclusions>
     </properties>
 
     <modules>

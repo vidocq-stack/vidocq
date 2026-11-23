@@ -42,8 +42,12 @@ import java.util.List;
 @Consumes(MediaType.APPLICATION_JSON)
 public class BookResource {
 
+    private final Library library;
+
     @Inject
-    Library library;
+    public BookResource(Library library) {
+        this.library = library;
+    }
 
     @GET
     public List<BookView> list() {
