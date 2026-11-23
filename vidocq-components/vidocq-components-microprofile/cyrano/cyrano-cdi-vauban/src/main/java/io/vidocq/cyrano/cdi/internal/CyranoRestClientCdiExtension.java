@@ -19,6 +19,7 @@
  */
 package io.vidocq.cyrano.cdi.internal;
 
+import io.vidocq.vauban.api.ExtensionPhase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.RequestScoped;
@@ -103,8 +104,11 @@ public class CyranoRestClientCdiExtension implements BuildCompatibleExtension {
         String baseUri = stringMember(anno, "baseUri");
         String configKey = stringMember(anno, "configKey");
         String annotationScope = detectScopeAnnotation(info);
-        //§5 / §6.3 — scope can be overridden by MP Config: <fqn>/mp-rest/scope or <configKey>/mp-rest/scope
-        String configScope = resolveConfigScope(info.name(), configKey);
+        //§5 / §6.3 — scope can be overridden by MP Config: <fqn>/mp-rest/scope or <configKey>/mp-rest/scope.
+        //The key belongs to the configuration the application starts with (BUG-20261123-47): asking whether this
+        //runs at build is what makes Vauban run the extension again at each start of a frozen application, and the
+        //build, which reads the build machine's configuration, keeps the scope of the interface.
+        String configScope = runsAtBuildTime() ? null : resolveConfigScope(info.name(), configKey);
         String scope = configScope != null ? configScope : annotationScope;
 
         discovered.putIfAbsent(info.name(), new DiscoveredInterface(info, info.name(), baseUri, configKey, scope));
@@ -143,6 +147,22 @@ public class CyranoRestClientCdiExtension implements BuildCompatibleExtension {
     }
 
     // --- helpers ----------------------------------------------------------
+
+    /**
+     * Whether Vauban runs this extension while the application compiles. Asking is also what makes Vauban run the
+     * extension again when the container starts, where {@code <interface>/mp-rest/scope} is read.
+     *
+     * <p>{@code vauban-api} is optional here: on another container, or with a version of it older than
+     * {@code ExtensionPhase}, no Vauban build runs the extension; the container does, when it deploys the
+     * application.
+     */
+    private static boolean runsAtBuildTime() {
+        try {
+            return ExtensionPhase.isBuildTime();
+        } catch (NoClassDefFoundError _) {
+            return false;
+        }
+    }
 
     private static AnnotationInfo findAnnotation(ClassInfo info, String fqn) {
         for (AnnotationInfo ai : info.annotations()) {

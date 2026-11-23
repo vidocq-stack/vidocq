@@ -516,7 +516,8 @@ proxy shares its client's instantiator. Containers other than Vauban go through 
 ## BUG-20261123-47 — `<interface>/mp-rest/scope` set at start is ignored in a frozen application
 
 - **Opened**: 2026-11-23
-- **Status**: OPEN — the design waits for the maintainer
+- **Status**: FIXED (pending commit) — option 2, chosen by the maintainer on 2026-11-23: an application started
+  with `-D` must see the key. The study of start-time configuration against frozen extensions is Vidocq/vidocq#763.
 
 ### Symptom
 
@@ -553,6 +554,20 @@ specification makes it a configuration value, which belongs to the start.
 3. **Document the limitation** (what this change does in `reference.adoc`), keep the behaviour.
 
 Options 1 and 3 can be combined: 3 now, 1 as the fix.
+
+### Fix
+
+Option 2. `discoverRegisterRestClient` asks `ExtensionPhase.isBuildTime()` (through `runsAtBuildTime()`, which
+answers `false` without `vauban-api`, as Heisenberg's `InterceptorPriorityExtension`). Vauban therefore runs the
+extension again at each start of a frozen application, where the key is read; at build the key is not read, and the
+frozen record keeps the scope of the interface. The whole extension reruns, not a class of its own: the scope is
+given when `@Synthesis` registers the bean, so the registration has to run where the key is read. Cost: the
+`@RegisterRestClient` scan of the deployment at each start.
+
+`CyranoScopeConfigAtStartTest`: `scopeKeySetAtStartAppliesWhenTheStartReadsAFrozenRecord` is enabled, and checks
+that `ranAtStart()` lists the extension (red before the fix: the list was empty);
+`withoutAScopeKeyAFrozenRecordKeepsTheScopeOfTheInterface` checks the frozen case without a key, with a single bean.
+`reference.adoc` documents the behaviour in place of the limitation.
 
 ### Client proxies of an `@ApplicationScoped` client (checked with this entry)
 

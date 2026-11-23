@@ -164,7 +164,7 @@ All keys follow the `<key>/mp-rest/<attribute>` pattern, where `<key>` is either
 | Full base URI. High priority (wins over `url`).
 
 | `<key>/mp-rest/scope`
-| CDI scope of the synthesised bean (`jakarta.enterprise.context.Dependent` by default, spec §6.3; a scope annotation on the interface or this key overrides it). Known limitation (BUG-20261123-47): the key is read while the build compatible extensions run. In an application packaged by Vidocq they run at build, so the value the build sees (`META-INF/microprofile-config.properties` of the application, the build machine's environment) is the one that counts; a value set when the application starts, by an environment variable or a system property, is ignored. Under `vidocq:dev` and in tests the extensions run at start and the key applies. Put the scope on the interface, or in the application's `microprofile-config.properties`.
+| CDI scope of the synthesised bean (`jakarta.enterprise.context.Dependent` by default, spec §6.3; a scope annotation on the interface or this key overrides it). The key belongs to the configuration the application starts with: a value set by an environment variable, a system property or a config source of the start applies, in a packaged application too [.tag-new]#NEW#. For that, Cyrano's build compatible extension runs again at each start of an application whose build froze the extensions (the startup report lists it among the extensions run at start); the build, which reads the build machine's configuration, keeps the scope of the interface. Before, the build's value was the one that counted (BUG-20261123-47).
 
 | `<key>/mp-rest/providers`
 | Comma-separated list of provider FQNs.

@@ -22,10 +22,10 @@ package io.vidocq.cyrano.cdi.internal;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.spi.Bean;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -43,9 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * of the client bean. The start's configuration decides it: a key set when the application starts applies, whether
  * the start runs the extensions or reads the record a build froze (Vidocq/vauban#288).
  *
- * <p>BUG-20261123-47: {@link CyranoRestClientCdiExtension} reads the key in its {@code @Enhancement} phase, so a
- * frozen build keeps the value of the build machine, and a key set at start is ignored. The frozen case is disabled
- * until the maintainer picks a design (options in {@code BUG.md}); it fails on the current code.</p>
+ * <p>BUG-20261123-47: {@link CyranoRestClientCdiExtension} read the key in its {@code @Enhancement} phase, so a
+ * frozen build kept the value of the build machine, and a key set at start was ignored. The extension now asks
+ * {@code ExtensionPhase.isBuildTime()}, which makes Vauban run it again at each start of a frozen application.</p>
  */
 class CyranoScopeConfigAtStartTest {
 
@@ -91,14 +91,24 @@ class CyranoScopeConfigAtStartTest {
     }
 
     @Test
-    @Disabled("BUG-20261123-47 (OPEN): the scope key is read at build; the design waits for the maintainer")
     void scopeKeySetAtStartAppliesWhenTheStartReadsAFrozenRecord() {
         var outcome = deployment().freezeExtensions(output);
         assertTrue(outcome.frozen(), outcome.reason());
         System.setProperty(SCOPE_KEY, ApplicationScoped.class.getName());
         try (var container = deployment().build()) {
             assertTrue(container.extensionsAtStart().frozen(), "frozen");
+            assertTrue(container.extensionsAtStart().ranAtStart().contains(CyranoRestClientCdiExtension.class.getName()),
+                    () -> "Cyrano's extension runs again at start: " + container.extensionsAtStart().ranAtStart());
             assertEquals(ApplicationScoped.class, clientScope(container));
+        }
+    }
+
+    @Test
+    void withoutAScopeKeyAFrozenRecordKeepsTheScopeOfTheInterface() {
+        var outcome = deployment().freezeExtensions(output);
+        assertTrue(outcome.frozen(), outcome.reason());
+        try (var container = deployment().build()) {
+            assertEquals(Dependent.class, clientScope(container));
         }
     }
 }
