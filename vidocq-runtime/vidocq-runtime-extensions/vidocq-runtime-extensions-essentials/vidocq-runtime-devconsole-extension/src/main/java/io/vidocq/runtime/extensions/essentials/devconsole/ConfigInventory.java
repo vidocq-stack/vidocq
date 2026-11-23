@@ -164,10 +164,7 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
         int found = 0;
         for (String key : keys) {
             for (ConfigSource source : lookup) {
-                String value = prefix.isEmpty() ? null : valueOf(source, prefix + key);
-                if (value == null) {
-                    value = valueOf(source, key);
-                }
+                String value = profiledValueOf(source, prefix, key);
                 if (value != null) {
                     found++;
                     if (rows.size() < MAX_ROWS) {
@@ -179,6 +176,15 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
             }
         }
         return found;
+    }
+
+    /**
+     * The value {@code source} has for {@code prefix + key} when a profile is active, else for {@code key};
+     * {@code null} when it has neither.
+     */
+    private static String profiledValueOf(ConfigSource source, String prefix, String key) {
+        String value = prefix.isEmpty() ? null : valueOf(source, prefix + key);
+        return value != null ? value : valueOf(source, key);
     }
 
     /** The value {@code source} has for {@code key}, {@code null} when it has none or cannot read it. */
