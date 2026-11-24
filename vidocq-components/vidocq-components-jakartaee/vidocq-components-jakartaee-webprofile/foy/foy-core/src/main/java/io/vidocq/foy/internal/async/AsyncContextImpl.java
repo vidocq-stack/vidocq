@@ -130,9 +130,9 @@ public final class AsyncContextImpl implements AsyncContext {
     @Override public boolean hasOriginalRequestAndResponse() { return originalRequestAndResponse; }
 
     @Override public void dispatch() {
-        // §2.3.3.3 : zero-arg dispatch => URI originale (avec queryString) de la request
-        // qui a appelé startAsync. Le TCK peut wrapper la request via ServletRequestWrapper
-        // (non-Http), on doit unwrap jusqu'au HttpServletRequest sous-jacent.
+        // §2.3.3.3: zero-arg dispatch => original URI (with queryString) of the request
+        // that called startAsync. The TCK may wrap the request in a ServletRequestWrapper
+        // (non-Http), so it must be unwrapped down to the underlying HttpServletRequest.
         jakarta.servlet.http.HttpServletRequest h = unwrapHttp(request);
         String path = null;
         String qs = null;

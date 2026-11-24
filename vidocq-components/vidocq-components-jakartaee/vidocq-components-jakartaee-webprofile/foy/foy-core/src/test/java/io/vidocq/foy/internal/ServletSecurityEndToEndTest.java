@@ -106,11 +106,11 @@ class ServletSecurityEndToEndTest {
         HttpResponse<String> bad = get("/admin", "alice:wrong");
         assertEquals(401, bad.statusCode());
 
-        // Utilisateur sans le rôle admin → 403
+        // User without the admin role → 403
         HttpResponse<String> forbidden = get("/admin", "bob:b-secret");
         assertEquals(403, forbidden.statusCode());
 
-        // Admin autorisé → 200
+        // Admin allowed → 200
         HttpResponse<String> ok = get("/admin", "alice:a-secret");
         assertEquals(200, ok.statusCode());
         assertEquals("admin:alice", ok.body());

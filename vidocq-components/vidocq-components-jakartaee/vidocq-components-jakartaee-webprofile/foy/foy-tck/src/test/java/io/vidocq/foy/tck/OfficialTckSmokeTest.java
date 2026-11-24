@@ -28,9 +28,9 @@ import org.junit.jupiter.api.Disabled;
  * <p>Activate via: {@code mvn -Ptck-official -Dtest.official.tck=true -Dtest=OfficialTckSmokeTest verify}.
  * Without the profile, the TCK classes are not on the classpath and compilation skips.</p>
  */
-@Disabled("Activation manuelle — voir README M3 TCK officiel")
+@Disabled("Run by hand: see the README, official TCK (M3)")
 public class OfficialTckSmokeTest {
-    // Les tests sont les classes *Tests du jar jakarta.tck:servlet-tck-runtime.
-    // Surefire les découvre automatiquement avec <includes>**/*Tests.class</includes>.
-    // Ce fichier sert de sentinelle pour documenter l'entrée.
+    // The tests are the *Tests classes of the jakarta.tck:servlet-tck-runtime jar.
+    // Surefire discovers them automatically with <includes>**/*Tests.class</includes>.
+    // This file is a sentinel that documents the entry point.
 }

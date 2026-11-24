@@ -250,8 +250,8 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         return sb;
     }
     @Override public String getContextPath() {
-        // Servlet 6.1 §3.5 : pour le root context "/", getContextPath() doit
-        // retourner une chaîne vide. Pour "/foo", retourner "/foo".
+        // Servlet 6.1 §3.5: for the root context "/", getContextPath() must
+        // return an empty string. For "/foo", return "/foo".
         return "/".equals(contextPath) ? "" : contextPath;
     }
     /** Slice of the canonical, decoded request path (section 3.5.2). */
@@ -297,7 +297,7 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
     @Override public long getDateHeader(String name) {
         String v = getHeader(name);
         if (v == null) return -1;
-        // Servlet 6.1 §3.4 : supporte RFC 7231 IMF-fixdate + formats hérités RFC 850/ANSI-C.
+        // Servlet 6.1 §3.4: supports RFC 7231 IMF-fixdate + the legacy RFC 850/ANSI-C formats.
         try {
             return java.time.ZonedDateTime.parse(v, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
                     .toInstant().toEpochMilli();
@@ -1388,7 +1388,7 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
 
     public void bindResponse(jakarta.servlet.http.HttpServletResponse res) {
         this.boundResponse = res;
-        // Permet à la response de reconstruire une URL absolue pour sendRedirect(path).
+        // Lets the response rebuild an absolute URL for sendRedirect(path).
         if (res instanceof HttpServletResponseImpl impl) impl.bindRequest(this);
     }
     public io.vidocq.foy.internal.async.AsyncContextImpl asyncContextInternal() { return asyncContext; }
@@ -1414,8 +1414,8 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         return startAsync(this, boundResponse);
     }
     @Override public AsyncContext startAsync(jakarta.servlet.ServletRequest req, ServletResponse res) {
-        // Servlet 6.1 §2.3.3.1 : startAsync doit throw IllegalStateException si la request
-        // n'est pas éligible (servlet ou filtre de la chaîne en asyncSupported=false).
+        // Servlet 6.1 §2.3.3.1: startAsync must throw IllegalStateException if the request
+        // is not eligible (a servlet or filter of the chain with asyncSupported=false).
         if (!asyncSupported) {
             throw new IllegalStateException(
                     "async not supported on this servlet/filter chain");
@@ -1423,9 +1423,9 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         // The bridge drives async cycles before the error handling: a cycle opened by an error page
         // would never run (BUG-20261013-04).
         if (dispatcherType == DispatcherType.ERROR) throw new IllegalStateException("startAsync() in an error page");
-        // §2.3.3.1 : startAsync doit throw ISE si un async est déjà en place sur
-        // cette request (completed OU dispatched OU en cours). Le bridge reset
-        // explicitement via clearAsyncContext() avant un ré-invoke ASYNC.
+        // §2.3.3.1: startAsync must throw ISE if an async cycle is already in place on
+        // this request (completed OR dispatched OR in progress). The bridge resets it
+        // explicitly through clearAsyncContext() before an ASYNC re-invocation.
         if (asyncContext != null) {
             throw new IllegalStateException("async already started on this request");
         }
@@ -1453,10 +1453,10 @@ public final class HttpServletRequestImpl implements HttpServletRequest {
         return started;
     }
     @Override public boolean isAsyncStarted() {
-        // §2.3.3.3 : true tant que le servlet (ou son dispatch) est encore en cours —
-        // reste true après un complete() pendant la fin du service(). Le flag bascule
-        // à false dès qu'un dispatch est planifié (le request original cède sa place
-        // au servlet redispatched, cf. TCK asyncStartedTest4).
+        // §2.3.3.3: true while the servlet (or its dispatch) is still running —
+        // stays true after a complete() during the rest of service(). The flag turns
+        // false as soon as a dispatch is scheduled (the original request gives way
+        // to the redispatched servlet, see TCK asyncStartedTest4).
         // Once the container completed a timed-out or failed cycle (error dispatch), async is over.
         return asyncContext != null && !asyncContext.hasDispatch() && !asyncContext.containerCompleted();
     }

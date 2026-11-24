@@ -40,7 +40,7 @@ import jakarta.enterprise.inject.spi.BeanManager;
  *
  * <p>Deeper integration (via SPI {@code BeanProvider} of
  * foy-api) will be introduced in M2 to allow discovery by
- * {@code ServiceLoader} et l'auto-configuration.</p>
+ * {@code ServiceLoader} and auto-configuration.</p>
  */
 public final class FoyVaubanBootstrap {
 

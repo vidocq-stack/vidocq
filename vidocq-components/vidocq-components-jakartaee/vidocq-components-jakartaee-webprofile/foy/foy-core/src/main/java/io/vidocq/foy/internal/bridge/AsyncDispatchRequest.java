@@ -82,6 +82,6 @@ public final class AsyncDispatchRequest extends HttpServletRequestWrapper {
     @Override public StringBuffer getRequestURL() { return new StringBuffer(RequestUrls.of(this)); }
 
     DispatchTarget target() { return target; }
-    // §2.3.3.3 : isAsyncStarted reste géré par la request originale
-    // (false si consommé par dispatch, true si re-startAsync).
+    // §2.3.3.3: isAsyncStarted stays handled by the original request
+    // (false if consumed by a dispatch, true on a new startAsync).
 }

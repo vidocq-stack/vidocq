@@ -78,7 +78,7 @@ public final class VidocqSessionCookieConfig implements SessionCookieConfig {
     @Override public boolean isHttpOnly() { return httpOnly; }
     @Override public void setHttpOnly(boolean httpOnly) { checkNotInitialized(); this.httpOnly = httpOnly; }
 
-    // Methods deprecated in Servlet 6.0 mais toujours dans l'API.
+    // Methods deprecated in Servlet 6.0 but still in the API.
     @SuppressWarnings("deprecation")
     @Override public String getComment() { return null; }
     @SuppressWarnings("deprecation")

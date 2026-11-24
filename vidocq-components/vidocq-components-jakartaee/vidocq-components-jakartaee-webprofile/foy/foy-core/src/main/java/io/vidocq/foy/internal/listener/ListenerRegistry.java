@@ -209,8 +209,8 @@ public final class ListenerRegistry {
         var vctx = ctx instanceof io.vidocq.foy.internal.container.VidocqServletContext v ? v : null;
         if (vctx != null) vctx.setContextInitializedPhase(true);
         try {
-            // Copie défensive : un listener peut ajouter programmatiquement d'autres
-            // listeners pendant son contextInitialized.
+            // Defensive copy: a listener may programmatically add other
+            // listeners during its contextInitialized.
             for (var l : new ArrayList<>(contextListeners)) {
                 boolean prog = isProgrammatic(l);
                 if (prog && vctx != null) {

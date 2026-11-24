@@ -183,7 +183,7 @@ public final class VidocqServletContext implements ServletContext {
         if (locale == null) return null;
         String lang = locale.getLanguage();
         String country = locale.getCountry();
-        // 1) Mappings explicites du web.xml (§14.4) — prioritaires.
+        // 1) Explicit web.xml mappings (§14.4) — take precedence.
         if (!localeEncodingMappings.isEmpty()) {
             if (country != null && !country.isEmpty()) {
                 String full = lang + "-" + country.toLowerCase(java.util.Locale.ROOT);
@@ -193,7 +193,7 @@ public final class VidocqServletContext implements ServletContext {
             String v = localeEncodingMappings.get(lang);
             if (v != null) return v;
         }
-        // 2) Défauts du conteneur (table alignée avec Tomcat / Servlet 6.1).
+        // 2) Container defaults (table aligned with Tomcat / Servlet 6.1).
         return DEFAULT_LOCALE_ENCODINGS.get(lang);
     }
 
@@ -717,7 +717,7 @@ public final class VidocqServletContext implements ServletContext {
         // application always resolves (its "/" servlet or the container default servlet, which
         // answers 404 for a missing resource); notFound only serves a bridge built without one.
         if (path == null) return null;
-        if (!path.startsWith("/")) return null; // doit être absolu dans le contexte
+        if (!path.startsWith("/")) return null; // must be absolute within the context
         if (dispatchResolver == null || dispatchInvoker == null) return null;
         // The path is context-relative: it is never stripped of a context-path prefix.
         String tmp = path;
@@ -804,7 +804,7 @@ public final class VidocqServletContext implements ServletContext {
     }
 
     @Override public Object getAttribute(String name) {
-        // Servlet 6.1 §4.0 : NullPointerException sur name null.
+        // Servlet 6.1 §4.0: NullPointerException on a null name.
         if (name == null) throw new NullPointerException("name is null");
         return attributes.get(name);
     }
@@ -831,9 +831,9 @@ public final class VidocqServletContext implements ServletContext {
     @Override public String getServletContextName() { return servletContextName; }
 
     // ---- Dynamic registration — not supported in M2a ----
-    // Servlet 6.1 §4.4 : après initialisation du contexte, ces méthodes doivent throw
-    // IllegalStateException. Avant initialisation, elles throw UnsupportedOperationException
-    // tant que la feature n'est pas implémentée.
+    // Servlet 6.1 §4.4: after the context is initialized, these methods must throw
+    // IllegalStateException. Before initialization, they throw UnsupportedOperationException
+    // as long as the feature is not implemented.
 
     @Override public ServletRegistration.Dynamic addServlet(String name, String className) {
         if (programmaticListenerActive) throw programmaticForbidden();
@@ -868,7 +868,7 @@ public final class VidocqServletContext implements ServletContext {
     @Override public ServletRegistration.Dynamic addJspFile(String name, String jspFile) {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        // §4.4 addJspFile : IllegalArgumentException si servletName null ou vide.
+        // §4.4 addJspFile: IllegalArgumentException if servletName is null or empty.
         requireNonEmptyName(name, SERVLET_NAME);
         if (dynamicServlets.containsKey(name) || reservedServletNames.contains(name)) return null;
         var application = jspApplication.get();
@@ -896,7 +896,7 @@ public final class VidocqServletContext implements ServletContext {
     }
     @Override public Map<String, ? extends ServletRegistration> getServletRegistrations() {
         if (programmaticListenerActive) throw programmaticForbidden();
-        // §4.4 : retourne *toutes* les ServletRegistration — web.xml + dynamiques.
+        // §4.4: returns *all* the ServletRegistrations — web.xml + dynamic ones.
         var merged = new java.util.LinkedHashMap<String, ServletRegistration>();
         merged.putAll(staticServlets);
         merged.putAll(dynamicServlets);
@@ -947,8 +947,8 @@ public final class VidocqServletContext implements ServletContext {
     }
 
     // ---- Listeners ----
-    // Servlet 6.1 §4.4 : addListener n'est autorisé que pendant l'initialisation
-    // (SCI.onStartup ou contextInitialized d'un listener non-programmatique).
+    // Servlet 6.1 §4.4: addListener is allowed only during initialization
+    // (SCI.onStartup or contextInitialized of a non-programmatic listener).
 
     @Override public void addListener(String className) {
         if (programmaticListenerActive) throw programmaticForbidden();
@@ -978,8 +978,8 @@ public final class VidocqServletContext implements ServletContext {
     @Override public <T extends java.util.EventListener> T createListener(Class<T> c) throws jakarta.servlet.ServletException {
         if (programmaticListenerActive) throw programmaticForbidden();
         if (initialized) throw alreadyInitialized();
-        // Servlet 6.1 §4.4 : seule une classe implémentant une interface reconnue
-        // peut être instanciée par createListener.
+        // Servlet 6.1 §4.4: only a class implementing a supported interface
+        // can be instantiated by createListener.
         if (!jakarta.servlet.ServletContextListener.class.isAssignableFrom(c)
                 && !jakarta.servlet.ServletContextAttributeListener.class.isAssignableFrom(c)
                 && !jakarta.servlet.ServletRequestListener.class.isAssignableFrom(c)
@@ -994,14 +994,14 @@ public final class VidocqServletContext implements ServletContext {
     }
 
     private boolean contextInitializedPhase;
-    /** Active/désactive la phase d'appel des {@code contextInitialized} des listeners
+    /** Turns on/off the phase that calls {@code contextInitialized} on the listeners
      *  declared (web.xml/@WebListener) — during this phase, addListener
-     *  d'un ServletContextListener doit throw IllegalArgumentException (§4.4). */
+     *  of a ServletContextListener must throw IllegalArgumentException (§4.4). */
     public void setContextInitializedPhase(boolean active) { this.contextInitializedPhase = active; }
 
     private void addProgrammaticListener(java.util.EventListener l) {
-        // Servlet 6.1 §4.4 : rejette un EventListener qui n'implémente aucune des
-        // interfaces écoute reconnues.
+        // Servlet 6.1 §4.4: rejects an EventListener that implements none of the
+        // supported listener interfaces.
         if (!(l instanceof jakarta.servlet.ServletContextListener
                 || l instanceof jakarta.servlet.ServletContextAttributeListener
                 || l instanceof jakarta.servlet.ServletRequestListener
@@ -1012,8 +1012,8 @@ public final class VidocqServletContext implements ServletContext {
             throw new IllegalArgumentException(
                     "listener " + l.getClass().getName() + " does not implement any supported listener interface");
         }
-        // §4.4 : addListener d'un ServletContextListener n'est autorisé que depuis
-        // un SCI.onStartup — jamais depuis un contextInitialized d'un autre SCL.
+        // §4.4: addListener of a ServletContextListener is allowed only from
+        // an SCI.onStartup — never from the contextInitialized of another SCL.
         if (contextInitializedPhase && l instanceof jakarta.servlet.ServletContextListener) {
             throw new IllegalArgumentException(
                     "ServletContextListener " + l.getClass().getName()
@@ -1066,8 +1066,8 @@ public final class VidocqServletContext implements ServletContext {
         if (initialized) throw alreadyInitialized();
         this.sessionTimeout = sessionTimeout;
     }
-    /** Setter interne (contourne les checks) — utilisé par le harness pour
-     *  propager la valeur de {@code <session-timeout>} du web.xml. */
+    /** Internal setter (bypasses the checks) — used by the harness to
+     *  propagate the {@code <session-timeout>} value of the web.xml. */
     public void setSessionTimeoutInternal(int minutes) { this.sessionTimeout = minutes; }
 
     private JspConfigDescriptor jspConfigDescriptor;

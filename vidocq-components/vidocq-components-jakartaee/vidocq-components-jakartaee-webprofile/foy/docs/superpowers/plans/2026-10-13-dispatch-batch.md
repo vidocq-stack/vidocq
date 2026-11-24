@@ -12,7 +12,7 @@
 
 **Tech Stack:** Java 25, Jakarta Servlet 6.1, JUnit 5, Maven 3.9.16, and the official Servlet 6.1 TCK through `run-official-tck-servlet6.1.sh`.
 
-**Spec:** the `BUG.md` entries listed above. Their "Hypothèse de cause" and fix directions are the requirements, except where a task rules differently (see "Rulings").
+**Spec:** the `BUG.md` entries listed above. Their "Suspected cause" and fix directions are the requirements, except where a task rules differently (see "Rulings").
 
 ## Global Constraints
 

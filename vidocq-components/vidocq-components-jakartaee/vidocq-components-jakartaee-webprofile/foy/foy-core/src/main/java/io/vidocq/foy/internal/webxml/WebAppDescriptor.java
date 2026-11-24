@@ -157,7 +157,7 @@ public final class WebAppDescriptor {
         return this;
     }
 
-    /** {@code <display-name>} du web.xml — exposé via {@link
+    /** {@code <display-name>} of the web.xml — exposed through {@link
      *  jakarta.servlet.ServletContext#getServletContextName()}. */
     private String displayName;
     public String displayName() { return displayName; }

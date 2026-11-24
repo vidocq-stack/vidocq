@@ -25,10 +25,10 @@ module io.vidocq.foy.core {
     requires java.xml;
     requires static java.net.http;
 
-    // Couplage transport HTTP temporaire (M1) : HttpServletRequestImpl,
-    // HttpServletResponseImpl, ServletOutputStreamImpl et ChappeServletBridge
-    // référencent encore directement chappe-api. À découpler en M2 via
-    // l'introduction d'une SPI FoyHttpExchange dans foy-api.
+    // Temporary HTTP transport coupling (M1): HttpServletRequestImpl,
+    // HttpServletResponseImpl, ServletOutputStreamImpl and ChappeServletBridge
+    // still reference chappe-api directly. To be decoupled in M2 by
+    // introducing a FoyHttpExchange SPI in foy-api.
     requires io.vidocq.chappe.api;
 
     uses io.vidocq.foy.spi.gen.WebComponent;

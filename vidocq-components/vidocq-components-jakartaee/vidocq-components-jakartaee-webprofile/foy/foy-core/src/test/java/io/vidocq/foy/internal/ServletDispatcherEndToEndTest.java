@@ -95,7 +95,7 @@ class ServletDispatcherEndToEndTest {
         };
         HttpServlet fragment = new HttpServlet() {
             @Override protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-                // Les setters d'état sont no-op dans l'IncludedResponse.
+                // The status setters are no-ops in the IncludedResponse.
                 resp.setStatus(999);
                 resp.setHeader("X-Ignored", "nope");
                 resp.getWriter().write(req.getAttribute("jakarta.servlet.include.servlet_path").toString()

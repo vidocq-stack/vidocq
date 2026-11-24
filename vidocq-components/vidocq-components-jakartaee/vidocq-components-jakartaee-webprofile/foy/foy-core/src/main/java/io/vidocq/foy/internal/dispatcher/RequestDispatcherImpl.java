@@ -105,7 +105,7 @@ public final class RequestDispatcherImpl implements io.vidocq.foy.spi.jsp.JspEng
                 }
             }
             @Override public void include(ServletRequest request, ServletResponse response) {
-                // Pas de contenu inclus — la cible n'existe pas.
+                // No included content — the target does not exist.
             }
         };
     }

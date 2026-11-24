@@ -94,12 +94,12 @@ public final class DynamicServletRegistration implements ServletRegistration.Dyn
     }
 
     @Override public Set<String> addMapping(String... urlPatterns) {
-        // Servlet 6.1 §4.4 / ServletRegistration.addMapping : si *un* pattern est déjà
-        // mappé à un autre servlet (web.xml ou autre dynamic), AUCUN update n'est fait
-        // et la méthode retourne l'ensemble des patterns en conflit.
+        // Servlet 6.1 §4.4 / ServletRegistration.addMapping: if *one* pattern is already
+        // mapped to another servlet (web.xml or another dynamic one), NO update is made
+        // and the method returns the set of conflicting patterns.
         Set<String> conflicts = new LinkedHashSet<>();
         for (String p : urlPatterns) {
-            if (mappings.contains(p)) continue; // déjà sur CE servlet : pas un conflit
+            if (mappings.contains(p)) continue; // already on THIS servlet: not a conflict
             if (owner != null && owner.isUrlPatternMappedElsewhere(name, p)) conflicts.add(p);
         }
         if (!conflicts.isEmpty()) return conflicts;

@@ -46,8 +46,8 @@ class CookieCodecTest {
 
     @Test
     void preservesQuotesAroundValue() {
-        // RFC 6265 : la valeur cookie peut être quoted-string ; côté serveur on
-        // préserve les guillemets (TCK CookieTests.getValueQuotedTest les attend).
+        // RFC 6265: the cookie value may be a quoted-string; on the server side the
+        // quotes are kept (TCK CookieTests.getValueQuotedTest expects them).
         var out = CookieCodec.parseCookieHeader("name=\"quoted-value\"");
         assertEquals("\"quoted-value\"", out.get(0).getValue());
     }

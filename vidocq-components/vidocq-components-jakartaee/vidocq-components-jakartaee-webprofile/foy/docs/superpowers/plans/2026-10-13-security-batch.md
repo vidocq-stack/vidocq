@@ -15,7 +15,7 @@
 
 **Tech Stack:** Java 25, Jakarta Servlet 6.1, JUnit 5, Maven 3.9.16 (`./mvnw`). foy-core tests run on the module path.
 
-**Spec:** the `BUG.md` entries named above. Each one is the requirement, including its "Fix envisagé" section, except where a task below decides differently. This plan argues from those entries.
+**Spec:** the `BUG.md` entries named above. Each one is the requirement, including its "Planned fix" section, except where a task below decides differently. This plan argues from those entries.
 
 ## Global Constraints
 
