@@ -105,7 +105,7 @@ jobs:
           echo "JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/zulu/bin" >> "$GITHUB_PATH"
 
-      - uses: https://codefloe.com/Vidocq/ci/release-maven@f79ddba722c722227e6d5b013d4b94a39c68009b
+      - uses: https://codefloe.com/Vidocq/ci/release-maven@7faa069e1cdfdfb0231398b3d47c7eab5d359bbd
         with:
           java-setup: 'false'
           maven-version: '3.10.0'
