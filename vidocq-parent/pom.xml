@@ -120,7 +120,10 @@
         <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
         <!-- Same version as the SBOM the CI writes for the dependency scan (Vidocq/ci sonar-analysis). -->
         <cyclonedx.maven.plugin.version>2.9.3</cyclonedx.maven.plugin.version>
-        <central.publishing.plugin.version>0.10.0</central.publishing.plugin.version>
+        <!-- 0.12.0 at least: older versions remove only maven-metadata-central-staging.xml from the
+             bundle, the name Maven 3.9 wrote. Maven 3.10 writes maven-metadata-local.xml and
+             _remote.repositories, which Central rejects as content without a .pom file. -->
+        <central.publishing.plugin.version>0.12.0</central.publishing.plugin.version>
         <!-- 3.1.1 pinned so that all releases (via Vidocq/ci/release-maven@v1)
              use a proven, stable version on Maven 3.9.x. -->
         <maven.release.plugin.version>3.1.1</maven.release.plugin.version>
