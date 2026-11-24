@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.kerckhoffs</groupId>
         <artifactId>kerckhoffs-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.5.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kerckhoffs-tck</artifactId>
@@ -19,9 +19,9 @@
         <!-- Never published: a TCK runner is not an artifact of the brick. -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <skipPublishing>true</skipPublishing>
-        <foy.version>0.4.0-SNAPSHOT</foy.version>
-        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <foy.version>0.5.0-SNAPSHOT</foy.version>
+        <chappe.version>0.5.0-SNAPSHOT</chappe.version>
+        <vauban.version>0.5.0-SNAPSHOT</vauban.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
         <shrinkwrap.version>1.2.6</shrinkwrap.version>
         <junit.version>5.10.2</junit.version>

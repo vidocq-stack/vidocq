@@ -22,13 +22,13 @@
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.5.0-SNAPSHOT</version>
         <relativePath>../../vidocq-parent/pom.xml</relativePath>
     </parent>
 
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-bom</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Vidocq Runtime BOM</name>
     <description>Versions of the Vidocq runtime artifacts an application declares</description>
@@ -46,369 +46,369 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devconsole-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-dev-agent</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-codegen-commons</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-config-keys</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-tooling</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-cli</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Essentials -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-crac-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-devconsole-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-migration-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-liquibase-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Jakarta EE core -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-peano-el-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Jakarta EE web -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-websocket-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-bodoni-jstl-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-naming-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-telemetry-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-noether-persistence-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-noether-persistence-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-noether-persistence-units</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-noether-persistence-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-kerckhoffs-security-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-kerckhoffs-security-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- MicroProfile -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cervantes-jwt-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-humboldt-telemetry-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Third-party libraries repackaged as named modules -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.module.repackaged</groupId>
                 <artifactId>vidocq-runtime-h2-module-repackaged</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Dev Services and test support -->
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-host</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-postgres</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-keycloak</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-otel</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-junit</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-junit</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-test-agent</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Components: the published modules of each stable brick, at the same version -->
@@ -416,589 +416,589 @@
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-cdi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-chappe</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-jdk-http</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-servlet</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-client</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-testing</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Champollion -->
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-jsonp</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-jsonb</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-jsonb-cdi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-jsonb-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-protobuf</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-protobuf-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-codegen-apt</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Vauban -->
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-classloader-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-weaver</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-classloader</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-webcontexts</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-indexer</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-naming</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-sjar</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-junit</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Bodoni -->
             <dependency>
                 <groupId>io.vidocq.bodoni</groupId>
                 <artifactId>bodoni-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.bodoni</groupId>
                 <artifactId>bodoni-peano</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Foy -->
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-chappe</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-websocket</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Ibarra -->
             <dependency>
                 <groupId>io.vidocq.ibarra</groupId>
                 <artifactId>ibarra-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ibarra</groupId>
                 <artifactId>ibarra-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ibarra</groupId>
                 <artifactId>ibarra-compiler</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ibarra</groupId>
                 <artifactId>ibarra-foy</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ibarra</groupId>
                 <artifactId>ibarra-arquillian</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Mansart -->
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-pool-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-pool-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-transactions-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-transactions-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-transactions-cdi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-transactions-jdbc</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-dialect-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-dialect-h2</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-dialect-postgresql</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.mansart</groupId>
                 <artifactId>mansart-data-cdi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Peano -->
             <dependency>
                 <groupId>io.vidocq.peano</groupId>
                 <artifactId>peano-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.peano</groupId>
                 <artifactId>peano-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.peano</groupId>
                 <artifactId>peano-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.peano</groupId>
                 <artifactId>peano-compiler</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Cervantes -->
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-mp-jwt-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-jaxrs</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Cyrano -->
             <dependency>
                 <groupId>io.vidocq.cyrano</groupId>
                 <artifactId>cyrano-mp-rest-client-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cyrano</groupId>
                 <artifactId>cyrano-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cyrano</groupId>
                 <artifactId>cyrano-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cyrano</groupId>
                 <artifactId>cyrano-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.cyrano</groupId>
                 <artifactId>cyrano-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Dirac -->
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-mp-metrics-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-rest</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Grimm -->
             <dependency>
                 <groupId>io.vidocq.grimm</groupId>
                 <artifactId>grimm-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.grimm</groupId>
                 <artifactId>grimm-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.grimm</groupId>
                 <artifactId>grimm-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Heisenberg -->
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-mp-ft-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Humboldt -->
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-otel-context</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-otel-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-otel-instrumentation-annotations</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-sdk-common</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-context</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-sdk-trace</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-propagator-w3c</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-exporter-otlp-http</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-sdk-metric</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-sdk-log</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-cdi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-rest</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-runtime</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-otel-interop</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Knock -->
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-mp-health-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-jaxrs</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Ravel -->
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-mp-config-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-cdi-vauban</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Chappe -->
             <dependency>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-api</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-http</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-cli</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- preview: usable and released, not complete or not certified (MONOREPO.md §3) -->
@@ -1006,75 +1006,75 @@
             <dependency>
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-authentication</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-authorization</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-cdi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-foy</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
 
             <!-- Noether -->
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-dialect-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-dialect-h2</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-dialect-postgresql</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-pool-mansart</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-processor</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-jta</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-jpa-cdi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
             <!-- A stopgap, not a conformant Validation provider: published because noether-jpa-core's tests use it. -->
             <dependency>
                 <groupId>io.vidocq.noether</groupId>
                 <artifactId>noether-validation-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.5.0-SNAPSHOT</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

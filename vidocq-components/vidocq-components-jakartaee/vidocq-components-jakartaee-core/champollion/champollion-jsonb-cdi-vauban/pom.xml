@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.vidocq.champollion</groupId>
         <artifactId>champollion-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.5.0-SNAPSHOT</version>
     </parent>
     <artifactId>champollion-jsonb-cdi-vauban</artifactId>
     <name>Champollion :: JSON-B CDI :: Vauban</name>
@@ -15,7 +15,7 @@
         it; Weld, Open Liberty or any other CDI container runs champollion-jsonb-cdi alone.</description>
     <properties>
         <!-- The Vauban API and container of this release line, as mansart-data-cdi pins them. -->
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.5.0-SNAPSHOT</vauban.version>
     </properties>
     <dependencies>
         <dependency>

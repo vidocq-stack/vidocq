@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.vidocq.noether</groupId>
         <artifactId>noether-it-other-containers</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.5.0-SNAPSHOT</version>
     </parent>
     <artifactId>noether-it-quarkus</artifactId>
     <name>Noether :: Quarkus integration test</name>
