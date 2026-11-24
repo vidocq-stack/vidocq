@@ -25,7 +25,7 @@
 
     <groupId>io.vidocq.noether</groupId>
     <artifactId>noether-jpa-tck</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Noether :: Jakarta Persistence 3.2 :: TCK runner</name>
@@ -39,7 +39,7 @@
         <maven.install.skip>true</maven.install.skip>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <noether.version>0.4.0-SNAPSHOT</noether.version>
+        <noether.version>${project.version}</noether.version>
         <tck.version>3.2.1</tck.version>
         <!-- Versions used by the TCK itself (persistence-tck-3.2.1.pom). -->
         <junit.version>5.11.4</junit.version>

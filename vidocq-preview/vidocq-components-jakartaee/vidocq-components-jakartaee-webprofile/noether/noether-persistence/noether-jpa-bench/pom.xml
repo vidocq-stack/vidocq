@@ -6,7 +6,7 @@
     <!-- Deliberately standalone and out of the Noether reactor. -->
     <groupId>io.vidocq.noether</groupId>
     <artifactId>noether-jpa-bench</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
     <name>Noether JPA comparative benchmark harness</name>
     <description>Isolated JMH harness; competing providers are benchmark-only dependencies.</description>
 
@@ -27,7 +27,7 @@
         -->
         <hibernate5.version>5.6.15.Final</hibernate5.version>
         <hibernate5.byte-buddy.version>1.17.8</hibernate5.byte-buddy.version>
-        <noether.version>0.4.0-SNAPSHOT</noether.version>
+        <noether.version>${project.version}</noether.version>
         <!-- run-bench.sh sets target/<provider> so each provider's clean leaves the others intact. -->
         <bench.build.directory>${project.basedir}/target</bench.build.directory>
     </properties>

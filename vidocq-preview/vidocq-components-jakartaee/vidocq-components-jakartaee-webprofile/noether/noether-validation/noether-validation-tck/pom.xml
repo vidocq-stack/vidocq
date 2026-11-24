@@ -19,7 +19,7 @@
 
     <groupId>io.vidocq.noether</groupId>
     <artifactId>noether-validation-tck</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Noether :: Validation :: TCK runner</name>
@@ -32,7 +32,7 @@
         <maven.deploy.skip>true</maven.deploy.skip>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <noether.version>0.4.0-SNAPSHOT</noether.version>
+        <noether.version>${project.version}</noether.version>
         <tck.version>3.1.1</tck.version>
         <validation.provider>io.vidocq.noether.validation.core.NoetherValidationProvider</validation.provider>
         <tck.suite.file>${project.build.directory}/dependency/validation-tck-tests-suite.xml</tck.suite.file>
