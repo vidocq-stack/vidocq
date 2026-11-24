@@ -35,7 +35,7 @@
     <parent>
         <groupId>io.vidocq.heisenberg</groupId>
         <artifactId>heisenberg-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0</version>
     </parent>
 
     <artifactId>heisenberg-tck</artifactId>
@@ -47,7 +47,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <humboldt.version>0.4.0-SNAPSHOT</humboldt.version>
+        <humboldt.version>0.4.0</humboldt.version>
     </properties>
 
     <repositories>
@@ -289,7 +289,7 @@
                 <dependency>
                     <groupId>io.vidocq.dirac</groupId>
                     <artifactId>dirac-cdi-vauban</artifactId>
-                    <version>0.4.0-SNAPSHOT</version>
+                    <version>0.4.0</version>
                     <scope>test</scope>
                 </dependency>
 

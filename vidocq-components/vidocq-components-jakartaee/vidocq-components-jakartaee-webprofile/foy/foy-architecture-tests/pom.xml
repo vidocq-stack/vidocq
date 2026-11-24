@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.foy</groupId>
         <artifactId>foy-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0</version>
     </parent>
 
     <artifactId>foy-architecture-tests</artifactId>
@@ -77,7 +77,7 @@
         <dependency>
             <groupId>io.vidocq</groupId>
             <artifactId>vidocq-archrules</artifactId>
-            <version>0.4.0-SNAPSHOT</version>
+            <version>0.4.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

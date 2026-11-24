@@ -24,7 +24,7 @@
     <parent>
         <groupId>io.vidocq.champollion</groupId>
         <artifactId>champollion-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0</version>
     </parent>
 
     <artifactId>champollion-tck</artifactId>
@@ -44,7 +44,7 @@
             The Vauban of this release line, as champollion-jsonb-cdi pins it: the container of the
             two CDI tests of the JSON-B TCK (jsonb-tck profile).
         -->
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.4.0</vauban.version>
 
         <!--
             Versions of the official Eclipse Foundation TCKs. Not published on
