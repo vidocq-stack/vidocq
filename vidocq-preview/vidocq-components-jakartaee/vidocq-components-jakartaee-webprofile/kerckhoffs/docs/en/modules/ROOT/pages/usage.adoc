@@ -64,7 +64,7 @@ login keeps nothing and goes to `errorPage` (default `/login-error`) the way the
 fails the deployment: only `useForwardToLogin` is read.
 
 [#custom-form]
-=== Custom FORM [.tag-new]#NEW#
+=== Custom FORM
 
 [source,java]
 ----
@@ -170,7 +170,7 @@ It is meant for tests, demos and debugging: the passwords are in the annotation.
 store. An unknown caller, a wrong password and a cleared credential are `INVALID`; the password is compared in
 constant time. A caller declared twice, a caller without a name, `priorityExpression` and `useForExpression` refuse
 the store, so the start fails. `priority` and `useFor` are read. Each in-memory store logs one `WARNING` at start
-[.tag-new]#NEW#, see xref:reference.adoc#in-memory-store-warning[The in-memory identity store warns at start].
+, see xref:reference.adoc#in-memory-store-warning[The in-memory identity store warns at start].
 
 [#application-stores]
 === Stores of the application
@@ -179,7 +179,7 @@ Any bean that implements `IdentityStore` is a store: an `@ApplicationScoped` one
 xref:getting-started.adoc[Getting started], or a `@RequestScoped` one (TCK `app-multiple-store-backup`).
 
 [#password-hash]
-=== Hashing passwords: `Pbkdf2PasswordHash` [.tag-new]#NEW#
+=== Hashing passwords: `Pbkdf2PasswordHash`
 
 A store of the application that keeps hashed passwords injects the built-in `Pbkdf2PasswordHash`. Each injection
 point gets its own instance; `initialize(Map)` takes the `Pbkdf2PasswordHash.*` parameters (`PBKDF2WithHmacSHA224`

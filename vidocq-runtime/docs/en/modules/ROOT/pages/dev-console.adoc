@@ -547,7 +547,7 @@ rows)` says how many rows the body holds, which a summary that counts rows says,
 another shape is shown as any other JSON.
 
 [#rows-menu]
-=== A menu on the selected rows [.tag-new]#NEW#
+=== A menu on the selected rows
 
 A result of rows can offer a menu on its rows, such as *Delete these rows* in a page of entities. The table then
 starts each row with a box to tick:
@@ -565,7 +565,7 @@ A panel writes the menu with `ActionResult.rowsWithMenu(summary, columns, rows, 
 xref:dev-console-panels.adoc#row-menu[A menu on the selected rows].
 
 [#graph-view]
-== A graph [.tag-new]#NEW#
+== A graph
 
 A result can be a graph, such as the entities of a persistence unit and their relations. The page lays it out as
 boxes and lines:

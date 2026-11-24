@@ -35,7 +35,7 @@ and unprefixed calls do not become qualified function references.
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | Literal/constant template compiler, build time only; Java Class-File API
 |===
 
-[[class-path-discovery]]**On a class path** [.tag-new]#NEW# — `peano-core` also lists its factory in `META-INF/services/jakarta.el.ExpressionFactory`. `ExpressionFactory.newInstance()` reads that file on a class path, where the `provides` of `module-info.java` is ignored. On the module path a named module ignores the file, and nothing changes.
+[[class-path-discovery]]**On a class path** — `peano-core` also lists its factory in `META-INF/services/jakarta.el.ExpressionFactory`. `ExpressionFactory.newInstance()` reads that file on a class path, where the `provides` of `module-info.java` is ignored. On the module path a named module ignores the file, and nothing changes.
 
 == Annotation processor discovery
 
@@ -417,7 +417,7 @@ that delegates every call to the contextual instance. A generated table serves i
 the proxy stands for (`AccessorTable.serves`). Vidocq provides the unwrapper for Vauban's proxies. Without one, the
 proxy falls through to the rest of the chain, as any subclass does.
 
-[[proxy-unwrapper-lifetime]]**How long an unwrapper stays** [.tag-new]#NEW# — an unwrapper is registered once per class and
+[[proxy-unwrapper-lifetime]]**How long an unwrapper stays** — an unwrapper is registered once per class and
 stays registered as long as the class loader of that class lives: one that an application jar brings leaves with the
 application layer at a hot reload of `vidocq dev`.
 

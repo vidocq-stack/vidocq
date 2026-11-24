@@ -820,7 +820,7 @@ read what the pom and `module-info.java` declare.
 
 [#doctor-keys]
 Last, `doctor` reads the xref:reference.adoc#configuration-key-descriptions[descriptions of configuration keys] the
-project and the jars it runs with ship, and checks `vidocq.properties` against them [.tag-new]#NEW#. Both checks
+project and the jars it runs with ship, and checks `vidocq.properties` against them. Both checks
 warn and never fail; xref:reference.adoc#key-descriptions-doctor[What the doctor checks] says what a value is
 compared with, and what is not checked.
 
@@ -917,7 +917,7 @@ vidocq update
 ----
 
 [#update-channel]
-==== Switching channel [.tag-new]#NEW#
+==== Switching channel
 
 Without an option, `vidocq update` stays on the channel of the installed CLI. `--release` and `--snapshot` switch
 explicitly, whatever is installed:

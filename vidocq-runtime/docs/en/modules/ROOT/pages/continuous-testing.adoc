@@ -105,7 +105,7 @@ One run at a time:
 A change stops the run in flight, and a Maven that is stopped while javac writes its classes leaves an output that
 looks whole: the classes of your sources are there, newer than the sources, and the ones javac writes last, of the
 sources an annotation processor generated, are missing. The next build then compiles nothing, and fails on the missing
-class until a source changes. Two rules keep a stopped run from leaving that behind [.tag-new]#NEW#:
+class until a source changes. Two rules keep a stopped run from leaving that behind:
 
 * In `vidocq:dev`, the recompile of the dev loop builds the main output, `target/classes`, and a test run does not.
   The run gets `-Dmaven.main.skip=true -Dmaven.resources.skip=true -Dvidocq.generate.skip=true`: it compiles no main
@@ -116,7 +116,7 @@ class until a source changes. Two rules keep a stopped run from leaving that beh
   deleted from the outputs it builds, `target/test-classes` and, in `vidocq:test`, `target/classes`, before the next
   run, which then compiles every source again.
 
-[[saved-while-compiling]]*A save while a run compiles.* [.tag-new]#NEW# A run that ends before `vidocq:dev` hears of
+[[saved-while-compiling]]*A save while a run compiles.* A run that ends before `vidocq:dev` hears of
 a save is not stopped, so nothing of it is deleted. When the save came after javac read the source, the class the run
 wrote is newer than the source and compiled from what javac read: Maven takes that source for compiled, and the next
 runs test the old code. So a run notes the time of each source when it starts, and the classes it leaves when it ends.
@@ -235,8 +235,8 @@ Log: target/vidocq-dev-tests.log   [r] run all  [f] rerun failed  [q] quit
 The location in parentheses is the first frame of the test's own class in the stack trace, so it points at the
 failing assertion rather than at JUnit. It is found in frames the JDK prefixes with the module and its version, as it
 does for the tests of a Vidocq application, which run in a named module (`at com.acme@1.0.0/com.acme.OrderServiceTest…`)
-[.tag-new]#NEW#. A failure of the class itself, in an `@BeforeAll` or while the application starts, is named by its
-class alone, `FAILED com.acme.OrderServiceTest`, and `f` runs the whole class again [.tag-new]#NEW#. A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
+. A failure of the class itself, in an `@BeforeAll` or while the application starts, is named by its
+class alone, `FAILED com.acme.OrderServiceTest`, and `f` runs the whole class again. A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
 `Tests: compilation failed (change), see target/vidocq-dev-tests.log` or `Tests: the run failed (change), see target/vidocq-dev-tests.log`.
 
 With a console attached, `vidocq:test` reads a key per line — type the key, then Enter:
@@ -263,7 +263,7 @@ failures and a chart of the failures over time, with two buttons: *Run all tests
 [#dev-services]
 == Dev services
 
-The tests never use the application's containers [.tag-new]#NEW#. Under `vidocq:dev`, they get a dev services session
+The tests never use the application's containers. Under `vidocq:dev`, they get a dev services session
 of their own, host `vidocq:dev-tests`, apart from the application's:
 
 * It opens at the first test run, which is slower for it: the `tests` panel shows the run `running` while the
@@ -298,7 +298,7 @@ table empties it for the next run too. Keep such tests on data they create thems
 * Surefire's tests only: Failsafe's integration tests are not run.
 * A run is offline (`mvn -o`). When it misses a dependency the tests need, a test-scope jar or Surefire's JUnit
   provider that was never downloaded, it runs again once online with the same tests, and the log is the online run's
-  [.tag-new]#NEW#. That is the first run of a new project under `vidocq dev`, which resolves the application's
+ . That is the first run of a new project under `vidocq dev`, which resolves the application's
   dependencies only, or the first run after a test dependency was added to the pom.
 * The keys need a real console: an IDE's run window may not deliver them.
 * The keys of the tests' dev services, a password included, are on the command line of the test run: other users of

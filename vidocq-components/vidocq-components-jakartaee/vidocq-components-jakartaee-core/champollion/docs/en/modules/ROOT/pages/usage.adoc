@@ -24,7 +24,7 @@ try (var p = Json.createParser(input)) {
 }
 ----
 
-[[skip-in-container]]`p.skipObject()` / `p.skipArray()` [.tag-new]#NEW# skip without materializing: from anywhere inside an object (an array), they advance to the end of that container, as the JSON-P 2.1 javadoc says; outside a container of that kind they do nothing. `p.getValue()` materializes the sub-tree `JsonValue` at the current position (handy for leaves).
+[[skip-in-container]]`p.skipObject()` / `p.skipArray()` skip without materializing: from anywhere inside an object (an array), they advance to the end of that container, as the JSON-P 2.1 javadoc says; outside a container of that kind they do nothing. `p.getValue()` materializes the sub-tree `JsonValue` at the current position (handy for leaves).
 
 === Push generator (`JsonGenerator`)
 

@@ -142,7 +142,7 @@ Neither module is published. What they found, now fixed:
 | ⚠️ Not exposed by the API
 |===
 
-[[bindings-and-inherited-metrics]]**Interceptor bindings and inherited methods** [.tag-new]#NEW# — an interceptor binding of the application that carries `@Counted` or `@Timed`, an annotation annotated with `@InterceptorBinding` and with the metric annotation, names the metric as that annotation would on the same method, constructor or class. A bean carries the metrics of the methods it inherits and does not override: from a superclass, named after that superclass, and from the default methods of its interfaces, named after the interface. An abstract method of an interface carries no metric, and an interface on its own has none.
+[[bindings-and-inherited-metrics]]**Interceptor bindings and inherited methods** — an interceptor binding of the application that carries `@Counted` or `@Timed`, an annotation annotated with `@InterceptorBinding` and with the metric annotation, names the metric as that annotation would on the same method, constructor or class. A bean carries the metrics of the methods it inherits and does not override: from a superclass, named after that superclass, and from the default methods of its interfaces, named after the interface. An abstract method of an interface carries no metric, and an interface on its own has none.
 
 == Configuration keys
 

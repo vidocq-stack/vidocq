@@ -76,7 +76,7 @@ return HealthCheckResponse.named("disk-space")
 
 The `data` object is omitted entirely when no entry is added.
 
-[.tag-new]#NEW# The keys of `data` come in the order of the `withData(...)` calls, the same at every start; a second call with the same key replaces the value and keeps the key's place.
+The keys of `data` come in the order of the `withData(...)` calls, the same at every start; a second call with the same key replaces the value and keeps the key's place.
 
 == Aggregation rules
 
@@ -85,7 +85,7 @@ The aggregate status of a probe group follows MicroProfile Health §3.2:
 * the global status is **DOWN** as soon as **one** check reports `DOWN`;
 * an **empty** check list yields **UP** (the probe is considered healthy);
 * an **exception** thrown by `HealthCheck.call()` is converted to a `DOWN` check **named after the exception's simple class name**, with no `data` entry — it never propagates out of the endpoint;
-* [.tag-new]#NEW# the `checks` array lists the checks probe by probe — liveness, readiness, then startup — and, within a probe, in the order of their registration names (the bean class name under CDI), the same at every start.
+* the `checks` array lists the checks probe by probe — liveness, readiness, then startup — and, within a probe, in the order of their registration names (the bean class name under CDI), the same at every start.
 
 [source,json]
 ----

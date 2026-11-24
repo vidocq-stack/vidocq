@@ -69,7 +69,7 @@ the extensions stop: its `@PreDestroy` runs while the data sources, the server a
 [#app-module-property]
 `-Dvidocq.app.module=<module>` names the application module to the runtime's own main: the module the banner and the startup report name, and the one an extension reads to declare something for the application by default.
 
-It is a name, and loads nothing [.tag-new]#NEW#. The application reaches the runtime through `-Dvidocq.app.path`, or, in a launch with the application layer switched off (`-Dvidocq.app.layer.off=true`, as in a jlink image), from the module path, where it runs as the JVM resolved it. A launch of the runtime's main that names the module with neither stops before the boot:
+It is a name, and loads nothing. The application reaches the runtime through `-Dvidocq.app.path`, or, in a launch with the application layer switched off (`-Dvidocq.app.layer.off=true`, as in a jlink image), from the module path, where it runs as the JVM resolved it. A launch of the runtime's main that names the module with neither stops before the boot:
 
 [source,text]
 ----
@@ -471,7 +471,7 @@ The whole report is one log record: one timestamp, printed in one piece, and not
 
 | `layer`
 | How many modules the application layer has and how they were found: `boot-layer detection from <module>`, or `vidocq.app.path=` followed by file names; `no application layer` without one.
-| The same count and origin; for `vidocq.app.path`, how many archives it lists instead of their names: `2 modules (vidocq.app.path, 2 archives)`. Then one line per module: its name, its archive and its kind (`directory`, `jar`, or `jrt` in a jlink image), the application's module first, the others in the order of their archives. Then `weaving`: `none`, who weaves the beans of an IDE build (`Vauban class loader, 1 planned bean: ...`, or the load-time weaving agent), or `failed (VAUBAN-009)`. Then [.tag-new]#NEW# `cdi extensions`, for a deployment that has build compatible extensions: `10 extensions frozen at build` when the start loaded what `vidocq:generate` recorded instead of running them, followed by `, 2 run at start: A, B` for those that left work for the start; `10 extensions run at start` without a record, followed by `(the record of the build is not this deployment's)` when one exists for other classes, as under `vidocq:dev` (xref:modules/vidocq-runtime-maven-plugin.adoc#frozen-extensions[Build compatible extensions frozen at build]). No `cdi extensions` row when the start neither ran an extension nor loaded a record: the deployment has none, or they all ran at compile (xref:modules/vidocq-runtime-maven-plugin.adoc#nothing-to-freeze[nothing to freeze]).
+| The same count and origin; for `vidocq.app.path`, how many archives it lists instead of their names: `2 modules (vidocq.app.path, 2 archives)`. Then one line per module: its name, its archive and its kind (`directory`, `jar`, or `jrt` in a jlink image), the application's module first, the others in the order of their archives. Then `weaving`: `none`, who weaves the beans of an IDE build (`Vauban class loader, 1 planned bean: ...`, or the load-time weaving agent), or `failed (VAUBAN-009)`. Then `cdi extensions`, for a deployment that has build compatible extensions: `10 extensions frozen at build` when the start loaded what `vidocq:generate` recorded instead of running them, followed by `, 2 run at start: A, B` for those that left work for the start; `10 extensions run at start` without a record, followed by `(the record of the build is not this deployment's)` when one exists for other classes, as under `vidocq:dev` (xref:modules/vidocq-runtime-maven-plugin.adoc#frozen-extensions[Build compatible extensions frozen at build]). No `cdi extensions` row when the start neither ran an extension nor loaded a record: the deployment has none, or they all ran at compile (xref:modules/vidocq-runtime-maven-plugin.adoc#nothing-to-freeze[nothing to freeze]).
 
 | `configuration`
 | —
@@ -613,7 +613,7 @@ concerned.
 ----
 
 [#vidocq-lay-001]
-==== VIDOCQ-LAY-001 — the application loaded twice [.tag-new]#NEW#
+==== VIDOCQ-LAY-001 — the application loaded twice
 
 A `Vidocq.run` trampoline launched with the application on the module path, as an IDE runs a main class, loads the
 application into the application layer while the JVM already holds it in the boot layer. Each class of the modules
@@ -632,7 +632,7 @@ through `vidocq.app.path`, off the module path, and the launchers without a laye
 them loads it twice.
 
 [#vidocq-gen-003]
-==== VIDOCQ-GEN-003 — the record of the build compatible extensions refused [.tag-new]#NEW#
+==== VIDOCQ-GEN-003 — the record of the build compatible extensions refused
 
 `vidocq:generate` runs the build compatible extensions of the application once and records what they did (xref:modules/vidocq-runtime-maven-plugin.adoc#frozen-extensions[Build compatible extensions frozen at build]); a start of the same deployment loads that record instead of running them. Vauban uses the record only for the deployment it was written for, and a production start whose deployment differs runs every extension at start, on each start. The anomaly says so, with Vauban's note, which names what differs from the build: the discovery settings, then the bean classes added, removed or changed since, ten of them by name.
 

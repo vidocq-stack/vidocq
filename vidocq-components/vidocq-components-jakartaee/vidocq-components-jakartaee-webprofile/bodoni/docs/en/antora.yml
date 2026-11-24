@@ -7,7 +7,8 @@ nav:
 asciidoc:
   attributes:
     lang: en
-    project-version: 0.4.0-SNAPSHOT
+    project-version: 0.5.0-SNAPSHOT
+    release-version: 0.4.0
     # Not defined by the vidocq-docs playbook yet: declared here so the links render.
     repo-bodoni: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni
     spec-tags-3-0: https://jakarta.ee/specifications/tags/3.0/

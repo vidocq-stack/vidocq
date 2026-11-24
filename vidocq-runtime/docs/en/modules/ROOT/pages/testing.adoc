@@ -61,7 +61,7 @@ class HelloResourceTest {
   that path holds `target/classes` and the main dependencies; JUnit and the other test dependencies stay on the
   class path, so the application never sees them. A `@Nested` class shares the application of the class that
   carries `@VidocqTest`.
-* [[application-layer]]**The application layer is the one of `vidocq:run`** [.tag-new]#NEW#. That path is divided
+* [[application-layer]]**The application layer is the one of `vidocq:run`**. That path is divided
   as `vidocq:run` divides it: the application module and, under `vidocq.app.layer=all`, the default, its libraries
   go to the application layer through `vidocq.app.path`, and the runtime, the bricks and what they read stay on the
   module path (see xref:usage.adoc#app-layer-dependencies[the application layer]). `vidocq.app.layer` and
@@ -93,7 +93,7 @@ class HelloResourceTest {
 </plugin>
 ----
 +
-[[from-the-ide]]A test an IDE starts gets no property from Surefire [.tag-new]#NEW#: `vidocq:test-path` also writes the
+[[from-the-ide]]A test an IDE starts gets no property from Surefire: `vidocq:test-path` also writes the
 same path to `target/vidocq-test-runtime-path`, and `@VidocqTest` reads it, next to the test classes, when the property
 is not set. The application then starts from the IDE instead of stopping on `Module io.vidocq.runtime.core not found`.
 The file is the one the last Maven build wrote, and an IDE that compiles by itself writes none: run
@@ -114,7 +114,7 @@ without the `ide-output` profile or one that sets `vidocq.ide.output.skip`, read
   service's key. Without that listener on the test class path, a plain `mvn test` starts no dev service, and the
   application uses what `vidocq.properties` points to.
 * [[http-port]]**Its HTTP listener** is the `default` Chappe listener, on `127.0.0.1` and port `0`
-  (`vidocq.chappe.listener.default.host` and `.port`, which win over `vidocq.properties`) [.tag-new]#NEW#: the system
+  (`vidocq.chappe.listener.default.host` and `.port`, which win over `vidocq.properties`): the system
   picks a free port as the listener binds it, so no other process can take it first. A port that
   `@VidocqTest(properties)` names as `vidocq.chappe.listener.default.port=9090` wins and stays as given.
   `VIDOCQ_HTTP_PORT` is not honoured, nor is its `vidocq.http.port`: the listener key the test passes outranks both

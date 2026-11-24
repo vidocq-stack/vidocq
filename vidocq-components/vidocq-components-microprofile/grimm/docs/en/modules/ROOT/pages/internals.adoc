@@ -42,7 +42,7 @@ resource class, built at compile time; the annotation scan of the <<build-pipeli
 | Cassini's fallback.
 |===
 
-[[response-schema]]**A JAX-RS `Response`** [.tag-new]#NEW# — it is described as an opaque `type: object` schema, by the scan and by the processor alike: its
+[[response-schema]]**A JAX-RS `Response`** — it is described as an opaque `type: object` schema, by the scan and by the processor alike: its
 getters are never read and no `Response`, `URI`, `Locale` or `MediaType` component is published. The `mp.openapi.schema.<FQCN>`
 override of `jakarta.ws.rs.core.Response` still wins over it.
 

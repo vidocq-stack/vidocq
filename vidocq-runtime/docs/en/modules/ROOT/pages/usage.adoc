@@ -140,7 +140,7 @@ live on the module path — `LogManager` instantiates handlers through the syste
 loader, which cannot see the layer.
 
 [#app-layer-dependencies]
-=== Dependencies in the application layer [.tag-new]#NEW#
+=== Dependencies in the application layer
 
 By default (`vidocq.app.layer=all`, since Vidocq 0.4.0) the application layer holds the project's classes and the
 project's dependencies, the way `WEB-INF/lib` works in a servlet container. A framework that looks up its
@@ -200,7 +200,7 @@ Changes detected — recompiling: ./mvnw -ntp -q process-classes -DskipTests -Dv
 That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows apply to every recompile: with
 `-U` there, each one checks the remote repositories and takes seconds more.
 
-[[dev-save-seen]]*How soon a save is seen.* [.tag-new]#NEW# The JDK's file watcher of macOS looks at the directories
+[[dev-save-seen]]*How soon a save is seen.* The JDK's file watcher of macOS looks at the directories
 every 2 seconds, so a save could wait up to 2 s before the recompile started. Where the JDK's
 watcher polls, `vidocq:dev` and `vidocq:test` read the modification time and size of the watched files themselves,
 every 200 ms by default (`vidocq.dev.watchPollMillis`; `0` keeps the JDK's watcher). The debounce
@@ -208,7 +208,7 @@ every 200 ms by default (`vidocq.dev.watchPollMillis`; `0` keeps the JDK's watch
 kernel: it is kept, and the property changes nothing. The wait before the recompile starts is in no log line:
 `Hot reload signalled after … ms` counts from the start of the recompile.
 
-[[dev-save-while-compiling]]*A save while a recompile runs.* [.tag-new]#NEW# The compiler reads every source, then
+[[dev-save-while-compiling]]*A save while a recompile runs.* The compiler reads every source, then
 writes the classes, seconds later on a real module. A source you save in between gets a class that is newer than the
 source, compiled from what the compiler read before your save, and Maven takes a source with a newer class for
 compiled. So `vidocq:dev` notes the time of each source when a recompile starts, and the classes the recompile leaves
@@ -229,7 +229,7 @@ Menu.java was saved since the previous recompile started and its class is not ol
 The test runs do the same for the sources they compile: see
 xref:continuous-testing.adoc#saved-while-compiling[A save while a run compiles].
 
-[[dev-save-while-starting]]*A save while `vidocq:dev` starts.* [.tag-new]#NEW# `vidocq:dev` watches the sources last:
+[[dev-save-while-starting]]*A save while `vidocq:dev` starts.* `vidocq:dev` watches the sources last:
 after the build, the dev services and the rest of its start. A file you save before that begins no recompile, and a
 source saved while the build compiles it gets a class that looks up to date. So, once it watches, `vidocq:dev` looks
 for the watched files saved since Maven started. When there is one, it recompiles before the application starts, and
@@ -246,7 +246,7 @@ Menu.java was saved while vidocq:dev started: compiling it before the applicatio
 * When the save does not compile, a warning says so and `vidocq:dev` compiles again at the next change. The
   application starts once the sources compile.
 
-[[dev-changed-while-stopped]]*A change made while `vidocq:dev` did not run.* [.tag-new]#NEW# `mvn vidocq:dev` alone
+[[dev-changed-while-stopped]]*A change made while `vidocq:dev` did not run.* `mvn vidocq:dev` alone
 runs no phase of the build: the goal starts the application from the classes of the last build. So it first looks
 for what changed since that build: a watched file saved since the compiler last ran, or a source it compiled that
 is gone. When there is one, it builds the project before the application starts, and the log names the file:
@@ -272,7 +272,7 @@ Since the last build, Menu.java changed: building the project first (mvn process
 * A pom that sets `useIncrementalCompilation` to `false` leaves no record of the compiler. `vidocq:dev` then compares
   with the newest file of the classes, and a class that is not older than its source is taken for compiled.
 
-[[dev-preload-classes]]*The application while a recompile runs.* [.tag-new]#NEW# `vidocq:dev` loads every class of
+[[dev-preload-classes]]*The application while a recompile runs.* `vidocq:dev` loads every class of
 the application's directories as soon as the application layer starts, at the first start and at each layer swap.
 The application then needs no class file from `target/classes`. It keeps running on the classes it loaded during a
 recompile, and while a save does not compile:
@@ -354,7 +354,7 @@ The startup log says where the start-time declarations come from: `Hot swap: sta
 With a runtime that declares none (one older than this check), the startup log says `Hot swap off: no dependency
 declares its start-time code (...)`, and every change swaps the layer, with the log lines of earlier versions.
 
-[[dev-swap-sessions]]*HTTP sessions across a swap.* [.tag-new]#NEW# A layer swap stops the application and starts it
+[[dev-swap-sessions]]*HTTP sessions across a swap.* A layer swap stops the application and starts it
 again on the new classes, and the HTTP sessions of the servlet application move with it: during the stop, each
 deployment writes its sessions out, and the new deployment at the same context path reads them back before it serves.
 An open page keeps its session, and its next request finds what the session held. An object read back keeps what the
@@ -378,7 +378,7 @@ to a REST resource or to a service keeps the sessions.
   class after it: `Hot reload - HTTP sessions not kept: Order gained a field total, so a restored instance would not
   match the new class`;
 * [[dev-swap-serial-version-uid]]a changed serializable class whose `serialVersionUID` moved, where Java would refuse
-  to read it back [.tag-new]#NEW#. The UID is the one the class declares, or else the default one Java computes, a
+  to read it back. The UID is the one the class declares, or else the default one Java computes, a
   hash of the class that a method or a constructor added, removed or changed moves, unless it is private: a lambda
   does not move it. A moved default UID keeps the sessions: Foy reads them with the new class, whose fields and
   superclass the case above found unchanged. It drops them when the class declares a `serialVersionUID`, before or
@@ -416,7 +416,7 @@ serialVersionUID changed and` `it is Externalizable`, `it declares writeObject`,
 missing`, and otherwise the message of the exception the read threw (`an unreadable value: ...` when the stream fails
 before it names a class).
 
-A session that holds `@SessionScoped` beans moves with them [.tag-new]#NEW#: each instance keeps its state and belongs
+A session that holds `@SessionScoped` beans moves with them: each instance keeps its state and belongs
 to the new container, the client proxies it holds and the `Event`, `Instance`, `Provider` or `BeanManager` it injects
 read back as the new container's, and the
 xref:modules/vidocq-runtime-extensions.adoc#servlet-built-in-beans[`@Inject HttpSession` bean] gives the session
@@ -458,7 +458,7 @@ not found, ...` with a runtime older than the agent.
 
 *Packaging.* Under `vidocq:package`, `lib/` holds the parent layer and `app/` holds the application jar and its
 libraries. Both launchers hand `app/` to the runtime through `-Dvidocq.app.path`, also for an application with a
-main class, with the pinned list. The build made the split, so they no longer carry the mode [.tag-new]#NEW#: nothing
+main class, with the pinned list. The build made the split, so they no longer carry the mode: nothing
 reads it there. `all` requires the layer mode
 (`vidocq.dev.layer`, `vidocq.package.layer`). Left to the default, a goal without the layer mode falls back to
 `classes` with a warning; asked for with `-Dvidocq.app.layer=all`, it fails. In the same way a dependency whose module
@@ -686,7 +686,7 @@ The `vidocq-runtime-grimm-openapi-extension` extension serves the OpenAPI docume
 While you develop, run `mvn vidocq:dev`: it adds the console itself when the application has `vidocq-runtime-chappe-webserver-extension`, and never packages it. The application logs `Vidocq dev console: http://127.0.0.1:8888/`, a read-only page with the startup report of the running boot and the live values of the extensions — the connections of each Mansart pool, the heap, the threads, the garbage collectors. It is on in a dev launch only, on the loopback address. See xref:dev-console.adoc[Dev console]; an extension adds its own panel as xref:dev-console-panels.adoc[Writing a dev console panel] describes.
 
 [#profiles]
-== Profiles [.tag-new]#NEW#
+== Profiles
 
 A key prefixed with `%<profile>.` applies only while that profile is active, the {spec-mp-config} "Config Profile" rule, with or without Ravel:
 
@@ -704,7 +704,7 @@ vidocq.http.port=8080
 * One profile at a time: `vidocq.profile=dev,test` is the profile named `dev,test`.
 
 [#property-expressions]
-== Property expressions [.tag-new]#NEW#
+== Property expressions
 
 A value may refer to other keys with the {spec-mp-config} property expressions, which every Vidocq key and the extensions read, with or without Ravel:
 

@@ -327,7 +327,7 @@ often from a very old, incompatible Vidocq version. The boot goes on; the sectio
 listener, rewrites the file cleanly.
 
 [#test-run-files]
-=== A test run has files of its own [.tag-new]#NEW#
+=== A test run has files of its own
 
 `vidocq:dev` and `vidocq:run` write `target/vidocq-dev-services.json` and
 `target/vidocq-dev-services.properties`. Each host of a test run writes a pair of its own, in `target/`:
@@ -370,7 +370,7 @@ xref:dev-console.adoc#panels[The dev console's panels].
 [#continuous-testing]
 == Continuous testing
 
-xref:continuous-testing.adoc[Continuous testing] never uses the application's containers [.tag-new]#NEW#. Under
+xref:continuous-testing.adoc[Continuous testing] never uses the application's containers. Under
 `vidocq:dev`, the tests get a session of their own, host `vidocq:dev-tests`, opened at their first run and stopped
 with `vidocq:dev`; `vidocq:test` opens one too, host `vidocq:test`. Each writes files of its own, and, as every
 test run, reuses no container and pins no host port (<<test-run-files>>). Each run gets

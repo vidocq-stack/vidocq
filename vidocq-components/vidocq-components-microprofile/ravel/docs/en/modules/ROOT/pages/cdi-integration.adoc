@@ -184,7 +184,7 @@ Use `defaultValue` or `Optional<T>` to make injection optional. `Provider<T>`, `
 when the value is read.
 
 [#start-check]
-=== Where the check runs [.tag-new]#NEW#
+=== Where the check runs
 
 The Build Compatible Extension reads no configuration. It records, as plain text, what the start must check — for
 each required `@ConfigProperty`, the key, the name of the injected type, the `defaultValue` and the injection

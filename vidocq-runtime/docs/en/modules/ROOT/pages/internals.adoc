@@ -161,7 +161,7 @@ Key mechanics (implemented in `vauban-classloader`, consumed by
   classes and boots again (same process, warm JIT, debugger attached). Cassini's static
   discovery caches are reset between deployments
   (`io.vidocq.cassini.runtime.CassiniMaintenance`).
-* **Classes loaded when the layer starts, under `vidocq:dev`** [.tag-new]#NEW# — the layer loader reads a class from
+* **Classes loaded when the layer starts, under `vidocq:dev`** — the layer loader reads a class from
   its archive when the class is first used, and a recompile removes the classes of `target/classes` before it writes
   them again. So the dev loop loads every class of the application's directories as soon as it has installed a layer,
   without initializing them (`ClassPreload`;
@@ -176,7 +176,7 @@ The full engine documentation (source/transformer SPI, weaving tiers, diagnostic
 options) lives in the Vauban documentation, Internals → Class loading.
 
 [#launcher-contract]
-=== The launcher contract [.tag-new]#NEW#
+=== The launcher contract
 
 The launchers hand the application to the runtime through the system properties below. They are a contract between
 the plugin, `@VidocqTest` and the runtime, not settings: an application does not set them, and a `java` command
@@ -312,7 +312,7 @@ The `vidocq-runtime-core-codegen` bundle wires the Vauban indexer (`vauban-proce
 Extension discovery itself needs no index file: it is plain `ServiceLoader` over the `provides io.vidocq.runtime.spi.VidocqExtension with …` directives of the modules on the module path.
 
 [#frozen-bce]
-=== Build compatible extensions, frozen at build [.tag-new]#NEW#
+=== Build compatible extensions, frozen at build
 
 The CDI side of an extension is often a build compatible extension of its brick: Ravel's synthesises the `@ConfigProperty` beans, Cassini's gives a scope to the `@Path` classes, Dirac's lists the classes that carry metrics. Vauban used to run all of them again at each start; `vidocq:generate` now freezes what they did, and the start loads it (xref:modules/vidocq-runtime-maven-plugin.adoc#frozen-extensions[Build compatible extensions frozen at build]). For that to hold, a brick and its Vidocq extension follow four rules.
 

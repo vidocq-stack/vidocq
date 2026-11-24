@@ -125,7 +125,7 @@ xref:internals.adoc#proxy-strategies[Internals — one strategy per case].
 |Nothing.
 
 |`@Produces` returning a **fully public** class of another module — even one that knows nothing
- about CDI, an **abstract** one included, such as `java.time.Clock` [.tag-new]#NEW#
+ about CDI, an **abstract** one included, such as `java.time.Clock`
 |The proxy is generated at build time in *your* producer's package. It forwards every method to
  what your producer returns, the abstract ones included: CDI 4.1 §3.10 does not count an abstract
  class as unproxyable. Built without the processor, the container generates the same proxy at run
@@ -133,7 +133,7 @@ xref:internals.adoc#proxy-strategies[Internals — one strategy per case].
  class of the JDK, a package not opened to it).
 |Nothing.
 
-|[[jdk-class-with-package-private-methods]][.tag-new]#NEW# `@Produces` of a normal scope returning a **class of the
+|[[jdk-class-with-package-private-methods]] `@Produces` of a normal scope returning a **class of the
  JDK with package-private methods**, such as `ArrayList<String>`
 |As Weld does, the container generates the proxy at run time in your producer's package, as Vauban cannot define a
  class in `java.util`. It forwards the public methods. A call the JDK class makes to one of its own package-private
@@ -281,7 +281,7 @@ public class OrderListener {
 Async observers (`@ObservesAsync`) are dispatched on the `EventDispatcher`'s internal `Executors.newVirtualThreadPerTaskExecutor()`. See xref:internals.adoc#virtual-threads[the threading model].
 
 [[startup-events]]
-=== The startup events [.tag-new]#NEW#
+=== The startup events
 
 The container fires `@Initialized(ApplicationScoped.class)`, then `Startup`, once it is complete: every bean is
 registered and every context is installed, including the contexts build compatible extensions register with
@@ -301,7 +301,7 @@ What Vauban does next (vauban#97):
 * **At startup**, the boot fails. `build()` throws a `DeploymentException` that names the observer and the event,
   with the observer's exception as its cause, and `VaubanContainer.current()` stays `null`: no half-initialized
   container is left behind. An `Error` thrown by an observer propagates as it is, with the same clean-up.
-* [.tag-new]#NEW# **At startup, an observer that throws a `DeploymentException` or a `DefinitionException`** stops
+* **At startup, an observer that throws a `DeploymentException` or a `DefinitionException`** stops
   the start with that very exception: no wrapper around it, no warning logged, the same clean-up. This is how a
   check of the environment the application starts in refuses a deployment, now that an extension the build froze
   does not run at start (xref:concepts.adoc#writing-a-frozen-extension[Writing an extension the build can freeze]).
@@ -343,7 +343,7 @@ public class Service { /* intercepted methods */ }
 
 `@AroundConstruct` is also supported. The build generates an `$$Intercepted` subclass for a bean with an interceptor binding, and that subclass runs the interceptor chain the container resolves for the bean.
 
-[[vetoed-interceptor]][.tag-new]#NEW# A class annotated `@Vetoed`, or a class of a package whose `package-info.java` is annotated `@Vetoed`, is no interceptor, as it is no bean: it intercepts nothing, and an extension's `@Registration` does not see it, whether the extensions run at start or the build froze them. The annotation processor and `vauban:generate` list no such class as a bean and generate nothing for it, the processor satisfies no injection point with a bean of a vetoed package of another module, and the container reads the `@Vetoed` of a package beside each class it indexes, whether it scans the class, finds it in a `vauban-beans.list` or an extension adds it through `ScannedClasses`.
+[[vetoed-interceptor]] A class annotated `@Vetoed`, or a class of a package whose `package-info.java` is annotated `@Vetoed`, is no interceptor, as it is no bean: it intercepts nothing, and an extension's `@Registration` does not see it, whether the extensions run at start or the build froze them. The annotation processor and `vauban:generate` list no such class as a bean and generate nothing for it, the processor satisfies no injection point with a bean of a vetoed package of another module, and the container reads the `@Vetoed` of a package beside each class it indexes, whether it scans the class, finds it in a `vauban-beans.list` or an extension adds it through `ScannedClasses`.
 
 [#programmatic-instance]
 == Programmatic `Instance<T>`
@@ -362,7 +362,7 @@ public class Router {
 
 `Instance<T>` enables dynamic resolution from application code while keeping the injection grid static inside the container.
 
-[.tag-new]#NEW# A parameterized type is selected with a `TypeLiteral`, as in `instance.select(new TypeLiteral<Supplier<String>>() { })`: the child `Instance` resolves its beans with the whole type, and keeps it through a later `select(qualifiers)`.
+A parameterized type is selected with a `TypeLiteral`, as in `instance.select(new TypeLiteral<Supplier<String>>() { })`: the child `Instance` resolves its beans with the whole type, and keeps it through a later `select(qualifiers)`.
 
 == Integration with Cassini (Jakarta REST)
 
@@ -420,7 +420,7 @@ CDI Lite has no session context: CDI 4.1 §6.7.2 leaves it to the container that
 * **Ends with the session.** When the session is invalidated or expires, Vauban fires `@BeforeDestroyed(SessionScoped.class)`, destroys the session's instances (their `@PreDestroy` methods run, and may still use session-scoped beans), then fires `@Destroyed(SessionScoped.class)`. A new session fires `@Initialized(SessionScoped.class)`. The event payload is the `HttpSession`.
 * **Outside a request, the context is inactive**: a call to a session-scoped bean throws `ContextNotActiveException`.
 * **Passivation is not validated.** Vauban does not check at deployment that a session-scoped bean is `Serializable`: one that is not deploys fine. Vauban never writes a session out on its own either. `@ConversationScoped` is not provided.
-* **Sessions survive a Vidocq dev swap** [.tag-new]#NEW#. When Vidocq swaps the application layer in dev mode, Foy moves the live sessions to the new layer, and a `Serializable` session bean moves with its state, no `@PostConstruct` and no `@PreDestroy` running. What it holds reads back as the new container's own: the client proxies of the beans it injects, and the built-in `Event`, `Instance` and `BeanManager` it injects. What keeps its session behind, with one `WARNING` from Foy: a session bean that is not `Serializable`, an intercepted one, an `Event` or an `Instance` obtained by `select(...)` or by a programmatic lookup, or given to an observer method, and kept in a field, one injected outside a bean (a parameter of a producer method, a non-contextual instance), an injected `InjectionPoint`, the client proxy of an interface that fell back to `java.lang.reflect.Proxy` (list the interface in `@ClientProxies`), any other field that is not `Serializable`. How each part moves, and the limits (a field added since, a synthetic bean): xref:internals.adoc#session-swap[Session entries across a container swap].
+* **Sessions survive a Vidocq dev swap**. When Vidocq swaps the application layer in dev mode, Foy moves the live sessions to the new layer, and a `Serializable` session bean moves with its state, no `@PostConstruct` and no `@PreDestroy` running. What it holds reads back as the new container's own: the client proxies of the beans it injects, and the built-in `Event`, `Instance` and `BeanManager` it injects. What keeps its session behind, with one `WARNING` from Foy: a session bean that is not `Serializable`, an intercepted one, an `Event` or an `Instance` obtained by `select(...)` or by a programmatic lookup, or given to an observer method, and kept in a field, one injected outside a bean (a parameter of a producer method, a non-contextual instance), an injected `InjectionPoint`, the client proxy of an interface that fell back to `java.lang.reflect.Proxy` (list the interface in `@ClientProxies`), any other field that is not `Serializable`. How each part moves, and the limits (a field added since, a synthetic bean): xref:internals.adoc#session-swap[Session entries across a container swap].
 * **The extension must be seen at build time.** `vauban-webcontexts` registers its context from a build-compatible extension. When the application is compiled with Vauban's annotation processor, `foy-cdi-vauban` on the processor path brings it along.
 
 The same scenarios, two clients, one cart each, a new cart after `invalidate()`, the events, pass on Foy with Vauban and on Foy hosting Weld's own Servlet integration, which serves as the reference (Foy's `foy-it-vauban-session` and `foy-it-weld-servlet` modules).
@@ -476,7 +476,7 @@ the main beans went missing (`Unsatisfied dependency` on a bean that exists). No
   `module-info` belongs to the main sources;
 * its `vauban-beans.list`, `vauban/required-opens.list`, `vauban-bce-runtime.list` and contexts list also carry the
   main compilation's lines, so hiding the main ones loses nothing;
-* [[test-provider-without-main-beans]][.tag-new]#NEW# when the main sources declare no bean, the test compilation
+* [[test-provider-without-main-beans]] when the main sources declare no bean, the test compilation
   emits a plain `_VaubanComponents`, which no `provides` clause names, and the services file next to it is ignored
   once the tests are patched into the named module. `scanClasspath()` takes the generated provider of each package
   a `vauban-beans.list` names, when the package is exported or opened to Vauban, so the test beans are built

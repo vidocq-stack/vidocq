@@ -438,7 +438,7 @@ not read: both are expected from a jar built with a later version. A new attribu
 of meaning does.
 
 [#key-descriptions-doctor]
-=== What the doctor checks [.tag-new]#NEW#
+=== What the doctor checks
 
 xref:modules/vidocq-runtime-cli.adoc#doctor[`vidocq doctor`] and
 xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`vidocq:doctor`] read the files of the project, then

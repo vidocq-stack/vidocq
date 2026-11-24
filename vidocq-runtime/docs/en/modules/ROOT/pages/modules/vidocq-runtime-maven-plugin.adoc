@@ -296,7 +296,7 @@ mvn vidocq:doctor -Dvidocq.doctor.fix                       # repair the project
   Maven, `JAVA_HOME`, the Maven wrapper, the pom, `vidocq.properties` and the extensions, then
  xref:modules/vidocq-runtime-cli.adoc#doctor-project[the project's]: its codegen bundles, the Vauban
   indexer, the `module-info.java` directives, the wrapper's Maven and the HTTP port, and last
-  xref:modules/vidocq-runtime-cli.adoc#doctor-keys[the descriptions of the configuration keys] [.tag-new]#NEW#:
+  xref:modules/vidocq-runtime-cli.adoc#doctor-keys[the descriptions of the configuration keys]:
   `Key descriptions` and `Config values` read the files the project and its runtime dependencies ship, and warn of
   a value of `vidocq.properties` its key does not allow. A failed check (a JDK older
   than 25, a missing codegen bundle) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the
@@ -383,12 +383,12 @@ The copy is a modified third-party jar: its signature files are dropped, and its
 | `scanExcludes` | none | Jars never scanned.
 | `autoScan` (`vidocq.generate.autoScan`) | `true` | Scan every CDI bean archive.
 | `cacheDir` (`vidocq.generate.cacheDir`)| `$XDG_CACHE_HOME/vidocq/depgen`, else `~/.cache/vidocq/depgen` | Where the output of the brick processors is cached. See <<depgen-cache>>.
-| `freezeExtensions` (`vidocq.freezeExtensions`) [.tag-new]#NEW# | `true` | Freeze the build compatible extensions of the application. See <<frozen-extensions>>.
-| `startExtensions` (`vidocq.startExtensions`) [.tag-new]#NEW# | none | Class names of build compatible extensions the start runs again whatever they asked.
+| `freezeExtensions` (`vidocq.freezeExtensions`) | `true` | Freeze the build compatible extensions of the application. See <<frozen-extensions>>.
+| `startExtensions` (`vidocq.startExtensions`) | none | Class names of build compatible extensions the start runs again whatever they asked.
 |===
 
 [#frozen-extensions]
-=== Build compatible extensions frozen at build [.tag-new]#NEW#
+=== Build compatible extensions frozen at build
 
 Once the dependencies are enriched, `vidocq:generate` runs the build compatible extensions of the application — those of the bricks, such as Ravel's or Cassini's, and the application's own — on the path the application starts with: `target/classes`, then every dependency of the compile and runtime scopes a launch ships, its enriched or modularized copy in place of the jar. It writes what they did in `target/classes/META-INF/vauban-frozen-extensions.properties` and two companion files, and the container start loads that instead of running them (xref:vauban::concepts.adoc#frozen-extensions[Extensions frozen at build], Vidocq/vauban#288). On an application with eleven Vidocq extensions, ten of them with a build compatible extension, the start took 389 to 400 ms instead of 422 to 431 ms (Vauban's BENCH-20261113-01).
 
@@ -451,7 +451,7 @@ vidocq:generate: acme-weblib-1.0.jar — Foy cannot process acme.web.Hello: <mes
 
 The whole javac output is in `target/vidocq-depgen/<artifactId>.log`. A generated file that the jar already has, and that the brick does not declare in `merge`, fails the same way.
 
-*Signed jars.* A signed jar is skipped, with a warning that says what it costs [.tag-new]#NEW#: `acme-weblib-1.0.jar is signed; not processed for Foy: what Foy generates for it is missing at run time, and the application fails when it uses the jar's Foy components` (a Mansart repository of such a jar has no implementation, and the application does not start). Name it in `<scanDependencies>` to process it anyway: its signature files are then dropped from the enriched copy. A jar a brick already processed — it carries the brick's marker — is left alone with an info line, `acme-weblib-1.0.jar — already processed for Mansart (META-INF/io.vidocq.mansart/generated); left alone` [.tag-new]#NEW#.
+*Signed jars.* A signed jar is skipped, with a warning that says what it costs: `acme-weblib-1.0.jar is signed; not processed for Foy: what Foy generates for it is missing at run time, and the application fails when it uses the jar's Foy components` (a Mansart repository of such a jar has no implementation, and the application does not start). Name it in `<scanDependencies>` to process it anyway: its signature files are then dropped from the enriched copy. A jar a brick already processed — it carries the brick's marker — is left alone with an info line, `acme-weblib-1.0.jar — already processed for Mansart (META-INF/io.vidocq.mansart/generated); left alone`.
 
 [#depgen-cache]
 *The cache.* Running javac over a library costs seconds, so its output is kept. The directory is `vidocq.generate.cacheDir` (also `<cacheDir>` of the goal) if set, else `$XDG_CACHE_HOME/vidocq/depgen`, else `~/.cache/vidocq/depgen`. An entry is keyed on its content: the jar, the processors, the jar's classpath (the `groupId:artifactId:version` of each dependency, since a processor's output can depend on the types it resolves there), `--release` and the JDK, so nothing needs invalidating. It is shared between projects, survives `mvn clean`, and is safe to delete.
@@ -653,7 +653,7 @@ not settings: see xref:internals.adoc#launcher-contract[the launcher contract].
 |===
 
 [#app-layer-where]
-*Where each launch reads them* [.tag-new]#NEW#. They are settings of the goals, not of the application: a launch that
+*Where each launch reads them*. They are settings of the goals, not of the application: a launch that
 no goal of the plugin starts reads them somewhere else, or not at all.
 
 [cols="2,3"]
@@ -681,7 +681,7 @@ sets it in `@VidocqTest(properties)` and in the VM options of its IDE run as wel
 
 `all` is the default since 0.4.0, in `vidocq:run`, `vidocq:dev`, an IDE launch and `vidocq:package` alike, so that
 development and production behave the same way. `classes` is the opt-out. The goals make the split themselves: only
-`vidocq:dev` hands the mode it settled on to the application, `classes` included, for its reload [.tag-new]#NEW#.
+`vidocq:dev` hands the mode it settled on to the application, `classes` included, for its reload.
 
 `all` needs the layer mode: `vidocq.dev.layer` for `vidocq:dev`, `vidocq.package.layer` for `vidocq:package`
 (both `true` by default). What happens when it cannot be honoured depends on whether you asked for it:
@@ -707,7 +707,7 @@ The build logs `application layer: <n> libraries, <m> kept in the parent layer b
 
 *Jlink, jpackage and Docker.* An image has no application layer (Vidocq/vidocq#580): `vidocq:jlink` links every
 module into one layer, the JVM's own, and the split above does not apply (<<jlink-one-layer>>). `vidocq:jlink` and
-`vidocq:jpackage` read neither `vidocq.app.layer` nor `vidocq.app.layer.keep` [.tag-new]#NEW#: a value the pom sets for
+`vidocq:jpackage` read neither `vidocq.app.layer` nor `vidocq.app.layer.keep`: a value the pom sets for
 `vidocq:package` changes nothing in an image. `vidocq:jpackage` and the `vidocq:docker` image of the `jlink` kind build
 on that image; the `jdk` kind ships the `vidocq:package` distribution, which keeps its layer (<<docker-jdk-kind>>).
 
@@ -727,7 +727,7 @@ set, under `classes` as under `all`: a trampoline launched from the module path 
 the boot layer, and load the application module twice, in the boot layer and in the application layer
 (BUG-20261114-10). Without a main class they pass `-Dvidocq.app.module` instead, with `vidocq.mainModule` or, when it
 is unset, the module the application jar declares: the runtime's own main finds the application module nowhere else
-(BUG-20261115-08). They carry the pinned list when there is one, and no longer the mode [.tag-new]#NEW#.
+(BUG-20261115-08). They carry the pinned list when there is one, and no longer the mode.
 A jar with classes parked by `vidocq:generate` ships enriched with them, so it moves to `app/` as well. The rule and the
 limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
 
@@ -1413,9 +1413,9 @@ run always uses.
 The application runs in another JVM, so a `-D` of the Maven command line does not reach it by itself. The goal
 forwards the ones that configure the application: every `-Dvidocq.*` that is not a setting of this plugin
 (`vidocq.run.*`, `vidocq.dev.*`, `vidocq.idea.*`, `vidocq.docker.*`, `vidocq.jlink.*`, `vidocq.mainClass`,
-`vidocq.mainModule`, `vidocq.app.layer` and `vidocq.app.layer.keep` [.tag-new]#NEW#, the settings of the other goals
+`vidocq.mainModule`, `vidocq.app.layer` and `vidocq.app.layer.keep`, the settings of the other goals
 (`vidocq.generate.*`, `vidocq.test.*`, `vidocq.doctor.*`, `vidocq.vscode.*`, `vidocq.eclipse.*`,
-`vidocq.freezeExtensions`, `vidocq.startExtensions`, ...) [.tag-new]#NEW#, and the other packaging settings).
+`vidocq.freezeExtensions`, `vidocq.startExtensions`, ...), and the other packaging settings).
 `vidocq.profile` is forwarded: the application reads it too. So `mvn vidocq:run
 -Dvidocq.chappe.listener.default.port=8081` listens on 8081. Anything else goes through
 `vidocq.run.systemProperties`, and the forked JVM inherits Maven's environment as it is.
@@ -1607,7 +1607,7 @@ you trust: `mvn vidocq:dev -Dvidocq.dev.debugHost='*'` (quote the `*` for the sh
 one, never every interface.
 
 [#debugger-port-busy]
-=== When the debug port is busy [.tag-new]#NEW#
+=== When the debug port is busy
 
 Before it forks the JVM, the goal checks that the agent can listen on its host and port: a JVM whose agent cannot
 dies at start with `ERROR: transport error 202: bind failed: Address already in use`, and nothing said the debug
@@ -1661,13 +1661,13 @@ ships in a binary whenever an extension that keeps the all-in-one `DevConsolePan
 . for every runtime extension the project resolves, reads its `META-INF/vidocq/dev-module` descriptor, if it has
   one, and resolves that companion `-dev` module and its own dev-only runtime dependencies, plus the console SPI,
   at the extension's own `groupId` and version. A companion's optional dependencies are not resolved, nor what they
-  bring [.tag-new]#NEW#: it runs without them, so an application that lacks one keeps the live panel. The Mansart
+  bring: it runs without them, so an application that lacks one keeps the live panel. The Mansart
   Data panel declares the JTA API optional, and without it a write commits, with no rollback to offer;
 . never adds a module twice: a jar the console step already put on the path is not added again by a
   companion's own transitive dependencies, and a jar the project already resolves at runtime scope — the legacy
   declaration, kept working — is left where it is, not duplicated;
 . puts a companion whose manifest says `Vidocq-Application-Layer: true` on the application path when the application
-  runs in the application layer [.tag-new]#NEW#, next to the framework it reads, such as the dev companion
+  runs in the application layer, next to the framework it reads, such as the dev companion
   of the Vaadin extension (https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[its own repository]); every other dev tool stays on the module path;
 . logs one INFO line naming what it added:
 +
@@ -1726,7 +1726,7 @@ dependency.
 <<idea,the `vidocq:idea` goal>>.
 
 [#dev-hot-swap-agent]
-=== The hot swap agent [.tag-new]#NEW#
+=== The hot swap agent
 
 `vidocq:dev` starts its child with `io.vidocq.runtime:vidocq-runtime-dev-agent`, a `java.lang.instrument` agent: a
 change in method bodies only redefines the application's classes in place instead of swapping the application layer
@@ -2240,7 +2240,7 @@ Each of them must be JDK 25 or newer. The goal cannot see IntelliJ's SDKs and pr
   temporary configuration.
 
 [#ide-output]
-== What an IDE compiles, and where [.tag-new]#NEW#
+== What an IDE compiles, and where
 
 VS Code's Java extension and Eclipse read a Maven project through m2e and compile it themselves, into the directories
 the project gives them. Those are the build's: `target/classes` then holds the IDE's classes, which are not woven and

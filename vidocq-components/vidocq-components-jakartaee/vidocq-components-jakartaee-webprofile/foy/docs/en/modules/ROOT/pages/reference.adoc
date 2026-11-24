@@ -25,7 +25,7 @@ Consolidated technical reference. Use this page as an anchor for external links 
 | `io.vidocq.foy:foy-processor:{project-version}`
 | **Build-time** annotation processor (no runtime role, never shipped in the application). Generates the `X$$FoyComponent` companions and the `META-INF` indexes. Zero dependency: it requires only the JDK `java.compiler` Java Module. Put it on `annotationProcessorPaths`, not on the class path.
 
-| `io.vidocq.foy:foy-websocket:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.foy:foy-websocket:{project-version}`
 | Optional Jakarta WebSocket 2.2 server (programmatic API) on the Servlet engine; see <<websocket-module>>. Depends on `foy-api`, the Servlet API and `jakarta.websocket-api` and `jakarta.websocket-client-api` 2.2.0, both at `compile` scope: the server API's Java Module requires the client API.
 
 | `io.vidocq.foy:foy-tck`
@@ -199,7 +199,7 @@ Each run writes a fresh `META-INF/services/io.vidocq.foy.spi.gen.WebComponent` a
 | `Builder.contextPath(String path)`
 | URL prefix served by this container. Default: `"/"`.
 
-| `Builder.initParameter(String name, String value)` [.tag-new]#NEW#
+| `Builder.initParameter(String name, String value)`
 | A servlet-context init parameter, replacing a `<context-param>` of the same name in the descriptors. This is how an embedder sets `io.vidocq.foy.websocket.allowed-origins`.
 
 | `Builder.sessionTimeoutSeconds(int seconds)`
@@ -229,10 +229,10 @@ Each run writes a fresh `META-INF/services/io.vidocq.foy.spi.gen.WebComponent` a
 | `Builder.identityStore(IdentityStore store)`
 | The user base behind BASIC, FORM, CLIENT-CERT and `login()`. With neither this nor `user(...)`/`certificateUser(...)`, every login fails. Exclusive with `user` and `certificateUser`.
 
-| `Builder.requestAuthentication(RequestAuthentication hook)` [.tag-new]#NEW#
+| `Builder.requestAuthentication(RequestAuthentication hook)`
 | Hands the authentication of every request to `hook` (a Jakarta Authentication runtime, such as Kerckhoffs): it is asked before the constraint of the resource is applied and replaces the `login-config` mechanism. Without it the container's own mechanisms apply.
 
-| `Builder.accessControl(AccessControl control)` [.tag-new]#NEW#
+| `Builder.accessControl(AccessControl control)`
 | Hands the access decision of every request to `control` (a Jakarta Authorization runtime, such as Kerckhoffs): it is asked once the caller is known, in place of the security constraints, which it can still read. Without it the constraints decide.
 
 | `Builder.confidentialPort(int port)`
@@ -274,10 +274,10 @@ Each run writes a fresh `META-INF/services/io.vidocq.foy.spi.gen.WebComponent` a
 | `Mounted.close()`
 | Destroys servlets and filters, invalidates the live sessions (`sessionDestroyed`) and fires `ServletContextListener.contextDestroyed`. To keep the sessions for the next deployment, call `closeExportingSessions()` instead. `contextInitialized` already fired during `build()`. Call it before you stop the Chappe server: it closes the application's upgraded connections first, while the server can still write, so a WebSocket peer gets its 1001 Close frame and the endpoint its `onClose`, with 1006 and `the application is stopping` (a close the container initiates), before `contextDestroyed`; a connection whose Close a send blocked on a peer that does not read holds past 2 s is cut without it, and that send fails with an `IOException` that says so. In the other order the server's stop cuts those connections first: their peers get no Close frame, and an endpoint may get `onError` for the cut connection, then `onClose(1006)`. From the moment `close()` starts, a new request, a WebSocket handshake included, gets `503 Service Unavailable` with `Retry-After: 3` (the undeploy's bound, in seconds) and a plain-text body, and reaches no listener, filter or servlet. That 503 is the container's own answer, never an error page of the application: once the undeploy began, no filter or servlet of the application may see a new request (Servlet 6.1 §2.3.4). The requests already in service get until 2 s after the start of `close()` to finish, and `destroy()` starts 3 s after it at most. Other applications' `getContext` no longer finds it, and a cross-context dispatch into it throws a temporary `UnavailableException` (503 when uncaught); its own `getContext` still resolves a URI under its path to itself.
 
-| `Mounted.closeExportingSessions()` [.tag-new]#NEW#
-| Returns a `byte[]`. The same undeploy as `close()`, in the same order, with the same 503 and graces, except that the session step exports the live sessions instead of invalidating them: no `sessionDestroyed`, `valueUnbound` or `attributeRemoved` fires for a session that moves, and `sessionWillPassivate` fires on its `HttpSessionActivationListener` attributes. A session with an attribute that cannot be written stays behind whole, invalidated as usual, with a WARNING. On Vauban, CDI state moves with the session [.tag-new]#NEW#: the `@SessionScoped` instances, and the client proxies and injected built-in beans they hold; a session that holds an intercepted or non-`Serializable` `@SessionScoped` instance stays behind the same way. Call it in place of `close()`, before you stop the server. A second call, or a call after `close()` or while a `close()` still runs, returns an export of no session, and leaves the sessions to that `close()`. The bytes are private to Foy and in memory only. See xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy].
+| `Mounted.closeExportingSessions()`
+| Returns a `byte[]`. The same undeploy as `close()`, in the same order, with the same 503 and graces, except that the session step exports the live sessions instead of invalidating them: no `sessionDestroyed`, `valueUnbound` or `attributeRemoved` fires for a session that moves, and `sessionWillPassivate` fires on its `HttpSessionActivationListener` attributes. A session with an attribute that cannot be written stays behind whole, invalidated as usual, with a WARNING. On Vauban, CDI state moves with the session: the `@SessionScoped` instances, and the client proxies and injected built-in beans they hold; a session that holds an intercepted or non-`Serializable` `@SessionScoped` instance stays behind the same way. Call it in place of `close()`, before you stop the server. A second call, or a call after `close()` or while a `close()` still runs, returns an export of no session, and leaves the sessions to that `close()`. The bytes are private to Foy and in memory only. See xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy].
 
-| `Mounted.importSessions(byte[])` [.tag-new]#NEW#
+| `Mounted.importSessions(byte[])`
 | Returns the number of sessions imported (`int`). Imports an export of the previous deployment into this one, under its class loader: same id, times and attributes, `isNew()` false, `sessionDidActivate` on the activation listeners, no `sessionCreated`. Expired sessions and sessions whose attributes cannot be read are skipped; one WARNING line gives the number dropped and the first cause, `class <name>: <reason>`. A class without `serialVersionUID` that gained a method or a constructor is read with its new version when its serialized form is the same (xref:internals.adoc#session-class-changed[A session class that changed], with every reason). Call it after `build()` and before the handler is mounted, so that a request with an old `JSESSIONID` never meets an empty store. It runs inside the `CdiContextListeners.aroundSessionImport` of the discovered adapters when the builder was given a `BeanManager`: `foy-cdi-vauban`'s binds a Vauban container, so the sessions' CDI state reads back into it. Give it only bytes that `closeExportingSessions()` returned in this JVM: anything else throws `IllegalArgumentException`. Throws `IllegalStateException` on a closed deployment.
 |===
 
@@ -332,17 +332,17 @@ An uncaught limit thrown from a `Runnable` given to `AsyncContext.start` still a
 | `io.vidocq.foy.spi.security.Identity`
 | Record of a validated caller: its `Principal` and its application roles (`Identity.of(name, roles)`).
 
-| `io.vidocq.foy.spi.gen.ComponentInstantiator` [.tag-new]#NEW#
+| `io.vidocq.foy.spi.gen.ComponentInstantiator`
 | Creates a component through Foy's component factory (CDI injection included). Foy publishes one as the `ServletContext` attribute `io.vidocq.foy.spi.gen.ComponentInstantiator`, so an add-on module such as `foy-websocket` instantiates endpoints without reaching into `foy-core`.
 |===
 
 [#websocket-spi]
-=== WebSocket takeover SPI (`io.vidocq.foy.spi.websocket`) [.tag-new]#NEW#
+=== WebSocket takeover SPI (`io.vidocq.foy.spi.websocket`)
 
 Not an application API (applications use Jakarta WebSocket): the transport-neutral contract between Foy's bridge and a WebSocket implementation, depending on the JDK and the Servlet API only. An implementation upgrades a request with a `WebSocketUpgradeHandler` (an `HttpUpgradeHandler` that names the negotiated sub-protocol and a listener); the transport answers the handshake, runs the framing and delivers events to a `WebSocketListener`, which sends through a `WebSocketPeer`. A connection sends one Close frame, and `WebSocketPeer.close(code, reason)` answers whether this call sent it: `false` when another Close went out or came in first (an earlier close, the peer's) or the connection was cut, so the caller tells which side closed first. The code `WebSocketListener.onClose` hears follows Jakarta WebSocket 2.2 section 2.1.5: the peer's when the peer closed first, 1006 with a reason naming the cause when the container did (the undeploy, a failed `onOpen`, a protocol violation of the peer, a callback that threw), whatever code went on the wire; 1006 with no reason for a TCP cut.
 
 [#websocket-module]
-== WebSocket module (`foy-websocket`) [.tag-new]#NEW#
+== WebSocket module (`foy-websocket`)
 
 Lot 1 of Jakarta WebSocket 2.2: the programmatic server API. How to use it: xref:usage.adoc#websocket[WebSocket]. Annotated endpoints and the client API are later lots.
 
@@ -379,7 +379,7 @@ Lot 1 of Jakarta WebSocket 2.2: the programmatic server API. How to use it: xref
 == Security
 
 [#request-authentication]
-=== `RequestAuthentication` hook [.tag-new]#NEW#
+=== `RequestAuthentication` hook
 
 `RequestAuthentication` lets a runtime take over the authentication of an application, for instance a Jakarta Authentication implementation that places an `HttpAuthenticationMechanism` in service (Jakarta Security 4.0, section 2.5). Foy defines the contract and depends on no implementation: the arrow goes from the implementation to Foy, never the reverse.
 
@@ -390,7 +390,7 @@ When one is installed (`SecuritySettings.withRequestAuthentication`), it replace
 * `HttpServletRequest.authenticate` asks the hook with `mandatory` set; `login(user, password)` throws `ServletException`; `logout` calls `cleanSubject`.
 
 [#access-control]
-=== `AccessControl` decision [.tag-new]#NEW#
+=== `AccessControl` decision
 
 `AccessControl` lets a runtime decide the access to web resources, for instance a Jakarta Authorization implementation whose `Policy` answers the `WebResourcePermission` of a request (Servlet 6.1 section 13, Jakarta Authorization 3.0). Installed with `SecuritySettings.withAccessControl` (`Builder.accessControl`), it is asked for _every_ request, once the caller is known:
 
@@ -398,7 +398,7 @@ When one is installed (`SecuritySettings.withRequestAuthentication`), it replace
 * It replaces the constraints: an excluded resource, or a protected one reached by an anonymous caller, goes through if the control says so. Without a `RequestAuthentication` hook, an anonymous caller of a protected resource is still challenged by the container's mechanism unless the control accepts it.
 
 [#current-request]
-=== `CurrentRequest` [.tag-new]#NEW#
+=== `CurrentRequest`
 
 `CurrentRequest.get()` returns the request being served by the current thread, for code that is not handed it: a security context that answers `getCallerPrincipal()`, a producer of a request-bound object. Foy binds it (a `ScopedValue`) around the whole processing of a request on the thread that serves it -- listeners, filters, servlet -- and inside a dispatch it answers the request of the dispatch, so `getUserPrincipal()` is the caller the `RequestAuthentication` hook established.
 
@@ -744,10 +744,10 @@ On a TLS connection the five Servlet 6.1 section 3.10 attributes are seeded when
 Foy does not need Vauban: give `FoyChappeBoot` the `BeanManager` of any CDI 4 container (`CDI.current().getBeanManager()`). Without `foy-cdi-vauban`'s build-time index, Foy finds the web components by walking the container's `Servlet`, `Filter` and `EventListener` beans.
 
 * **The request context is active for each request** — Foy activates it through the standard `RequestContextController` before the application's request listeners, and deactivates it after them, on the thread that served the request (an asynchronous request included: Foy waits for it). `@RequestScoped` beans work in servlets, filters and listeners, and the container fires `@Initialized(RequestScoped.class)` and `@Destroyed(RequestScoped.class)`. If the context is already active (an embedding runtime activated it), Foy leaves it alone. Up to 0.3.0, Foy activated it under no container, Vauban included (BUG-20261010-01). On Vauban, this needs a Vauban with its built-in `RequestContextController`; before it, the request context was not activated under Vauban and a `@RequestScoped` bean failed with `ContextNotActiveException`.
-* **The session context, on Vauban** — `@SessionScoped` beans live in the `HttpSession`: one instance per session, created on first use (which creates the session), destroyed with it when it is invalidated or expires, between `@BeforeDestroyed` and `@Destroyed(SessionScoped.class)`; a new session fires `@Initialized(SessionScoped.class)`. CDI Lite leaves the session context to the servlet container (CDI 4.1 §6.7.2): Vauban's `vauban-webcontexts` provides it, and `foy-cdi-vauban`, which depends on it, drives it from Foy's request and session events. Nothing to configure. The instances are never written out, except at a Vidocq dev swap, when they move with the session to the next deployment as CDI passivation: no `@PreDestroy`, no `@PostConstruct` [.tag-new]#NEW# (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]).
+* **The session context, on Vauban** — `@SessionScoped` beans live in the `HttpSession`: one instance per session, created on first use (which creates the session), destroyed with it when it is invalidated or expires, between `@BeforeDestroyed` and `@Destroyed(SessionScoped.class)`; a new session fires `@Initialized(SessionScoped.class)`. CDI Lite leaves the session context to the servlet container (CDI 4.1 §6.7.2): Vauban's `vauban-webcontexts` provides it, and `foy-cdi-vauban`, which depends on it, drives it from Foy's request and session events. Nothing to configure. The instances are never written out, except at a Vidocq dev swap, when they move with the session to the next deployment as CDI passivation: no `@PreDestroy`, no `@PostConstruct` (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]).
 * **Error pages, denials and async threads keep the contexts** — `requestDestroyed`, where the context listeners unbind, fires after the error page and after `AsyncListener.onComplete`, as in Tomcat; a security denial, a login page and the error page of a refused path (`/WEB-INF/…`, an invalid path) run inside the request listeners too. A `Runnable` given to `AsyncContext.start()` runs with the container's context listeners bound on its own thread: it shares the request's session, and gets a request context of its own (the request-scoped instances of the serving thread are not visible there). The application's request listeners still see one request.
-* **The request, the session and the context as beans, on Vauban** [.tag-new]#NEW# — `@Inject HttpServletRequest` (`@RequestScoped`), `@Inject HttpSession` (`@SessionScoped`) and `@Inject ServletContext` (`@ApplicationScoped`), qualifier `@Default`, as CDI 4.1 requires of a Servlet container: `foy-cdi-vauban` produces them, with client proxies generated at its build, and the application declares nothing. Not on another container: Weld's servlet integration provides its own. xref:usage.adoc#servlet-built-in-beans[Usage], xref:internals.adoc#servlet-built-in-beans[Internals].
-* [[cdi-context-listeners]]**The session context, on another container** — Foy finds the listeners that drive a CDI implementation's contexts through the `io.vidocq.foy.spi.cdi.CdiContextListeners` service, registers them ahead of the application's listeners, before the deployment's initializers run, when it is given that implementation's `BeanManager`, and an adapter such as `foy-cdi-vauban` provides them. `listeners` returns context, request and session listeners that run outside the request context (ahead of the listener that activates it); a context listener among them hears `contextInitialized` before the `ServletContainerInitializer`s and `contextDestroyed` after the application's listeners; `requestContextListeners` [.tag-new]#NEW# returns request listeners that need it, registered right behind that listener. `aroundSessionImport` [.tag-new]#NEW# (a default method that only runs its `Supplier`) lets an adapter bind its CDI container for the duration of a session import, so the session's CDI objects rebind to it; Foy nests the adapters' calls around `Mounted.importSessions`. `foy-cdi-vauban`'s binds the Vauban container, and leaves another container's import as is (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]). Unlike a `ServletContainerInitializer`, such a provider does not make Foy start an application that has no web component. Weld's own servlet integration, `weld-servlet-core`, also runs on Foy: its `ServletContainerInitializer` starts Weld and manages the request and session contexts itself; Foy is then given no `BeanManager`, and servlets declared in `web.xml` reach their beans through `CDI.current()`.
+* **The request, the session and the context as beans, on Vauban** — `@Inject HttpServletRequest` (`@RequestScoped`), `@Inject HttpSession` (`@SessionScoped`) and `@Inject ServletContext` (`@ApplicationScoped`), qualifier `@Default`, as CDI 4.1 requires of a Servlet container: `foy-cdi-vauban` produces them, with client proxies generated at its build, and the application declares nothing. Not on another container: Weld's servlet integration provides its own. xref:usage.adoc#servlet-built-in-beans[Usage], xref:internals.adoc#servlet-built-in-beans[Internals].
+* [[cdi-context-listeners]]**The session context, on another container** — Foy finds the listeners that drive a CDI implementation's contexts through the `io.vidocq.foy.spi.cdi.CdiContextListeners` service, registers them ahead of the application's listeners, before the deployment's initializers run, when it is given that implementation's `BeanManager`, and an adapter such as `foy-cdi-vauban` provides them. `listeners` returns context, request and session listeners that run outside the request context (ahead of the listener that activates it); a context listener among them hears `contextInitialized` before the `ServletContainerInitializer`s and `contextDestroyed` after the application's listeners; `requestContextListeners` returns request listeners that need it, registered right behind that listener. `aroundSessionImport` (a default method that only runs its `Supplier`) lets an adapter bind its CDI container for the duration of a session import, so the session's CDI objects rebind to it; Foy nests the adapters' calls around `Mounted.importSessions`. `foy-cdi-vauban`'s binds the Vauban container, and leaves another container's import as is (xref:internals.adoc#sessions-across-redeploy[Sessions across a redeploy]). Unlike a `ServletContainerInitializer`, such a provider does not make Foy start an application that has no web component. Weld's own servlet integration, `weld-servlet-core`, also runs on Foy: its `ServletContainerInitializer` starts Weld and manages the request and session contexts itself; Foy is then given no `BeanManager`, and servlets declared in `web.xml` reach their beans through `CDI.current()`.
 
 `foy-it-weld`, part of every build and never published, runs Foy on Chappe with Weld SE 6.0 (CDI 4.1) on a class path, without `foy-cdi-vauban`: a servlet, a filter and a listener get an injected bean, a `@RequestScoped` bean is one instance per request, and the request context events fire. No Open Liberty module: on a server, use the server's own Servlet container.
 

@@ -254,7 +254,7 @@ modules excluded. Initial I5 also verifies HTTP deployment on Foy/Chappe.
 references. The JDK Class-File API updates only the compiled module's service and
 package metadata; existing providers, exports, opens and requirements are preserved.
 
-[[stable-module-descriptor]]**The same descriptor at every run** [.tag-new]#NEW# — the page index keeps its place among the services the module provides: a run that
+[[stable-module-descriptor]]**The same descriptor at every run** — the page index keeps its place among the services the module provides: a run that
 changes no page writes the descriptor it read, byte for byte, so a build tool that
 compares the classes by content sees no change.
 

@@ -4,5 +4,4 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-* xref:reference.adoc#class-path-discovery[Peano is found on a class path] [.tag-new]#NEW# — `peano-core` lists its factory in `META-INF/services/jakarta.el.ExpressionFactory`, so `ExpressionFactory.newInstance()` finds Peano for an application or a test container on a class path, which failed with `Provider com.sun.el.ExpressionFactoryImpl not found`. The module path is unchanged.
-* xref:reference.adoc#proxy-unwrapper-lifetime[A proxy unwrapper no longer keeps its application layer] [.tag-new]#NEW# — a `ProxyUnwrapper` that an application jar declares in `META-INF/services` stays registered as long as its class loader lives: under `vidocq dev`, it kept every discarded application layer reachable, one more class loader alive per hot reload (EL-025).
+_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._

@@ -146,7 +146,7 @@ Current   100%   █████████████████████
 // TODO@user: extract the exact list of skipped tests from the Surefire report and tabulate them here.
 
 [#language-model-tck]
-== Language model TCK [.tag-new]#NEW#
+== Language model TCK
 
 The core TCK never calls the language model TCK (`cdi-tck-lang-model`), which checks the `jakarta.enterprise.lang.model` API that build compatible extensions read. `LangModelTckTest`, in `vauban-tck-runner` under `-Ptck`, runs its `LangModelVerifier` from a build compatible extension, with the type annotation checks on, in the three places Vauban builds that model:
 

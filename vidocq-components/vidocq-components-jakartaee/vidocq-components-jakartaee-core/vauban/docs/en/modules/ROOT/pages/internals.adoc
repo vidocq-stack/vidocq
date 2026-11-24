@@ -185,7 +185,7 @@ generators as the bridge javac copies into the public class; they intercept the 
 copies, as the processor does (BUG-20261118-16). `BridgeCalls`, part of the run-time generators' reflective
 front-end, tells which method a bridge calls from the class bytes of its class, read through the Class-File API
 from the class's own loader; a class defined in memory, without bytes there, is judged by the names its classes
-declare. [.tag-new]#NEW#
+declare.
 
 Three kinds of method are not business methods and are never overridden, by any of the generators,
 which read one list: `@Inject` initializers, the bean class's own interceptor methods
@@ -251,7 +251,7 @@ throws `UnproxyableResolutionException`. Weld picks the same superclass. Every p
 (BUG-20261118-20). That name is what tells the bean class behind a proxy that may not extend it:
 `io.vidocq.vauban.api.ClientProxyClass.beanClassOf(Class)` reads it, for code that reads the bean class's annotations,
 a JAX-RS provider's say; code that casts the proxy to the class it names must check the proxy is an instance of it.
-[.tag-new]#NEW#
+
 
 [cols="1,2,2"]
 |===
@@ -274,7 +274,7 @@ excluding, `java.lang.Object`), because a method inherited from a superclass is 
 by the produced type nor overridden by the proxy: judging only declared methods would hand out a
 proxy that silently runs the superclass body against its own empty state.
 
-[.tag-new]#NEW# An abstract class qualifies: CDI 4.1 §3.10 does not count it as unproxyable. The
+An abstract class qualifies: CDI 4.1 §3.10 does not count it as unproxyable. The
 proxy overrides each abstract method, its own and those an interface leaves to it, and forwards it
 to the contextual instance; it never calls `super`. An abstract method is judged by its access like
 any other, so a protected one keeps the proxy in the type's own package (next row). When nothing
@@ -292,7 +292,7 @@ contextual instance. No dynamic proxy, no reflection. On the class path (non-APT
 |Zero `opens`; zero reflection on the build-time path (a `reflect.Proxy` only as the class-path
 fallback).
 
-|**Synthetic bean of an interface** [.tag-new]#NEW#
+|**Synthetic bean of an interface**
 |No class for the APT to see: the extension's module lists the interface in `@ClientProxies`, and the
 APT emits the same static class `implements <Iface>` in the package of the annotated class, registered
 under the interface's key (xref:concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic
@@ -416,7 +416,7 @@ inherits from a package-private one; the language model has none. The walk over 
 keys each method by its signature as a member of the proxied class, the type variables of its generic superclasses
 resolved, as the processor does: both forward the same methods, and `ProducerProxyEligibility` judges the same ones.
 A bridge used to stand in for its method, which the proxy then left to run on itself
-(BUG-20261117-49). [.tag-new]#NEW#
+(BUG-20261117-49).
 ====
 
 == Case by case: from your source to a running proxy
@@ -627,7 +627,7 @@ agent entirely
 ----
 
 [#recompiled-under-woven-proxy]
-[.tag-new]#NEW# The same holds for one class the IDE recompiled over a Maven build, `BookResource` with
+The same holds for one class the IDE recompiled over a Maven build, `BookResource` with
 its implicit public constructor, say. Maven wove the marker into it and shipped
 `BookResource_ClientProxy`, which calls `BookResource(ProxyLink)`; plain `javac` writes the class back
 without that constructor. A no-arg constructor is not enough here: the container reads the shipped
@@ -725,7 +725,7 @@ Details worth knowing about the load-time tier:
 * **Plan-driven, no heuristics** — the agent only ever touches the classes named in the
   plan computed from the container's own index: unwoven beans get the marker constructor,
   their `_ClientProxy` companions are retargeted to it.
-* [[woven-serial-version-uid]][.tag-new]#NEW# **The `serialVersionUID` of a library class** — the marker
+* [[woven-serial-version-uid]] **The `serialVersionUID` of a library class** — the marker
   constructor is not private, so it changes the default `serialVersionUID` of a class that declares none (Java Object
   Serialization Specification, section 4.6). A class woven at load time from a jar or an sjar gets a
   `private static final long serialVersionUID` of the value its original bytes give, and an object it serialized
@@ -733,7 +733,7 @@ Details worth knowing about the load-time tier:
   edit, and so would a declared value, which Foy and Vidocq's dev swap read as a class that cannot move
   (BUG-20261118-95). Known limit: an application class woven by Vauban has another default value than the same class
   built without it.
-* [.tag-new]#NEW# **What the shipped proxy expects** — a bean class needs the marker when it has
+* **What the shipped proxy expects** — a bean class needs the marker when it has
   none and either has no non-private no-arg constructor, or its `<Bean>_ClientProxy` next to it
   calls `<init>(ProxyLink)` all the same: a woven build wrote that proxy, and the class was
   recompiled since without Vauban (<<recompiled-under-woven-proxy>>). The proxy's constant pool is
@@ -752,7 +752,7 @@ Details worth knowing about the load-time tier:
   produced types — which carry no scope annotation — and the superclasses they need, so a placed
   client proxy does not chain a third-party constructor.
 * **Opt-out** — `-Dvauban.weaving.loadtime=disabled`: no agent is attached, and every bean
-  that needed one fails the start [.tag-new]#NEW#, named with the reason, as when the agent cannot
+  that needed one fails the start, named with the reason, as when the agent cannot
   be attached; a bean nothing injects included, where its first client proxy used to fail at run
   time. In a Vauban layer the class loader still weaves, so nothing fails there. Explicit
   `-javaagent:vauban-weaver.jar=<plan>` is also supported (`Premain-Class`): with the opt-out,
@@ -855,7 +855,7 @@ archive ───▶ │ dir | jar | sjar | …  │ ─▶│ cdi-proxifier | (
   note for custom layer loaders: the JVM loads layer-module classes through
   `findClass(String moduleName, String name)`, whose inherited default returns `null` —
   both name-based and module-based lookups are overridden.
-  [[module-scoped-lookups]][.tag-new]#NEW# The module-based lookups answer for the module
+  [[module-scoped-lookups]] The module-based lookups answer for the module
   they name, as the JDK's own loaders do. `Module.getResourceAsStream`, and
   `Class.getResource` on a class of a layer module, read that module's archive only: a name
   outside any package (`META-INF/…`, a root file) gives each module its own copy, and
@@ -1082,7 +1082,7 @@ Providers generated before this method existed grant nothing; the extension keep
 The container uses the same lookup itself to wire an intercepted bean: once the generated provider has created the `$$Intercepted` subclass, its post-construction method `$$init` is called through a method handle found with that lookup, so the bean's package needs neither `exports` nor `opens` (BUG-20261010-02). Without a granting provider, the call falls back to reflection, which needs the package exported to `io.vidocq.vauban.core`.
 
 [#session-swap]
-== Session entries across a container swap [.tag-new]#NEW#
+== Session entries across a container swap
 
 When Vidocq swaps the application layer in dev mode, Foy moves the live HTTP sessions to the new layer
 (foy#114): it writes each session attribute to its own bytes with Java

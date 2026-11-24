@@ -183,7 +183,7 @@ public class EchoUpgradeServlet extends HttpServlet {
 Jakarta WebSocket does not go through `HttpUpgradeHandler.init` and a raw connection: see <<websocket>>.
 
 [#websocket]
-== WebSocket [.tag-new]#NEW#
+== WebSocket
 
 Foy serves Jakarta WebSocket 2.2 through the optional `foy-websocket` module (xref:reference.adoc#websocket-module[reference]). Put it on the class path or the module path next to `foy-chappe`: its `ServletContainerInitializer` is found by the usual service lookup and needs no configuration. This first lot is the **programmatic server API**, enough for a framework that registers its endpoints itself (Atmosphere, hence Vaadin push).
 
@@ -573,7 +573,7 @@ Discovery is on by default and is driven by `FoyChappeBoot.builder()`:
 
 Fragments are ordered per Servlet 6.1 §8.2.2: an `<absolute-ordering>` in `web.xml` replaces any `<ordering>` in the fragments; without it, `<before>`/`<after>` constraints and `<others/>` apply. Initializers run in `ServiceLoader` order, restricted to the roots the ordering retains (§8.2.4). A jar excluded by an absolute ordering contributes neither its fragment, nor its annotations, nor its initializers, nor its `META-INF/resources/` (in no lookup tier, the "any other root" fallback included), nor its classes to a `@HandlesTypes` initializer (its class index is not read and it is not scanned).
 
-[[jlink-image-resources]]*In a jlink image* [.tag-new]#NEW# — a module linked into a run-time image serves its `META-INF/resources/` too: its resources have `jrt:` URLs, and a `jrt:/<module>` application root or fragment is read from the image's `jrt` file system, like a directory. The last tier, any other root, also holds the `META-INF/resources/` of the image's modules that the application's class loader sees, after the roots the class loader names; an ordered or excluded module is not added twice. The image's modules are listed once, at the first lookup.
+[[jlink-image-resources]]*In a jlink image* — a module linked into a run-time image serves its `META-INF/resources/` too: its resources have `jrt:` URLs, and a `jrt:/<module>` application root or fragment is read from the image's `jrt` file system, like a directory. The last tier, any other root, also holds the `META-INF/resources/` of the image's modules that the application's class loader sees, after the roots the class loader names; an ordered or excluded module is not added twice. The image's modules are listed once, at the first lookup.
 
 [NOTE]
 ====
@@ -635,7 +635,7 @@ Add `foy-processor` to the compiler's annotation processor path. It generates, a
 Your own `@RequestScoped` beans work: Foy activates the CDI request context for each request, under Vauban or any other CDI container. On Vauban, `@SessionScoped` beans work too (xref:reference.adoc#other-containers[Other CDI containers]).
 
 [#servlet-built-in-beans]
-=== Injecting the request, the session and the context [.tag-new]#NEW#
+=== Injecting the request, the session and the context
 
 On Vauban, a bean injects the `HttpServletRequest` being served, its `HttpSession` and the application's `ServletContext`, as CDI requires of a Servlet container. The application declares nothing: `foy-cdi-vauban` on its path is enough.
 

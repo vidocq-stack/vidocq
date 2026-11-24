@@ -143,7 +143,7 @@ Mansart chooses table and column names itself; the annotations change them.
 IMPORTANT: The table default is **not** Jakarta Persistence's. Although entities use `@jakarta.persistence.Entity`, a Jakarta Persistence provider names the table after the entity name (`Book`), Mansart after the plural (`books`). `@Entity(name = "...")` does not change Mansart's table either: to keep a schema made for Jakarta Persistence, or created after the class name, put `@Table(name = "book")` on the entity.
 
 [#name-quoting]
-[.tag-new]#NEW# Mansart writes a table or column name in its SQL as the mapping gives it, as Jakarta Persistence does:
+Mansart writes a table or column name in its SQL as the mapping gives it, as Jakarta Persistence does:
 
 * *Without quotes* — `@Table(name = "ITEM")`, `@Column(name = "title")`, and every default name — the name is undelimited: the database folds it to its own case, lower case on PostgreSQL, upper case on H2, exactly as it folds the names of a migration written without quotes (`CREATE TABLE books (...)`). The case written in the annotation does not matter.
 * *With double quotes inside the value* — `@Table(name = "\"Order Lines\"")`, `@Column(name = "\"Item Label\"")` — the name is delimited: it reaches the database with its quotes, so its case, its spaces, or a reserved word are kept. The table or column must have been created with the same quoted name.
@@ -185,10 +185,10 @@ The storage applies wherever Mansart knows which attribute a value belongs to: i
 **Outside the Jakarta Data backend scope**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Persistence implements these within its documented mapping boundaries.
 
 [#plural-attributes]
-A plural attribute — `@ElementCollection`, `@OneToMany`, `@ManyToMany`, or a field whose type is a `Collection` or a `Map` — is not a column of the entity's table, and Mansart leaves it to the persistence provider [.tag-new]#NEW#: it is not in `_Book`, a Mansart repository neither reads nor writes it (an entity it loads keeps the field's initial value), and a derived query on it (`findByTags`) is a method no query derives from (xref:usage.adoc#unresolved-methods[a build error naming it]). The processor says so in a compiler note per attribute. An entity can therefore carry collections that xref:noether::index.adoc[Noether] maps, and still be served by Mansart repositories for its columns. Before, the processor treated such a field as a column, and the generated `_Book` did not compile.
+A plural attribute — `@ElementCollection`, `@OneToMany`, `@ManyToMany`, or a field whose type is a `Collection` or a `Map` — is not a column of the entity's table, and Mansart leaves it to the persistence provider: it is not in `_Book`, a Mansart repository neither reads nor writes it (an entity it loads keeps the field's initial value), and a derived query on it (`findByTags`) is a method no query derives from (xref:usage.adoc#unresolved-methods[a build error naming it]). The processor says so in a compiler note per attribute. An entity can therefore carry collections that xref:noether::index.adoc[Noether] maps, and still be served by Mansart repositories for its columns. Before, the processor treated such a field as a column, and the generated `_Book` did not compile.
 
 [#nested-entities]
-An entity may be a static nested class [.tag-new]#NEW#. The metamodel of `shop.Library.Shelf` is `shop._Library_Shelf`: in the entity's package, named after the entity's binary name with `_` where it has `$` — the rule the implementation of a nested repository follows — so that `Library.Shelf` and `Archive.Shelf` each have their own (MANSART-050). Application code that uses the metamodel writes `_Library_Shelf.name`.
+An entity may be a static nested class. The metamodel of `shop.Library.Shelf` is `shop._Library_Shelf`: in the entity's package, named after the entity's binary name with `_` where it has `$` — the rule the implementation of a nested repository follows — so that `Library.Shelf` and `Archive.Shelf` each have their own (MANSART-050). Application code that uses the metamodel writes `_Library_Shelf.name`.
 
 == Repository annotations
 

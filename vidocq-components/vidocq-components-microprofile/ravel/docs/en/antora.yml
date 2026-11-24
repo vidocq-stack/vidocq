@@ -8,5 +8,5 @@ asciidoc:
   attributes:
     lang: en
 
-    project-version: 0.4.0-SNAPSHOT
-    release-version: 0.4.0-RC2
+    project-version: 0.5.0-SNAPSHOT
+    release-version: 0.4.0
