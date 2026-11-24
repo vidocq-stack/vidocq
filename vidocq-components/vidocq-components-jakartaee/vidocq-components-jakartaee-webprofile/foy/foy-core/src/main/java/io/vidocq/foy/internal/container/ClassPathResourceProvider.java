@@ -554,23 +554,15 @@ public final class ClassPathResourceProvider implements ResourceProvider {
 
         @Override public InputStream open() throws IOException {
             JarFile f = new JarFile(index.jar.toFile());
-            JarEntry e = f.getJarEntry(entry);
-            if (e == null || e.isDirectory()) {
-                f.close();
-                throw new IOException("not a file: " + entry);
-            }
-            InputStream in;
             try {
-                in = f.getInputStream(e);
+                JarEntry e = f.getJarEntry(entry);
+                if (e == null || e.isDirectory()) throw new IOException("not a file: " + entry);
+                return new JarEntryStream(f, f.getInputStream(e));
             } catch (IOException | RuntimeException ex) {
+                // The stream did not take the jar over: close it here, whatever failed.
                 try { f.close(); } catch (IOException suppressed) { ex.addSuppressed(suppressed); }
                 throw ex;
             }
-            return new FilterInputStream(in) {
-                @Override public void close() throws IOException {
-                    try { super.close(); } finally { f.close(); }
-                }
-            };
         }
 
         @Override public URL url() {
@@ -580,6 +572,25 @@ public final class ClassPathResourceProvider implements ResourceProvider {
             } catch (URISyntaxException | java.net.MalformedURLException _) {
                 return null;
             }
+        }
+    }
+
+    /** The stream of one jar entry, which owns its jar: closing the stream closes the jar. */
+    private static final class JarEntryStream extends FilterInputStream {
+        private final JarFile jar;
+
+        JarEntryStream(JarFile jar, InputStream in) {
+            super(in);
+            this.jar = jar;
+        }
+
+        /** Bulk reads go straight to the entry's stream, as FilterInputStream does, stated here (Sonar java:S4929). */
+        @Override public int read(byte[] b, int off, int len) throws IOException {
+            return in.read(b, off, len);
+        }
+
+        @Override public void close() throws IOException {
+            try { super.close(); } finally { jar.close(); }
         }
     }
 }
