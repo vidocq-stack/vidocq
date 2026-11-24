@@ -1,13 +1,13 @@
 name: kerckhoffs
 title: Kerckhoffs
-version: dev
-prerelease: true
+version: '0.4.0'
 nav:
   - modules/ROOT/nav.adoc
 asciidoc:
   attributes:
     lang: en
-    project-version: 0.4.0-SNAPSHOT
+    project-version: 0.4.0
+    release-version: 0.4.0
     # Not defined by the vidocq-docs playbook yet: declared here so the links render.
     repo-kerckhoffs: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs
     spec-security-4-0: https://jakarta.ee/specifications/security/4.0/
