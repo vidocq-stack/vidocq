@@ -1,7 +1,19 @@
 = What's new
-:description: Everything that changed in this component since the {release-version} release.
+:description: Everything that changed in this component since the 0.3.0 release, release candidate by release candidate.
 
 [.lead]
-New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+Everything that landed in this component since the 0.3.0 release, newest first: <<final,Added in 0.4.0>>, <<rc2,Brought by 0.4.0-RC2>>. The documentation of the earlier release candidates is no longer published, so their entries are kept here. Every entry links to the section that documents it, and the [.tag-new]#NEW# badges on those pages mark what 0.4.0 added. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them.
+
+// cumulative what's new
+
+[#final]
+== Added in 0.4.0 (since 0.4.0-RC2)
 
 * xref:internals.adoc#stable-module-descriptor[A precompilation that changes no page leaves `module-info.class` as it was] [.tag-new]#NEW# — the page index keeps its place among the services of the module descriptor. A run without a compile moved it to the end, after a service another build step had appended (`vidocq:generate` registers the Peano accessors after the pages): the same module in other bytes, and `vidocq dev` swapped the application layer for a save that changed no class (IBARRA-159).
+
+[#rc2]
+== Brought by 0.4.0-RC2 (since 0.3.0)
+
+* xref:internals.adoc#generated-code[Generated code and reflective fallback] — one table lists what Ibarra generates at build (the page classes, the page index and its `provides`, the listener factories), what uses it at run time and what happens without it, followed by what still reflects and how the Arquillian adapter proves it does not.
+* `GeneratedClass.toString()` names the class, the bytecode length and its content hash, consistent with `equals`, instead of the array identity: two equal classes print the same, which makes compiler logs and test failures readable (IBARRA-157).
+* Closing a page application flushes the `java.beans` introspection caches that the page expressions filled, so the class loader of a layer `vidocq dev` discards on a hot reload can be collected (IBARRA-158).

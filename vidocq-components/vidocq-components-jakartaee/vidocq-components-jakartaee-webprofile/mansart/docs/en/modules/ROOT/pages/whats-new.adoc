@@ -1,10 +1,15 @@
 = What's new
-:description: Everything that changed in this component since the {release-version} release.
+:description: Everything that changed in this component since the 0.3.0 release, release candidate by release candidate.
 
 [.lead]
-New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+Everything that landed in this component since the 0.3.0 release, newest first: <<final,Added in 0.4.0>>, <<rc2,Added in 0.4.0-RC2>>, <<rc1,Brought by 0.4.0-RC1>>. The documentation of the earlier release candidates is no longer published, so their entries are kept here. Every entry links to the section that documents it, and the [.tag-new]#NEW# badges on those pages mark what 0.4.0 added. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them.
 
-== Pool
+// cumulative what's new
+
+[#final]
+== Added in 0.4.0 (since 0.4.0-RC2)
+
+=== Pool
 
 * xref:modules/mansart-pool.adoc#session-reset[Session attributes put back on release] [.tag-new]#NEW# — the transaction isolation, read-only flag, catalog, schema, holdability, network timeout and type map a borrower changed no longer reach the next borrower of the same connection; only the attributes changed are read and put back (MANSART-047).
 * xref:modules/mansart-pool.adoc#pending-work[No second rollback on release] [.tag-new]#NEW# — a connection handed back out of auto-commit is rolled back only when a statement ran since the last `commit()` or `rollback()`; a committed transaction no longer pays a rollback, which on H2 emptied the statement cache. Statements are wrapped to track this, and `Statement.getConnection()` now returns the pooled connection instead of the driver's (Vidocq/noether#45).
@@ -12,7 +17,7 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:modules/mansart-pool.adoc#idle-maintenance[Idle connections are validated, `minIdle` is held] [.tag-new]#NEW# — `ValidationMode.PERIODIC`, the default, checked nothing, and `validationQuery` was never run: a connection the database dropped was the next borrower's error. The housekeeper now checks the idle connections and closes the dead ones, the `validationQuery` is what checks when it is set, and the pool keeps `minIdle` connections through the idle timeout and opens new ones to reach it again; `minIdle` was honoured at start-up only (MANSART-058, MANSART-059).
 * xref:modules/mansart-pool.adoc#xa-connections[XA connections are pooled] [.tag-new]#NEW# — with `xaDataSourceClassName`, each transaction opened a physical connection outside the pool: no `maxSize`, no reuse, no metrics. An XA connection is now a borrow like any other (MANSART-065).
 
-== Transactions
+=== Transactions
 
 * xref:modules/mansart-transactions.adoc#completion[A rollback-only mark set in `beforeCompletion` rolls back] [.tag-new]#NEW# — the transaction was committed all the same; `commit()` now rolls back and throws `RollbackException` (MANSART-051).
 * xref:modules/mansart-transactions.adoc#completion[A synchronization may register another from `beforeCompletion`] [.tag-new]#NEW# — it failed with `ConcurrentModificationException` and the transaction rolled back (MANSART-052).
@@ -26,12 +31,12 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:modules/mansart-transactions.adoc#one-phase[A one-phase commit says what failed] [.tag-new]#NEW# — a commit the database rolled back is `RollbackException`, not `SystemException`, and the `XAException` is the cause (MANSART-064).
 * xref:modules/mansart-transactions.adoc#jta-datasource[One connection per transaction and data source] [.tag-new]#NEW# — a repository and a persistence unit on the same data source each enlisted a connection of their own in the same transaction: neither saw the other's uncommitted work. `JtaDataSource` and `JtaConnections` (`mansart-transactions-jdbc`) share one (MANSART-066).
 
-== Data
+=== Data
 
 * xref:reference.adoc#name-quoting[Mapped names are no longer quoted] [.tag-new]#NEW# — a table or column name reaches the SQL as the mapping writes it, as with Jakarta Persistence: without quotes the database folds it, with double quotes inside the value (`@Table(name = "\"Order Lines\"")`) it is delimited. A repository and a persistence unit that share an entity now name the same table. *A schema created with quoted names needs a change*: see xref:migration.adoc#mapped-names-unquoted[Upgrading from 0.3.0] (MANSART-067).
 * xref:usage.adoc#repository-bean-types[A repository on a named data store is injected by its parameterized supertype] [.tag-new]#NEW# — `@Inject BasicRepository<AuditEntry, Long>` now finds a repository with `@Repository(dataStore = "audit")`, as it already found one on the default data store. It stopped the container start with an unsatisfied dependency (MANSART-068).
 
-== Build
+=== Build
 
 * xref:usage.adoc#private-repositories[A private repository is a compile error] [.tag-new]#NEW# — a `@Repository` interface that is `private`, or nested in a `private` type, fails the build with the fix in the message, instead of a compiler note and a repository served at run time, which a named module cannot do; `-Amansart.privateRepositories=warn` keeps the previous behaviour. A repository declared inside a method is refused at run time with a message (Vidocq/mansart#85).
 * xref:internals.adoc#codegen-apt[`Outer_BookRepositoryImpl`] [.tag-new]#NEW# — the implementation of a nested repository is named with `_` where its binary name has `$`, so no top-level generated class carries a `$`; `META-INF/mansart-repositories.list` names the class, so an index written by an earlier processor stays valid (Vidocq/mansart#85).
@@ -41,3 +46,54 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:reference.adoc#nested-entities[A static nested entity compiles] [.tag-new]#NEW# — its metamodel was written into a package named after the outer class (`shop.Library._Shelf`), which the compiler refused: `class shop.Library clashes with package of same name`. It is now `shop._Library_Shelf`, in the entity's package, and the run-time path looks it up under that name: it took `_Shelf`, the metamodel of any entity of the package with that simple name (MANSART-050).
 * xref:reference.adoc#plural-attributes[An entity with a collection compiles] [.tag-new]#NEW# — an `@ElementCollection`, `@OneToMany` or `@ManyToMany` field, or one typed `List`, `Set` or `Map`, is no longer taken for a column: it is left out of `_Book`, which did not compile (`<identifier> expected` on `java.util.List<java.lang.String>.class`), and out of the model the run-time path builds, which selected a column the table does not have. Mansart repositories read and write the entity's columns and leave its collections to the persistence provider (MANSART-049).
 * xref:concepts.adoc#static-metamodel[The JPA metamodel `Book_` is the persistence provider's] [.tag-new]#NEW# — `mansart-data-processor` writes the Jakarta Data metamodel `_Book` only. The `Book_` it wrote declared every attribute a `SingularAttribute`, a `List<Tag>` included, and kept the provider's processor from writing its own: Noether could not fill `Book_.tags`, and a Criteria query on the collection failed. An application that refers to `Book_` puts its provider's processor on the annotation processor path (xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0], Vidocq/noether#45).
+
+[#rc2]
+== Added in 0.4.0-RC2 (since 0.4.0-RC1)
+
+* xref:internals.adoc#generated-code[Generated code and reflective fallback] — one table lists what Mansart generates at build (repository implementations, entity models and metamodels, the per-package `_MansartComponents`, the repository lists), what uses it at run time and what runs when it is missing, followed by when the run-time path still runs and how to tell which path ran.
+* xref:reference.adoc#application-modules[Reflection once, not on every call] — a JDQL statement left to the run time finds its repository method once, `@Transactional` caches the annotation per bean class and method, and the CDI extension no longer loads every class of the archive at startup, only the possible repository implementations.
+* xref:reference.adoc#application-modules[Entities and repositories without `opens`] — Mansart reaches an application's entities, repositories and projection records without reflection: a generated `_MansartComponents` service per package hands it the entity models and creates the repository implementations, and a projection into a record is built by generated code. A named application module needs no `opens` for them; reflection stays the fallback without the processor or on another container. A one-attribute `SELECT` into a one-component record works (it was read as a plain column).
+* xref:reference.adoc#migration-check[A missing table, caught at build time] — when the application ships Flyway SQL migrations, the annotation processor warns about an entity whose table no migration creates, and names the fix: `@Table(name = "book")` when a migration creates `book` for `Book`, whose default table is `books`. `-Amansart.migrationCheck=off` turns it off, `-Amansart.migrations` names other directories.
+* xref:reference.adoc#table-names[Table and column names, and a missing table] — the naming rules are documented: a table is named after the entity's class in snake_case and plural (`Book` -> `books`), unlike Jakarta Persistence, and `@Entity(name)` does not change it. A repository whose table does not exist now fails with a message naming the entity, the table it looked for and the fix (`@Table`, or a migration), instead of a bare "SQL error"; on H2, a table created unquoted (stored in upper case) is reported with the two ways out.
+* xref:usage.adoc#dependency-repositories[Repositories shipped in a library] — `vidocq:generate` runs Mansart's processor over a dependency jar's `@Repository` interfaces and their entities' metamodels, marks the jar so it is processed once, and vetoes another provider's generated implementation. A `@Find` whose parameters have no names in the class file binds each to the entity's only attribute of its type, or fails naming the method — before, the run-time path dropped such a parameter and returned every row.
+* xref:reference.adoc#other-cdi-containers[Mansart on Weld and Open Liberty] — the jars run unchanged on other CDI containers, proven by two test modules: a generated repository and `@Transactional` on Weld SE, a repository on an Open Liberty data source. The Jakarta platform APIs are now `provided` (the container brings them), a generated repository is registered on a container that does not discover `@Singleton` classes, and `mansart-data-cdi` no longer opens its package to Vauban: a generated provider instantiates its producer.
+* xref:usage.adoc#unresolved-methods[A method no query derives from fails the build] — the annotation processor reports it as an error instead of generating a method that throws at run time; `-Amansart.unresolvedMethods=warn` keeps the old behaviour.
+* xref:usage.adoc#_derived_queries_by_method_name[The `Null` keyword] — `findByReturnedOnNull()`, the Jakarta Data 1.0 spelling, derives an `IS NULL` condition, as `IsNull` did.
+* *A repository implemented at run time is announced* — when a repository is served by the run-time path (its generated implementation is missing, or the `java.lang.reflect.Proxy` fallback is used), Mansart says so at start-up. The run-time path also serves a generic repository contract and default methods, builds the model beside a metamodel Mansart did not generate, and serves a repository whose indexed implementation is gone; a nested or invalid repository no longer breaks the build.
+* *Jakarta Data conformance fixes* — generated and run-time repositories are kept apart (MANSART-012); the `First` keyword is honoured in derived queries (MANSART-013); single-result methods throw `EmptyResultException` (MANSART-014); columns project to primitives and primitive arrays (MANSART-015); lifecycle methods take several entities (MANSART-016); `CrudRepository.insert`, `insertAll`, `update` and `updateAll` are implemented (MANSART-017); `@By` and `@OrderBy` are honoured on `@Find` (MANSART-018); `findFirst` without a match and `@Find` collections work on the run-time path (MANSART-019, MANSART-020); inserting an entity already stored is refused (MANSART-021); the entity of an inherited `@Find` method is resolved (MANSART-022); JDQL enum literals are resolved against the model, never by loading a class (MANSART-023); `Pagination.Keyset` cursors (MANSART-011) and recovered transaction `Xid`s (MANSART-010) compare by content.
+* The runtime of a routed data store (`@Repository(dataStore = "...")`) belongs to its CDI container instead of a static cache: after a `vidocq dev` hot reload the repositories use the new container's data source rather than the previous one's closed data source, and the discarded layer can be collected (MANSART-041).
+
+[#rc1]
+== Brought by 0.4.0-RC1 (since 0.3.0)
+
+=== 2026-10-11 — Persistence and Validation extraction
+
+Persistence and the provisional Validation provider moved to
+xref:noether::index.adoc[Noether]. They are no longer Mansart reactor modules.
+Data, Pool and Transactions remain here with unchanged production semantics.
+See xref:noether::migration.adoc[renamed artifacts, packages and providers].
+Pre-extraction JPA entries below describe historical Mansart delivery.
+
+
+=== Pool
+
+* **The pool finds its driver with the application** — the JDBC driver is looked up through the application's class loader, then `DriverManager`, so a driver that only the application sees works; under Vidocq this used to fail with "No suitable driver" (mansart#42). xref:modules/mansart-pool.adoc#finding-the-driver[Finding the JDBC driver].
+
+=== Jakarta Data
+
+* **`@Param`, `@Find` and JDQL without `FROM` in compiled repositories** (mansart#41) — the annotation processor ignored `@Param` (a `:name` matched the Java parameter name only, so a jar needed `-parameters`), generated a `@Find` method that threw `UnsupportedOperationException`, and refused `@Query("WHERE …")` without `FROM`. It now honours all three, as the repositories generated at run time already did; its warnings name the type and the method, for a jar processed from class files. xref:usage.adoc#query-jdql[`@Query` JDQL].
+* **An enum is stored as `@Enumerated` says** (mansart#26) — `@Enumerated` used to be read and then ignored: every enum was stored by its name, `@Enumerated(EnumType.ORDINAL)` included. Now `@Enumerated(EnumType.ORDINAL)`, and a bare `@Enumerated`, store the constant's index in an integer column, and `@Enumerated(EnumType.STRING)` stores its name, in writes, row mapping, projections, `WHERE` bindings and the generated DDL. An enum with **no** `@Enumerated` still stores its name, unlike the Jakarta Persistence default, which is the index. **This changes what an existing application does** if it declares `ORDINAL`: its tables hold names, and Mansart now writes and reads indexes for that attribute. Either switch the attribute to `@Enumerated(EnumType.STRING)` (or drop the annotation) to keep the data as it is, or convert the column to indexes before upgrading. xref:reference.adoc#enum-storage[Enum storage], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
+* **An `UPDATE` or a `DELETE` cannot follow a `SELECT` clause** — the JDQL parser Mansart uses at run time — for a repository generated at run time and for `JdqlExecutor.run` — read a `SELECT` clause and then went on to whatever followed it, so `SELECT this DELETE FROM Product` ran as a `DELETE`. Such a statement is now refused with a `MansartDataException`. A tool that tells reads from writes by the first keyword can no longer be led to run a write as a query. xref:usage.adoc#query-jdql[`@Query` JDQL].
+* **`mansart-data-cdi` is an explicit bean archive** (mansart#33) — the jar now ships a `META-INF/beans.xml` (`annotated`), like `mansart-transactions-cdi`, so a CDI container that does not scan implicit archives, such as Weld SE by default, treats it as a bean archive. Under Vauban nothing changes. xref:reference.adoc#bean-archives[Bean archives].
+
+=== The Jakarta Data core for tools
+
+`io.vidocq.mansart.data.core` gives a tool — the Vidocq dev console, for one — what Mansart knows about an entity and a way to run a JDQL statement typed as text:
+
+* **`EntityModels.of(Class<E>)`** — the model Mansart uses for an entity: its generated `_Entity.$MODEL`, or one built at run time from the mapping annotations. A tool no longer has to re-read the annotations or reflect on generated classes to describe an entity. xref:reference.adoc#tooling-api[The core API for tools].
+* **`JdqlExecutor.run(jdql, parameters, model, runtime)`** — parses one statement against the entity's model, binds its named parameters by name, converts a text value to the attribute's type (enum, `java.time`, numbers, booleans, UUIDs), and runs it as a `@Query` method's statement would, returning a `JdqlResult`: entities, projected rows, a count or an aggregate's value. An overload with `maxRows` reads at most that many rows, as a SQL `LIMIT`. `isWrite` and `target` read a statement's first keyword and its entity without parsing it. xref:reference.adoc#tooling-api[The core API for tools].
+* **An entity model no longer keeps its class loader reachable** — models used to be cached in a static map keyed by the entity class, which kept every class and its loader alive. Under a dev reload, where the application layer is replaced while Mansart stays, each discarded layer stayed in memory. Models now live with their class and go away with its loader. xref:reference.adoc#tooling-api[The core API for tools].
+
+=== Jakarta Persistence
+
+* **Noether JPA P0–P12 delivered within scope** — `noether-persistence` provides entity lifecycle, JPQL/Criteria, XML mapping, container integration, cache and Validation integration. The locally patched PostgreSQL TCK passes all non-skipped tests; comparative benchmarks and a modular Leyden AOT smoke are recorded. Remaining mapping boundaries and the local TCK patch are explicit; no formal certification or GraalVM native-image support is claimed. See xref:noether::index.adoc[implementation status], xref:tck.adoc[TCK evidence] and xref:performance.adoc[performance methodology].
