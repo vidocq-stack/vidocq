@@ -186,8 +186,8 @@ jobs:
           sonar-token: ${{ secrets.SONAR_TOKEN }}
           host-url: ${{ vars.SONAR_HOST_URL }}
           bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
-          # No build here: validate only, for the SBOM the dependency scan reads, over the modules analysed.
-          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dcyclonedx.skipNotDeployed=false -pl ${{ steps.sonar-scope.outputs.pl }} validate
+          # No build here: validate only, for the SBOM the dependency scan reads, over the analysed modules that ship (root pom).
+          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dvidocq.aggregator.deploy.skip=false -pl ${{ steps.sonar-scope.outputs.pl }} validate
           # skipJreProvisioning: the scanner runs on the runner's Java 25 instead of downloading a JRE from the
           # server at each analysis; that download hung for ten minutes on 2026-11-23 and the job was cut (#765).
           analysis-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dsonar.scanner.skipJreProvisioning=true -pl ${{ steps.sonar-scope.outputs.pl }}

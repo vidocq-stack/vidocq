@@ -19,8 +19,13 @@
     <url>https://codefloe.com/Vidocq/vidocq</url>
 
     <properties>
-        <!-- The root and the grouping POMs aggregate only: nothing to publish. -->
-        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- The root and the grouping POMs aggregate only: nothing to publish.
+             The SonarQube runs of the CI set vidocq.aggregator.deploy.skip=false, for CycloneDX alone: its aggregate
+             SBOM, written on the root, is skipped when the root skips deploy, and lists only the modules that do not
+             (skipNotDeployed). The dependency scan then sees what the release ships, not the benchmarks, tests and
+             examples, which set maven.deploy.skip themselves. -->
+        <vidocq.aggregator.deploy.skip>true</vidocq.aggregator.deploy.skip>
+        <maven.deploy.skip>${vidocq.aggregator.deploy.skip}</maven.deploy.skip>
 
         <!-- Incremental builds (gitflow-incremental-builder, .mvn/extensions.xml, MONOREPO.md §4). -->
         <gib.referenceBranch>refs/remotes/origin/main</gib.referenceBranch>
