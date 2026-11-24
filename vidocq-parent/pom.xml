@@ -498,32 +498,9 @@
                         </executions>
                     </plugin>
 
-                    <!-- One CycloneDX SBOM per published artifact (Vidocq/vidocq#270): written at
-                         package, attached with the classifier cyclonedx and the type json
-                         (<artifactId>-<version>-cyclonedx.json), so the gpg plugin below signs it
-                         at verify like the jars and Maven Central carries it with its .asc.
-                         What the artifact ships only: compile and runtime scopes. Build tooling,
-                         never in an application. -->
-                    <plugin>
-                        <groupId>org.cyclonedx</groupId>
-                        <artifactId>cyclonedx-maven-plugin</artifactId>
-                        <version>${cyclonedx.maven.plugin.version}</version>
-                        <configuration>
-                            <outputFormat>json</outputFormat>
-                            <!-- Named like the file it becomes on Central. -->
-                            <outputName>${project.build.finalName}-cyclonedx</outputName>
-                            <includeTestScope>false</includeTestScope>
-                            <includeProvidedScope>false</includeProvidedScope>
-                            <includeSystemScope>false</includeSystemScope>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <id>attach-sbom</id>
-                                <phase>package</phase>
-                                <goals><goal>makeBom</goal></goals>
-                            </execution>
-                        </executions>
-                    </plugin>
+                    <!-- No SBOM per module (Vidocq/vidocq#796): the release publishes one aggregate
+                         CycloneDX SBOM, attached to the root POM (vidocq-build) by its own release
+                         profile. One per module was 1,440 of the 6,546 files of 0.4.0 on Central. -->
 
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
@@ -577,6 +554,10 @@
                                  after Sonatype validation and the wait-for-Central
                                  step in release.sh polls until it propagates. -->
                             <autoPublish>${central.publishing.autoPublish}</autoPublish>
+                            <!-- MD5 and SHA-1, the two Central requires (Vidocq/vidocq#796). The
+                                 default, ALL, adds SHA-256 and SHA-512: a third of the files of a
+                                 release, against the namespace's file limit. -->
+                            <checksums>required</checksums>
                         </configuration>
                     </plugin>
 

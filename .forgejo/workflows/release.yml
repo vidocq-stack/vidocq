@@ -4,7 +4,8 @@
 # What it does is release.sh of Vidocq/ci (release-maven), as the repositories before the monorepo did:
 #   - a release/<version> branch from main, every POM of the reactor at <version>, commit, push;
 #   - the whole reactor built with -P release,crac,!incubator and without tests, then deployed: signed jars,
-#     sources, javadoc and one CycloneDX SBOM per artifact (vidocq-parent's release profile);
+#     sources, javadoc (vidocq-parent's release profile), MD5 and SHA-1 checksums only, and one aggregate CycloneDX
+#     SBOM for the release, attached to the root POM vidocq-build (#796);
 #   - the tag v<version>, then main at <next>-SNAPSHOT, committed and pushed by vidocq-ci-bot, signed with its key.
 # Then the same signed files go to the Maven package registry of Codefloe (codefloe.com/api/packages/Vidocq/maven),
 # from the bundle release.sh uploaded to Central (.forgejo/scripts/publish-codefloe-maven.py). A probe upload before

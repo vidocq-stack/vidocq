@@ -6,7 +6,9 @@
 
     <!--
       The root of the Vidocq monorepo: an aggregator, never a parent of a published module. Every brick inherits
-      vidocq-parent (below), the grouping POMs inherit this one. It publishes nothing.
+      vidocq-parent (below), the grouping POMs inherit this one. A release publishes this POM for one reason: it
+      carries the aggregate CycloneDX SBOM of the release (profile release below, Vidocq/vidocq#796), so it has the
+      metadata Maven Central requires.
 
       Maturity levels (MONOREPO.md §3): vidocq-components/ is stable, vidocq-preview/ is usable and released but not
       certified, vidocq-incubator/ is built and tested but never released. The release runs with -P '!incubator'.
@@ -16,7 +18,46 @@
     <version>0.5.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Vidocq</name>
+    <description>The build root of the Vidocq monorepo. Published with each release only to carry the aggregate CycloneDX SBOM of every module the release ships.</description>
     <url>https://codefloe.com/Vidocq/vidocq</url>
+
+    <scm>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <!-- The licences and developers of vidocq-parent, which this POM does not inherit:
+         SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+        <developer>
+            <name>Antoine Sabot-Durand</name>
+            <email>antoine@sabot-durand.net</email>
+        </developer>
+    </developers>
 
     <properties>
         <!-- The root and the grouping POMs aggregate only: nothing to publish.
@@ -55,6 +96,88 @@
             <modules>
                 <module>vidocq-incubator</module>
             </modules>
+        </profile>
+        <profile>
+            <!--
+              The release SBOM (Vidocq/vidocq#796): one CycloneDX SBOM for the whole release instead of one per module,
+              attached to this POM, signed and published with it. makeAggregateBom runs on the execution root only
+              and lists the reactor modules a publishing plugin would deploy (skipNotDeployed): the bricks, which
+              carry central-publishing through vidocq-parent's release profile, not the modules release.sh leaves
+              out. This POM counts as deployed through its own central-publishing execution below, while
+              maven.deploy.skip stays true, so maven-deploy-plugin never runs here or in the grouping POMs.
+              Every plugin is inherited=false: the grouping POMs publish nothing. The versions are those of
+              vidocq-parent (cyclonedx.maven.plugin.version, maven.gpg.plugin.version,
+              central.publishing.plugin.version), which this POM does not inherit: change them together.
+            -->
+            <id>release</id>
+            <properties>
+                <central.publishing.autoPublish>false</central.publishing.autoPublish>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.cyclonedx</groupId>
+                        <artifactId>cyclonedx-maven-plugin</artifactId>
+                        <version>2.9.3</version>
+                        <inherited>false</inherited>
+                        <configuration>
+                            <outputFormat>json</outputFormat>
+                            <!-- Named like the file it becomes on Central: vidocq-build-<version>-cyclonedx.json. -->
+                            <outputName>${project.artifactId}-${project.version}-cyclonedx</outputName>
+                            <includeTestScope>false</includeTestScope>
+                            <includeProvidedScope>false</includeProvidedScope>
+                            <includeSystemScope>false</includeSystemScope>
+                            <outputReactorProjects>false</outputReactorProjects>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-release-sbom</id>
+                                <phase>package</phase>
+                                <goals><goal>makeAggregateBom</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg><arg>loopback</arg>
+                                        <arg>--batch</arg>
+                                        <arg>--yes</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.12.0</version>
+                        <inherited>false</inherited>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>injected-central-publishing</id>
+                                <phase>deploy</phase>
+                                <goals><goal>publish</goal></goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>${central.publishing.autoPublish}</autoPublish>
+                            <checksums>required</checksums>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 </project>
