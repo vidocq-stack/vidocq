@@ -217,18 +217,23 @@ final class ContainerScanner {
 
         private static final java.util.regex.Pattern COMMENT =
                 java.util.regex.Pattern.compile("<!--.*?-->", java.util.regex.Pattern.DOTALL);
+        /**
+         * The attribute and its quoted value. The value is stripped after the match: spaces matched inside the
+         * pattern, around a value that may hold spaces itself, backtrack polynomially (Sonar java:S5852).
+         */
         private static final java.util.regex.Pattern ATTRIBUTE =
-                java.util.regex.Pattern.compile("bean-discovery-mode\\s*=\\s*([\"'])\\s*([^\"']*?)\\s*\\1");
+                java.util.regex.Pattern.compile("bean-discovery-mode\\s*+=\\s*+([\"'])([^\"']*+)\\1");
 
         static BeanDiscoveryMode of(String beansXml) {
             var matcher = ATTRIBUTE.matcher(COMMENT.matcher(beansXml).replaceAll(""));
             if (!matcher.find()) return ANNOTATED;
-            return switch (matcher.group(2)) {
+            var value = matcher.group(2).strip();
+            return switch (value) {
                 case "all" -> ALL;
                 case "annotated" -> ANNOTATED;
                 case "none" -> NONE;
                 default -> throw new IllegalArgumentException(
-                        "invalid bean-discovery-mode \"" + matcher.group(2) + "\" (expected all, annotated or none)");
+                        "invalid bean-discovery-mode \"" + value + "\" (expected all, annotated or none)");
             };
         }
     }
