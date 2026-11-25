@@ -15,7 +15,8 @@ modules, labelled historical; current commands are in `README.md`.
 
 ## Closure contract — D43 baseline, 2026-10-18
 
-**Scope review complete; release readiness remains blocked.** P0–P12 and
+**Scope review complete. Update of 2026-11-25: Noether was released as a preview in Vidocq 0.4.0
+(2026-11-24); C2 and C4 are closed, C3 is still pending triage.** P0–P12 and
 D5/D9–D43 are the frozen engineering baseline, not a promise that every
 portable JPA mapping works. The dated history below records delivered work;
 the future backlog is not an instruction to keep adding combinations until
@@ -34,12 +35,12 @@ Data/JPA bridge.
 | Exit criterion | Evidence / remaining action | Status |
 | --- | --- | --- |
 | C1 — Finite functional contract | Delivered scope and boundary matrix in the Persistence roadmap; portable refusals are named, not relabelled optional | Documented |
-| C2 — Correctness of delivered paths | Fix and add tracked regressions for Persistence BUG-20261018-03 (CDI configuration collision) and -04 (TABLE allocation/pool capacity). Resolve or explicitly gate affected behavior; a surprising timeout is not an accepted fallback | Blocking |
+| C2 — Correctness of delivered paths | Fix and add tracked regressions for Persistence BUG-20261018-03 (CDI configuration collision) and -04 (TABLE allocation/pool capacity). Resolve or explicitly gate affected behavior; a surprising timeout is not an accepted fallback | Closed (2026-11-11, audit #45): -03 fixed with `PersistenceBindingKeyTest`; -04 gated, a unit with a TABLE generator refuses a pool below two connections at bootstrap (`ConnectionPoolModulePathTest`, `IdGeneratorsTest`). See `noether-persistence/BUG.md` |
 | C3 — Close review risks | Reproduce or dismiss table-generator initialization race, resource-local JDBC execution policy and early-bootstrap resource ownership risks. The Java 25 review supplied static evidence, not three additional proven bugs | Pending triage |
-| C4 — Published dependency gate | Select released parent/Mansart coordinates and rerun standalone/container gates without relying on locally installed development snapshots. Revalidate the Vauban integration against the selected published version | Blocking publication |
+| C4 — Published dependency gate | Select released parent/Mansart coordinates and rerun standalone/container gates without relying on locally installed development snapshots. Revalidate the Vauban integration against the selected published version | Closed (2026-11-24): since the monorepo (2026-11-20), parent, Mansart and Vauban are modules of the same reactor; Noether was built, tested and released with them in Vidocq 0.4.0, at one version |
 | C5 — Verification and performance evidence | Clean reactor passes 1151 tests. D43 TCK evidence remains 2135 / 2131 passed / 0 failures / 0 errors / 4 skips with local TCK-BUG-001. Current comparative JMH, reverse-order repeat and JFR/SQL diagnostics are recorded in BENCH-20261018-01/02/03 | Baseline recorded; rerun correctness gates after C2/C3 changes |
 
-Dependency availability checked on 2026-10-18 via Maven Central metadata:
+Historical (superseded by the 0.4.0 release, see C4): dependency availability checked on 2026-10-18 via Maven Central metadata:
 `io.vidocq:vidocq-parent`, `io.vidocq.mansart:mansart-pool-core`,
 `io.vidocq.mansart:mansart-transactions-jdbc` and
 `io.vidocq.vauban:vauban-core` each advertise **0.3.0** as the latest release.

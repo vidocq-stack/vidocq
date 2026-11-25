@@ -6,7 +6,8 @@ gap analysis and a pointer to the per-gap tracking issues and design docs — no
 certification process document (that will follow the same shape as `CERTIFICATION.md`
 once the gaps below are closed).
 
-> Status: **in progress** — Servlet, Server Pages, Expression Language and Data delivered.
+> Status: **in progress** — Servlet, Server Pages, Expression Language and Data delivered;
+> Persistence (Noether) and Security (Kerckhoffs) released as previews in 0.4.0 (2026-11-24).
 > Umbrella tracking issue:
 > [vidocq#67](https://codefloe.com/Vidocq/vidocq/issues/67).
 
@@ -22,7 +23,7 @@ already tracked in `CERTIFICATION.md`) plus:
 | Jakarta Expression Language | 6.0 | `peano` | ✅ official TCK 361/361 and signatures; extension `vidocq-runtime-peano-el-extension` | done |
 | Jakarta Data | 1.0 | `mansart-jakarta-data` | ✅ official TCK 73/73 + signature (SQL; NoSQL out of scope) | done |
 | Jakarta Transactions (JTA) | 2.0 | `mansart-transactions` | 🟡 minimal JTA, no XA recovery; smoke 5/5 + signatures, full suite in progress | 1.1.0 |
-| Jakarta Persistence (JPA) | 3.2 | [`noether`](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) (Antoine's project, split out of Mansart) | 🟡 (2026-11-16) extension `vidocq-runtime-noether-persistence-extension` on `main` ([#541](https://codefloe.com/Vidocq/vidocq/pulls/541)): the persistence units an application injects, declared in a `persistence.xml` or by `vidocq.persistence.*` keys, are created at start, so a unit that cannot be created fails the start; three integration test modules, and the Persistence panel of the dev console. TCK 2131/2135 (0 failures, 4 skips of the TCK itself) on the full 3.2.1 suite with one fixture backported from upstream, PostgreSQL 17, measured on 2026-10-22 on the brick alone and not rerun since: a local run, not an official result. First Noether release pending — [#283](https://codefloe.com/Vidocq/vidocq/issues/283) | 1.0.0; may be pulled into a 0.4.x release if Noether publishes in time |
+| Jakarta Persistence (JPA) | 3.2 | [`noether`](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) (Antoine's project, split out of Mansart) | 🟡 (2026-11-16) extension `vidocq-runtime-noether-persistence-extension` on `main` ([#541](https://codefloe.com/Vidocq/vidocq/pulls/541)): the persistence units an application injects, declared in a `persistence.xml` or by `vidocq.persistence.*` keys, are created at start, so a unit that cannot be created fails the start; three integration test modules, and the Persistence panel of the dev console. TCK 2131/2135 (0 failures, 4 skips of the TCK itself) on the full 3.2.1 suite with one fixture backported from upstream, PostgreSQL 17, measured on 2026-10-22 on the brick alone and not rerun since: a local run, not an official result. Released as a preview in 0.4.0 (2026-11-24), no certification claim — [#283](https://codefloe.com/Vidocq/vidocq/issues/283) | 1.0.0 (certification) |
 | Jakarta Validation (Bean Validation) | 3.1 | `erasmus` | 🟡 21/22 built-in constraints; cascading, groups, executable validation, TCK and runtime extension to do — [#64](https://codefloe.com/Vidocq/vidocq/issues/64) | 1.1.0 |
 | Jakarta Concurrency | 3.1 | — | ❌ no implementation, a natural fit for virtual threads — [#72](https://codefloe.com/Vidocq/vidocq/issues/72) | 1.1.0 |
 | Jakarta WebSocket | 2.2 | `foy` (`foy-websocket`) on Chappe | 🚧 lot 1: programmatic server API (`vidocq-runtime-foy-websocket-extension`, on Foy); annotated endpoints, client, TCK to come — [#65](https://codefloe.com/Vidocq/vidocq/issues/65) | 1.1.0 |
@@ -75,28 +76,26 @@ API at runtime instead of a third-party bytecode library), lives in
 | Debugging Support 2.0 (SMAP for Server Pages) | [vidocq#73](https://codefloe.com/Vidocq/vidocq/issues/73) |
 | **Umbrella** | [vidocq#67](https://codefloe.com/Vidocq/vidocq/issues/67) |
 
-## 4. Open question: is Web Profile certification all-or-nothing?
+## 4. Decided: the target is Web Profile 11 certification
 
-Unlike the other gaps, the legacy view layer (EL/Faces/JSTL/Server Pages, §1) raises a
-scope question before an implementation question: these specs are hard to reconcile
-with the ecosystem's zero-dynamic-reflection philosophy (Server Pages in particular
-compiles Java *at runtime* in its classic form — see [#73](https://codefloe.com/Vidocq/vidocq/issues/73)
-for the precompile-only alternative), and it is not yet confirmed
-whether a partial Web Profile implementation can be certified, or whether all
-constituent specs are mandatory for the compatibility claim (as they are for Core
-Profile 11 — see `CERTIFICATION.md` §1's two-tier profile/constituent model, which
-likely extends unchanged to Web Profile). This is tracked in
-[#66](https://codefloe.com/Vidocq/vidocq/issues/66) and must be resolved before
-committing to a Web Profile certification target (as opposed to just closing gaps
-for their own sake).
+Decided on 2026-11-09: Vidocq aims at **Jakarta EE Web Profile 11 certification**, and therefore at the
+certification of each of its constituent specifications, Persistence 3.2 included. This closes the question this
+section used to leave open (is a partial Web Profile certifiable, or are all constituent specifications mandatory?):
+as for Core Profile 11 (`CERTIFICATION.md` §1, two-tier profile/constituent model), every constituent specification
+is required, so the view layer (Server Pages, Expression Language, Standard Tag Library, Faces) and Enterprise
+Beans Lite are in scope. The view layer keeps the ecosystem's rules: pages compiled at build time (Ibarra), Faces
+written from scratch. The sequencing and the dates of the release plan are unchanged: certification in 1.4.0
+([`ROADMAP.md`](ROADMAP.md#release-plan)). Tracked in [#66](https://codefloe.com/Vidocq/vidocq/issues/66) and the
+umbrella [#67](https://codefloe.com/Vidocq/vidocq/issues/67).
+
+The context below is kept as the record of the alternative that was set aside.
 
 Context for that decision: Quarkus and Helidon deliberately target Core Profile +
 MicroProfile and *not* Web Profile. Faces, Server Pages and Enterprise Beans are the
 parts of Jakarta EE that cloud-native deployments have largely moved away from. A
 "Web Profile minus the view layer" (Core Profile + Servlet + Data + Persistence +
 Security + Validation + WebSocket + Concurrency) is not certifiable as such, but is
-what is actually deployed on Kubernetes today. Both targets are legitimate; the choice
-between them is the real strategic question behind #66.
+what is actually deployed on Kubernetes today. Both targets were legitimate; the full Web Profile was chosen.
 
 ## 5. Kubernetes as the deployment platform — what it does and does not replace
 
@@ -170,17 +169,17 @@ solves the *operations* half of the "application server" problem; the *semantics
 
 ## 6. Status
 
-Updated on 2026-11-16 (Persistence, Security, Standard Tag Library; the other lines are those of 2026-11-14).
+Updated on 2026-11-25 (Persistence and Security released as previews in 0.4.0; the other lines are those of
+2026-11-14 and 2026-11-16).
 
 - **Delivered:** Servlet 6.1 (Foy), Server Pages 4.0 (Ibarra, precompiled at build time),
   Expression Language 6.0 (Peano), Data 1.0 (Mansart), each with its runtime extension and
   its official TCK passing; the `java:comp/env` naming context for data sources
   (`vidocq-runtime-naming-extension`, Vauban Naming).
-- **In progress:** Persistence 3.2 (Noether, Antoine's project: runtime extension on `main`, first release pending;
-  planned for 1.0.0, may be pulled into a 0.4.x release if Noether publishes in time), Validation 3.1 (Erasmus),
+- **In progress:** Persistence 3.2 (Noether, Antoine's project: released as a preview in 0.4.0, certified in 1.0.0), Validation 3.1 (Erasmus),
   Transactions 2.0 beyond minimal JTA, WebSocket 2.2 (programmatic server API on Foy; annotated endpoints, client, TCK to come),
-  Security 4.0 with Authentication 3.1 and Authorization 3.0 (Kerckhoffs: runtime extension on `main`, partial run of
-  the official Security TCK), Standard Tag Library 3.0 (Bodoni: runtime extension, official Tags TCK 541/541).
+  Security 4.0 with Authentication 3.1 and Authorization 3.0 (Kerckhoffs: released as a preview in 0.4.0, default set of the official Security TCK green
+  on the assembled runtime, 81 tests), Standard Tag Library 3.0 (Bodoni: runtime extension, official Tags TCK 541/541).
 - **Not started:** Concurrency, Debugging Support (1.1.0); CDI Full and Enterprise Beans Lite
   (1.2.0); Faces, from scratch (1.3.0).
 - Production readiness (1.0.0: fuzzing, soak and chaos tests, end-to-end benchmarks,

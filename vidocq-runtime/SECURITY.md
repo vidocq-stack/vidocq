@@ -11,7 +11,7 @@ supported line.
 | Version | Supported |
 |---|---|
 | `main` (development, `-SNAPSHOT`) | Fixes land here first |
-| `0.4.x` (release candidates, then 0.4.0 at the end of November 2026) | Yes |
+| `0.4.x` (0.4.0 released on 2026-11-24) | Yes |
 | `0.3.x` and older | No |
 
 Before 1.0.0, only the latest release line is supported. From 1.0.0, the latest minor line of
