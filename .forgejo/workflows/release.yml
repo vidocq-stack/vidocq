@@ -17,6 +17,15 @@
 # publishes (.forgejo/scripts/release-gate.py). Run both on main by hand when the last scheduled ones were not on it.
 # A dry run (the default) builds, signs and bundles, and pushes and uploads nothing; the gate only warns there.
 #
+# A patch release (x.y.Z, Z > 0) runs from the branch maintenance/x.y instead, and publishes only what changed since
+# the previous release of the line: .forgejo/scripts/patch-plan.py lists those modules (with their -codegen and -dev
+# companions and the modules of .forgejo/release-patch.json), .forgejo/scripts/patch-compat.py checks with japicmp that
+# each stays binary and source compatible with the jar it replaces, and release.sh moves them alone to x.y.Z (its
+# patch-modules input). The others keep the version of their last release and come from Maven Central: every module
+# with code is published with a flattened pom (vidocq-parent, profile flatten-published). The tag is pushed and the
+# maintenance branch moves to the release commit; main is not touched and next_dev_version is not used. The gate
+# applies as for a full release: run the Nightly build and the TCK nightly on the maintenance branch first.
+#
 # The whole build runs on Azul Zulu CRaC 25: vidocq-runtime-crac-extension requires jdk.crac and is published with the
 # rest (as the runtime's own releases did, on the crac runner). With auto_publish 'manual' (the default) the deployment
 # waits on central.sonatype.com for a maintainer's Publish.
@@ -30,15 +39,19 @@ on:
         type: string
         required: true
       next_dev_version:
-        description: 'Next development version, without -SNAPSHOT (e.g. 0.5.0); -SNAPSHOT is appended'
+        description: 'Next development version, without -SNAPSHOT (e.g. 0.5.0); -SNAPSHOT is appended. A full release only'
         type: string
-        required: true
+        required: false
       dry_run:
-        description: "'true': build, sign and bundle only, no push, no upload, main untouched"
+        description: "'true': build, sign and bundle only, no push, no upload, the branch untouched"
         type: choice
         required: true
         default: 'true'
         options: ['true', 'false']
+      accepted_parent_changes:
+        description: 'Patch release only: parent or grouping poms changed since the previous release of the line that touch the build only (comma-separated paths); any other one stops a patch release'
+        type: string
+        required: false
       auto_publish:
         description: "'manual': the deployment waits for Publish on central.sonatype.com; 'auto': published once validated"
         type: choice
@@ -53,7 +66,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/maintenance/')
     runs-on: vidocq-runner
     env:
       # Every Maven call of release.sh: the whole reactor (no incremental build), build-info as the nightly writes it.
@@ -67,6 +80,33 @@ jobs:
           token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
           # The head of main when the job starts, not the commit of the dispatch: the gate below checks that one.
           ref: ${{ github.ref_name }}
+
+      # A full release from main moves main to the next development version: it needs one. A patch release from
+      # maintenance/x.y publishes the modules that changed since the previous release of its line.
+      - name: What this release publishes
+        id: plan
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          NEXT_DEV_VERSION: ${{ inputs.next_dev_version }}
+          ACCEPTED: ${{ inputs.accepted_parent_changes }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            [ -n "$NEXT_DEV_VERSION" ] || { echo "::error::a full release from main needs next_dev_version"; exit 1; }
+            echo "a full release of the reactor from main"
+            exit 0
+          fi
+          line="${RELEASE_VERSION%.*}"
+          [ "maintenance/$line" = "$GITHUB_REF_NAME" ] \
+            || { echo "::error::release $RELEASE_VERSION does not belong to $GITHUB_REF_NAME"; exit 1; }
+          previous=$(git describe --tags --abbrev=0 --match "v${line}.*" HEAD) \
+            || { echo "::error::no release of the line $line below $GITHUB_REF_NAME"; exit 1; }
+          accept=()
+          IFS=',' read -ra poms <<< "$ACCEPTED"
+          for pom in "${poms[@]}"; do pom="${pom// /}"; [ -n "$pom" ] && accept+=(--accept "$pom"); done
+          python3 -I -B .forgejo/scripts/patch-plan.py "${accept[@]}" "$previous" > "$RUNNER_TEMP/patch-modules.txt"
+          { echo "modules<<PATCH_MODULES_END"; cat "$RUNNER_TEMP/patch-modules.txt"; echo "PATCH_MODULES_END"; } \
+            >> "$GITHUB_OUTPUT"
 
       - name: Nightly build and TCK nightly green on this commit
         env:
@@ -106,6 +146,18 @@ jobs:
           echo "JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/zulu/bin" >> "$GITHUB_PATH"
 
+      # Each module of a patch, built at the version of its last release, against that release's jar on Central: the
+      # modules a patch does not publish were compiled against it. Before anything is pushed or uploaded.
+      - name: The modules of the patch stay compatible with the jars they replace
+        if: steps.plan.outputs.modules != ''
+        env:
+          PATCH_MODULES: ${{ steps.plan.outputs.modules }}
+        run: |
+          set -euo pipefail
+          mapfile -t folders <<< "$PATCH_MODULES"
+          ./mvnw -B -ntp -DskipTests -pl "$(printf '%s\n' "${folders[@]}" | paste -sd, -)" package
+          python3 -I -B .forgejo/scripts/patch-compat.py "${folders[@]}"
+
       - uses: https://codefloe.com/Vidocq/ci/release-maven@7faa069e1cdfdfb0231398b3d47c7eab5d359bbd
         with:
           java-setup: 'false'
@@ -117,6 +169,7 @@ jobs:
           release-profile: release,crac,!incubator,repackaged-api
           release-version: ${{ inputs.release_version }}
           next-dev-version: ${{ inputs.next_dev_version }}
+          patch-modules: ${{ steps.plan.outputs.modules }}
           dry-run: ${{ inputs.dry_run }}
           auto-publish: ${{ inputs.auto_publish == 'auto' && 'true' || 'false' }}
           central-username: ${{ secrets.CENTRAL_USERNAME }}

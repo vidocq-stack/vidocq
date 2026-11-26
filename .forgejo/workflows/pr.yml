@@ -24,8 +24,13 @@
 name: pr-validate
 on:
   pull_request:
-    branches: [main]
+    # main, and the maintenance branch of a released line (maintenance/x.y), where the fixes of a patch release go.
+    branches: [main, 'maintenance/**']
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+# The branch the pull request targets: what the incremental build, the title check and the analysis compare with.
+env:
+  BASE: ${{ github.base_ref }}
 
 jobs:
   pr-state:
@@ -65,8 +70,8 @@ jobs:
           TITLE: ${{ github.event.pull_request.title }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main || true
-          git diff --name-only "$(git merge-base origin/main HEAD)" HEAD > "$RUNNER_TEMP/changed.txt" || true
+          git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE" || true
+          git diff --name-only "$(git merge-base "origin/$BASE" HEAD)" HEAD > "$RUNNER_TEMP/changed.txt" || true
           python3 - "$RUNNER_TEMP/changed.txt" <<'PY'
           import json, os, re, sys
           title = os.environ["TITLE"]
@@ -111,10 +116,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # gitflow-incremental-builder compares with the merge base of main
+          fetch-depth: 0   # gitflow-incremental-builder compares with the merge base of the target branch
 
-      - name: Fetch main for the incremental build
-        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+      - name: Fetch the target branch for the incremental build
+        run: git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
 
       - name: Detect a docs-only change set
         id: changes
@@ -144,7 +149,7 @@ jobs:
         # -Pquality: the JaCoCo reports the SonarQube analysis below reads; the build is not run a second time.
         run: >-
           mvn -B -ntp -U install -am -Pquality -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist
-          -Dgib.referenceBranch=refs/remotes/origin/main
+          -Dgib.referenceBranch=refs/remotes/origin/${{ github.base_ref }}
           -Dgib.buildUpstreamMode=impacted
           -Dgib.skipTestsForUpstreamModules=true
           -Dgib.uncommitted=false -Dgib.untracked=false
@@ -161,7 +166,7 @@ jobs:
         run: |
           set -euo pipefail
           touch "$IMPACTED"
-          git diff --name-only "$(git merge-base refs/remotes/origin/main HEAD)" HEAD > "$RUNNER_TEMP/changed.txt"
+          git diff --name-only "$(git merge-base "refs/remotes/origin/$BASE" HEAD)" HEAD > "$RUNNER_TEMP/changed.txt"
           python3 - "$IMPACTED" "$RUNNER_TEMP/changed.txt" >> "$GITHUB_OUTPUT" <<'PY'
           import os, sys
           root = os.getcwd()

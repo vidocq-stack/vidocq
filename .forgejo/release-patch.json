@@ -1,0 +1,18 @@
+{
+  "description": "What a patch release (x.y.Z, Z > 0) publishes besides the modules that changed since the previous release of its line (.forgejo/scripts/patch-plan.py). Each entry is a reactor folder, published at the patch version every time because a published artifact names it by a version it does not declare itself: an application builds on the BOM's version, the plugin's and the CLI's; the plugin resolves the dev agent and the core's -codegen at the version of vidocq-runtime-core, the test agent at its own version, the dev console at the version of vidocq-runtime-chappe-webserver-extension; the banner shows the version of vidocq-runtime-core.",
+  "always": [
+    "vidocq-runtime/vidocq-runtime-bom",
+    "vidocq-runtime/vidocq-runtime-parent",
+    "vidocq-runtime/vidocq-runtime-maven-plugin",
+    "vidocq-runtime/vidocq-runtime-cli",
+    "vidocq-runtime/vidocq-runtime-core",
+    "vidocq-runtime/vidocq-runtime-core-codegen",
+    "vidocq-runtime/vidocq-runtime-dev-agent",
+    "vidocq-runtime/vidocq-runtime-test-agent",
+    "vidocq-runtime/vidocq-runtime-devconsole-spi",
+    "vidocq-runtime/vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-devconsole-extension",
+    "vidocq-runtime/vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-chappe-webserver-extension"
+  ],
+  "companions": ["-codegen", "-dev"],
+  "profiles": ["release", "crac", "repackaged-api"]
+}
