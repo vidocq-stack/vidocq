@@ -48,6 +48,15 @@ class CliVersionTest {
         assertTrue(v.matches(SEMVER), "runtime version must be semver, got: " + v);
     }
 
+    /**
+     * The CLI is published with every release, a patch release included, and scaffolds on that release. Its parent
+     * is not: in a patch release it keeps the version of the last release that changed it.
+     */
+    @Test
+    void theRuntimeVersionIsTheCliVersion() {
+        assertEquals(Version.cli(), Version.runtime());
+    }
+
     @Test
     void buildTimestampIsResolvedFromBuild() {
         String ts = Version.buildTimestamp();

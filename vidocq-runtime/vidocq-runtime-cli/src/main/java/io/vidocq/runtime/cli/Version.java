@@ -27,10 +27,11 @@ import java.util.Properties;
 /**
  * Build-time version information, filtered by Maven into {@code version.properties}.
  *
- * <p>{@link #cli()} is the version of the CLI itself ({@code project.version}), while
- * {@link #runtime()} is the version of the released {@code vidocq-runtime-parent} the CLI
- * inherits from ({@code project.parent.version}) — the version scaffolded projects must
- * reference so their parent resolves from Maven Central.</p>
+ * <p>{@link #cli()} is the version of the CLI itself, and {@link #runtime()} the Vidocq version
+ * scaffolded projects build on: the same {@code project.version}. The CLI is published with every
+ * release, a patch release included, and so are the BOM, the application parent and the plugin a
+ * scaffolded project names; the CLI's own parent is not, it keeps the version of the last release
+ * that changed it.</p>
  *
  * <p>A SNAPSHOT is rebuilt under the same version, so {@link #cliDisplay()} adds the
  * build timestamp to tell two of them apart.</p>

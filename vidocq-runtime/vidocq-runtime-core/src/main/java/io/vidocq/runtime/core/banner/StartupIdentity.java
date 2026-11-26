@@ -31,6 +31,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Who is starting: the Vidocq version and build, the JVM, the launch and the application.
@@ -59,6 +61,9 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
 
     /** The shortest application name kept before the version when the context line is too wide. */
     private static final int MIN_NAME_COLUMNS = 8;
+
+    /** A release {@code x.y.z}. */
+    private static final Pattern RELEASE = Pattern.compile("(\\d+)\\.(\\d+)\\.(\\d+)");
 
     public StartupIdentity {
         Objects.requireNonNull(vidocq, "vidocq");
@@ -251,9 +256,25 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
     }
 
     static boolean worthALook(BuildInfo brick, BuildInfo runtime) {
-        return !Objects.equals(brick.version(), runtime.version())
+        return !(Objects.equals(brick.version(), runtime.version())
+                        || earlierPatchOfTheLine(brick.version(), runtime.version()))
                 || brick.isDirty()
                 || (brick.snapshot() && brick.commit() == null);
+    }
+
+    /**
+     * Whether {@code brick} is an earlier patch of the runtime's line ({@code 0.4.0} under {@code 0.4.1}): a patch
+     * release publishes only the modules that changed, and the others keep the version of the release that last did.
+     */
+    static boolean earlierPatchOfTheLine(String brick, String runtime) {
+        if (brick == null || runtime == null) {
+            return false;
+        }
+        Matcher b = RELEASE.matcher(brick);
+        Matcher r = RELEASE.matcher(runtime);
+        return b.matches() && r.matches()
+                && b.group(1).equals(r.group(1)) && b.group(2).equals(r.group(2))
+                && Integer.parseInt(b.group(3)) < Integer.parseInt(r.group(3));
     }
 
     /** {@code io.vidocq.<brick>.*} gives {@code <brick>}; the runtime itself and VidocqTools applications give {@code null}. */

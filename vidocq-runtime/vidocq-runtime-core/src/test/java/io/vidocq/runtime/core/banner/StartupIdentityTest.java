@@ -216,6 +216,26 @@ class StartupIdentityTest {
         assertTrue(StartupIdentity.worthALook(jar("0.4.0-SNAPSHOT", null, null, null, null, null), runtime));
     }
 
+    /**
+     * A patch release publishes only what changed: under runtime 0.4.1, a brick still at 0.4.0 is on the train, one
+     * from another line or newer than the runtime is not.
+     */
+    @Test
+    void aBrickOfAnEarlierPatchOfTheRuntimeLineIsNotWorthALook() {
+        BuildInfo runtime = jar("0.4.1", "9beafc47", false, null, null, null);
+
+        assertFalse(StartupIdentity.worthALook(jar("0.4.0", "2d8ec095", false, null, null, null), runtime));
+        assertFalse(StartupIdentity.worthALook(jar("0.4.1", "2d8ec095", false, null, null, null), runtime));
+        assertTrue(StartupIdentity.worthALook(jar("0.4.2", "2d8ec095", false, null, null, null), runtime));
+        assertTrue(StartupIdentity.worthALook(jar("0.3.9", "2d8ec095", false, null, null, null), runtime));
+        assertTrue(StartupIdentity.worthALook(jar("0.4.0-SNAPSHOT", "2d8ec095", false, null, null, null), runtime));
+        assertTrue(StartupIdentity.worthALook(jar("0.4.0", "2d8ec095", true, null, null, null), runtime));
+        assertTrue(StartupIdentity.worthALook(jar("0.4.0", "2d8ec095", false, null, null, null),
+                jar("0.5.0-SNAPSHOT", "9beafc47", false, null, null, null)));
+        assertFalse(StartupIdentity.earlierPatchOfTheLine(null, "0.4.1"));
+        assertFalse(StartupIdentity.earlierPatchOfTheLine("0.4.0", null));
+    }
+
     @Test
     void bricksAreNamedByTheirThirdSegmentOutsideTheRuntime() {
         assertEquals("vauban", StartupIdentity.brickOf("io.vidocq.vauban.core"));

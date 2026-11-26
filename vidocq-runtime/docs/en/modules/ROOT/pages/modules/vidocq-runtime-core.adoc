@@ -208,7 +208,7 @@ The *context line* is `Java <version> (<vendor>) | <mode> (<reason>) | debug <ad
 
 Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the dev console, and the name comes back whole if it then fits, then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason, the debugger and the dev console whatever their length.
 
-The Vidocq bricks are released with the runtime, at its version. When a brick (Vauban, Chappe, Cassini, ...) has another version than the runtime, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
+The Vidocq bricks are released with the runtime, at its version. A patch release (`0.4.1`, `0.4.2`, ...) publishes only the modules that changed, with the runtime itself: a brick still at an earlier patch of the runtime's line (`0.4.0` under `0.4.1`) is where it should be. When a brick (Vauban, Chappe, Cassini, ...) has another version than that, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
 
 [source,text]
 ----
