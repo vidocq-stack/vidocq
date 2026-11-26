@@ -301,6 +301,7 @@ The REST and Servlet extensions are two mounts of one server. The longest prefix
 
 The REST extension mounts its resources on the `@ApplicationPath` of the application's `Application` subclass, which needs no CDI scope: `cassini-processor`, in the REST codegen bundle, records the path at compile time. `vidocq.rest.context-path` wins over it.
 
+[#servlet-declarative-mount]
 === Declarative mount
 
 `vidocq.http.mount.<name>.type=servlet` mounts the application on `vidocq.http.mount.<name>.path`, on `vidocq.http.mount.<name>.listener`; `vidocq.http.mount.<name>.session-timeout` overrides `vidocq.servlet.session-timeout`. With such a mount, the extension does not mount the application on its own. A `servlet` mount on an application without any web component fails at startup, and so do a second `servlet` mount, which would start the application twice, and `strip-prefix=true`: the prefix is the context path, and Foy dispatches on the full request path.
@@ -500,6 +501,176 @@ Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-
 == Vaadin
 
 A Vaadin Flow application runs on the Servlet extension. The Vaadin extension, `vidocq-runtime-vaadin-extension`, its `-dev` companion and the Vaadin guide now live in their own repository, https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin].
+
+[#declarative-mounts]
+== Declarative mounts
+
+A mount puts a handler on a path prefix of a listener: static files, the REST resources, the servlets, a WebSocket
+route. The extensions mount what they serve on their own (REST on `vidocq.rest.context-path`, servlets on
+`vidocq.servlet.context-path`); a declarative mount does it from `vidocq.properties`, with no code. Each mount has a
+name of your choice, `<name>`, without a dot, and its keys are `vidocq.http.mount.<name>.*`.
+
+IMPORTANT: `vidocq.http.mount.<name>.path` declares the mount. A mount without a `.path` key is not mounted, and
+nothing says so: no error, no warning. Write `.path` even for `/`.
+
+=== Serving a web page next to a REST API
+
+The usual layout: the page at `/`, the REST resources at `/api`.
+
+[source,properties]
+----
+# src/main/resources/vidocq.properties
+vidocq.http.mount.api.path=/api
+vidocq.http.mount.api.type=restful
+
+vidocq.http.mount.ui.path=/
+vidocq.http.mount.ui.type=static
+vidocq.http.mount.ui.classpath=static
+----
+
+[source]
+----
+src/main/resources/
+├── vidocq.properties
+└── static/
+    ├── index.html          → GET /  and GET /index.html
+    └── css/app.css         → GET /css/app.css
+----
+
+`GET /api/...` reaches the REST resources, every other path the files of `static/`. The
+`vidocq-runtime-petstore-example` example uses this layout.
+
+Two things make it work:
+
+* *The REST resources move to `/api`.* By default the REST extension mounts them on `/`, and two mounts on the same
+prefix of one listener fail at startup. A `restful` mount, as above, replaces that automatic mount. Without one, set
+`vidocq.rest.context-path=/api` instead.
+* *The folder of the files is one the application module can read*: <<declarative-mounts-modules>>.
+
+=== Keys of every mount
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.http.mount.<name>.path`
+| —
+| *Required*: it declares the mount. The prefix, `/api`, or `/` for the root; a trailing `/` is dropped. For a
+`websocket` mount, the pattern of the route, `/ws/rooms/\{pin}`.
+
+| `vidocq.http.mount.<name>.type`
+| —
+| *Required.* `static`, `restful`, `servlet` or `websocket`. A type no extension of the application provides fails
+the start, with the available types in the message: `static` and `websocket` come with the web server,
+`restful` with the REST extension, `servlet` with the Servlet extension.
+
+| `vidocq.http.mount.<name>.listener`
+| `default`
+| The listener the mount goes on (`vidocq.chappe.listeners`).
+
+| `vidocq.http.mount.<name>.priority`
+| the length of the prefix
+| Routing order on a listener, the highest first. By default the longest prefix wins: `/api` (4) is tried before
+`/` (0).
+
+| `vidocq.http.mount.<name>.strip-prefix`
+| `true` (`false` for `servlet`)
+| Whether the handler sees the path without the prefix: with `true`, `GET /api/items` reaches a `restful` mount on
+`/api` as `/items`. `false` keeps the full path, for resources whose `@Path` already holds the prefix.
+|===
+
+Two mounts on the same prefix of one listener fail at startup, the mounts the extensions make on their own
+included.
+
+=== `static`: files
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.http.mount.<name>.classpath`
+| —
+| The folder of the files in the application's resources: `static` serves `src/main/resources/static/`.
+
+| `vidocq.http.mount.<name>.filesystem`
+| —
+| A folder on disk instead, `/var/www/ui`. Exactly one of `classpath` and `filesystem`: neither, or both, fails
+the start.
+
+| `vidocq.http.mount.<name>.index`
+| `index.html`
+| The file served for a folder: `GET /` serves `index.html`, `GET /docs/` serves `docs/index.html`.
+
+| `vidocq.http.mount.<name>.clean-urls`
+| `false`
+| With `true`, a path without an extension that matches no file is tried with `.html`: `/about` serves
+`about.html`.
+
+| `vidocq.http.mount.<name>.cache-control`
+| none
+| The `Cache-Control` header of every response, `max-age=3600`.
+
+| `vidocq.http.mount.<name>.cache-in-memory`
+| `false`
+| Keeps the classpath files under 64 KB in memory after their first request.
+|===
+
+A path that matches no file answers 404. The declarative mount has no fallback page for a single-page application
+whose router owns the URLs (`/orders/42` answering `index.html`): that takes a `StaticFileHandler` built in code,
+with `spaFallback` (xref:chappe::usage.adoc[Chappe usage]).
+
+[#declarative-mounts-modules]
+==== The folder of the files and the application module
+
+The application is a Java module, and a module hides the resources of its packages from other modules. A resource
+folder whose name could be a Java package, such as `web/` or `public/`, is such a package: the mount does not find
+its files, and every request answers 404, without an error at startup.
+
+Use a folder whose name cannot be a Java package, and the mount reads it with no `opens`:
+
+* `static`, a Java keyword, as above;
+* `META-INF/resources`, with a `-` in its name: the folder of the Servlet convention.
+
+To keep another name, open the folder and each of its sub-folders: `opens web; opens web.css; opens web.js;`.
+
+=== `restful`: REST resources
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.http.mount.<name>.include-packages`
+| all
+| Comma-separated packages: the mount serves only the resources of these packages and of their sub-packages.
+
+| `vidocq.http.mount.<name>.exclude-packages`
+| none
+| Comma-separated packages whose resources the mount does not serve.
+|===
+
+One `restful` mount turns the automatic mount of the REST extension off: every REST mount is then declared. Two
+`restful` mounts split the resources by package, the application on `/api` and MicroProfile Health on `/health`
+for instance. The startup report lists each one in its `rest` section (<<cassini-rest-report>>).
+
+=== `servlet`: the web application
+
+The Servlet extension mounts the application on `vidocq.servlet.context-path`; a `servlet` mount moves it. Its keys
+and rules: <<servlet-declarative-mount>>.
+
+=== `websocket`: a native WebSocket route
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.http.mount.<name>.handler`
+| —
+| *Required.* The class of a CDI bean that implements Chappe's `WebSocketHandler`. The route is `.path`, a pattern
+whose `\{name}` segments are path parameters.
+|===
+
+The origins allowed to connect: <<chappe-websocket-origins>>. Jakarta WebSocket endpoints (`@ServerEndpoint`) need
+no mount: <<foy-websocket>>.
 
 == Typical lifecycle — Chappe example
 

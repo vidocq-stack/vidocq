@@ -131,7 +131,7 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.http.mount.<name>.*`
 | —
-| Declarative mounts (static resources, `restful`, `servlet`, …). Mounts are routed by descending `.priority`, the length of the prefix by default (longest prefix first), and two mounts on the same prefix of one listener fail at startup.
+| Declarative mounts: static files (`type=static`), REST resources (`restful`), the web application (`servlet`), a WebSocket route (`websocket`). `vidocq.http.mount.<name>.path` declares the mount: a mount without it is not mounted, and nothing says so. Every key, per type, and how to serve a page next to a REST API: xref:modules/vidocq-runtime-extensions.adoc#declarative-mounts[Declarative mounts].
 
 | `vidocq.servlet.context-path`+
 `vidocq.servlet.listener` +
