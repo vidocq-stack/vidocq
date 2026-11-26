@@ -92,6 +92,12 @@ public final class DefaultCassiniHttpAdapter implements CassiniHttpAdapter {
         return mayStream;
     }
 
+    /** A route matches the path for some verb: the request is this stack's, even when it answers 405. */
+    @Override
+    public boolean hasResourceAt(String routingPath) {
+        return !router.methodsAllowedFor(routingPath).isEmpty();
+    }
+
     @Override
     public CompletionStage<Void> dispatch(CassiniHttpExchange exchange) {
         final RequestStatistics stats = statistics;

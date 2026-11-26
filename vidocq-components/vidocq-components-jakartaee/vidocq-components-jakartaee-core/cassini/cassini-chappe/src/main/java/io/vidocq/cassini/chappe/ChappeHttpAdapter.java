@@ -81,6 +81,17 @@ public final class ChappeHttpAdapter implements Handler {
     private final boolean inline;
 
     /**
+     * Whether a resource matches the path of {@code request} for some HTTP method
+     * ({@link CassiniHttpAdapter#hasResourceAt}), without dispatching it: a handler that shares its
+     * prefix with others passes a path no resource matches to the next one (vidocq#802).
+     */
+    public boolean serves(Request request) {
+        // The path ChappeHttpExchange#routingPath routes: Chappe's pathInfo, already below the mount prefix.
+        String pathInfo = request.pathInfo();
+        return engine.hasResourceAt(pathInfo == null || pathInfo.isEmpty() ? "/" : pathInfo);
+    }
+
+    /**
      * When the engine may stream ({@link CassiniHttpAdapter#mayStream}) or no {@link Scoped} hook
      * bounds the request scope, each request is handled on a dedicated virtual thread (M2h);
      * otherwise on the thread Chappe called the handler on, itself a virtual thread, so blocking

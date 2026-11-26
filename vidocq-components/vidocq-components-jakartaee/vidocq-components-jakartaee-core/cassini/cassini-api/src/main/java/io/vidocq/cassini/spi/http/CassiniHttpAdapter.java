@@ -54,4 +54,18 @@ public interface CassiniHttpAdapter {
     default boolean mayStream() {
         return true;
     }
+
+    /**
+     * Whether a resource matches {@code routingPath} for some HTTP method, without dispatching
+     * anything. A transport that puts several handlers on one path prefix asks it, so that a path no
+     * resource matches goes to the next handler instead of answering 404 (vidocq#802). A path with a
+     * resource answers through {@link #dispatch}, a 405 or an automatic {@code OPTIONS} included.
+     * Pre-matching filters do not run: a filter that rewrites the request URI does not make a path match.
+     *
+     * @param routingPath the path the engine routes, as {@link CassiniHttpExchange#routingPath()} gives it
+     * @return {@code true} by default: an adapter that cannot tell serves every path
+     */
+    default boolean hasResourceAt(String routingPath) {
+        return true;
+    }
 }
