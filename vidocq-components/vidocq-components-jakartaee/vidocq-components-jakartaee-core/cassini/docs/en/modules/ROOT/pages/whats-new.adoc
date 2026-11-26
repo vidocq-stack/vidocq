@@ -4,4 +4,6 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+== Transports
+
+* xref:internals.adoc#shared-prefix[The REST stack says whether a resource matches a path] [.tag-new]#NEW# — `CassiniHttpAdapter.hasResourceAt(String)` and `ChappeHttpAdapter.serves(Request)` answer whether a resource matches the path of a request for some HTTP method, without dispatching it. The Vidocq runtime asks it when the REST resources share their prefix with static files or servlets (Vidocq/vidocq#802), so a path no resource matches goes to the next handler of the prefix. An adapter that does not override `hasResourceAt` serves every path, as before.

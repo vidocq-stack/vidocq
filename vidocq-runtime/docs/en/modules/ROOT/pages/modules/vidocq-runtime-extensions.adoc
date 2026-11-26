@@ -503,7 +503,7 @@ Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-
 A Vaadin Flow application runs on the Servlet extension. The Vaadin extension, `vidocq-runtime-vaadin-extension`, its `-dev` companion and the Vaadin guide now live in their own repository, https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin].
 
 [#declarative-mounts]
-== Declarative mounts
+== Declarative mounts [.tag-new]#NEW#
 
 A mount puts a handler on a path prefix of a listener: static files, the REST resources, the servlets, a WebSocket
 route. The extensions mount what they serve on their own (REST on `vidocq.rest.context-path`, servlets on
@@ -580,11 +580,11 @@ the start, with the available types in the message: `static` and `websocket` com
 
 | `vidocq.http.mount.<name>.order`
 | `100` (`static`), `200` (`restful`), `300` (`servlet`)
-| The rank of the mount among the mounts of the same prefix, the lowest asked first: <<declarative-mounts-shared>>.
+| [.tag-new]#NEW# The rank of the mount among the mounts of the same prefix, the lowest asked first: <<declarative-mounts-shared>>.
 |===
 
 [#declarative-mounts-shared]
-=== Several mounts on one prefix
+=== Several mounts on one prefix [.tag-new]#NEW#
 
 Static files, REST resources and servlets can share a prefix, `/` for all three for instance. The mounts of one
 prefix are asked in their order, the lowest first; a mount that has nothing for a request passes it to the next one,

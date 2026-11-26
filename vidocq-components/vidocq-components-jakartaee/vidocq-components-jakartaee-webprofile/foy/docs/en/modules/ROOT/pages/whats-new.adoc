@@ -4,4 +4,6 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+== Integration
+
+* xref:internals.adoc#serves-request[Foy says whether the application serves a request] [.tag-new]#NEW# — `FoyChappeBoot.Mounted.serves(Request)` answers whether a servlet maps the path or the container default servlet has a file, a welcome file or a directory redirect for it, without handling the request: no filter runs and no session is touched. The Vidocq runtime asks it when the servlets share their prefix with static files or REST resources (Vidocq/vidocq#802), so a request the application does not serve goes to the next handler of the prefix.
