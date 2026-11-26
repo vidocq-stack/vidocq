@@ -67,6 +67,12 @@ parent, no profile and no `distributionManagement`, so an application inherits o
 declare and nothing of the repository's own build. It is a build tool of this reactor and never reaches an
 application.
 
+Every other module with code is installed and published flattened too, by the `flatten-published` profile of
+`io.vidocq:vidocq-parent`: no parent, each dependency at its resolved version. A patch release (`0.4.1`, `0.4.2`,
+...) publishes only the modules that changed, and a module of a patch release would otherwise take the versions of
+its dependencies from a parent published with an earlier release. An application sees the same dependencies as
+before.
+
 [#sbom]
 == Software bill of materials (CycloneDX)
 

@@ -700,5 +700,51 @@
                 <directory>${project.basedir}/target-ide</directory>
             </build>
         </profile>
+        <profile>
+            <!-- A module with code is installed and published with a flattened pom: no parent, every dependency
+                 with its version resolved, and what Maven Central requires (name, description, url, licenses,
+                 developers, scm). A patch release (x.y.Z) publishes only the modules that changed: a module at
+                 0.4.1 must not take the versions of its dependencies from a parent already published at 0.4.0,
+                 whose ${project.version} would become 0.4.1 in it. Every build does it, not the release alone,
+                 so the pull requests and the nightly build and test the poms the release publishes.
+                 A pom module (a parent, a grouping pom, vidocq-parent itself) is not flattened: the poms that
+                 inherit it need its build. flatten-maven-plugin is a build tool and ships nothing (AGENTS.md,
+                 zero external dependency); vidocq-runtime-bom and vidocq-runtime-parent flatten their own way. -->
+            <id>flatten-published</id>
+            <activation>
+                <file>
+                    <exists>${basedir}/src/main/java</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>flatten-maven-plugin</artifactId>
+                        <version>1.7.3</version>
+                        <configuration>
+                            <flattenMode>ossrh</flattenMode>
+                            <updatePomFile>true</updatePomFile>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>flatten-published</id>
+                                <phase>process-resources</phase>
+                                <goals>
+                                    <goal>flatten</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>flatten-published-clean</id>
+                                <phase>clean</phase>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>
