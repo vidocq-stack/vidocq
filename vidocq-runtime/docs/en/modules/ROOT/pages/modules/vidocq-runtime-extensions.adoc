@@ -510,8 +510,8 @@ route. The extensions mount what they serve on their own (REST on `vidocq.rest.c
 `vidocq.servlet.context-path`); a declarative mount does it from `vidocq.properties`, with no code. Each mount has a
 name of your choice, `<name>`, without a dot, and its keys are `vidocq.http.mount.<name>.*`.
 
-IMPORTANT: `vidocq.http.mount.<name>.path` declares the mount. A mount without a `.path` key is not mounted, and
-nothing says so: no error, no warning. Write `.path` even for `/`.
+IMPORTANT: `vidocq.http.mount.<name>.path` declares the mount. Write it even for `/`: a mount without it fails the
+start, with the missing key and the keys it would have ignored in the message. A mount name has no dot.
 
 === Serving a web page next to a REST API
 
