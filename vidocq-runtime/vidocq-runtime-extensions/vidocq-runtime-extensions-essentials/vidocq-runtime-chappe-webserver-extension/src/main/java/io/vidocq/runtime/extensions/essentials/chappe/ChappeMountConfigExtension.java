@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Read the config {@code vidocq.http.mount.<name>.*} and save each mount
@@ -84,6 +85,7 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
 
     private static final String PREFIX = "vidocq.http.mount.";
     private static final String SUFFIX_PATH = ".path";
+    private static final String MOUNT = "Mount '";
 
     /**
      * Built-in mount type handled here (not via a {@link MountHandlerProvider}, since a WebSocket
@@ -126,7 +128,7 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
         for (MountConfig m : mounts) {
             String type = m.property("type")
                     .orElseThrow(() -> new IllegalStateException(
-                            "Mount '" + m.name() + "' is missing required " + PREFIX + m.name() + ".type"));
+                            MOUNT + m.name() + "' is missing required " + PREFIX + m.name() + ".type"));
             if (TYPE_WEBSOCKET.equals(type)) {
                 mountWebSocket(m);
                 continue;
@@ -161,19 +163,19 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
         String pattern = m.prefix();
         String handlerClass = m.property("handler")
                 .orElseThrow(() -> new IllegalStateException(
-                        "Mount '" + m.name() + "' (type=websocket) requires " + PREFIX + m.name()
+                        MOUNT + m.name() + "' (type=websocket) requires " + PREFIX + m.name()
                                 + ".handler=<fully-qualified WebSocketHandler bean>"));
         var container = m.extensionContext().container();
         Class<?> beanClass;
         try {
             beanClass = Class.forName(handlerClass, false, container.classLoader());
         } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("Mount '" + m.name()
+            throw new IllegalStateException(MOUNT + m.name()
                     + "': WebSocket handler class not found: " + handlerClass, e);
         }
         Object bean = container.select(beanClass);
         if (!(bean instanceof WebSocketHandler ws)) {
-            throw new IllegalStateException("Mount '" + m.name() + "': " + handlerClass
+            throw new IllegalStateException(MOUNT + m.name() + "': " + handlerClass
                     + " must implement " + WebSocketHandler.class.getName());
         }
         ChappeMountPoint.instance().webSocket(m.listener(), pattern, ws);
@@ -183,15 +185,35 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
     }
 
     private static Set<String> collectMountNames(VidocqConfig config) {
-        Set<String> names = new LinkedHashSet<>();
+        // The first segment after the prefix names the mount, and its .path key declares it.
+        Map<String, List<String>> keysByName = new TreeMap<>();
         for (String key : config.getPropertyNames()) {
-            if (!key.startsWith(PREFIX) || !key.endsWith(SUFFIX_PATH)) continue;
-            String middle = key.substring(PREFIX.length(), key.length() - SUFFIX_PATH.length());
-            if (!middle.isEmpty() && middle.indexOf('.') < 0) {
-                names.add(middle);
+            int dot = key.startsWith(PREFIX) ? key.indexOf('.', PREFIX.length()) : -1;
+            if (dot > PREFIX.length()) {
+                keysByName.computeIfAbsent(key.substring(PREFIX.length(), dot), _ -> new ArrayList<>()).add(key);
             }
         }
+        Set<String> names = new LinkedHashSet<>();
+        for (Map.Entry<String, List<String>> entry : keysByName.entrySet()) {
+            String name = entry.getKey();
+            List<String> keys = entry.getValue();
+            if (!keys.contains(PREFIX + name + SUFFIX_PATH)) {
+                throw undeclaredMount(name, keys);
+            }
+            names.add(name);
+        }
         return names;
+    }
+
+    /**
+     * Keys of a mount without its {@code .path} used to be ignored without a word: a mount written with a
+     * guessed key served nothing, and a {@code restful} one still turned the automatic REST mount off.
+     */
+    private static IllegalStateException undeclaredMount(String name, List<String> keys) {
+        List<String> sorted = keys.stream().sorted().toList();
+        return new IllegalStateException(MOUNT + name + "' has no " + PREFIX + name + SUFFIX_PATH
+                + ", the key that declares a mount, so " + String.join(", ", sorted) + " would be ignored. Add "
+                + PREFIX + name + SUFFIX_PATH + " (/ for the root). A mount name has no dot.");
     }
 
     private static String normalizePrefix(String raw) {
