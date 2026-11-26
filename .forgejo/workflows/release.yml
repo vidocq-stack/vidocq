@@ -158,7 +158,7 @@ jobs:
           ./mvnw -B -ntp -DskipTests -pl "$(printf '%s\n' "${folders[@]}" | paste -sd, -)" package
           python3 -I -B .forgejo/scripts/patch-compat.py "${folders[@]}"
 
-      - uses: https://codefloe.com/Vidocq/ci/release-maven@7faa069e1cdfdfb0231398b3d47c7eab5d359bbd
+      - uses: https://codefloe.com/Vidocq/ci/release-maven@8b1beb7f7762315896a876be592b8c043a14d738
         with:
           java-setup: 'false'
           maven-version: '3.10.0'
