@@ -139,6 +139,29 @@ public final class ChappeServletBridge implements Handler, RequestDispatcherImpl
     }
 
     /**
+     * Whether the application has something for {@code request}, without handling it: a transport
+     * that puts several handlers on one prefix passes a request the application does not serve to the
+     * next one (vidocq#802). Served: a path an application servlet maps (an application {@code /}
+     * servlet maps every path), and what the container default servlet answers with content: a file,
+     * a welcome file, a directory redirect. Not served: a path outside the context, under
+     * {@code WEB-INF/} or {@code META-INF/}, or one the container default servlet would answer 404.
+     * No filter runs: a filter mapped to {@code /*} does not see a request the application does not serve.
+     */
+    public boolean serves(Request request) {
+        String rawPath = UrlSession.of(request.path()).path();
+        Resolution resolution = resolve(rawPath);
+        // 404 (outside the context, a protected path): not the application's. 400: the bridge answers it.
+        if (resolution.refusal() > 0) return resolution.refusal() != 404;
+        String path = resolution.path();
+        Optional<ServletDispatcher.Mapping> match = dispatcher.find(path);
+        if (match.isEmpty()) return false;
+        if ("*".equals(rawPath) || !isContainerDefault(match)) return true;
+        if (welcomeRedirect(rawPath, path, null) != null) return true;
+        if (path.endsWith("/")) return welcomeTarget(path) != null;
+        return servletContext.getResourcePaths(path + "/") == null && isReadableResource(path);
+    }
+
+    /**
      * Runs the servlet pipeline for {@code request} on its own virtual thread and parks chappe's
      * thread until the response head is known.
      *

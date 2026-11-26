@@ -20,6 +20,7 @@
 package io.vidocq.foy.chappe;
 
 import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Request;
 import io.vidocq.foy.internal.boot.ApplicationSources;
 import io.vidocq.foy.internal.boot.ApplicationSources.Initializer;
 import io.vidocq.foy.internal.boot.CdiComponentFactory;
@@ -31,6 +32,7 @@ import io.vidocq.foy.internal.boot.Deployment;
 import io.vidocq.foy.internal.boot.WebAppDeployer;
 import io.vidocq.foy.internal.boot.WebAppDiscovery;
 import io.vidocq.foy.internal.boot.WebAppModel;
+import io.vidocq.foy.internal.bridge.ChappeServletBridge;
 import io.vidocq.foy.internal.container.ClassPathResourceProvider;
 import io.vidocq.foy.internal.container.VidocqServletContext;
 import io.vidocq.foy.internal.gen.RegistryComponentFactory;
@@ -151,6 +153,16 @@ public final class FoyChappeBoot {
          */
         public List<String> listenerClassNames() {
             return deployment.listeners().classNames();
+        }
+
+        /**
+         * Whether the application has something for {@code request}, without handling it: a servlet maps its
+         * path, or the container default servlet has content for it (a file, a welcome file, a directory
+         * redirect). A transport that puts several handlers on one prefix gives a request the application does
+         * not serve to the next one (vidocq#802). A handler other than Foy's own bridge serves every request.
+         */
+        public boolean serves(Request request) {
+            return !(handler instanceof ChappeServletBridge bridge) || bridge.serves(request);
         }
 
         /**
