@@ -21,7 +21,9 @@ package io.vidocq.runtime.extensions.essentials.chappe;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -69,5 +71,23 @@ class ChappeMountConfigExtensionTest {
         var config = TestConfig.of(Map.of("vidocq.http.port", "0"));
 
         assertDoesNotThrow(() -> new ChappeMountConfigExtension().onStart(new FakeExtensionContext(config)));
+    }
+
+    /** A quote around a placeholder of a log pattern quotes the placeholder itself: the log said {@code '{0}'}. */
+    @Test
+    void theMountLineOfTheLogNamesTheMount() {
+        var config = TestConfig.of(Map.of(
+                "vidocq.http.mount.ui.path", "/",
+                "vidocq.http.mount.ui.type", "static",
+                "vidocq.http.mount.ui.classpath", "shared-a"));
+        new ChappeEngineExtension().configure(null);
+        try (LogRecords logs = new LogRecords(ChappeMountConfigExtension.class.getName())) {
+            new ChappeMountConfigExtension().onStart(new FakeExtensionContext(config));
+
+            List<String> lines = logs.messages(Level.INFO);
+            assertTrue(lines.stream().anyMatch(l -> l.startsWith("Mounted 'ui' (type=static)")), lines.toString());
+        } finally {
+            ChappeMountPoint.uninstall();
+        }
     }
 }

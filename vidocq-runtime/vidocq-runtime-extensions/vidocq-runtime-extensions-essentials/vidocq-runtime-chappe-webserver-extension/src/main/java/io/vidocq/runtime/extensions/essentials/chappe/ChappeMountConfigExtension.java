@@ -149,7 +149,7 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
             ChappeMountPoint.instance().mount(m.listener(), m.prefix(), handler, stripPrefix, m.priority(),
                     PREFIX + m.name(), order);
             LOG.log(System.Logger.Level.INFO,
-                    "Mounted '{0}' (type={1}) on listener={2} prefix={3} priority={4} strip-prefix={5} order={6}",
+                    "Mounted ''{0}'' (type={1}) on listener={2} prefix={3} priority={4} strip-prefix={5} order={6}",
                     m.name(), type, m.listener(), m.prefix().isEmpty() ? "/" : m.prefix(),
                     m.priority(), stripPrefix, order);
         }
@@ -181,7 +181,7 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
         }
         ChappeMountPoint.instance().webSocket(m.listener(), pattern, ws);
         LOG.log(System.Logger.Level.INFO,
-                "Mounted '{0}' (type=websocket) on listener={1} pattern={2} handler={3}",
+                "Mounted ''{0}'' (type=websocket) on listener={1} pattern={2} handler={3}",
                 m.name(), m.listener(), pattern, handlerClass);
     }
 

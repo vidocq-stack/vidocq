@@ -193,7 +193,7 @@ public final class OtelSpiAutoConfiguration {
             ConfigurableSpanExporterProvider p = spanExporterProviders.get(tracesExporterName);
             var otelExporter = p.createExporter(new MapConfigProperties(props, loader));
             extraSpanExporters.add(new OtelSpanExporterBridge(otelExporter));
-            LOG.log(Level.INFO, "  -> OTel SpanExporter '{0}' bridged to Humboldt", tracesExporterName);
+            LOG.log(Level.INFO, "  -> OTel SpanExporter ''{0}'' bridged to Humboldt", tracesExporterName);
         }
         return extraSpanExporters;
     }
@@ -262,7 +262,7 @@ public final class OtelSpiAutoConfiguration {
             if (!match.isEmpty() || !configuredName.equals(provider.getName())) return;
             var otelSampler = provider.createSampler(configProps);
             if (otelSampler != null) {
-                LOG.log(Level.INFO, "  -> SamplerProvider '{0}' ({1}) bridged via OtelSamplerBridge",
+                LOG.log(Level.INFO, "  -> SamplerProvider ''{0}'' ({1}) bridged via OtelSamplerBridge",
                         configuredName, provider.getClass().getName());
                 match.add(new OtelSamplerBridge(otelSampler));
             }
@@ -321,7 +321,7 @@ public final class OtelSpiAutoConfiguration {
                     var p = byName.get(n);
                     if (p != null) chosen.add(p);
                     else LOG.log(Level.WARNING,
-                            "  Propagator '{0}' requested but unavailable (neither builtin nor discovered SPI)", n);
+                            "  Propagator ''{0}'' requested but unavailable (neither builtin nor discovered SPI)", n);
                 }
             }
         }
@@ -346,7 +346,7 @@ public final class OtelSpiAutoConfiguration {
             var otelExporter = provider.createExporter(cfg);
             if (otelExporter != null) {
                 out.add(new OtelMetricExporterBridge(otelExporter));
-                LOG.log(Level.INFO, "  -> MetricExporter '{0}' ({1}) bridged to Humboldt",
+                LOG.log(Level.INFO, "  -> MetricExporter ''{0}'' ({1}) bridged to Humboldt",
                         configured, provider.getClass().getName());
             }
         });

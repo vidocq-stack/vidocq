@@ -5,6 +5,21 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261126-01 — The mount lines of the startup log say `Mounted {0}` instead of the mount's name
+
+- **Date**: 2026-11-26
+- **Status**: FIXED in the pull request that adds this entry
+- **Module**: `vidocq-runtime-chappe-webserver-extension` (`ChappeMountConfigExtension`); the same pattern in
+  Humboldt's `humboldt-otel-interop` (`OtelSpiAutoConfiguration`, four lines)
+- **Symptom**: a declarative mount logs `Mounted {0} (type=static) on listener=default prefix=/ ...`; a WebSocket
+  mount logs `Mounted {0} (type=websocket) ...`. Humboldt logs `SpanExporter {0}`, `SamplerProvider {0}`,
+  `Propagator {0}` and `MetricExporter {0}` the same way. Seen in the startup log of the 0.4.1 patch dry run.
+- **Repro**: `ChappeMountConfigExtensionTest.theMountLineOfTheLogNamesTheMount`: a static mount named `ui`, the INFO
+  line must start with `Mounted 'ui' (type=static)`.
+- **Cause**: `System.Logger` formats with `MessageFormat`, where a single quote quotes what follows: `'{0}'` prints
+  the placeholder literally. A quote is written `''`.
+- **Fix**: `''{0}''` in the six patterns.
+
 ## BUG-20261123-65 — The `tck / RUNTIME` job of the TCK nightly runs no TCK: its install fails on the Servlet TCK jars
 
 - **Date**: 2026-11-23
