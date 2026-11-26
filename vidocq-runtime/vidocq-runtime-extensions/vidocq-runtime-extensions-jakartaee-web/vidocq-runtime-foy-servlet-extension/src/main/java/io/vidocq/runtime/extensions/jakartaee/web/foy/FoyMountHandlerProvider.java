@@ -21,8 +21,10 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.foy.chappe.FoyChappeBoot;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.ChainableHandler;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountConfig;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.MountOrder;
 import io.vidocq.runtime.spi.DevHandover;
 import jakarta.enterprise.inject.spi.BeanManager;
 
@@ -84,6 +86,12 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
                         + "nor ServletContainerInitializer"));
         deployments.register(cfg.name(), cfg.listener(), mounted);
         FoyDeployments.importSessions(mounted, handover);
-        return mounted.handler();
+        // Shares its prefix (vidocq#802): a request the application does not serve goes to the next mount.
+        return ChainableHandler.of(mounted.handler(), mounted::serves);
+    }
+
+    @Override
+    public int order() {
+        return MountOrder.SERVLET;
     }
 }

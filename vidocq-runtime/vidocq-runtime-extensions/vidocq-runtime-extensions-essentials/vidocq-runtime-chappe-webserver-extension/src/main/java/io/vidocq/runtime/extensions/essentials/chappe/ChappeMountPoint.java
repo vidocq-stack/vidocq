@@ -19,10 +19,15 @@
  */
 package io.vidocq.runtime.extensions.essentials.chappe;
 
+import io.vidocq.chappe.api.ForwardingRequest;
 import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Request;
+import io.vidocq.chappe.api.Response;
 import io.vidocq.chappe.api.Router;
 import io.vidocq.chappe.api.WebSocketHandler;
 import io.vidocq.chappe.api.WebSocketOrigins;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.ChainableHandler;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.MountOrder;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -62,6 +67,8 @@ public final class ChappeMountPoint {
     private static final StackWalker CALLER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
     private static final String LISTENER_NAME = "listenerName";
+    private static final String LISTENER = "listener '";
+    private static final String PREFIX = "prefix";
 
     private final Map<String, Router.Builder> routers = new LinkedHashMap<>();
     private WebSocketOrigins webSocketOrigins = WebSocketOrigins.sameOrigin();
@@ -76,6 +83,8 @@ public final class ChappeMountPoint {
     private final Map<String, String> boundUrls = new ConcurrentHashMap<>();
     /** The pages extensions advertised, by listener, in the order they were advertised. */
     private final Map<String, List<Page>> pages = new LinkedHashMap<>();
+    /** The owners of the mounts of each shared prefix, in their order, by listener: for the startup report. */
+    private final Map<String, Map<String, List<String>>> shared = new ConcurrentHashMap<>();
 
     ChappeMountPoint() {}
 
@@ -161,7 +170,7 @@ public final class ChappeMountPoint {
         if (existing != null) {
             throw existing.owner() == null
                     ? declaredTwice(listener.name(), owner)
-                    : new IllegalStateException("listener '" + listener.name()
+                    : new IllegalStateException(LISTENER + listener.name()
                             + "' is already declared by an extension (" + existing.owner() + ")");
         }
         declare(new Declaration(listener, options, owner));
@@ -235,7 +244,7 @@ public final class ChappeMountPoint {
     }
 
     private static IllegalStateException declaredTwice(String name, String owner) {
-        return new IllegalStateException("listener '" + name + "' is declared by an extension (" + owner
+        return new IllegalStateException(LISTENER + name + "' is declared by an extension (" + owner
                 + "); remove it from vidocq.chappe.listeners");
     }
 
@@ -261,7 +270,7 @@ public final class ChappeMountPoint {
      * full path (see {@link Router.Builder#mount(String, Handler, boolean)}).
      */
     public void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix) {
-        Objects.requireNonNull(prefix, "prefix");
+        Objects.requireNonNull(prefix, PREFIX);
         mount(listenerName, prefix, handler, stripPrefix, routingKey(prefix).length());
     }
 
@@ -281,27 +290,82 @@ public final class ChappeMountPoint {
      */
     void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix, int priority,
                String owner) {
+        mount(listenerName, prefix, handler, stripPrefix, priority, owner, MountOrder.DEFAULT);
+    }
+
+    /**
+     * Mounts a handler that may share its prefix with other mounts of the listener (vidocq#802): the
+     * mounts of one prefix are asked by ascending {@code order} ({@link MountOrder}), and each passes on
+     * a request it does not serve. Only the last of them may be a plain {@link Handler}.
+     *
+     * @param stripPrefix whether {@code handler} sees the path below the prefix
+     * @param order       its rank among the mounts of the same prefix, the lowest asked first
+     * @param owner       what the errors and the startup report name the mount by, its configuration keys
+     *                    ({@code vidocq.rest}, {@code vidocq.http.mount.<n>})
+     * @throws IllegalStateException when another mount of the prefix has the same order, or when a plain
+     *                               handler would come before another mount
+     */
+    public void mountShared(String listenerName, String prefix, ChainableHandler handler, boolean stripPrefix,
+                            int order, String owner) {
+        Objects.requireNonNull(prefix, PREFIX);
+        mount(listenerName, prefix, handler, stripPrefix, routingKey(prefix).length(), owner, order);
+    }
+
+    /**
+     * Mounts on behalf of {@code owner} at a rank {@code order} among the mounts of the same prefix. The
+     * mounts of a prefix are routed at the highest priority any of them has.
+     */
+    void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix, int priority,
+               String owner, int order) {
         Objects.requireNonNull(listenerName, LISTENER_NAME);
-        Objects.requireNonNull(prefix, "prefix");
+        Objects.requireNonNull(prefix, PREFIX);
         Objects.requireNonNull(handler, "handler");
         Objects.requireNonNull(owner, "owner");
         ensureOpen();
         String key = routingKey(prefix);
         List<PendingMount> listenerMounts = mounts.computeIfAbsent(listenerName, n -> new ArrayList<>());
+        var added = new PendingMount(key, handler, stripPrefix, priority, owner, order);
+        List<PendingMount> sharing = new ArrayList<>();
         for (PendingMount existing : listenerMounts) {
-            if (existing.prefix().equals(key)) {
-                throw new IllegalStateException("listener '" + listenerName + "': prefix '"
-                        + (key.isEmpty() ? "/" : key) + "' is mounted twice, by "
-                        + existing.owner() + " and by " + owner + "; move one of them "
-                        + "(vidocq.rest.context-path, vidocq.servlet.context-path, vidocq.http.mount.<n>.path)");
-            }
+            if (existing.prefix().equals(key)) sharing.add(existing);
         }
-        listenerMounts.add(new PendingMount(key, handler, stripPrefix, priority, owner));
+        if (!sharing.isEmpty()) {
+            sharing.add(added);
+            checkShared(listenerName, key, sharing);
+        }
+        listenerMounts.add(added);
         routers.computeIfAbsent(listenerName, n -> Router.builder());
     }
 
+    /**
+     * The mounts of one prefix make a chain only when each one but the last can pass a request on, and
+     * when their orders tell them apart.
+     */
+    private static void checkShared(String listenerName, String key, List<PendingMount> sharing) {
+        String where = LISTENER + listenerName + "': prefix '" + (key.isEmpty() ? "/" : key) + "'";
+        String move = "move one of them (vidocq.rest.context-path, vidocq.servlet.context-path, "
+                + "vidocq.http.mount.<n>.path)";
+        sharing.sort(Comparator.comparingInt(PendingMount::order));
+        for (int i = 1; i < sharing.size(); i++) {
+            PendingMount before = sharing.get(i - 1);
+            PendingMount after = sharing.get(i);
+            if (before.order() == after.order()) {
+                throw new IllegalStateException(where + " is mounted twice, by " + before.owner() + " and by "
+                        + after.owner() + ", with the same order " + after.order() + ": give them different orders "
+                        + "(vidocq.http.mount.<n>.order, vidocq.rest.order, vidocq.servlet.order), or " + move);
+            }
+            if (!(before.handler() instanceof ChainableHandler)) {
+                throw new IllegalStateException(where + " is mounted by " + before.owner() + " before "
+                        + after.owner() + ", and " + before.owner() + " cannot pass on a request it does not "
+                        + "serve, so " + after.owner() + " would never be asked: give " + before.owner()
+                        + " the highest order, or " + move);
+            }
+        }
+    }
+
     /** A mount waiting for the server start; {@code prefix} is already a routing key. */
-    private record PendingMount(String prefix, Handler handler, boolean stripPrefix, int priority, String owner) {}
+    private record PendingMount(String prefix, Handler handler, boolean stripPrefix, int priority, String owner,
+                                int order) {}
 
     /**
      * The prefix as the router matches it: the root is spelled {@code ""} or {@code "/"}, and a
@@ -320,7 +384,15 @@ public final class ChappeMountPoint {
 
     /** Prefixes of a listener's mounts, in routing order (longest first). */
     List<String> mountPrefixes(String listenerName) {
-        return ordered(listenerName).stream().map(PendingMount::prefix).toList();
+        return ordered(listenerName).stream().map(PendingMount::prefix).distinct().toList();
+    }
+
+    /**
+     * The prefixes of a started listener that several mounts share, each with the owners of its mounts in
+     * the order they are asked; the prefix {@code /} for the root.
+     */
+    Map<String, List<String>> sharedPrefixes(String listenerName) {
+        return shared.getOrDefault(listenerName, Map.of());
     }
 
     private List<PendingMount> ordered(String listenerName) {
@@ -407,14 +479,72 @@ public final class ChappeMountPoint {
 
     Router buildRouter(String listenerName) {
         Router.Builder b = routers.computeIfAbsent(listenerName, n -> Router.builder());
-        // Applied once: the pending mounts move into the router.
+        // Applied once: the pending mounts move into the router, those of a shared prefix as one chain,
+        // routed where the first of them comes in priority order.
         List<PendingMount> pending = ordered(listenerName);
         mounts.remove(listenerName);
+        Map<String, List<PendingMount>> byPrefix = new LinkedHashMap<>();
         for (PendingMount m : pending) {
-            b.mount(m.prefix(), m.handler(), m.stripPrefix());
+            byPrefix.computeIfAbsent(m.prefix(), k -> new ArrayList<>()).add(m);
         }
+        Map<String, List<String>> chains = new LinkedHashMap<>();
+        for (var entry : byPrefix.entrySet()) {
+            List<PendingMount> group = entry.getValue();
+            if (group.size() == 1) {
+                PendingMount m = group.getFirst();
+                b.mount(m.prefix(), m.handler(), m.stripPrefix());
+                continue;
+            }
+            group.sort(Comparator.comparingInt(PendingMount::order));
+            chains.put(entry.getKey().isEmpty() ? "/" : entry.getKey(),
+                    group.stream().map(PendingMount::owner).toList());
+            // The chain gets the full path: it strips the prefix for each mount that asked for it.
+            b.mount(entry.getKey(), new MountChain(entry.getKey(), group), false);
+        }
+        if (!chains.isEmpty()) shared.put(listenerName, java.util.Collections.unmodifiableMap(chains));
         b.webSocketOrigins(webSocketOrigins);
         return b.build();
+    }
+
+    /**
+     * The mounts of one prefix, asked in their order: each but the last passes on a request it does not
+     * serve ({@link ChainableHandler#handleIfServed}), and the last answers what none before it served.
+     */
+    private static final class MountChain implements Handler {
+
+        private final String prefix;
+        private final Handler[] handlers;
+        private final boolean[] strip;
+
+        MountChain(String prefix, List<PendingMount> ordered) {
+            this.prefix = prefix;
+            this.handlers = ordered.stream().map(PendingMount::handler).toArray(Handler[]::new);
+            this.strip = new boolean[ordered.size()];
+            for (int i = 0; i < strip.length; i++) strip[i] = ordered.get(i).stripPrefix();
+        }
+
+        @Override
+        public Response handle(Request request) throws Exception {
+            int last = handlers.length - 1;
+            for (int i = 0; i < last; i++) {
+                Response response = ((ChainableHandler) handlers[i]).handleIfServed(seenBy(i, request));
+                if (response != null) return response;
+            }
+            return handlers[last].handle(seenBy(last, request));
+        }
+
+        /** The request as the router gives it to a mount of this prefix, stripped of it or not. */
+        private Request seenBy(int i, Request request) {
+            if (!strip[i] || prefix.isEmpty()) return request;
+            String stripped = request.path().substring(prefix.length());
+            String below = stripped.isEmpty() ? "/" : stripped;
+            return new ForwardingRequest() {
+                @Override public Request delegate() { return request; }
+                @Override public String path() { return below; }
+                @Override public String contextPath() { return prefix; }
+                @Override public String pathInfo() { return below; }
+            };
+        }
     }
 
     List<Runnable> beforeStartHooks() {

@@ -568,7 +568,7 @@ class FoyExtensionTest {
     }
 
     private FoyExtension configured(Map<String, String> values) {
-        FoyExtension extension = new FoyExtension((l, p, h) -> mounts.add(new Mount(l, p, h)), new FoyDeployments(),
+        FoyExtension extension = new FoyExtension((l, p, h, o) -> mounts.add(new Mount(l, p, h)), new FoyDeployments(),
                 beforeStopHooks::add);
         extension.configure(new MapConfiguration(values));
         extensions.add(extension);

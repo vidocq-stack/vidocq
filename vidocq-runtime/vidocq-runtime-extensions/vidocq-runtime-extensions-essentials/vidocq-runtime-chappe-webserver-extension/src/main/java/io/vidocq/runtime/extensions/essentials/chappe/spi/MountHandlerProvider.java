@@ -75,4 +75,13 @@ public interface MountHandlerProvider {
     default boolean stripPrefix() {
         return true;
     }
+
+    /**
+     * The rank of the handler among the mounts of the same prefix, the lowest asked first: the default of
+     * {@code vidocq.http.mount.<name>.order} ({@link MountOrder}). A handler that shares a prefix and is not
+     * the last of its mounts must be a {@link ChainableHandler}.
+     */
+    default int order() {
+        return MountOrder.DEFAULT;
+    }
 }

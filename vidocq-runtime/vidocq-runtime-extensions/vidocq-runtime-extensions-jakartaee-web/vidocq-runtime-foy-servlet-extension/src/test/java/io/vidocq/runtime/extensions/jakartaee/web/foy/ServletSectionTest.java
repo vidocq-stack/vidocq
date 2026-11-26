@@ -40,7 +40,7 @@ class ServletSectionTest {
 
     @Test
     void contributesTheServletSection() {
-        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
+        FoyExtension extension = new FoyExtension((l, p, h, o) -> {}, deployments);
 
         assertEquals("servlet", extension.id());
         assertEquals("Servlet (Foy)", extension.title());
@@ -50,14 +50,14 @@ class ServletSectionTest {
     void inactiveWithoutDeployment() {
         RecordingSection section = new RecordingSection();
 
-        new FoyExtension((l, p, h) -> {}, deployments).contribute(null, section);
+        new FoyExtension((l, p, h, o) -> {}, deployments).contribute(null, section);
 
         assertEquals("inactive: no web component", section.summary);
     }
 
     @Test
     void summarizesTheLiveDeployments(@TempDir Path root) throws Exception {
-        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
+        FoyExtension extension = new FoyExtension((l, p, h, o) -> {}, deployments);
         extension.configure(new MapConfiguration(Map.of("vidocq.servlet.session-timeout", "120")));
         extension.start(null, FoyExtensionTest.config(Map.of()),
                 FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
@@ -72,7 +72,7 @@ class ServletSectionTest {
 
     @Test
     void listsTheContextPathServletsAndFilters(@TempDir Path root) throws Exception {
-        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
+        FoyExtension extension = new FoyExtension((l, p, h, o) -> {}, deployments);
         extension.configure(new MapConfiguration(Map.of("vidocq.servlet.context-path", "/shop")));
         extension.start(null, FoyExtensionTest.config(Map.of()), FoyExtensionTest.loaderWith(root, WITH_FILTER));
         RecordingSection section = new RecordingSection();
@@ -102,7 +102,7 @@ class ServletSectionTest {
 
     @Test
     void sessionsThatNeverExpireSayNever(@TempDir Path root) throws Exception {
-        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
+        FoyExtension extension = new FoyExtension((l, p, h, o) -> {}, deployments);
         extension.configure(new MapConfiguration(Map.of("vidocq.servlet.session-timeout", "0")));
         extension.start(null, FoyExtensionTest.config(Map.of()),
                 FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));

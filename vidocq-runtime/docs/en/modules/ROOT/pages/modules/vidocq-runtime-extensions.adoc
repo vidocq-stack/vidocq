@@ -297,7 +297,7 @@ A bean injects the `HttpServletRequest` being served (`@RequestScoped`), its `Ht
 
 === Next to REST
 
-The REST and Servlet extensions are two mounts of one server. The longest prefix wins: with REST on `/api` and the servlets on `/`, `/api/items` reaches Cassini and every other path reaches Foy. Two mounts on the same prefix of one listener fail at startup, with the extensions and the keys to change named in the message. By default, servlet filters and the `HttpSession` do not apply to REST resources. [[rest-as-servlet]]To run the application's REST resources inside Foy instead (https://codefloe.com/Vidocq/vidocq/issues/215[vidocq#215]), add `cassini-servlet` next to the two extensions: the resources are then served by a servlet that Foy registers at the `@ApplicationPath`, so the context path, the filters and the authentication (Jakarta Security included) apply to them like to any servlet, and `SecurityContext` and `jakarta.ws.rs.core.SecurityContext` answer with the caller Foy authenticated. `vidocq.rest.mode` chooses: `auto` (the default) serves the resources as a servlet when the Foy extension and `cassini-servlet` are both there, and on Chappe otherwise; `chappe` mounts them on Chappe whatever is there; `servlet` fails the start when Foy or `cassini-servlet` is missing. In servlet mode the automatic Chappe mount is not made; the declarative `vidocq.http.mount.<name>.type=restful` mounts stay on Chappe, which is where MicroProfile Health and the other operations endpoints are served, outside the application's security. `cassini-servlet` is not a dependency of the REST extension, so an application without Foy needs no Servlet API.
+The REST and Servlet extensions are two mounts of one server. The longest prefix wins: with REST on `/api` and the servlets on `/`, `/api/items` reaches Cassini and every other path reaches Foy. They can also share a prefix: each request then goes to the first one that serves it, the REST resources before the servlets by default (<<declarative-mounts-shared>>). By default, servlet filters and the `HttpSession` do not apply to REST resources. [[rest-as-servlet]]To run the application's REST resources inside Foy instead (https://codefloe.com/Vidocq/vidocq/issues/215[vidocq#215]), add `cassini-servlet` next to the two extensions: the resources are then served by a servlet that Foy registers at the `@ApplicationPath`, so the context path, the filters and the authentication (Jakarta Security included) apply to them like to any servlet, and `SecurityContext` and `jakarta.ws.rs.core.SecurityContext` answer with the caller Foy authenticated. `vidocq.rest.mode` chooses: `auto` (the default) serves the resources as a servlet when the Foy extension and `cassini-servlet` are both there, and on Chappe otherwise; `chappe` mounts them on Chappe whatever is there; `servlet` fails the start when Foy or `cassini-servlet` is missing. In servlet mode the automatic Chappe mount is not made; the declarative `vidocq.http.mount.<name>.type=restful` mounts stay on Chappe, which is where MicroProfile Health and the other operations endpoints are served, outside the application's security. `cassini-servlet` is not a dependency of the REST extension, so an application without Foy needs no Servlet API.
 
 The REST extension mounts its resources on the `@ApplicationPath` of the application's `Application` subclass, which needs no CDI scope: `cassini-processor`, in the REST codegen bundle, records the path at compile time. `vidocq.rest.context-path` wins over it.
 
@@ -540,11 +540,11 @@ src/main/resources/
 `GET /api/...` reaches the REST resources, every other path the files of `static/`. The
 `vidocq-runtime-petstore-example` example uses this layout.
 
-Two things make it work:
+Two things to know:
 
-* *The REST resources move to `/api`.* By default the REST extension mounts them on `/`, and two mounts on the same
-prefix of one listener fail at startup. A `restful` mount, as above, replaces that automatic mount. Without one, set
-`vidocq.rest.context-path=/api` instead.
+* *A `restful` mount replaces the automatic mount of the REST extension*, which is on `/` (or the `@ApplicationPath`).
+Without one, `vidocq.rest.context-path=/api` moves the automatic mount instead. The REST resources may also stay on
+`/`, next to the files: <<declarative-mounts-shared>>.
 * *The folder of the files is one the application module can read*: <<declarative-mounts-modules>>.
 
 === Keys of every mount
@@ -577,10 +577,75 @@ the start, with the available types in the message: `static` and `websocket` com
 | `true` (`false` for `servlet`)
 | Whether the handler sees the path without the prefix: with `true`, `GET /api/items` reaches a `restful` mount on
 `/api` as `/items`. `false` keeps the full path, for resources whose `@Path` already holds the prefix.
+
+| `vidocq.http.mount.<name>.order`
+| `100` (`static`), `200` (`restful`), `300` (`servlet`)
+| The rank of the mount among the mounts of the same prefix, the lowest asked first: <<declarative-mounts-shared>>.
 |===
 
-Two mounts on the same prefix of one listener fail at startup, the mounts the extensions make on their own
-included.
+[#declarative-mounts-shared]
+=== Several mounts on one prefix
+
+Static files, REST resources and servlets can share a prefix, `/` for all three for instance. The mounts of one
+prefix are asked in their order, the lowest first; a mount that has nothing for a request passes it to the next one,
+and the last one answers what none before it served, with its own 404.
+
+[source,properties]
+----
+vidocq.http.mount.ui.path=/
+vidocq.http.mount.ui.type=static
+vidocq.http.mount.ui.classpath=static
+# The REST resources (vidocq.rest.context-path) and the servlets (vidocq.servlet.context-path) stay on / too.
+----
+
+[cols="1,1,3"]
+|===
+| Mount | Default order | It passes a request on when
+
+| static files (`static`)
+| `100`
+| no file matches the path, or the method is neither `GET` nor `HEAD`.
+
+| REST resources (`restful`, the REST extension)
+| `200`
+| no resource matches the path, whatever the method. A path with a resource is answered by it: a wrong method
+gets its 405 there.
+
+| the web application (`servlet`, the Servlet extension)
+| `300`
+| no servlet of the application maps the path, and the container's default servlet has no file, welcome file or
+directory for it. An application servlet mapped to `/` takes every path.
+
+| a handler another extension mounts in code
+| `1000`
+| never: it must be the last of its prefix.
+|===
+
+So with the defaults, `GET /index.html` serves the file, `GET /items/42` reaches the REST resource, `GET /cart` the
+servlet, and `GET /nothing` gets the 404 of the web application.
+
+The order changes with `vidocq.http.mount.<name>.order` for a declarative mount, and `vidocq.rest.order` and
+`vidocq.servlet.order` for the automatic mounts: `vidocq.rest.order=50` asks the REST resources before the files.
+The start fails when two mounts of one prefix have the same order, and when a mount that cannot pass a request on is
+not the last one; the message names the mounts and the keys to change.
+
+Things to know:
+
+* *The order matters only on one prefix.* Between prefixes, the longest one still wins, or the highest
+`.priority`: `/api` is asked before `/`, and a request for `/api/...` never comes back to the mounts of `/`.
+* *A request the web application passes on runs none of its filters*, a filter mapped to `/*` included: the servlet
+security constraints and filters do not apply to the files and REST resources of the same prefix. To run them inside
+the web application, see <<rest-as-servlet>>.
+* *A REST resource whose `@Path` matches every path* (`@Path("/{any: .*}")`) never passes a request on: the mounts
+after it are never asked.
+* *A mount alone on its prefix answers every request itself*, as before: nothing is asked twice.
+* The startup report shows each shared prefix in its `http` section, with its mounts in their order:
++
+----
+http          HTTP (Chappe) | 0 ms
+  default http://127.0.0.1:8080/
+  default /   vidocq.http.mount.ui, vidocq.rest, vidocq.servlet
+----
 
 === `static`: files
 

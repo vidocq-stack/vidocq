@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.ChainableHandler;
 import io.vidocq.runtime.spi.DevHandover;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -61,9 +62,10 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
     private Optional<DevHandover> handover = Optional.empty();
 
     public FoyExtension() {
-        // Declared here, not in MountTarget: the mount point names the class that mounts in its errors.
-        // No prefix stripping: Foy dispatches on the full request path, its context path included.
-        this((listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler, false),
+        // No prefix stripping: Foy dispatches on the full request path, its context path included. The mount
+        // is named by its keys in the errors and the startup report.
+        this((listener, prefix, handler, order) -> ChappeMountPoint.instance()
+                        .mountShared(listener, prefix, handler, false, order, AUTO_MOUNT),
                 new FoyDeployments(), hook -> ChappeMountPoint.instance().addBeforeStopHook(hook));
     }
 
@@ -95,6 +97,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
     @Override
     public Set<String> configKeys() {
         return Set.of(ServletSettings.CONTEXT_PATH, ServletSettings.LISTENER_KEY, ServletSettings.SESSION_TIMEOUT,
+                ServletSettings.ORDER_KEY,
                 ServletSettings.RESPONSE_CHARACTER_ENCODING, ServletSecurity.USERS_PREFIX + "*",
                 ServletSecurity.CONFIDENTIAL_PORT, ServletSecurity.ROTATE_SESSION_ID);
     }
@@ -149,7 +152,9 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
         // Recorded before mounting: a refused mount (duplicate prefix) still leaves it to onStop.
         deployments.register(AUTO_MOUNT, settings.listener(), mounted);
         FoyDeployments.importSessions(mounted, handover);
-        target.mount(settings.listener(), mounted.mountPrefix(), mounted.handler());
+        // Shares its prefix (vidocq#802): a request the application does not serve goes to the next mount.
+        target.mount(settings.listener(), mounted.mountPrefix(), ChainableHandler.of(mounted.handler(), mounted::serves),
+                settings.order());
         LOG.log(System.Logger.Level.INFO, "Foy Servlet extension mounted on listener={0} prefix={1}",
                 settings.listener(), mounted.mountPrefix().isEmpty() ? "/" : mounted.mountPrefix());
     }

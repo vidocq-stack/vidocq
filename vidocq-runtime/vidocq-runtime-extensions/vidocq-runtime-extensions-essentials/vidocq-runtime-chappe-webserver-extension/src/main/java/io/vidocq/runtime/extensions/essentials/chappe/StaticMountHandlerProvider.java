@@ -20,9 +20,14 @@
 package io.vidocq.runtime.extensions.essentials.chappe;
 
 import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.HttpMethod;
+import io.vidocq.chappe.api.Request;
+import io.vidocq.chappe.api.Response;
 import io.vidocq.chappe.api.StaticFileHandler;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.ChainableHandler;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountConfig;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.MountOrder;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -73,6 +78,35 @@ public final class StaticMountHandlerProvider implements MountHandlerProvider {
         cfg.property("cache-control").ifPresent(b::cacheControl);
         b.cacheInMemory(cfg.property("cache-in-memory", Boolean.class, Boolean.FALSE));
 
-        return b.build();
+        return passingOnWhatItLacks(b.build());
     }
+
+    @Override
+    public int order() {
+        return MountOrder.STATIC;
+    }
+
+    /**
+     * Static files share a prefix (vidocq#802): a request for a file the mount does not have, or with a
+     * method other than GET and HEAD, goes to the next mount of the prefix. Alone on its prefix, the mount
+     * answers it, a 404 or a 405.
+     */
+    static ChainableHandler passingOnWhatItLacks(Handler files) {
+        return new ChainableHandler() {
+            @Override
+            public Response handle(Request request) throws Exception {
+                return files.handle(request);
+            }
+
+            @Override
+            public Response handleIfServed(Request request) throws Exception {
+                HttpMethod method = request.method();
+                if (method != HttpMethod.GET && method != HttpMethod.HEAD) return null;
+                Response response = files.handle(request);
+                return response.status().code() == NOT_FOUND ? null : response;
+            }
+        };
+    }
+
+    private static final int NOT_FOUND = 404;
 }

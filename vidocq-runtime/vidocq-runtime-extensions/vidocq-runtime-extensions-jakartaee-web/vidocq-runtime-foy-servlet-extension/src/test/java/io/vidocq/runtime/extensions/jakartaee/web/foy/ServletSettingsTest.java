@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeListener;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.MountOrder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -37,6 +38,20 @@ class ServletSettingsTest {
         assertEquals(ChappeListener.DEFAULT, s.listener());
         assertEquals(30 * 60, s.sessionTimeoutSeconds());
         assertEquals("UTF-8", s.responseCharacterEncoding());
+        // After the static files and the REST resources of a shared prefix (vidocq#802).
+        assertEquals(MountOrder.SERVLET, s.order());
+    }
+
+    @Test
+    void theOrderAmongTheMountsOfAPrefixIsConfigured() {
+        assertEquals(50, ServletSettings.from(new MapConfiguration(Map.of("vidocq.servlet.order", " 50 "))).order());
+    }
+
+    @Test
+    void aBadOrderNamesTheKey() {
+        MapConfiguration config = new MapConfiguration(Map.of("vidocq.servlet.order", "first"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSettings.from(config));
+        assertTrue(e.getMessage().contains("vidocq.servlet.order"), e.getMessage());
     }
 
     @Test
@@ -78,6 +93,6 @@ class ServletSettingsTest {
         assertEquals(Set.of("vidocq.servlet.context-path", "vidocq.servlet.listener",
                 "vidocq.servlet.session-timeout", "vidocq.servlet.response-character-encoding",
                 "vidocq.servlet.users.*", "vidocq.servlet.confidential-port",
-                "vidocq.servlet.rotate-session-id-on-login"), extension.configKeys());
+                "vidocq.servlet.rotate-session-id-on-login", "vidocq.servlet.order"), extension.configKeys());
     }
 }

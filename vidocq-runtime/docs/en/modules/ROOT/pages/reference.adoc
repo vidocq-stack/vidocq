@@ -131,7 +131,7 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.http.mount.<name>.*`
 | —
-| Declarative mounts: static files (`type=static`), REST resources (`restful`), the web application (`servlet`), a WebSocket route (`websocket`). `vidocq.http.mount.<name>.path` declares the mount: a mount without it fails the start. Every key, per type, and how to serve a page next to a REST API: xref:modules/vidocq-runtime-extensions.adoc#declarative-mounts[Declarative mounts].
+| Declarative mounts: static files (`type=static`), REST resources (`restful`), the web application (`servlet`), a WebSocket route (`websocket`). `vidocq.http.mount.<name>.path` declares the mount: a mount without it fails the start. Several mounts can share a prefix, asked in their `.order` (xref:modules/vidocq-runtime-extensions.adoc#declarative-mounts-shared[Several mounts on one prefix]). Every key, per type, and how to serve a page next to a REST API: xref:modules/vidocq-runtime-extensions.adoc#declarative-mounts[Declarative mounts].
 
 | `vidocq.servlet.context-path`+
 `vidocq.servlet.listener` +
@@ -192,6 +192,12 @@ the one backend
 | `vidocq.rest.context-path`
 | `/`
 | Prefix under which Cassini mounts the JAX-RS application.
+
+| `vidocq.rest.order` +
+`vidocq.servlet.order`
+| `200` +
+`300`
+| The rank of the automatic REST and Servlet mounts among the mounts of their prefix, the lowest asked first. See xref:modules/vidocq-runtime-extensions.adoc#declarative-mounts-shared[Several mounts on one prefix].
 
 | `vidocq.profile`
 | (empty)

@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeListener;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.MountOrder;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 
 import java.nio.charset.Charset;
@@ -38,12 +39,14 @@ import java.nio.charset.Charset;
  *                              an initializer or a listener can still set another one
  */
 record ServletSettings(String contextPath, String listener, int sessionTimeoutSeconds,
-                       String responseCharacterEncoding) {
+                       String responseCharacterEncoding, int order) {
 
     static final String CONTEXT_PATH = "vidocq.servlet.context-path";
     static final String LISTENER_KEY = "vidocq.servlet.listener";
     static final String SESSION_TIMEOUT = "vidocq.servlet.session-timeout";
     static final String RESPONSE_CHARACTER_ENCODING = "vidocq.servlet.response-character-encoding";
+    /** The rank of the automatic mount among the mounts of its prefix (vidocq#802). */
+    static final String ORDER_KEY = "vidocq.servlet.order";
     static final int DEFAULT_SESSION_TIMEOUT_SECONDS = 30 * 60;
     /** Not the Servlet default (ISO-8859-1): a page written through {@code getWriter()} keeps its accents. */
     static final String DEFAULT_RESPONSE_CHARACTER_ENCODING = "UTF-8";
@@ -52,7 +55,18 @@ record ServletSettings(String contextPath, String listener, int sessionTimeoutSe
         String timeout = config.property(SESSION_TIMEOUT).orElse(null);
         return new ServletSettings(config.property(CONTEXT_PATH).orElse(null),
                 config.property(LISTENER_KEY, ChappeListener.DEFAULT), seconds(timeout),
-                encoding(config.property(RESPONSE_CHARACTER_ENCODING).orElse(null)));
+                encoding(config.property(RESPONSE_CHARACTER_ENCODING).orElse(null)),
+                parseOrder(config.property(ORDER_KEY).orElse(null)));
+    }
+
+    /** {@code null}: the default, after the static files and the REST resources; otherwise an integer. */
+    static int parseOrder(String value) {
+        if (value == null) return MountOrder.SERVLET;
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(ORDER_KEY + " must be an integer, got '" + value + "'", e);
+        }
     }
 
     /**

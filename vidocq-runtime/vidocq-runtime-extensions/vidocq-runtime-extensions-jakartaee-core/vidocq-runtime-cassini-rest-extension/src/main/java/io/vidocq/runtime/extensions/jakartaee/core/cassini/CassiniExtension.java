@@ -25,6 +25,8 @@ import io.vidocq.cassini.spi.bean.BeanProvider;
 import io.vidocq.cassini.spi.http.CassiniStack;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeListener;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.ChainableHandler;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.MountOrder;
 import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
 import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMounts;
 import io.vidocq.runtime.spi.ExtensionContext;
@@ -83,6 +85,8 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
     private String contextPath = "/";
     private String listener = ChappeListener.DEFAULT;
     private String restMode = "";
+    /** The rank of the automatic mount among the mounts of its prefix (vidocq#802). */
+    private int order = MountOrder.RESTFUL;
 
     @Override
     public String name() {
@@ -99,6 +103,18 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
         this.contextPath = config.property("vidocq.rest.context-path", "/");
         this.listener = config.property("vidocq.rest.listener", ChappeListener.DEFAULT);
         this.restMode = config.property(RestMode.PROPERTY, "");
+        this.order = parseOrder(config.property(ORDER_KEY, String.valueOf(MountOrder.RESTFUL)));
+    }
+
+    /** The key of the rank of the automatic mount among the mounts of its prefix. */
+    static final String ORDER_KEY = "vidocq.rest.order";
+
+    static int parseOrder(String value) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException(ORDER_KEY + "=" + value + " is not an integer", e);
+        }
     }
 
     @Override
@@ -152,7 +168,9 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
             }
         }
         String mountPrefix = "/".equals(effectiveContextPath) ? "" : effectiveContextPath;
-        ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
+        // Shares its prefix (vidocq#802): a path no resource matches goes to the next mount of the prefix.
+        ChappeMountPoint.instance().mountShared(listener, mountPrefix, ChainableHandler.of(bridge, bridge::serves),
+                true, order, AUTO_MOUNT);
         RestMount mount = RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes(),
                 stack.statistics().orElse(null));
         RestMounts.register(mount);

@@ -24,8 +24,10 @@ import io.vidocq.cassini.chappe.ChappeHttpAdapter;
 import io.vidocq.cassini.spi.bean.BeanProvider;
 import io.vidocq.cassini.spi.http.CassiniStack;
 import io.vidocq.chappe.api.Handler;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.ChainableHandler;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountConfig;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.MountOrder;
 import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMount;
 import io.vidocq.runtime.extensions.jakartaee.core.cassini.live.RestMounts;
 import io.vidocq.vauban.core.context.RequestContext;
@@ -82,7 +84,14 @@ public final class CassiniMountHandlerProvider implements MountHandlerProvider {
         RestMounts.register(RestMount.of(cfg.name(), cfg.listener(), cfg.prefix(), stripPrefix,
                 beanProvider.getResourceClasses(), stack.routes(), stack.statistics().orElse(null)));
         RequestContext requestContext = new RequestContext();
-        return new ChappeHttpAdapter(stack.adapter(), requestContext::runInScope);
+        ChappeHttpAdapter adapter = new ChappeHttpAdapter(stack.adapter(), requestContext::runInScope);
+        // Shares its prefix (vidocq#802): a path no resource matches goes to the next mount of the prefix.
+        return ChainableHandler.of(adapter, adapter::serves);
+    }
+
+    @Override
+    public int order() {
+        return MountOrder.RESTFUL;
     }
 
     /**

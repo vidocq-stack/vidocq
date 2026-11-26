@@ -19,11 +19,15 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
-import io.vidocq.chappe.api.Handler;
+import io.vidocq.runtime.extensions.essentials.chappe.spi.ChainableHandler;
 
 /** Where the extension mounts Foy: the shared web server, or a recorder in tests. */
 @FunctionalInterface
 interface MountTarget {
 
-    void mount(String listener, String prefix, Handler handler);
+    /**
+     * Mounts the application on {@code prefix}: {@code order} is its rank among the mounts that share the
+     * prefix (vidocq#802).
+     */
+    void mount(String listener, String prefix, ChainableHandler handler, int order);
 }

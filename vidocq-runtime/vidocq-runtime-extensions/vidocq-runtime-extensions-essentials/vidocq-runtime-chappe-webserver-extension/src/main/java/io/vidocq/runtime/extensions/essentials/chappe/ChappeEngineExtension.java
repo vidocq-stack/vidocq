@@ -96,6 +96,8 @@ public final class ChappeEngineExtension implements VidocqExtension, StartupRepo
             if (url.isPresent()) {
                 section.listener(name, url.get());
                 started.add(name + " " + url.get());
+                // A prefix several mounts share: who is asked, in which order (vidocq#802).
+                mp.sharedPrefixes(name).forEach((prefix, owners) -> section.list(name + " " + prefix, owners));
             }
         }
         if (started.isEmpty()) {

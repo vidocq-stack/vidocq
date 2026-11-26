@@ -179,7 +179,7 @@ class FoyMountHandlerProviderTest {
                 FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML), Optional.empty());
         int before = LifecycleListener.DESTROYED.get();
 
-        new FoyExtension((l, p, h) -> {}, deployments).onStop();
+        new FoyExtension((l, p, h, o) -> {}, deployments).onStop();
 
         assertEquals(before + 1, LifecycleListener.DESTROYED.get());
     }
