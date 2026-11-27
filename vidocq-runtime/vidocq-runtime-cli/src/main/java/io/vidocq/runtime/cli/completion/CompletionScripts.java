@@ -28,7 +28,8 @@ import java.util.stream.Collectors;
  *
  * <p>Both scripts share {@code _vidocq_spec}, a POSIX function that receives the words
  * typed after {@code vidocq} (the one being completed excluded) and prints the words to
- * offer — the shell port of {@link CompletionSpec#candidates(List)}. {@code @}-words are
+ * offer — the shell port of {@link CompletionSpec#candidates(List, String)}, which reads the word being completed
+ * from {@code _VIDOCQ_CUR}. {@code @}-words are
  * then expanded by the shell-specific function: files through the shell's own completion,
  * config keys from {@code vidocq.properties}, and extension ids from {@code pom.xml}.
  * No JVM starts on TAB.</p>
@@ -36,6 +37,8 @@ import java.util.stream.Collectors;
 public final class CompletionScripts {
     private static final String ESAC = "    esac\n";
     private static final String CASE_INDENT = "        ";
+    /** Closes a {@code case} branch that echoes its words. */
+    private static final String END_ECHO = "\" ;;\n";
 
     private CompletionScripts() {}
 
@@ -59,7 +62,7 @@ public final class CompletionScripts {
                 %s
                 _vidocq() {
                     local cur="${COMP_WORDS[COMP_CWORD]}" w words=""
-                    for w in $(_vidocq_spec "${COMP_WORDS[@]:1:COMP_CWORD-1}"); do
+                    for w in $(_VIDOCQ_CUR="$cur" _vidocq_spec "${COMP_WORDS[@]:1:COMP_CWORD-1}"); do
                         case "$w" in
                             @files) COMPREPLY=( $(compgen -f -- "$cur") ); return 0 ;;
                             @*)     words="$words $(_vidocq_dynamic "$w")" ;;
@@ -84,7 +87,7 @@ public final class CompletionScripts {
                 _vidocq() {
                     local w
                     local -a cands
-                    for w in ${=$(_vidocq_spec "${(@)words[2,CURRENT-1]}")}; do
+                    for w in ${=$(_VIDOCQ_CUR="${words[CURRENT]}" _vidocq_spec "${(@)words[2,CURRENT-1]}")}; do
                         case "$w" in
                             @files) _files; return ;;
                             @*)     cands+=( ${(f)"$(_vidocq_dynamic "$w")"} ) ;;
@@ -113,7 +116,7 @@ public final class CompletionScripts {
         sh.append("            if [ $# -eq 1 ]; then\n");
         sh.append("                case \"$cmd\" in\n");
         CompletionSpec.SUBCOMMANDS.forEach((cmd, subs) ->
-                sh.append("                    ").append(cmd).append(") echo \"").append(join(subs)).append("\" ;;\n"));
+                sh.append("                    ").append(cmd).append(") echo \"").append(join(subs)).append(END_ECHO));
         sh.append("                esac\n");
         sh.append("                return\n");
         sh.append("            fi\n");
@@ -134,12 +137,13 @@ public final class CompletionScripts {
         sh.append("    if [ \"$pos\" -eq 1 ]; then\n");
         sh.append("        case \"$ctx\" in\n");
         CompletionSpec.FIRST_ARGUMENTS.forEach((ctx, words) ->
-                sh.append("            \"").append(ctx).append("\") echo \"").append(join(words)).append("\" ;;\n"));
+                sh.append("            \"").append(ctx).append("\") echo \"").append(join(words)).append(END_ECHO));
         sh.append("        esac\n");
         sh.append("    fi\n");
         sh.append("    case \"$ctx\" in\n");
         cases(sh, CompletionSpec.ARGUMENTS, "");
         sh.append(ESAC);
+        shortAliases(sh);
         sh.append("}\n");
         sh.append("_vidocq_addable() {\n");
         sh.append("    local taken id\n");
@@ -161,6 +165,18 @@ public final class CompletionScripts {
                     return 0
                 }""");
         return sh.toString();
+    }
+
+    /** The short aliases of the context, when the word being completed starts with a single dash. */
+    private static void shortAliases(StringBuilder sh) {
+        sh.append("    case \"$_VIDOCQ_CUR\" in\n");
+        sh.append("        --*) ;;\n");
+        sh.append("        -*)\n");
+        sh.append("            case \"$ctx\" in\n");
+        ShortOptions.contexts().forEach(ctx -> sh.append("                \"").append(ctx).append("\") echo \"")
+                .append(String.join(" ", ShortOptions.of(ctx).keySet())).append(END_ECHO));
+        sh.append("            esac ;;\n");
+        sh.append(ESAC);
     }
 
     private static void aliases(StringBuilder sh, Map<String, String> aliases, String variable) {

@@ -22,6 +22,7 @@ package io.vidocq.runtime.cli;
 import io.vidocq.runtime.cli.build.BuildType;
 import io.vidocq.runtime.cli.build.DockerKind;
 import io.vidocq.runtime.cli.completion.Shell;
+import io.vidocq.runtime.cli.completion.ShortOptions;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.UpdatePlan;
@@ -65,6 +66,12 @@ public final class CliParser {
             BUILD, CLEAN, CONFIG, COMPLETION, UPDATE, EXTENSION, POM);
     private static final String DRY_RUN = "--dry-run";
     private static final String PORT = "--port";
+    private static final String OFFLINE = "--offline";
+    private static final String CONFIG_OPTION = "--config";
+    private static final String PROFILE_OPTION = "--profile";
+    private static final String NAME_OPTION = "--name";
+    private static final String GROUP_ID_OPTION = "--group-id";
+    private static final String EXTENSION_OPTION = "--extension";
     private static final String KIND = "--kind";
     private static final String MAVEN_PROFILE = "--maven-profile";
     private static final String PASS_THROUGH = "--";
@@ -139,7 +146,7 @@ public final class CliParser {
             String arg = it.next();
             switch (arg) {
                 case PORT, "-p"       -> { port = parseInt(next(it, PORT), PORT); portExplicit = true; }
-                case "--config", "-c" -> config = Path.of(next(it, "--config"));
+                case CONFIG_OPTION, "-c"  -> config = Path.of(next(it, CONFIG_OPTION));
                 case DEBUG        -> debug  = true;
                 case MAVEN_PROFILE    -> mavenProfiles.addAll(mavenProfiles(it));
                 default               -> unknownOpt(arg, START);
@@ -159,7 +166,7 @@ public final class CliParser {
             String arg = it.next();
             switch (arg) {
                 case PORT, "-p"        -> { port = parseInt(next(it, PORT), PORT); portExplicit = true; }
-                case "--profile", "-P" -> profile = next(it, "--profile");
+                case PROFILE_OPTION, "-P" -> profile = next(it, PROFILE_OPTION);
                 case DEBUG         -> debug   = true;
                 case MAVEN_PROFILE     -> mavenProfiles.addAll(mavenProfiles(it));
                 default                -> unknownOpt(arg, "dev");
@@ -269,10 +276,10 @@ public final class CliParser {
         while (it.hasNext()) {
             String arg = it.next();
             switch (arg) {
-                case "--name", "-n"      -> name    = next(it, "--name");
-                case "--group-id", "-g"  -> groupId = next(it, "--group-id");
+                case NAME_OPTION, "-n"      -> name    = next(it, NAME_OPTION);
+                case GROUP_ID_OPTION, "-g"  -> groupId = next(it, GROUP_ID_OPTION);
                 case "--package"         -> pkg     = next(it, "--package");
-                case "--extension", "-x" -> extensions.add(next(it, "--extension"));
+                case EXTENSION_OPTION, "-x" -> extensions.add(next(it, EXTENSION_OPTION));
                 // The Vidocq version the project builds on; the parent's with --with-parent (#380).
                 case "--vidocq-version", "--parent-version" -> parentVersion = next(it, arg);
                 case "--with-parent"     -> withParent = true;
@@ -372,7 +379,7 @@ public final class CliParser {
         while (it.hasNext()) {
             String arg = it.next();
             switch (arg) {
-                case "--offline", "-o" -> offline   = true;
+                case OFFLINE, "-o"     -> offline   = true;
                 case "--skip-tests"    -> skipTests = true;
                 case DRY_RUN       -> dryRun    = true;
                 case KIND              -> {
@@ -401,7 +408,7 @@ public final class CliParser {
         while (it.hasNext()) {
             String arg = it.next();
             switch (arg) {
-                case "--offline", "-o" -> offline = true;
+                case OFFLINE, "-o"     -> offline = true;
                 case DRY_RUN       -> dryRun  = true;
                 case MAVEN_PROFILE     -> mavenProfiles.addAll(mavenProfiles(it));
                 case PASS_THROUGH      -> it.forEachRemaining(passthrough::add);
@@ -558,8 +565,9 @@ public final class CliParser {
                 topic(START, "Build and run the application",
                         "Runs 'mvn vidocq:run' in the project (./mvnw when present): compiles it and",
                         "starts it with its dependencies and extensions on the module path.");
-                options("--port, -p <n>",      "HTTP listening port, over the project's own setting",
-                        "--config, -c <file>", "Path to an external vidocq.properties file",
+                options(ShortOptions.label(START, PORT) + " <n>", "HTTP listening port, over the project's own setting",
+                        ShortOptions.label(START, CONFIG_OPTION) + " <file>",
+                        "Path to an external vidocq.properties file",
                         DEBUG,             "Open a debug agent on port 5005",
                         MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
             }
@@ -568,8 +576,9 @@ public final class CliParser {
                         "Runs 'mvn process-classes vidocq:dev' in the project (./mvnw when present):",
                         "the application starts with its dependencies and extensions, the dev console",
                         "and the debug agent (port 5005), and restarts on every source change.");
-                options("--port, -p <n>",       "HTTP listening port, over the project's own setting",
-                        "--profile, -P <name>", "Vidocq config profile to activate (default: dev), not a Maven one",
+                options(ShortOptions.label("dev", PORT) + " <n>", "HTTP listening port, over the project's own setting",
+                        ShortOptions.label("dev", PROFILE_OPTION) + " <name>",
+                        "Vidocq config profile to activate (default: dev), not a Maven one",
                         DEBUG,              "Force the debug agent on (it is on by default in dev)",
                         MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
             }
@@ -612,16 +621,19 @@ public final class CliParser {
                         "Maven version, HTTP port) and prints a report. Exits non-zero if any",
                         "check fails.");
                 options("--fix",         "First repair what it can: codegen paths, module-info.java, the wrapper",
-                        "--verbose, -v", "Print extra details (per-status summary, minimum Java version)");
+                        ShortOptions.label(DOCTOR, "--verbose"),
+                        "Print extra details (per-status summary, minimum Java version)");
             }
             case CREATE -> {
                 CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");
                 CliOutput.println();
                 CliOutput.println(OPTIONS);
-                opt("--name, -n <name>",         "Project / artifact name (asked on a console when left out)");
-                opt("--group-id, -g <groupId>",  "Maven groupId            (default: io.example)");
+                opt(ShortOptions.label(CREATE, NAME_OPTION) + " <name>",
+                        "Project / artifact name (asked on a console when left out)");
+                opt(ShortOptions.label(CREATE, GROUP_ID_OPTION) + " <groupId>",
+                        "Maven groupId            (default: io.example)");
                 opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
-                opt("--extension, -x <id>",       "Extension to enable, repeatable");
+                opt(ShortOptions.label(CREATE, EXTENSION_OPTION) + " <id>", "Extension to enable, repeatable");
                 opt("--vidocq-version <version>", "Vidocq version the project builds on (default: the CLI's runtime");
                 opt("",                           "version); a SNAPSHOT adds the Vidocq snapshot repositories to the pom");
                 opt("--parent-version <version>", "The same option, as it was named until 0.4.0");
@@ -649,7 +661,7 @@ public final class CliParser {
                 cmd("docker",             "Docker image of the jlink image, or of the distribution (vidocq:docker)");
                 CliOutput.println();
                 CliOutput.println(OPTIONS);
-                opt("--offline, -o",  "Run Maven offline (-o)");
+                opt(ShortOptions.label(BUILD, OFFLINE), "Run Maven offline (-o)");
                 opt("--skip-tests",   "Skip tests (-DskipTests)");
                 opt(DRY_RUN,      "Print the Maven command without running it");
                 opt("--kind <jlink|jdk>", "docker only: the jlink image (default), or the distribution on a JDK");
@@ -666,7 +678,7 @@ public final class CliParser {
                 CliOutput.println("Runs 'mvn clean' in the current project.");
                 CliOutput.println();
                 CliOutput.println(OPTIONS);
-                opt("--offline, -o", "Run Maven offline (-o)");
+                opt(ShortOptions.label(CLEAN, OFFLINE), "Run Maven offline (-o)");
                 opt(DRY_RUN,     "Print the Maven command without running it");
                 opt(MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
                 opt(PASS_THROUGH_NAME, PASS_THROUGH_HELP);

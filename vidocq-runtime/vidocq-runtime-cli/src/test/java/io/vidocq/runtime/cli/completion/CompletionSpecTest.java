@@ -116,6 +116,32 @@ class CompletionSpecTest {
         assertEquals(List.of("--check", "--release", "--snapshot"), after("update"));
     }
 
+    /** Vidocq/vidocq#782: {@code vidocq create -<TAB>} offers {@code -x} next to {@code --extension}. */
+    @Test
+    void aSingleDashOffersTheShortAliasesNextToTheLongOptions() {
+        List<String> offered = CompletionSpec.candidates(List.of("create"), "-");
+
+        assertTrue(offered.containsAll(List.of("-n", "-g", "-x")), offered.toString());
+        assertTrue(offered.containsAll(after("create")), offered.toString());
+        assertEquals(List.of("-x"), CompletionSpec.candidates(List.of("create", "--name", "todo"), "-x").stream()
+                .filter(w -> w.startsWith("-x")).toList(), "a typed short alias completes to itself");
+    }
+
+    @Test
+    void aDoubleDashOffersTheLongOptionsOnly() {
+        assertEquals(after("create"), CompletionSpec.candidates(List.of("create"), "--"));
+        assertTrue(after("create").stream().allMatch(w -> w.startsWith("--")), "nothing typed: long options only");
+    }
+
+    @Test
+    void startAndDevOfferTheirShortAliases() {
+        assertTrue(CompletionSpec.candidates(List.of("start"), "-").containsAll(List.of("-p", "-c", "--port")));
+        assertTrue(CompletionSpec.candidates(List.of("dev"), "-").containsAll(List.of("-p", "-P", "--profile")));
+        assertFalse(CompletionSpec.candidates(List.of("dev"), "-").contains("-c"), "-c is start's, not dev's");
+        assertEquals(List.of(CompletionSpec.FILES), after("start", "-p", "8080", "-c"));
+        assertTrue(after("dev", "-P").isEmpty(), "-P takes a free-form value");
+    }
+
     @Test
     void unknownCommandOffersNothing() {
         assertTrue(after("frobnicate").isEmpty());
@@ -124,7 +150,7 @@ class CompletionSpecTest {
     @Test
     void everyOfferedOptionIsAcceptedByTheParser() {
         for (var context : CompletionSpec.contexts()) {
-            for (String word : CompletionSpec.candidates(context)) {
+            for (String word : CompletionSpec.candidates(context, "-")) {
                 if (!word.startsWith("-") || word.equals("--")) {
                     continue;
                 }

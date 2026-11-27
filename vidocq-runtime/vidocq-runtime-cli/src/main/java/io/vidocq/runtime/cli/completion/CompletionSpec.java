@@ -26,6 +26,7 @@ import io.vidocq.runtime.tooling.RegistryEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,10 @@ import java.util.Set;
  * ({@code extension list}). A word starting with {@code @} is computed by the script when
  * completing, without starting a JVM: {@link #FILES}, {@link #CONFIG_KEYS},
  * {@link #POM_EXTENSIONS}.</p>
+ *
+ * <p>The options are offered by their long form; the {@link ShortOptions short aliases} join them only when the
+ * word being completed is a single dash or starts with one ({@code -}, {@code -x}), so the usual list does not
+ * double.</p>
  */
 public final class CompletionSpec {
 
@@ -100,19 +105,17 @@ public final class CompletionSpec {
             "extension remove", List.of(POM_EXTENSIONS));
 
     /** Values offered right after an option, keyed {@code "<context> <option>"}. */
-    static final Map<String, List<String>> OPTION_VALUES = ordered(
+    static final Map<String, List<String>> OPTION_VALUES = withShortAliases(ordered(
             "create --extension", extensionIds(),
-            "create -x", extensionIds(),
             "pom convert --to", List.of("parentless", "parent"),
             "idea --kind", List.of("maven", "application"),
-            "start --config", List.of(FILES),
-            "start -c", List.of(FILES));
+            "start --config", List.of(FILES)));
 
     /** Options followed by a value — nothing is offered for a free-form one. */
-    static final Set<String> VALUE_OPTIONS = Set.of(
-            PORT, "-p", "--config", "-c", "--profile", "-P", "--name", "-n",
-            "--group-id", "-g", "--package", "--extension", "-x", "--vidocq-version", "--parent-version", KIND,
-            "--to", MAVEN_PROFILE);
+    static final Set<String> VALUE_OPTIONS = withShortAliases(Set.of(
+            PORT, "--config", "--profile", "--name",
+            "--group-id", "--package", "--extension", "--vidocq-version", "--parent-version", KIND,
+            "--to", MAVEN_PROFILE));
 
     private CompletionSpec() {}
 
@@ -123,9 +126,18 @@ public final class CompletionSpec {
 
     /**
      * The words offered after {@code typed} — the words already typed after
-     * {@code vidocq}, the one being completed excluded.
+     * {@code vidocq}, the one being completed excluded — when nothing of that word is typed yet.
      */
     public static List<String> candidates(List<String> typed) {
+        return candidates(typed, "");
+    }
+
+    /**
+     * The words offered after {@code typed} for the word being completed, {@code current}: the short aliases of the
+     * context join the long options when {@code current} starts with a single dash. The shell keeps those that start
+     * with {@code current}.
+     */
+    public static List<String> candidates(List<String> typed, String current) {
         if (typed.isEmpty()) {
             return CommandCatalog.COMMANDS;
         }
@@ -153,6 +165,9 @@ public final class CompletionSpec {
             result.addAll(FIRST_ARGUMENTS.getOrDefault(context, List.of()));
         }
         result.addAll(ARGUMENTS.getOrDefault(context, List.of()));
+        if (offersShortAliases(current)) {
+            result.addAll(ShortOptions.of(context).keySet());
+        }
         return List.copyOf(result);
     }
 
@@ -167,6 +182,38 @@ public final class CompletionSpec {
             }
         }
         return contexts;
+    }
+
+    /** Whether the word being completed asks for the short aliases: {@code -} or {@code -x}, never {@code --}. */
+    static boolean offersShortAliases(String current) {
+        return current.startsWith("-") && !current.startsWith("--");
+    }
+
+    /** {@code values} plus, after each {@code "<context> <long>"} key, the same values for its short alias. */
+    private static Map<String, List<String>> withShortAliases(Map<String, List<String>> values) {
+        Map<String, List<String>> map = new LinkedHashMap<>();
+        values.forEach((key, words) -> {
+            map.put(key, words);
+            int space = key.lastIndexOf(' ');
+            String context = key.substring(0, space);
+            ShortOptions.of(context).forEach((alias, longForm) -> {
+                if (longForm.equals(key.substring(space + 1))) {
+                    map.put(context + " " + alias, words);
+                }
+            });
+        });
+        return Collections.unmodifiableMap(map);
+    }
+
+    /** {@code options} plus the short alias of each, in any context. */
+    private static Set<String> withShortAliases(Set<String> options) {
+        Set<String> set = new HashSet<>(options);
+        ShortOptions.contexts().forEach(context -> ShortOptions.of(context).forEach((alias, longForm) -> {
+            if (options.contains(longForm)) {
+                set.add(alias);
+            }
+        }));
+        return Set.copyOf(set);
     }
 
     static List<String> extensionIds() {

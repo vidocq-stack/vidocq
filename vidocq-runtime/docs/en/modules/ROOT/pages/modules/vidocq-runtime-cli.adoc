@@ -874,6 +874,11 @@ the current `pom.xml` declares after `extension remove`, the keys of the project
 `vidocq.properties` after `config get|set`. These values are read by the script itself, so
 pressing TAB never starts a JVM.
 
+Options are offered by their long form. After a single dash the short aliases of the command join
+them: `vidocq create -<TAB>` offers `-n`, `-g` and `-x` next to `--name`, `--group-id` and
+`--extension`, `start -<TAB>` adds `-p` and `-c`, `dev -<TAB>` adds `-p` and `-P`. After `--` only the
+long options are offered.
+
 [source,bash]
 ----
 # bash — load for the current shell

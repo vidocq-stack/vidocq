@@ -64,6 +64,19 @@ class CompletionScriptsTest {
         }
     }
 
+    /** Vidocq/vidocq#782: the short aliases are offered after a single dash, never after two. */
+    @Test
+    void bothScriptsOfferTheShortAliasesAfterASingleDash() {
+        assertTrue(CompletionScripts.bash(CMDS, "s").contains("_VIDOCQ_CUR=\"$cur\" _vidocq_spec"));
+        assertTrue(CompletionScripts.zsh(CMDS, "s").contains("_VIDOCQ_CUR=\"${words[CURRENT]}\" _vidocq_spec"));
+        for (Shell shell : Shell.values()) {
+            String script = CompletionScripts.script(shell, CMDS, "s");
+            assertTrue(script.contains("    case \"$_VIDOCQ_CUR\" in\n        --*) ;;\n        -*)\n"), script);
+            assertTrue(script.contains("                \"create\") echo \"-n -g -x\" ;;\n"), script);
+            assertTrue(script.contains("                \"dev\") echo \"-p -P\" ;;\n"), script);
+        }
+    }
+
     @Test
     void scriptsCarryTheStampOfTheCliThatWroteThem() {
         for (Shell shell : Shell.values()) {
