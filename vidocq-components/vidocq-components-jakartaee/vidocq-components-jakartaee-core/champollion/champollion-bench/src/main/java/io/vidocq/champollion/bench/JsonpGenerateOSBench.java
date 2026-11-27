@@ -67,7 +67,7 @@ public class JsonpGenerateOSBench {
 
     private static JsonProvider providerByClass(String fqcn) {
         try {
-            return (JsonProvider) Class.forName(fqcn).getDeclaredConstructor().newInstance();
+            return Class.forName(fqcn).asSubclass(JsonProvider.class).getDeclaredConstructor().newInstance();
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Cannot instantiate " + fqcn, e);
         }

@@ -37,6 +37,8 @@ import org.junit.jupiter.api.Test;
 class ProtobufJsonTest {
 
     @ProtobufMessage
+    // A protobuf bytes field is a byte[] component; equals and hashCode below compare the bytes.
+    @SuppressWarnings("ArrayRecordComponent")
     public record AllScalars(
             @ProtobufField(number = 1, type = FieldType.INT32) int i32,
             @ProtobufField(number = 2, type = FieldType.INT64) long i64,

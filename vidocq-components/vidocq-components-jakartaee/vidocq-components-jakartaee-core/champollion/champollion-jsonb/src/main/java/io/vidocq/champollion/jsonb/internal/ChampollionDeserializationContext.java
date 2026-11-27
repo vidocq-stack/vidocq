@@ -42,7 +42,8 @@ final class ChampollionDeserializationContext implements DeserializationContext 
         return (T) registry.readerFor(clazz).read(adjust(parser));
     }
 
-    @Override @SuppressWarnings("unchecked")
+    // The signature is DeserializationContext's (JSON-B API).
+    @Override @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     public <T> T deserialize(Type type, JsonParser parser) {
         return (T) registry.readerFor(type).read(adjust(parser));
     }

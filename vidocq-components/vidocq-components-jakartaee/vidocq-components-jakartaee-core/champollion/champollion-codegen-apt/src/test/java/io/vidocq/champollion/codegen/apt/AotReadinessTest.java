@@ -227,7 +227,7 @@ class AotReadinessTest {
             if (idx >= 0) {
                 int from = idx + kw.length();
                 int end = from;
-                while (end < src.length() && (Character.isJavaIdentifierPart(src.charAt(end)))) end++;
+                while (end < src.length() && Character.isJavaIdentifierPart(src.charAt(end))) end++;
                 String simple = src.substring(from, end);
                 return pkg.isEmpty() ? simple : pkg + "." + simple;
             }

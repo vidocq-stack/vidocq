@@ -111,7 +111,7 @@ class CodedOutputStreamTest {
 
         @Test
         void computeRawVarint32Size_matches_actual_encoding() throws IOException {
-            int[] samples = {0, 1, 127, 128, 16383, 16384, 1 << 21 - 1, 1 << 21, Integer.MAX_VALUE};
+            int[] samples = {0, 1, 127, 128, 16383, 16384, (1 << 21) - 1, 1 << 21, Integer.MAX_VALUE};
             for (int sample : samples) {
                 byte[] bytes = encode(o -> o.writeRawVarint32(sample));
                 assertEquals(bytes.length, CodedOutputStream.computeRawVarint32Size(sample),

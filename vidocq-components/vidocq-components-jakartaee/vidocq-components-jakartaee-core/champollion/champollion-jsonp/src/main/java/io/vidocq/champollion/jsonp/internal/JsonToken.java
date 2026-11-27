@@ -31,9 +31,9 @@ package io.vidocq.champollion.jsonp.internal;
  * nothing per scalar.</p>
  */
 public enum JsonToken {
-    /** {@code {} */
+    /** <code>{</code> */
     START_OBJECT,
-    /** {@code }} */
+    /** <code>}</code> */
     END_OBJECT,
     /** {@code [} */
     START_ARRAY,

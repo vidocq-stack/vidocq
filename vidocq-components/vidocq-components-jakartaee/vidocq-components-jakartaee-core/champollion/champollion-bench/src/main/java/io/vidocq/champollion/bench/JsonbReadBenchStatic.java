@@ -90,7 +90,11 @@ public class JsonbReadBenchStatic {
             }
             default -> throw new IllegalArgumentException(size);
         }
-        try { seed.close(); } catch (Exception ignored) {}
+        try {
+            seed.close();
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot close the seed Jsonb", e);
+        }
 
         champollionStatic = JsonbBuilder
                 .newBuilder("io.vidocq.champollion.jsonb.internal.ChampollionJsonbProvider")

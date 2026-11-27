@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -46,13 +47,13 @@ class JsonbStaticBindingTest {
      */
     static class CoordStaticBinding implements JsonbBinding<Coord> {
         // Counter to verify that THIS binding was actually used (not the runtime).
-        static volatile int writeCalls = 0;
-        static volatile int readCalls = 0;
+        static final AtomicInteger writeCalls = new AtomicInteger();
+        static final AtomicInteger readCalls = new AtomicInteger();
 
         @Override public Class<Coord> type() { return Coord.class; }
 
         @Override public void write(JsonGenerator g, Coord value) {
-            writeCalls++;
+            writeCalls.incrementAndGet();
             g.writeStartObject();
             g.write("x", value.x());
             g.write("y", value.y());
@@ -60,7 +61,7 @@ class JsonbStaticBindingTest {
         }
 
         @Override public Coord read(JsonParser p) {
-            readCalls++;
+            readCalls.incrementAndGet();
             JsonParser.Event e = p.next();
             if (e != JsonParser.Event.START_OBJECT) throw new IllegalStateException("Expected START_OBJECT");
             int x = 0, y = 0;
@@ -88,21 +89,21 @@ class JsonbStaticBindingTest {
 
         @Test
         void static_binding_used_for_write_when_registered() {
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             String json = jsonb.toJson(new Coord(3, 4));
             assertEquals("{\"x\":3,\"y\":4}", json);
-            assertEquals(1, CoordStaticBinding.writeCalls,
+            assertEquals(1, CoordStaticBinding.writeCalls.get(),
                     "Le binding statique doit avoir été appelé pour le write.");
         }
 
         @Test
         void static_binding_used_for_read_when_registered() {
-            CoordStaticBinding.readCalls = 0;
+            CoordStaticBinding.readCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             Coord c = jsonb.fromJson("{\"x\":7,\"y\":8}", Coord.class);
             assertEquals(new Coord(7, 8), c);
-            assertEquals(1, CoordStaticBinding.readCalls,
+            assertEquals(1, CoordStaticBinding.readCalls.get(),
                     "Le binding statique doit avoir été appelé pour le read.");
         }
 
@@ -110,19 +111,19 @@ class JsonbStaticBindingTest {
         void runtime_fallback_when_no_static_binding_for_type() {
             // Coord a un binding statique, mais Pair n'en a pas → runtime.
             record Pair(String a, String b) {}
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             String json = jsonb.toJson(new Pair("hello", "world"));
             assertEquals("{\"a\":\"hello\",\"b\":\"world\"}", json);
-            assertEquals(0, CoordStaticBinding.writeCalls,
+            assertEquals(0, CoordStaticBinding.writeCalls.get(),
                     "Le binding Coord ne doit pas être utilisé pour Pair.");
         }
 
         @Test
         void mix_static_and_runtime_in_same_jsonb() {
             // Coord = static, Pair = runtime, dans le même Jsonb.
-            CoordStaticBinding.writeCalls = 0;
-            CoordStaticBinding.readCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
+            CoordStaticBinding.readCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
 
             assertEquals("{\"x\":1,\"y\":2}", jsonb.toJson(new Coord(1, 2)));
@@ -131,8 +132,8 @@ class JsonbStaticBindingTest {
             record Pair(String k, String v) {}
             assertEquals("{\"k\":\"a\",\"v\":\"b\"}", jsonb.toJson(new Pair("a", "b")));
 
-            assertEquals(1, CoordStaticBinding.writeCalls);
-            assertEquals(1, CoordStaticBinding.readCalls);
+            assertEquals(1, CoordStaticBinding.writeCalls.get());
+            assertEquals(1, CoordStaticBinding.readCalls.get());
         }
     }
 
@@ -156,12 +157,12 @@ class JsonbStaticBindingTest {
             // If two static bindings declare the same type, the first in
             // registration order wins (deterministic).
             class A extends CoordStaticBinding { @Override public void write(JsonGenerator g, Coord v) {
-                writeCalls++; g.writeStartObject(); g.write("from","A"); g.writeEnd();
+                writeCalls.incrementAndGet(); g.writeStartObject(); g.write("from","A"); g.writeEnd();
             }}
             class B extends CoordStaticBinding { @Override public void write(JsonGenerator g, Coord v) {
-                writeCalls++; g.writeStartObject(); g.write("from","B"); g.writeEnd();
+                writeCalls.incrementAndGet(); g.writeStartObject(); g.write("from","B"); g.writeEnd();
             }}
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new A(), new B());
             String json = jsonb.toJson(new Coord(0, 0));
             assertEquals("{\"from\":\"A\"}", json);
@@ -189,77 +190,77 @@ class JsonbStaticBindingTest {
 
         @Test
         void elements_of_a_list_use_the_static_binding() throws Exception {
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             String json = jsonb.toJson(List.of(new Coord(1, 2), new Coord(3, 4)), typeOf("coords"));
             assertEquals("[{\"x\":1,\"y\":2},{\"x\":3,\"y\":4}]", json);
-            assertEquals(2, CoordStaticBinding.writeCalls,
+            assertEquals(2, CoordStaticBinding.writeCalls.get(),
                     "Each element of a List<Coord> must go through the static binding, not the runtime registry.");
         }
 
         @Test
         void values_of_a_map_use_the_static_binding() throws Exception {
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             String json = jsonb.toJson(java.util.Map.of("a", new Coord(1, 2)), typeOf("coordsByName"));
             assertEquals("{\"a\":{\"x\":1,\"y\":2}}", json);
-            assertEquals(1, CoordStaticBinding.writeCalls);
+            assertEquals(1, CoordStaticBinding.writeCalls.get());
         }
 
         @Test
         void a_record_component_uses_the_static_binding() {
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             String json = jsonb.toJson(new Segment(new Coord(1, 2), new Coord(3, 4)));
             assertEquals("{\"from\":{\"x\":1,\"y\":2},\"to\":{\"x\":3,\"y\":4}}", json);
-            assertEquals(2, CoordStaticBinding.writeCalls);
+            assertEquals(2, CoordStaticBinding.writeCalls.get());
         }
 
         @Test
         void an_element_typed_object_uses_the_static_binding_of_its_runtime_class() throws Exception {
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             String json = jsonb.toJson(List.of(new Coord(1, 2)), typeOf("anything"));
             assertEquals("[{\"x\":1,\"y\":2}]", json);
-            assertEquals(1, CoordStaticBinding.writeCalls);
+            assertEquals(1, CoordStaticBinding.writeCalls.get());
         }
 
         @Test
         void elements_of_a_list_are_read_by_the_static_binding() throws Exception {
-            CoordStaticBinding.readCalls = 0;
+            CoordStaticBinding.readCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             List<Coord> read = jsonb.fromJson("[{\"x\":1,\"y\":2},{\"x\":3,\"y\":4}]", typeOf("coords"));
             assertEquals(List.of(new Coord(1, 2), new Coord(3, 4)), read);
-            assertEquals(2, CoordStaticBinding.readCalls,
+            assertEquals(2, CoordStaticBinding.readCalls.get(),
                     "Each element of a List<Coord> must be read by the static binding, not the runtime registry.");
         }
 
         @Test
         void values_of_a_map_are_read_by_the_static_binding() throws Exception {
-            CoordStaticBinding.readCalls = 0;
+            CoordStaticBinding.readCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             java.util.Map<String, Coord> byName = jsonb.fromJson("{\"a\":{\"x\":1,\"y\":2}}", typeOf("coordsByName"));
             assertEquals(java.util.Map.of("a", new Coord(1, 2)), byName);
-            assertEquals(1, CoordStaticBinding.readCalls);
+            assertEquals(1, CoordStaticBinding.readCalls.get());
         }
 
         @Test
         void a_record_component_is_read_by_the_static_binding() {
-            CoordStaticBinding.readCalls = 0;
+            CoordStaticBinding.readCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             Segment s = jsonb.fromJson("{\"from\":{\"x\":1,\"y\":2},\"to\":{\"x\":3,\"y\":4}}", Segment.class);
             assertEquals(new Segment(new Coord(1, 2), new Coord(3, 4)), s);
-            assertEquals(2, CoordStaticBinding.readCalls);
+            assertEquals(2, CoordStaticBinding.readCalls.get());
         }
 
         @Test
         void a_type_without_binding_next_to_one_with_still_uses_the_runtime() throws Exception {
             record Pair(String a, String b) {}
-            CoordStaticBinding.writeCalls = 0;
+            CoordStaticBinding.writeCalls.set(0);
             var jsonb = jsonbWith(new CoordStaticBinding());
             String json = jsonb.toJson(List.of(new Pair("x", "y")), typeOf("anything"));
             assertEquals("[{\"a\":\"x\",\"b\":\"y\"}]", json);
-            assertEquals(0, CoordStaticBinding.writeCalls);
+            assertEquals(0, CoordStaticBinding.writeCalls.get());
         }
     }
 
@@ -274,12 +275,12 @@ class JsonbStaticBindingTest {
         public record Person(String firstName, String lastName) {}
 
         static class PersonStaticBinding implements JsonbBinding<Person> {
-            static volatile int calls = 0;
+            static final AtomicInteger calls = new AtomicInteger();
 
             @Override public Class<Person> type() { return Person.class; }
 
             @Override public void write(JsonGenerator g, Person value) {
-                calls++;
+                calls.incrementAndGet();
                 g.writeStartObject();
                 if (value.firstName() != null) g.write("firstName", value.firstName());
                 if (value.lastName() != null) g.write("lastName", value.lastName());
@@ -287,7 +288,7 @@ class JsonbStaticBindingTest {
             }
 
             @Override public Person read(JsonParser p) {
-                calls++;
+                calls.incrementAndGet();
                 throw new UnsupportedOperationException("not used by these tests");
             }
         }
@@ -301,27 +302,27 @@ class JsonbStaticBindingTest {
 
         @Test
         void null_values_are_written_by_the_runtime_mapping() {
-            PersonStaticBinding.calls = 0;
+            PersonStaticBinding.calls.set(0);
             String json = jsonbWith(new JsonbConfig().withNullValues(true)).toJson(new Person(null, "Hugo"));
             assertEquals("{\"firstName\":null,\"lastName\":\"Hugo\"}", json);
-            assertEquals(0, PersonStaticBinding.calls);
+            assertEquals(0, PersonStaticBinding.calls.get());
         }
 
         @Test
         void a_naming_strategy_is_applied_by_the_runtime_mapping() {
-            PersonStaticBinding.calls = 0;
+            PersonStaticBinding.calls.set(0);
             String json = jsonbWith(new JsonbConfig().withPropertyNamingStrategy(
                     jakarta.json.bind.config.PropertyNamingStrategy.LOWER_CASE_WITH_UNDERSCORES))
                     .toJson(new Person("Victor", "Hugo"));
             assertEquals("{\"first_name\":\"Victor\",\"last_name\":\"Hugo\"}", json);
-            assertEquals(0, PersonStaticBinding.calls);
+            assertEquals(0, PersonStaticBinding.calls.get());
         }
 
         @Test
         void formatting_keeps_the_static_binding() {
-            PersonStaticBinding.calls = 0;
+            PersonStaticBinding.calls.set(0);
             jsonbWith(new JsonbConfig().withFormatting(true)).toJson(new Person("Victor", "Hugo"));
-            assertEquals(1, PersonStaticBinding.calls);
+            assertEquals(1, PersonStaticBinding.calls.get());
         }
     }
 }

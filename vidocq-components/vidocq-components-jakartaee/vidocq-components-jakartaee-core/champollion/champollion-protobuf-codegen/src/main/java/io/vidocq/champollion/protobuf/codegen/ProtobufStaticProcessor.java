@@ -127,7 +127,8 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
                         "Failed to write service file: " + ex);
             }
         }
-        return true;
+        // Leaves @ProtobufStatic to any other processor that asks for it.
+        return false;
     }
 
     // ============================================================ Parser emission
@@ -348,7 +349,7 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
         if (pf.oneofGroup().isEmpty()) return;
         for (RecordComponentElement other : comps) {
             ProtobufField opf = other.getAnnotation(ProtobufField.class);
-            if (other != read && opf != null && pf.oneofGroup().equals(opf.oneofGroup())
+            if (!other.equals(read) && opf != null && pf.oneofGroup().equals(opf.oneofGroup())
                     && !other.asType().getKind().isPrimitive()) {
                 pw.println(CASE_BODY + other.getSimpleName() + ASSIGN_NULL);
             }

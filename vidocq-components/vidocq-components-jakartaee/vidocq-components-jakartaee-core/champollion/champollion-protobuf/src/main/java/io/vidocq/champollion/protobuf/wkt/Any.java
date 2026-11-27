@@ -49,6 +49,8 @@ import java.util.Objects;
  * WKT) will be handled in a later commit — for now the mapping
  * falls back to the default "object with type_url + base64 value".</p>
  */
+// A protobuf bytes field is a byte[] component (published API); equals and hashCode compare the bytes.
+@SuppressWarnings("ArrayRecordComponent")
 @ProtobufMessage("google.protobuf.Any")
 public record Any(
         @ProtobufField(number = 1, type = FieldType.STRING) String type_url,

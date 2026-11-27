@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -106,7 +107,9 @@ class JsonbCdiVaubanComponentsTest {
         assertEquals("served", registry.get(String.class));
         registry.uninstall(new Shutdown());
         assertEquals(recording.hashCode(), registry.hashCode());
-        assertEquals(recording.toString(), registry.toString());
+        // Recording keeps Object.toString: the proxy hands back the registry's own identity string.
+        assertEquals(recording.getClass().getName() + "@" + Integer.toHexString(recording.hashCode()),
+                registry.toString());
         // JUnit calls registry.equals(recording): the proxy hands it to the registry, equal to itself.
         assertEquals(registry, recording, "the registry's own equals, on the registry");
 
@@ -144,7 +147,8 @@ class JsonbCdiVaubanComponentsTest {
         for (Method method : JsonbCdiRegistry.class.getMethods()) {
             if (Modifier.isStatic(method.getModifiers()) || Modifier.isFinal(method.getModifiers())) continue;
             try {
-                JsonbCdiRegistryClientProxy.class.getDeclaredMethod(method.getName(), method.getParameterTypes());
+                assertNotNull(JsonbCdiRegistryClientProxy.class.getDeclaredMethod(method.getName(),
+                        method.getParameterTypes()));
             } catch (NoSuchMethodException _) {
                 missing.add(methodId(method));
             }

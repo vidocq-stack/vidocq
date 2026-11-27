@@ -58,6 +58,8 @@ final class AccessFailures {
                 + " — add `opens " + pkg + ";` to its module-info.java";
     }
 
+    // Identity on purpose: a throwable that is its own cause ends the walk.
+    @SuppressWarnings("ReferenceEquality")
     private static boolean isAccessFailure(Throwable t) {
         for (Throwable c = t; c != null; c = c.getCause() == c ? null : c.getCause()) {
             if (c instanceof IllegalAccessException || c instanceof InaccessibleObjectException) {

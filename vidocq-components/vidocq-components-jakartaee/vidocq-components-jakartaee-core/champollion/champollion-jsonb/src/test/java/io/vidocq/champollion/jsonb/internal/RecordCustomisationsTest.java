@@ -116,7 +116,7 @@ class RecordCustomisationsTest {
                             && jsonb.fromJson(json, Counted.class).getValue() == n * 1000.5;
                 }));
             }
-            for (var r : results) assertEquals(Boolean.TRUE, r.get());
+            for (var r : results) assertEquals(true, r.get());
         }
     }
 

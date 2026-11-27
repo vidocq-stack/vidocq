@@ -100,7 +100,7 @@ class AnyJsonTest {
             String json = ProtobufJson.toJson(any);
             assertEquals(
                     "\"type.googleapis.com/google.protobuf.Empty\"",
-                    json.split("\"@type\":")[1].split("[},]")[0].replaceAll("\\s", ""),
+                    json.split("\"@type\":", -1)[1].split("[},]", -1)[0].replaceAll("\\s", ""),
                     json);
             assertTrue(!json.contains("\"value\""), "Empty Any must not have value field: " + json);
         }

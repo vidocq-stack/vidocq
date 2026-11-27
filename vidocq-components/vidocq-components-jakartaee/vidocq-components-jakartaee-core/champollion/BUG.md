@@ -6,6 +6,37 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 
 ---
 
+## BUG-20261127-91 — Protobuf: an enum whose constants have a body cannot be written
+
+- **Date** : 2026-11-27
+- **Statut** : FIXED on `refactor/champollion-errorprone`
+- **Module touché** : `champollion-protobuf` — `RuntimeBinding` (`writeScalarNoTag`, `isDefault`, the size
+  computations), `ProtobufJsonRuntime.isDefault`
+- **Symptôme** : writing a message whose `ENUM` field holds a constant with a body (`HIGH { ... }`), as JSON or on the
+  wire, throws `IllegalArgumentException: class ...Level$2 is not an enum`. Found by Error Prone (`GetClassOnEnum`,
+  Vidocq/vidocq#832).
+- **Reproduction minimale** : `EnumConstantWithBodyTest`: `ProtobufJson.toJson(new Reading(Level.HIGH))`, where
+  `enum Level { LOW { ... }, HIGH { ... } }`.
+- **Cause** : the runtime looked the `EnumValueMap` up by `value.getClass()`, which is the constant's anonymous subclass
+  for a constant with a body; `EnumValueMap.build` refuses a class that is not an enum.
+- **Correction** : `EnumValueMap.forConstant(Enum<?>)` looks the map up by `getDeclaringClass()`; every write path of
+  the runtime uses it.
+
+## BUG-20261127-90 — JSON-P: a `true`, `false` or `null` value of another implementation is not read as one
+
+- **Date** : 2026-11-27
+- **Statut** : FIXED on `refactor/champollion-errorprone`
+- **Module touché** : `champollion-jsonp` — `ChampollionJsonArray.getBoolean/isNull`,
+  `ChampollionJsonObject.getBoolean/isNull`, `ChampollionJsonMergePatch`
+- **Symptôme** : a `JsonValue` whose `getValueType()` is `TRUE`, `FALSE` or `NULL` but which is not the
+  `JsonValue.TRUE`/`FALSE`/`NULL` constant (another implementation, added through `JsonArrayBuilder.add(JsonValue)`)
+  makes `getBoolean` throw `ClassCastException`, `isNull` answer `false`, and a merge patch keep the member it should
+  remove. Found by Error Prone (`ReferenceEquality`, Vidocq/vidocq#832).
+- **Reproduction minimale** : `ForeignLiteralValuesTest`: `new ChampollionJsonArrayBuilder().add(() ->
+  JsonValue.ValueType.TRUE).build().getBoolean(0)`.
+- **Cause** : the three classes compared the value with the constants by identity.
+- **Correction** : they read the value type instead.
+
 ## BUG-20261127-84 — Codegen: the `.proto` parser skips a `oneof` block with its fields
 
 - **Date** : 2026-11-27

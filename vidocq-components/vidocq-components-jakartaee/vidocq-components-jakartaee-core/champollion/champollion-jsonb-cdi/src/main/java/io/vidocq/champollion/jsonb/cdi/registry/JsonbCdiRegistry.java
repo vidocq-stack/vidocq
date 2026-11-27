@@ -37,6 +37,7 @@ import jakarta.inject.Inject;
 
 import java.lang.reflect.Type;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -111,7 +112,8 @@ public class JsonbCdiRegistry implements JsonbInstances.Source {
     }
 
     private void destroyAll() {
-        for (Class<?> type : handles.keySet()) {
+        // A copy of the keys: the loop removes from the map it walks. Each remove hands a handle to one caller only.
+        for (Class<?> type : List.copyOf(handles.keySet())) {
             Instance.Handle<?> handle = handles.remove(type);
             if (handle != null) handle.destroy();
         }

@@ -41,7 +41,7 @@ class OpenLibertyPortabilityIT {
 
     @Test
     void applicationProvidersAreChampollion() throws Exception {
-        String[] providers = send(HttpRequest.newBuilder(URI.create(BASE + "/json/providers")).GET()).split("\\|");
+        String[] providers = send(HttpRequest.newBuilder(URI.create(BASE + "/json/providers")).GET()).split("\\|", -1);
         assertTrue(providers[0].startsWith("io.vidocq.champollion."), providers[0]);
         assertTrue(providers[1].startsWith("io.vidocq.champollion."), providers[1]);
     }

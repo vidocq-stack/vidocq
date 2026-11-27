@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 
@@ -647,7 +648,7 @@ class RestBindingsCustomisationsTest {
     @Test
     void aPropertyOrderPutsItsPropertiesFirst() throws Exception {
         Object ordered = fmt.type("fmt.Ordered").getDeclaredConstructor().newInstance();
-        for (String f : List.of("a", "b", "c")) fmt.type("fmt.Ordered").getField(f).set(ordered, f.toUpperCase());
+        for (String f : List.of("a", "b", "c")) fmt.type("fmt.Ordered").getField(f).set(ordered, f.toUpperCase(Locale.ROOT));
         String json = assertSameAsTheRuntime("fmt.Ordered", ordered);
         assertEquals("{\"b\":\"B\",\"a\":\"A\",\"c\":\"C\"}", json);
         String recordJson = assertSameAsTheRuntime("fmt.OrderedRecord", fmt.newInstance("fmt.OrderedRecord", "A", "B", "C"));

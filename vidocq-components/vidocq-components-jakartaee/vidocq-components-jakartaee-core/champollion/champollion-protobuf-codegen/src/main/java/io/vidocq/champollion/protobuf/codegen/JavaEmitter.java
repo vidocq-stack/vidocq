@@ -352,7 +352,7 @@ public final class JavaEmitter {
         // Strip any package prefix (before the first uppercase letter).
         // Proto3 rule: full names read {package}.{Type}.{Nested}, so
         // we keep the last sequence of names starting with an uppercase letter.
-        String[] segs = fullName.split("\\.");
+        String[] segs = fullName.split("\\.", -1); // empty segments are skipped below
         int start = 0;
         for (int i = 0; i < segs.length; i++) {
             if (!segs[i].isEmpty() && Character.isUpperCase(segs[i].charAt(0))) {

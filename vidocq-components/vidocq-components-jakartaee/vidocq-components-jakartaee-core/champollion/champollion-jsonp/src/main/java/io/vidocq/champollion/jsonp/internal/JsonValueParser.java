@@ -68,7 +68,6 @@ public final class JsonValueParser implements JsonParser {
             case ObjectFrame of -> nextObject(of);
             case ArrayFrame af -> nextArray(af);
             case ScalarFrame sf -> nextScalar(sf);
-            case ValueFrame vf -> nextValue(vf);
         };
     }
 
@@ -108,11 +107,6 @@ public final class JsonValueParser implements JsonParser {
     private Event nextScalar(ScalarFrame sf) {
         stack.pop();
         return scalarEvent(sf.value);
-    }
-
-    private Event nextValue(ValueFrame vf) {
-        stack.pop();
-        return scalarEvent(vf.value);
     }
 
     /** Pushes the value onto the stack and emits the correct start event. */
@@ -249,7 +243,7 @@ public final class JsonValueParser implements JsonParser {
 
     // ===== Frames =====
 
-    private sealed interface Frame permits ObjectFrame, ArrayFrame, ScalarFrame, ValueFrame {}
+    private sealed interface Frame permits ObjectFrame, ArrayFrame, ScalarFrame {}
 
     private static final class ObjectFrame implements Frame {
         final JsonObject source;
@@ -277,11 +271,6 @@ public final class JsonValueParser implements JsonParser {
     private static final class ScalarFrame implements Frame {
         final JsonValue value;
         ScalarFrame(JsonValue value) { this.value = value; }
-    }
-
-    private static final class ValueFrame implements Frame {
-        final JsonValue value;
-        ValueFrame(JsonValue value) { this.value = value; }
     }
 
     private record SimpleLocation(long lineNumber, long columnNumber, long streamOffset) implements JsonLocation {

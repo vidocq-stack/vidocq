@@ -460,6 +460,10 @@ class ProviderFactoriesTest {
                 @Override public int read() throws IOException {
                     throw new IOException("broken");
                 }
+
+                @Override public int read(byte[] b, int off, int len) throws IOException {
+                    throw new IOException("broken");
+                }
             };
             JsonException e = assertThrows(JsonException.class, () -> PROVIDER.createParser(failing));
             assertEquals("broken", e.getCause().getMessage());

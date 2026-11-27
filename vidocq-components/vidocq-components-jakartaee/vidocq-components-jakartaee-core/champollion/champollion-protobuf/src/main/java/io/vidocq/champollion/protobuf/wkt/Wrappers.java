@@ -68,6 +68,8 @@ public final class Wrappers {
     public record StringValue(@ProtobufField(number = 1, type = FieldType.STRING) String value)
             implements Message {}
 
+    // A protobuf bytes field is a byte[] component (published API); equals and hashCode compare the bytes.
+    @SuppressWarnings("ArrayRecordComponent")
     @ProtobufMessage("google.protobuf.BytesValue")
     public record BytesValue(@ProtobufField(number = 1, type = FieldType.BYTES) byte[] value)
             implements Message {

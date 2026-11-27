@@ -347,9 +347,9 @@ final class RestBindings {
     private void reachSubclasses(TypeElement type) {
         var erased = env.getTypeUtils().erasure(type.asType());
         for (TypeElement candidate : compiled) {
-            boolean concrete = candidate.getKind() == ElementKind.RECORD || candidate.getKind() == ElementKind.CLASS
-                    && !candidate.getModifiers().contains(Modifier.ABSTRACT);
-            if (candidate != type && concrete
+            boolean concrete = candidate.getKind() == ElementKind.RECORD || (candidate.getKind() == ElementKind.CLASS
+                    && !candidate.getModifiers().contains(Modifier.ABSTRACT));
+            if (!candidate.equals(type) && concrete
                     && env.getTypeUtils().isSubtype(env.getTypeUtils().erasure(candidate.asType()), erased)) {
                 pending.add(candidate);
             }
@@ -434,9 +434,9 @@ final class RestBindings {
         String name = element.getQualifiedName().toString();
         if (JAVA_LANG_OBJECT.equals(name)) return true;
         if (isPlatform(name)) return false;
-        return element.getKind() == ElementKind.INTERFACE && !hasAnnotation(element, JSONB_TYPE_INFO)
-                || element.getKind() == ElementKind.CLASS && element.getModifiers().contains(Modifier.ABSTRACT)
-                && !hasAnnotation(element, JSONB_TYPE_INFO);
+        return (element.getKind() == ElementKind.INTERFACE && !hasAnnotation(element, JSONB_TYPE_INFO))
+                || (element.getKind() == ElementKind.CLASS && element.getModifiers().contains(Modifier.ABSTRACT)
+                && !hasAnnotation(element, JSONB_TYPE_INFO));
     }
 
     // ===== Model =====
@@ -584,7 +584,7 @@ final class RestBindings {
         }
         Variant own = variants.stream().filter(v -> env.getTypeUtils().isAssignable(type.asType(), v.type().asType()))
                 .findFirst().orElse(null);
-        if (own == null || own.type() != type) {
+        if (own == null || !own.type().equals(type)) {
             return refuse("not listed by its own @JsonbSubtype in " + bearer.getQualifiedName());
         }
         String discriminator = key;
@@ -626,7 +626,7 @@ final class RestBindings {
         }
         for (TypeElement level : hierarchy(type)) {
             String onType = unsupportedAnnotation(level.getAnnotationMirrors());
-            if (onType != null) return (level == type ? "the class" : "superclass " + level.getQualifiedName())
+            if (onType != null) return (level.equals(type) ? "the class" : "superclass " + level.getQualifiedName())
                     + " carries " + onType;
             PackageElement pkg = env.getElementUtils().getPackageOf(level);
             String onPackage = unsupportedAnnotation(pkg.getAnnotationMirrors());
@@ -853,7 +853,7 @@ final class RestBindings {
             if (unsupported != null) return CREATOR_PARAMETER + "\"" + param.jsonName() + "\": " + unsupported;
         }
         return properties.stream()
-                .filter(p -> p.write() != Access.NONE && !creator.takes(p.jsonName()) && p.in() != Mapping.PLAIN)
+                .filter(p -> p.write() != Access.NONE && !creator.takes(p.jsonName()) && !Mapping.PLAIN.equals(p.in()))
                 .findFirst().map(p -> QUOTED_PROPERTY + p.jsonName() + "\" is customised, and set after the"
                         + " @JsonbCreator: the runtime reads it without its customisation")
                 .orElse(null);
@@ -895,8 +895,8 @@ final class RestBindings {
     private static boolean isGetter(ExecutableElement m) {
         String n = m.getSimpleName().toString();
         if (!m.getParameters().isEmpty() || m.getReturnType().getKind() == TypeKind.VOID) return false;
-        return n.startsWith("get") && n.length() > 3
-                || n.startsWith("is") && n.length() > 2 && m.getReturnType().getKind() == TypeKind.BOOLEAN;
+        return (n.startsWith("get") && n.length() > 3)
+                || (n.startsWith("is") && n.length() > 2 && m.getReturnType().getKind() == TypeKind.BOOLEAN);
     }
 
     private static boolean isSetter(ExecutableElement m) {
@@ -1039,15 +1039,15 @@ final class RestBindings {
         boolean serializer = JSONB_TYPE_SERIALIZER.equals(nameOf(annotation));
         lastReason = "@" + simpleNameOf(annotation) + "(" + name + ".class): ";
         if (propertyType.getKind() != TypeKind.DECLARED || !((DeclaredType) propertyType).getTypeArguments().isEmpty()) {
-            return fail("a primitive, array or generic property, whose type the runtime hands it");
+            return instanceFail("a primitive, array or generic property, whose type the runtime hands it");
         }
         Instance instance = instance(custom, packageOf(owner));
         if (instance == null) return null;
         TypeMirror handled = typeArgument(custom, serializer ? JSONB_SERIALIZER : JSONB_DESERIALIZER);
-        if (handled == null) return fail("its type argument is not a concrete type");
+        if (handled == null) return instanceFail("its type argument is not a concrete type");
         boolean callable = serializer ? env.getTypeUtils().isAssignable(propertyType, handled)
                 : env.getTypeUtils().isAssignable(handled, propertyType);
-        return callable ? instance : fail("it handles " + handled + ", not " + propertyType);
+        return callable ? instance : instanceFail("it handles " + handled + ", not " + propertyType);
     }
 
     /** The type argument of the {@code generic} interface {@code type} implements, or {@code null}. */
@@ -1072,21 +1072,28 @@ final class RestBindings {
         TypeElement adapter = (TypeElement) ((DeclaredType) annotationValue(annotation)).asElement();
         String name = adapter.getQualifiedName().toString();
         lastReason = "@JsonbTypeAdapter(" + name + ".class): ";
-        if (propertyType.getKind().isPrimitive()) return fail("a primitive property");
-        if (OPTIONAL.equals(erasureName(propertyType))) return fail("an Optional property");
+        if (propertyType.getKind().isPrimitive()) return adapterFail("a primitive property");
+        if (OPTIONAL.equals(erasureName(propertyType))) return adapterFail("an Optional property");
         Instance instance = instance(adapter, packageOf(owner));
         if (instance == null) return null;
         List<? extends TypeMirror> args = adapterArguments(adapter);
-        if (args.isEmpty()) return fail("its JsonbAdapter type arguments are not concrete types");
+        if (args.isEmpty()) return adapterFail("its JsonbAdapter type arguments are not concrete types");
         if (!env.getTypeUtils().isSameType(args.get(0), propertyType)) {
-            return fail("it adapts " + args.get(0) + ", not " + propertyType);
+            return adapterFail("it adapts " + args.get(0) + ", not " + propertyType);
         }
         String unsupported = supported(args.get(1));
-        if (unsupported != null) return fail("its adapted type: " + unsupported);
+        if (unsupported != null) return adapterFail("its adapted type: " + unsupported);
         return new Adapter(instance, args.get(1));
     }
 
-    private <T> T fail(String why) {
+    /** Appends {@code why} to {@link #lastReason}: no instance. */
+    private Instance instanceFail(String why) {
+        lastReason += why;
+        return null;
+    }
+
+    /** Appends {@code why} to {@link #lastReason}: no adapter. */
+    private Adapter adapterFail(String why) {
         lastReason += why;
         return null;
     }
@@ -1098,18 +1105,18 @@ final class RestBindings {
      */
     private Instance instance(TypeElement type, String pkg) {
         String className = type.getQualifiedName().toString();
-        if (type.getModifiers().contains(Modifier.ABSTRACT)) return fail("abstract");
-        if (!accessibleFrom(type, pkg)) return fail("not accessible from package " + pkg);
+        if (type.getModifiers().contains(Modifier.ABSTRACT)) return instanceFail("abstract");
+        if (!accessibleFrom(type, pkg)) return instanceFail("not accessible from package " + pkg);
         if (type.getNestingKind().isNested() && !type.getModifiers().contains(Modifier.STATIC)
                 && !type.getKind().isInterface()) {
-            return fail("an inner class");
+            return instanceFail("an inner class");
         }
         boolean samePackage = packageOf(type).equals(pkg);
         var constructors = ElementFilter.constructorsIn(type.getEnclosedElements());
         boolean callable = constructors.stream().anyMatch(c -> c.getParameters().isEmpty()
-                && (c.getModifiers().contains(Modifier.PUBLIC) || samePackage && !c.getModifiers().contains(Modifier.PRIVATE)));
+                && (c.getModifiers().contains(Modifier.PUBLIC) || (samePackage && !c.getModifiers().contains(Modifier.PRIVATE))));
         boolean bean = isLikelyBean(type);
-        if (!callable && !bean) return fail("no no-argument constructor the binding can call");
+        if (!callable && !bean) return instanceFail("no no-argument constructor the binding can call");
         if (bean && !isBeanDefining(type)) {
             // It injects, but nothing makes it a bean in the default (annotated) discovery: the runtime would create it
             // with new, its injections left null.
@@ -1130,7 +1137,7 @@ final class RestBindings {
     private static boolean isLikelyBean(TypeElement type) {
         for (AnnotationMirror a : type.getAnnotationMirrors()) {
             String n = nameOf(a);
-            if (n.startsWith("jakarta.enterprise.context.") && n.endsWith("Scoped")
+            if ((n.startsWith("jakarta.enterprise.context.") && n.endsWith("Scoped"))
                     || "jakarta.inject.Singleton".equals(n)) {
                 return true;
             }
@@ -1458,8 +1465,8 @@ final class RestBindings {
     /** A record, a class, or an interface carrying {@code @JsonbTypeInfo}: a type that may get a binding. */
     static boolean isBindable(TypeElement element) {
         return element.getKind() == ElementKind.RECORD
-                || element.getKind() == ElementKind.CLASS && !element.getModifiers().contains(Modifier.ABSTRACT)
-                || element.getKind() == ElementKind.INTERFACE && hasAnnotation(element, JSONB_TYPE_INFO);
+                || (element.getKind() == ElementKind.CLASS && !element.getModifiers().contains(Modifier.ABSTRACT))
+                || (element.getKind() == ElementKind.INTERFACE && hasAnnotation(element, JSONB_TYPE_INFO));
     }
 
     // ===== Helpers =====

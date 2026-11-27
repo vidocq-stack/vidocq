@@ -82,6 +82,8 @@ class JsonbArraysAndContainersTest {
         jsonb.close();
     }
 
+    // Records with array components are what this test binds: JSON-B must read and write them.
+    @SuppressWarnings("ArrayRecordComponent")
     public record PrimitiveArrays(int[] ints, long[] longs, double[] doubles, boolean[] booleans, short[] shorts,
                                   float[] floats, char[] chars, byte[] bytes, String[] strings) {}
 
@@ -98,6 +100,7 @@ class JsonbArraysAndContainersTest {
     @SuppressWarnings("rawtypes")
     public record RawContainers(List list, Map map, Optional optional, Object any) {}
 
+    @SuppressWarnings("ArrayRecordComponent") // a record with an array component is what this test binds
     public record GenericArray(List<String>[] lists) {}
 
     @Test

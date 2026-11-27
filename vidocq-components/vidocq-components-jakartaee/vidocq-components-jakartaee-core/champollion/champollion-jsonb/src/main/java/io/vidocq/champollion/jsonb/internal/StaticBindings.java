@@ -133,6 +133,8 @@ final class StaticBindings {
      * unless this index was made from them. Computed once per class (the {@link ClassValue}), a type with none
      * included, as every call of {@code toJson} and {@code fromJson} asks.
      */
+    // Identity on purpose: class loaders compare by identity.
+    @SuppressWarnings("ReferenceEquality")
     private Optional<JsonbBinding<?>> lookLater(Class<?> type) {
         ClassLoader own = type.getClassLoader();
         ClassLoader context = Thread.currentThread().getContextClassLoader();
@@ -145,6 +147,8 @@ final class StaticBindings {
         return Optional.empty();
     }
 
+    // Identity on purpose: class loaders compare by identity.
+    @SuppressWarnings("ReferenceEquality")
     private boolean wasRead(ClassLoader loader) {
         for (WeakReference<ClassLoader> ref : read) {
             if (ref.get() == loader) return true;

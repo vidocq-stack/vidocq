@@ -20,16 +20,17 @@
 package io.vidocq.champollion.it.openliberty;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import java.util.Locale;
 
 /** An application bean the JSON-B adapter gets injected: proof the adapter is a CDI bean. */
 @ApplicationScoped
 public class Formatter {
 
     public String decorate(String value) {
-        return "<" + value.toUpperCase() + ">";
+        return "<" + value.toUpperCase(Locale.ROOT) + ">";
     }
 
     public String strip(String value) {
-        return value.substring(1, value.length() - 1).toLowerCase();
+        return value.substring(1, value.length() - 1).toLowerCase(Locale.ROOT);
     }
 }

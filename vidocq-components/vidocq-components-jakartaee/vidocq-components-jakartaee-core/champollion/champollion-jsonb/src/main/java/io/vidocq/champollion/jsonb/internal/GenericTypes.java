@@ -80,6 +80,8 @@ final class GenericTypes {
         }
     }
 
+    // Identity on purpose: an argument substitute hands back unchanged keeps its type, and nothing is allocated.
+    @SuppressWarnings("ReferenceEquality")
     private static Type substitute(Type type, Map<TypeVariable<?>, Type> bindings) {
         return switch (type) {
             case TypeVariable<?> v -> bindings.getOrDefault(v, v);
@@ -103,6 +105,8 @@ final class GenericTypes {
     }
 
     /** A parameterized type with resolved arguments, equal to the JDK's for the same raw type and arguments. */
+    // equals and hashCode below compare the arguments' contents; the accessor hands out a copy.
+    @SuppressWarnings("ArrayRecordComponent")
     private record Parameterized(Class<?> raw, Type[] arguments, Type owner) implements ParameterizedType {
 
         @Override

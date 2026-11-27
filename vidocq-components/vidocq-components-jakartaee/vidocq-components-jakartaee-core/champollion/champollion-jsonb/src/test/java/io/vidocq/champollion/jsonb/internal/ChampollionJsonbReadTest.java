@@ -68,8 +68,8 @@ class ChampollionJsonbReadTest {
         @Test
         void reads_booleans_and_null() {
             try (var j = JsonbBuilder.create()) {
-                assertEquals(Boolean.TRUE, j.fromJson("true", Boolean.class));
-                assertEquals(Boolean.FALSE, j.fromJson("false", Boolean.class));
+                assertEquals(true, j.fromJson("true", Boolean.class));
+                assertEquals(false, j.fromJson("false", Boolean.class));
                 assertEquals(null, j.fromJson("null", String.class));
             } catch (Exception e) { throw new RuntimeException(e); }
         }

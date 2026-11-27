@@ -734,7 +734,8 @@ final class RestBindingEmitter {
 
     private static String escape(String value) {
         StringBuilder sb = new StringBuilder();
-        for (char ch : value.toCharArray()) {
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
             switch (ch) {
                 case '\\' -> sb.append("\\\\");
                 case '"' -> sb.append("\\\"");

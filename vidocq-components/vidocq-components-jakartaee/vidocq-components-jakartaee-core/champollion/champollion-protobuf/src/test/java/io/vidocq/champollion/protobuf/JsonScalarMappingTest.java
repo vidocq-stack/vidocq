@@ -59,6 +59,7 @@ class JsonScalarMappingTest {
             @ProtobufField(number = 10, type = FieldType.ENUM) List<Level> levels
     ) implements Message {}
 
+    @SuppressWarnings("ArrayRecordComponent") // a protobuf bytes field is a byte[] component
     @ProtobufMessage
     public record Singles(
             @ProtobufField(number = 1, type = FieldType.INT32) int int32,

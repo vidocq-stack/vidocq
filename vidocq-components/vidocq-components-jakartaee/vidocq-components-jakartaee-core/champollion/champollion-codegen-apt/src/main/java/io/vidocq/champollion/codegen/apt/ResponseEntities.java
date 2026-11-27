@@ -97,14 +97,14 @@ final class ResponseEntities {
                 ExpressionTree argument = call.getArguments().getFirst();
                 add(trees.getTypeMirror(new TreePath(getCurrentPath(), argument)));
             }
-            return super.visitMethodInvocation(call, unused);
+            return super.visitMethodInvocation(call, null);
         }
 
         @Override
         public Void visitNewClass(NewClassTree creation, Void unused) {
             TypeMirror created = trees.getTypeMirror(getCurrentPath());
             genericEntityArgument(created).ifPresent(found::add);
-            return super.visitNewClass(creation, unused);
+            return super.visitNewClass(creation, null);
         }
 
         /** {@code Response.ok/accepted(entity…)} or {@code ResponseBuilder.entity(entity…)}. */
@@ -113,13 +113,13 @@ final class ResponseEntities {
             String name = m.getSimpleName().toString();
             boolean firstIsObject = !m.getParameters().isEmpty()
                     && "java.lang.Object".equals(m.getParameters().getFirst().asType().toString());
-            return firstIsObject && (RESPONSE.equals(owner) && FACTORIES.contains(name)
-                    || RESPONSE_BUILDER.equals(owner) && "entity".equals(name));
+            return firstIsObject && ((RESPONSE.equals(owner) && FACTORIES.contains(name))
+                    || (RESPONSE_BUILDER.equals(owner) && "entity".equals(name)));
         }
 
         /** The entity type of an argument: the {@code T} of a {@code GenericEntity<T>}, else its own static type. */
         private void add(TypeMirror type) {
-            if (type == null || type.getKind() != TypeKind.DECLARED && type.getKind() != TypeKind.ARRAY) return;
+            if (type == null || (type.getKind() != TypeKind.DECLARED && type.getKind() != TypeKind.ARRAY)) return;
             Optional<TypeMirror> generic = genericEntityArgument(type);
             if (generic.isPresent()) {
                 if (!found.contains(generic.get())) found.add(generic.get());

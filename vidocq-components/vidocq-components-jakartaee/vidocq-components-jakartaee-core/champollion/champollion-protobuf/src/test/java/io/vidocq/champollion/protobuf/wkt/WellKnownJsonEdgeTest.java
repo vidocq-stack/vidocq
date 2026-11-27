@@ -98,6 +98,12 @@ class WellKnownJsonEdgeTest {
         assertEquals(m, ProtobufJson.fromJson(FieldMask.class, "\"fooBar.bazQux,x\""));
     }
 
+    /** As protobuf-java's FieldMaskUtil.fromJsonString: an empty path, anywhere in the list, is skipped. */
+    @Test
+    void empty_field_mask_paths_are_skipped_wherever_they_are() {
+        assertEquals(FieldMask.of("a", "b_c"), ProtobufJson.fromJson(FieldMask.class, "\",a,,bC,\""));
+    }
+
     @Test
     void empty_any_forms_read_as_the_default_any() {
         Any empty = new Any("", new byte[0]);

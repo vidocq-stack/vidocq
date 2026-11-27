@@ -78,6 +78,8 @@ final class ComputedClassValue<T> extends ClassValue<T> {
     }
 
     /** Whether the loader of {@code type} is one that is never discarded. */
+    // Identity on purpose: the very platform and application loaders.
+    @SuppressWarnings("ReferenceEquality")
     private static boolean lastsAsLongAsTheJvm(Class<?> type) {
         ClassLoader loader = type.getClassLoader();
         return loader == null || loader == PLATFORM || loader == APPLICATION;

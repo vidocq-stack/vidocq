@@ -1105,6 +1105,7 @@ final class RuntimeReadRegistry {
     }
 
     private record MethodSetter(Method m, BindingReader reader) implements BeanWriter {
+        @Override
         public void apply(Object target, JsonParser p) {
             Object value;
             try { value = reader.read(p); }
@@ -1112,6 +1113,7 @@ final class RuntimeReadRegistry {
             catch (RuntimeException e) { throw new JsonbException("Failed to read property " + m.getName() + ": " + e.getMessage(), e); }
             applyValue(target, value);
         }
+        @Override
         public void applyValue(Object target, Object value) {
             try { m.invoke(target, value); }
             catch (ReflectiveOperationException e) {
@@ -1131,6 +1133,7 @@ final class RuntimeReadRegistry {
      * {@code opens}, consistent with strict Java Modules.
      */
     private record MhSetter(java.lang.invoke.MethodHandle mh, Method m, BindingReader reader) implements BeanWriter {
+        @Override
         public void apply(Object target, JsonParser p) {
             Object value;
             try { value = reader.read(p); }
@@ -1138,6 +1141,7 @@ final class RuntimeReadRegistry {
             catch (RuntimeException e) { throw new JsonbException("Failed to read property " + m.getName() + ": " + e.getMessage(), e); }
             applyValue(target, value);
         }
+        @Override
         public void applyValue(Object target, Object value) {
             try { mh.invoke(target, value); }
             catch (Throwable t) {
@@ -1147,6 +1151,7 @@ final class RuntimeReadRegistry {
     }
 
     private record FieldSetter(Field f, BindingReader reader) implements BeanWriter {
+        @Override
         public void apply(Object target, JsonParser p) {
             Object value;
             try { value = reader.read(p); }
@@ -1154,6 +1159,7 @@ final class RuntimeReadRegistry {
             catch (RuntimeException e) { throw new JsonbException("Failed to read field " + f.getName() + ": " + e.getMessage(), e); }
             applyValue(target, value);
         }
+        @Override
         public void applyValue(Object target, Object value) {
             try { f.set(target, value); }
             catch (IllegalAccessException e) {
@@ -1589,9 +1595,10 @@ final class RuntimeReadRegistry {
         };
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    // LinkedList where the target type asks for it, and for a plain Queue: unlike ArrayDeque, it takes null elements.
+    @SuppressWarnings({"unchecked", "rawtypes", "JdkObsolete"})
     private static java.util.Collection<Object> newCollectionFor(Class<?> raw) {
-        // Cas exacts d'abord (avant les check d'interface qui pourraient matcher).
+        // Exact classes first, before the interface checks that could match them.
         if (raw == java.util.LinkedList.class) return new java.util.LinkedList<>();
         if (raw == java.util.ArrayDeque.class) return new java.util.ArrayDeque<>();
         if (raw == java.util.PriorityQueue.class) return new java.util.PriorityQueue<>();
@@ -1599,7 +1606,7 @@ final class RuntimeReadRegistry {
         if (raw == java.util.TreeSet.class) return new java.util.TreeSet<>();
         if (raw == java.util.HashSet.class) return new java.util.HashSet<>();
         if (raw == java.util.LinkedHashSet.class) return new java.util.LinkedHashSet<>();
-        // Interfaces / supertypes ensuite.
+        // Then interfaces and supertypes.
         if (java.util.SortedSet.class.isAssignableFrom(raw) || java.util.NavigableSet.class.isAssignableFrom(raw)) {
             return new java.util.TreeSet<>();
         }
@@ -1843,8 +1850,8 @@ final class RuntimeReadRegistry {
                 }
                 yield bd;
             }
-            case VALUE_TRUE -> Boolean.TRUE;
-            case VALUE_FALSE -> Boolean.FALSE;
+            case VALUE_TRUE -> true;
+            case VALUE_FALSE -> false;
             case VALUE_NULL -> null;
             case START_OBJECT -> readDynamicMap(p);
             case START_ARRAY -> readDynamicArray(p);
@@ -2302,8 +2309,8 @@ final class RuntimeReadRegistry {
         private static Object readBoolean(JsonParser p) {
             var e = p.next();
             if (e == JsonParser.Event.VALUE_NULL) return null;
-            if (e == JsonParser.Event.VALUE_TRUE) return Boolean.TRUE;
-            if (e == JsonParser.Event.VALUE_FALSE) return Boolean.FALSE;
+            if (e == JsonParser.Event.VALUE_TRUE) return true;
+            if (e == JsonParser.Event.VALUE_FALSE) return false;
             throw new JsonbException("Expected boolean, got " + e);
         }
 

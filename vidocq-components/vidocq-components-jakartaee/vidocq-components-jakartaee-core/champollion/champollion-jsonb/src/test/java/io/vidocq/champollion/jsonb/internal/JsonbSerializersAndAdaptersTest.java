@@ -103,7 +103,7 @@ class JsonbSerializersAndAdaptersTest {
     public static final class PointAdapter implements JsonbAdapter<Point, String> {
         @Override public String adaptToJson(Point p) { return p.x() + "," + p.y(); }
         @Override public Point adaptFromJson(String s) {
-            String[] parts = s.split(",");
+            String[] parts = s.split(",", -1);
             return new Point(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
         }
     }

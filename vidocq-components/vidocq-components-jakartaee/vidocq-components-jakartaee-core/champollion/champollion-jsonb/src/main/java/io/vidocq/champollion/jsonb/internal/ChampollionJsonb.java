@@ -352,7 +352,8 @@ public final class ChampollionJsonb implements Jsonb {
         return fromJson(new StringReader(str), (Type) type);
     }
 
-    @SuppressWarnings("unchecked")
+    // The signature is Jsonb's (JSON-B API).
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     @Override public <T> T fromJson(String str, Type runtimeType) {
         if (jsonProvider instanceof io.vidocq.champollion.jsonp.internal.ChampollionJsonProvider) {
             return (T) readValuePooledFromString(str, runtimeType);
@@ -384,7 +385,8 @@ public final class ChampollionJsonb implements Jsonb {
         return fromJson(reader, (Type) type);
     }
 
-    @SuppressWarnings("unchecked")
+    // The signature is Jsonb's (JSON-B API).
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     @Override public <T> T fromJson(Reader reader, Type runtimeType) {
         if (jsonProvider instanceof io.vidocq.champollion.jsonp.internal.ChampollionJsonProvider) {
             return (T) readValuePooled(reader, runtimeType);
@@ -421,7 +423,8 @@ public final class ChampollionJsonb implements Jsonb {
         return fromJson(stream, (Type) type);
     }
 
-    @SuppressWarnings("unchecked")
+    // The signature is Jsonb's (JSON-B API).
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     @Override public <T> T fromJson(InputStream stream, Type runtimeType) {
         if (jsonProvider instanceof io.vidocq.champollion.jsonp.internal.ChampollionJsonProvider) {
             return (T) readValueFromStream(stream, runtimeType);

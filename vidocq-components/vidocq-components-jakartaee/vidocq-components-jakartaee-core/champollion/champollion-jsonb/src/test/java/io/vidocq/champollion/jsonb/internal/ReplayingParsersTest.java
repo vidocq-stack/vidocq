@@ -155,9 +155,9 @@ class ReplayingParsersTest {
             p.next();
             assertEquals("s", ctx.deserialize(String.class, p));
             p.next();
-            assertEquals(Boolean.TRUE, ctx.deserialize(Boolean.class, p));
+            assertEquals(true, ctx.deserialize(Boolean.class, p));
             p.next();
-            assertEquals(Boolean.FALSE, ctx.deserialize(Boolean.class, p));
+            assertEquals(false, ctx.deserialize(Boolean.class, p));
             p.next();
             assertNull(ctx.deserialize(String.class, p));
             p.next();

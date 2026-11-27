@@ -123,6 +123,8 @@ public final class ChampollionJsonPatch implements JsonPatch {
      * (1 == 1.0). For containers, structural equivalence. For string/bool/null:
      * value identity equality.
      */
+    // Identity on purpose: the same value is equal to itself, without walking it.
+    @SuppressWarnings("ReferenceEquality")
     static boolean equalsByValue(JsonValue a, JsonValue b) {
         if (a == b) return true;
         if (a.getValueType() != b.getValueType()) return false;

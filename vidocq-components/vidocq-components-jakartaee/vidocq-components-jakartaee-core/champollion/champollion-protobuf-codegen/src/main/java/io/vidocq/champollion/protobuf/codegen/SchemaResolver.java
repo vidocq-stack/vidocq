@@ -59,9 +59,9 @@ import java.util.Objects;
  *   <li>conflict between {@link MessageDecl} and {@link EnumDecl} is forbidden</li>
  * </ul>
  *
- * <p>Imports are not followed in M2.2: only the types defined in the current
- * {@link ProtoFile} are resolved. The multi-file resolver will come with
- * M2.3 ({@link SchemaResolver#resolve(List)}).</p>
+ * <p>{@link #resolve(ProtoFile)} follows no import: only the types defined in that
+ * {@link ProtoFile} are resolved. {@link #resolveAll(Collection)} resolves several
+ * files together, their cross-file references included.</p>
  */
 public final class SchemaResolver {
 

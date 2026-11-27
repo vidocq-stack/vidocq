@@ -922,7 +922,7 @@ final class RuntimeBindingRegistry {
      * accessor hides the property (a public field is not enough); the names of the hidden properties are added
      * to {@code hiddenProps} and removed from the result.
      */
-    private static java.util.LinkedHashMap<String, Method> discoverGetters(Class<?> type, java.util.Set<String> hiddenProps) {
+    private static java.util.SequencedMap<String, Method> discoverGetters(Class<?> type, java.util.Set<String> hiddenProps) {
         var getterByProp = new java.util.LinkedHashMap<String, Method>();
         for (Method m : accessorCandidates(type)) {
             String propName = getterPropertyName(m);
@@ -1441,6 +1441,8 @@ final class RuntimeBindingRegistry {
      * The {@code @JsonbTypeInfo} carried by the direct interfaces and the superclass of {@code type}, or
      * {@code null}. If several of them carry a different one, multiple inheritance is not supported.
      */
+    // Identity on purpose: the very same @JsonbTypeInfo declaration, reached through two parents, is no conflict.
+    @SuppressWarnings("ReferenceEquality")
     private static jakarta.json.bind.annotation.JsonbTypeInfo typeInfoOfDirectParents(Class<?> type) {
         java.util.List<Class<?>> parents = new java.util.ArrayList<>(java.util.List.of(type.getInterfaces()));
         if (type.getSuperclass() != null && type.getSuperclass() != Object.class) parents.add(type.getSuperclass());
@@ -1536,6 +1538,8 @@ final class RuntimeBindingRegistry {
         return null;
     }
 
+    // Identity on purpose: the class that declares this very annotation, not one with an equal one.
+    @SuppressWarnings("ReferenceEquality")
     private static Class<?> bearerOfTypeInfo(Class<?> type, jakarta.json.bind.annotation.JsonbTypeInfo info) {
         if (type == null || type == Object.class) return null;
         if (type.getAnnotation(jakarta.json.bind.annotation.JsonbTypeInfo.class) == info) return type;
@@ -1567,7 +1571,7 @@ final class RuntimeBindingRegistry {
             }
             for (Property p : concretePropertiesOf(concrete)) {
                 Object v = readProperty(p, value, "Failed property ");
-                writeMember(g, p, v, v == null || v instanceof java.util.Optional<?> opt && opt.isEmpty());
+                writeMember(g, p, v, v == null || (v instanceof java.util.Optional<?> opt && opt.isEmpty()));
             }
             g.writeEnd();
         };
@@ -1781,10 +1785,10 @@ final class RuntimeBindingRegistry {
     private static boolean isAbsent(Object v) {
         // An instanceof chain rather than a pattern switch: this runs for every member written.
         return v == null
-                || v instanceof java.util.Optional<?> opt && opt.isEmpty()
-                || v instanceof java.util.OptionalInt oi && oi.isEmpty()
-                || v instanceof java.util.OptionalLong ol && ol.isEmpty()
-                || v instanceof java.util.OptionalDouble od && od.isEmpty();
+                || (v instanceof java.util.Optional<?> opt && opt.isEmpty())
+                || (v instanceof java.util.OptionalInt oi && oi.isEmpty())
+                || (v instanceof java.util.OptionalLong ol && ol.isEmpty())
+                || (v instanceof java.util.OptionalDouble od && od.isEmpty());
     }
 
     /** Writes a member, or, when its value is absent, a JSON null only if the property is nillable (§4.3.3). */
@@ -1806,7 +1810,7 @@ final class RuntimeBindingRegistry {
     }
 
     private record MethodAccessor(Method m) implements Accessor {
-        public Object read(Object target) throws Throwable { return m.invoke(target); }
+        @Override public Object read(Object target) throws Throwable { return m.invoke(target); }
     }
 
     /**
@@ -1816,7 +1820,7 @@ final class RuntimeBindingRegistry {
      * and compatible with strict Java Modules.
      */
     private record MhAccessor(java.lang.invoke.MethodHandle mh) implements Accessor {
-        public Object read(Object target) throws Throwable { return mh.invoke(target); }
+        @Override public Object read(Object target) throws Throwable { return mh.invoke(target); }
     }
 
     /**
@@ -1828,7 +1832,7 @@ final class RuntimeBindingRegistry {
      * lookup cannot generate the lambda (class/package not accessible).
      */
     private record LambdaAccessor(java.util.function.UnaryOperator<Object> f) implements Accessor {
-        public Object read(Object target) { return f.apply(target); }
+        @Override public Object read(Object target) { return f.apply(target); }
     }
 
     /**
@@ -1842,16 +1846,16 @@ final class RuntimeBindingRegistry {
      * etc.) for polymorphic paths (visibility, ordering, etc.).
      */
     private record LongAccessor(java.util.function.ToLongFunction<Object> fn) implements Accessor {
-        public Object read(Object target) { return Long.valueOf(fn.applyAsLong(target)); }
+        @Override public Object read(Object target) { return Long.valueOf(fn.applyAsLong(target)); }
     }
     private record IntAccessor(java.util.function.ToIntFunction<Object> fn) implements Accessor {
-        public Object read(Object target) { return Integer.valueOf(fn.applyAsInt(target)); }
+        @Override public Object read(Object target) { return Integer.valueOf(fn.applyAsInt(target)); }
     }
     private record DoubleAccessor(java.util.function.ToDoubleFunction<Object> fn) implements Accessor {
-        public Object read(Object target) { return Double.valueOf(fn.applyAsDouble(target)); }
+        @Override public Object read(Object target) { return Double.valueOf(fn.applyAsDouble(target)); }
     }
     private record BooleanAccessor(java.util.function.Predicate<Object> fn) implements Accessor {
-        public Object read(Object target) { return Boolean.valueOf(fn.test(target)); }
+        @Override public Object read(Object target) { return Boolean.valueOf(fn.test(target)); }
     }
 
     /**
@@ -1924,13 +1928,10 @@ final class RuntimeBindingRegistry {
     }
 
     private record FieldAccessor(Field f) implements Accessor {
-        public Object read(Object target) throws Throwable { return f.get(target); }
+        @Override public Object read(Object target) throws Throwable { return f.get(target); }
     }
 
     private record Property(String name, Accessor accessor, BindingWriter writer, boolean nillable) {
-        Property(String name, Accessor accessor, BindingWriter writer) {
-            this(name, accessor, writer, false);
-        }
     }
 
     // ============================================================
@@ -1938,10 +1939,6 @@ final class RuntimeBindingRegistry {
     // ============================================================
 
     private static final class Builtins {
-
-        static final BindingWriter OBJECT = (g, v) -> {
-            if (v == null) g.writeNull(); else g.write(v.toString());
-        };
 
         static final BindingWriter STRING = (g, v) -> { if (v == null) g.writeNull(); else g.write((String) v); };
 

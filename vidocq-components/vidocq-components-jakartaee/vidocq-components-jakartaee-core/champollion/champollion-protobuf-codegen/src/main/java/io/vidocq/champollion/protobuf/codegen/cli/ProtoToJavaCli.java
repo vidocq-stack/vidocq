@@ -81,7 +81,7 @@ public final class ProtoToJavaCli {
         Map<String, Descriptors.FileDescriptor> resolved = SchemaResolver.resolveAll(files);
         JavaEmitter emitter = new JavaEmitter(javaPackage, staticParser);
         Path pkgRoot = outputDir;
-        for (String segment : javaPackage.split("\\.")) {
+        for (String segment : javaPackage.split("\\.", -1)) {
             pkgRoot = pkgRoot.resolve(segment);
         }
         Files.createDirectories(pkgRoot);

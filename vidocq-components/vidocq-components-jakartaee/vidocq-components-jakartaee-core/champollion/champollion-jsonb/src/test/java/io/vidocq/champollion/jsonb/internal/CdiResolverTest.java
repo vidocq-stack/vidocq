@@ -53,7 +53,7 @@ class CdiResolverTest {
     private static final String FROM_CDI = "the CDI bean";
 
     /** How the minimal CDI API answers. */
-    private enum Container {
+    enum Container {
         /** {@code Instance.get()} returns {@link #FROM_CDI}. */
         RUNNING,
         /** {@code CDI.current()} throws {@link IllegalStateException}, as without an active container. */

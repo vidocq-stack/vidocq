@@ -309,8 +309,9 @@ public final class JsonReaderTokenizer extends JsonTokenizer {
             int start = bufPos - 1;
             int q = bufPos;
             boolean valid = true;
+            // A loop run once, for the breaks to the slow path: javac emits no test for while (false).
             fast:
-            {
+            do {
                 // integer part — 'first' is '-' or a digit
                 if (first == '-') {
                     if (q >= end) break fast;
@@ -365,7 +366,7 @@ public final class JsonReaderTokenizer extends JsonTokenizer {
                 bufPos = q;
                 valueRange(start, q - start);
                 return JsonToken.NUMBER;
-            }
+            } while (false);
         }
         valueScratchStart();
         buffer.append((char) first);

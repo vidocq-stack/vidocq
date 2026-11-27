@@ -168,17 +168,17 @@ class JsonbCustomizationTest {
     @DisplayName("@JsonbCreator — static factory or annotated constructor")
     class JsonbCreatorAnnotation {
 
-        /** POJO immuable sans no-arg ctor : @JsonbCreator sur ctor. */
-        public static final class Money {
+        /** An immutable POJO without a no-argument constructor: @JsonbCreator on its constructor. */
+        public static final class Amount {
             public final String currency;
             public final long cents;
             @JsonbCreator
-            public Money(@JsonbProperty("currency") String currency, @JsonbProperty("cents") long cents) {
+            public Amount(@JsonbProperty("currency") String currency, @JsonbProperty("cents") long cents) {
                 this.currency = currency;
                 this.cents = cents;
             }
             @Override public boolean equals(Object o) {
-                return o instanceof Money m && m.currency.equals(currency) && m.cents == cents;
+                return o instanceof Amount m && m.currency.equals(currency) && m.cents == cents;
             }
             @Override public int hashCode() { return java.util.Objects.hash(currency, cents); }
         }
@@ -186,8 +186,8 @@ class JsonbCustomizationTest {
         @Test
         void reads_pojo_via_jsonb_creator_constructor() {
             try (var j = JsonbBuilder.create()) {
-                Money m = j.fromJson("{\"currency\":\"EUR\",\"cents\":1234}", Money.class);
-                assertEquals(new Money("EUR", 1234), m);
+                Amount m = j.fromJson("{\"currency\":\"EUR\",\"cents\":1234}", Amount.class);
+                assertEquals(new Amount("EUR", 1234), m);
             } catch (Exception e) { throw new RuntimeException(e); }
         }
 
