@@ -88,6 +88,9 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
     // Fragments of the generated source.
     private static final String END_METHOD = "    }";
     private static final String LIST_ADD = ".add(";
+    private static final String ASSIGN_NULL = " = null;";
+    /** Indent of a statement inside a {@code case} of the generated field switch. */
+    private static final String CASE_BODY = "                    ";
     private final Set<String> providers = new LinkedHashSet<>();
 
     private void emitStaticParser(TypeElement type, Filer filer, Messager messager) {
@@ -283,7 +286,7 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
         boolean boxedOrExplicit = pf.explicitPresence()
                 || (tm.getKind().name().equals("DECLARED") && isWrapperType(tm));
         if (boxedOrExplicit) {
-            return javaTypeName(tm) + " " + name + " = null;";
+            return javaTypeName(tm) + " " + name + ASSIGN_NULL;
         }
         return switch (pf.type()) {
             case INT32, UINT32, SINT32, FIXED32, SFIXED32 -> "int " + name + " = 0;";
@@ -295,7 +298,7 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
             case BYTES -> "byte[] " + name + " = new byte[0];";
             case ENUM -> javaTypeName(tm) + " " + name + " = " + javaTypeName(tm)
                     + ".values()[0];";
-            case MESSAGE -> javaTypeName(tm) + " " + name + " = null;";
+            case MESSAGE -> javaTypeName(tm) + " " + name + ASSIGN_NULL;
             case MAP -> "java.util.Map<Object,Object> " + name + " = new java.util.LinkedHashMap<>();";
         };
     }
@@ -329,11 +332,11 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
                 pw.println("                    }");
             } else {
                 // STRING/BYTES/MESSAGE non packable : un tag par valeur.
-                pw.println("                    " + name + LIST_ADD + scalarRead(pf.type(), elem) + ");");
+                pw.println(CASE_BODY + name + LIST_ADD + scalarRead(pf.type(), elem) + ");");
             }
             return;
         }
-        pw.println("                    " + name + " = " + scalarRead(pf.type(), javaTypeName(tm)) + ";");
+        pw.println(CASE_BODY + name + " = " + scalarRead(pf.type(), javaTypeName(tm)) + ";");
     }
 
     /**
@@ -347,7 +350,7 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
             ProtobufField opf = other.getAnnotation(ProtobufField.class);
             if (other != read && opf != null && pf.oneofGroup().equals(opf.oneofGroup())
                     && !other.asType().getKind().isPrimitive()) {
-                pw.println("                    " + other.getSimpleName() + " = null;");
+                pw.println(CASE_BODY + other.getSimpleName() + ASSIGN_NULL);
             }
         }
     }

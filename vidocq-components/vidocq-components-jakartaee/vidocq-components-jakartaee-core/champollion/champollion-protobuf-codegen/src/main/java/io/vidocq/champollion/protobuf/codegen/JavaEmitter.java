@@ -49,6 +49,8 @@ public final class JavaEmitter {
     private static final String JAVA_FLOAT = "float";
     private static final String JAVA_DOUBLE = "double";
     private static final String JAVA_BOOLEAN = "boolean";
+    /** Closes a generated block and leaves a blank line after it. */
+    private static final String END_BLOCK = "}\n\n";
 
     private final String javaPackage;
     private final boolean staticParser;
@@ -213,45 +215,54 @@ public final class JavaEmitter {
      */
     private static void emitOneofs(StringBuilder sb, Descriptors.Descriptor d,
                                    Map<String, List<Descriptors.FieldDescriptor>> oneofs, String indent) {
-        String body = indent + "    ";
-        boolean checks = oneofs.values().stream().anyMatch(members -> members.size() > 1);
-        if (checks) {
+        if (oneofs.values().stream().anyMatch(members -> members.size() > 1)) {
             sb.append(indent).append("public ").append(d.name()).append(" {\n");
             for (Map.Entry<String, List<Descriptors.FieldDescriptor>> oneof : oneofs.entrySet()) {
-                if (oneof.getValue().size() < 2) continue;
-                sb.append(body).append("if (");
-                List<Descriptors.FieldDescriptor> members = oneof.getValue();
-                for (int i = 0; i < members.size(); i++) {
-                    if (i > 0) sb.append(" + ");
-                    sb.append('(').append(safeIdent(members.get(i).name())).append(" != null ? 1 : 0)");
-                }
-                sb.append(" > 1) {\n");
-                sb.append(body).append("    throw new IllegalArgumentException(\"At most one member of oneof '")
-                        .append(oneof.getKey()).append("' can be set\");\n");
-                sb.append(body).append("}\n");
+                emitOneofCheck(sb, oneof.getKey(), oneof.getValue(), indent + "    ");
             }
-            sb.append(indent).append("}\n\n");
+            sb.append(indent).append(END_BLOCK);
         }
         for (Map.Entry<String, List<Descriptors.FieldDescriptor>> oneof : oneofs.entrySet()) {
-            String caseType = upperCamel(oneof.getKey()) + "Case";
-            String notSet = upperSnake(oneof.getKey()) + "_NOT_SET";
-            sb.append(indent).append("/** The member of oneof {@code ").append(oneof.getKey())
-                    .append("} that is set. */\n");
-            sb.append(indent).append("public enum ").append(caseType).append(" {\n");
-            for (Descriptors.FieldDescriptor member : oneof.getValue()) {
-                sb.append(body).append(upperSnake(member.name())).append(",\n");
-            }
-            sb.append(body).append(notSet).append(";\n");
-            sb.append(indent).append("}\n\n");
-            sb.append(indent).append("public ").append(caseType).append(' ')
-                    .append(decapitalize(caseType)).append("() {\n");
-            for (Descriptors.FieldDescriptor member : oneof.getValue()) {
-                sb.append(body).append("if (").append(safeIdent(member.name())).append(" != null) return ")
-                        .append(caseType).append('.').append(upperSnake(member.name())).append(";\n");
-            }
-            sb.append(body).append("return ").append(caseType).append('.').append(notSet).append(";\n");
-            sb.append(indent).append("}\n\n");
+            emitOneofCase(sb, oneof.getKey(), oneof.getValue(), indent);
         }
+    }
+
+    /** The statement of the compact constructor that refuses two members of {@code oneof} set. */
+    private static void emitOneofCheck(StringBuilder sb, String oneof,
+                                       List<Descriptors.FieldDescriptor> members, String indent) {
+        if (members.size() < 2) return;
+        sb.append(indent).append("if (");
+        for (int i = 0; i < members.size(); i++) {
+            if (i > 0) sb.append(" + ");
+            sb.append('(').append(safeIdent(members.get(i).name())).append(" != null ? 1 : 0)");
+        }
+        sb.append(" > 1) {\n");
+        sb.append(indent).append("    throw new IllegalArgumentException(\"At most one member of oneof '")
+                .append(oneof).append("' can be set\");\n");
+        sb.append(indent).append("}\n");
+    }
+
+    /** The {@code <Name>Case} enum of {@code oneof} and its {@code <name>Case()} method. */
+    private static void emitOneofCase(StringBuilder sb, String oneof,
+                                      List<Descriptors.FieldDescriptor> members, String indent) {
+        String body = indent + "    ";
+        String caseType = upperCamel(oneof) + "Case";
+        String notSet = upperSnake(oneof) + "_NOT_SET";
+        sb.append(indent).append("/** The member of oneof {@code ").append(oneof).append("} that is set. */\n");
+        sb.append(indent).append("public enum ").append(caseType).append(" {\n");
+        for (Descriptors.FieldDescriptor member : members) {
+            sb.append(body).append(upperSnake(member.name())).append(",\n");
+        }
+        sb.append(body).append(notSet).append(";\n");
+        sb.append(indent).append(END_BLOCK);
+        sb.append(indent).append("public ").append(caseType).append(' ')
+                .append(decapitalize(caseType)).append("() {\n");
+        for (Descriptors.FieldDescriptor member : members) {
+            sb.append(body).append("if (").append(safeIdent(member.name())).append(" != null) return ")
+                    .append(caseType).append('.').append(upperSnake(member.name())).append(";\n");
+        }
+        sb.append(body).append("return ").append(caseType).append('.').append(notSet).append(";\n");
+        sb.append(indent).append(END_BLOCK);
     }
 
     /** {@code test_oneof} → {@code TestOneof}, {@code kind} → {@code Kind}. */
