@@ -69,6 +69,16 @@ public final class EnumValueMap {
         return CACHE.get(enumClass);
     }
 
+    /**
+     * The map of the enum of {@code constant}: its declaring class, not {@code getClass()}, which is an anonymous
+     * subclass for a constant with a body (BUG-20261127-91).
+     */
+    public static EnumValueMap forConstant(Enum<?> constant) {
+        return CACHE.get(constant.getDeclaringClass());
+    }
+
+    // The ordinal on purpose: a constant without @ProtoEnumValue has its declaration index on the wire.
+    @SuppressWarnings("EnumOrdinal")
     private static EnumValueMap build(Class<?> enumClass) {
         if (!enumClass.isEnum()) {
             throw new IllegalArgumentException(enumClass + " is not an enum");
@@ -99,6 +109,7 @@ public final class EnumValueMap {
     }
 
     /** Returns the proto value corresponding to {@code constant}. */
+    @SuppressWarnings("EnumOrdinal") // the same declaration-index default as build
     public int valueOf(Enum<?> constant) {
         Integer v = enumToInt.get(constant);
         return v != null ? v : constant.ordinal();

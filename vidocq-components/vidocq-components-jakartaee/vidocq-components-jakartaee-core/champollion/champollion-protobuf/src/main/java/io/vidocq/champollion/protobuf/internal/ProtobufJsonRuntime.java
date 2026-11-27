@@ -660,7 +660,7 @@ public final class ProtobufJsonRuntime {
             if (!first) sb.append(',');
             first = false;
             // Conversion snake_case → camelCase on each path segment.
-            String[] segments = path.split("\\.");
+            String[] segments = path.split("\\.", -1);
             for (int i = 0; i < segments.length; i++) {
                 if (i > 0) sb.append('.');
                 sb.append(Descriptors.toJsonName(segments[i]));
@@ -723,11 +723,12 @@ public final class ProtobufJsonRuntime {
     private static FieldMask parseFieldMask(String s) {
         if (s.isEmpty()) return new FieldMask(List.of());
         // Reverse conversion camelCase → snake_case on each path segment.
-        String[] paths = s.split(",");
+        String[] paths = s.split(",", -1);
         List<String> out = new ArrayList<>(paths.length);
         for (String p : paths) {
+            if (p.isEmpty()) continue; // an empty path names no field, as protobuf-java's FieldMaskUtil skips it
             StringBuilder buf = new StringBuilder();
-            String[] segments = p.split("\\.");
+            String[] segments = p.split("\\.", -1);
             for (int i = 0; i < segments.length; i++) {
                 if (i > 0) buf.append('.');
                 for (int j = 0; j < segments[i].length(); j++) {
@@ -1317,7 +1318,7 @@ public final class ProtobufJsonRuntime {
             case DOUBLE -> ((double) value) == 0.0;
             case STRING -> ((String) value).isEmpty();
             case BYTES -> ((byte[]) value).length == 0;
-            case ENUM -> EnumValueMap.forClass(((Enum<?>) value).getClass()).valueOf((Enum<?>) value) == 0;
+            case ENUM -> EnumValueMap.forConstant((Enum<?>) value).valueOf((Enum<?>) value) == 0;
             case MESSAGE -> false;
             case MAP -> ((java.util.Map<?, ?>) value).isEmpty();
         };
@@ -1499,6 +1500,8 @@ public final class ProtobufJsonRuntime {
         throw new IllegalArgumentException("Cannot resolve List element type for " + rc.getName());
     }
 
+    // equals and hashCode below compare the record type alone: the array derived from it takes no part.
+    @SuppressWarnings("ArrayRecordComponent")
     record JsonBindingPlan(Class<?> recordType,
                            List<FieldBinding> fields,
                            Map<String, FieldBinding> byJsonName,

@@ -305,7 +305,7 @@ public final class RuntimeBinding {
             case SINT32 -> out.writeSInt32NoTag((int) value);
             case SINT64 -> out.writeSInt64NoTag((long) value);
             case BOOL -> out.writeBoolNoTag((boolean) value);
-            case ENUM -> out.writeEnumNoTag(EnumValueMap.forClass(value.getClass()).valueOf((Enum<?>) value));
+            case ENUM -> out.writeEnumNoTag(EnumValueMap.forConstant((Enum<?>) value).valueOf((Enum<?>) value));
             case FIXED32 -> out.writeFixed32NoTag((int) value);
             case SFIXED32 -> out.writeSFixed32NoTag((int) value);
             case FLOAT -> out.writeFloatNoTag((float) value);
@@ -395,7 +395,7 @@ public final class RuntimeBinding {
             case SINT32 -> out.writeSInt32NoTag((int) value);
             case SINT64 -> out.writeSInt64NoTag((long) value);
             case BOOL -> out.writeBoolNoTag((boolean) value);
-            case ENUM -> out.writeEnumNoTag(EnumValueMap.forClass(value.getClass()).valueOf((Enum<?>) value));
+            case ENUM -> out.writeEnumNoTag(EnumValueMap.forConstant((Enum<?>) value).valueOf((Enum<?>) value));
             case FIXED32 -> out.writeFixed32NoTag((int) value);
             case SFIXED32 -> out.writeSFixed32NoTag((int) value);
             case FLOAT -> out.writeFloatNoTag((float) value);
@@ -426,7 +426,7 @@ public final class RuntimeBinding {
             case SINT64 -> CodedOutputStream.computeRawVarint64Size(CodedOutputStream.encodeZigZag64((long) value));
             case BOOL -> 1;
             case ENUM -> {
-                int number = EnumValueMap.forClass(value.getClass()).valueOf((Enum<?>) value);
+                int number = EnumValueMap.forConstant((Enum<?>) value).valueOf((Enum<?>) value);
                 // Negative ENUM (NEG=-1) → writeInt32NoTag sign-extends to 10 bytes.
                 yield number < 0 ? CodedOutputStream.computeRawVarint64Size(number)
                              : CodedOutputStream.computeRawVarint32Size(number);
@@ -522,7 +522,7 @@ public final class RuntimeBinding {
             case SINT64 -> CodedOutputStream.computeRawVarint64Size(CodedOutputStream.encodeZigZag64((long) value));
             case BOOL -> 1;
             case ENUM -> {
-                int number = EnumValueMap.forClass(value.getClass()).valueOf((Enum<?>) value);
+                int number = EnumValueMap.forConstant((Enum<?>) value).valueOf((Enum<?>) value);
                 // Negative ENUM (NEG=-1) → writeInt32NoTag sign-extends to 10 bytes.
                 yield number < 0 ? CodedOutputStream.computeRawVarint64Size(number)
                              : CodedOutputStream.computeRawVarint32Size(number);
@@ -550,7 +550,7 @@ public final class RuntimeBinding {
     private static boolean isDefault(FieldBinding fb, Object value) {
         return switch (fb.type) {
             case INT32, UINT32, SINT32, FIXED32, SFIXED32, ENUM -> {
-                if (value instanceof Enum<?> e) yield EnumValueMap.forClass(e.getClass()).valueOf(e) == 0;
+                if (value instanceof Enum<?> e) yield EnumValueMap.forConstant(e).valueOf(e) == 0;
                 yield ((int) value) == 0;
             }
             case INT64, UINT64, SINT64, FIXED64, SFIXED64 -> ((long) value) == 0L;
@@ -845,6 +845,8 @@ public final class RuntimeBinding {
 
     // ================================================================== Data classes
 
+    // equals and hashCode below compare the record type alone: the arrays derived from it take no part.
+    @SuppressWarnings("ArrayRecordComponent")
     record BindingPlan(Class<?> recordType,
                        List<FieldBinding> fields,
                        Map<Integer, FieldBinding> byNumber,
