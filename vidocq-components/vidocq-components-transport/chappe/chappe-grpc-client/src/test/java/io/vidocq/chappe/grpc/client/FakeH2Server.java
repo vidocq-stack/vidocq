@@ -39,6 +39,9 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
+
 import io.vidocq.chappe.api.Headers;
 import io.vidocq.chappe.http.h2.HpackDecoder;
 import io.vidocq.chappe.http.h2.HpackEncoder;
@@ -70,7 +73,26 @@ final class FakeH2Server implements AutoCloseable {
     }
 
     FakeH2Server(Script script, Http2Settings settings) throws IOException {
-        serverSocket = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
+        this(script, settings, new ServerSocket(0, 50, InetAddress.getLoopbackAddress()), "http");
+    }
+
+    /**
+     * A server over TLS, its certificate from {@code tls}; it offers {@code alpn} by ALPN, none when empty.
+     */
+    static FakeH2Server tls(Script script, SSLContext tls, String... alpn) throws IOException {
+        var socket = (SSLServerSocket)
+                tls.getServerSocketFactory().createServerSocket(0, 50, InetAddress.getLoopbackAddress());
+        var parameters = socket.getSSLParameters();
+        parameters.setApplicationProtocols(alpn);
+        socket.setSSLParameters(parameters);
+        return new FakeH2Server(script, Http2Settings.serverDefaults(8_192), socket, "https");
+    }
+
+    private final String scheme;
+
+    private FakeH2Server(Script script, Http2Settings settings, ServerSocket listening, String scheme) {
+        this.scheme = scheme;
+        serverSocket = listening;
         Thread.ofVirtual().start(() -> {
             while (!serverSocket.isClosed()) {
                 try {
@@ -93,7 +115,7 @@ final class FakeH2Server implements AutoCloseable {
     }
 
     URI uri() {
-        return URI.create("http://127.0.0.1:" + serverSocket.getLocalPort());
+        return URI.create(scheme + "://127.0.0.1:" + serverSocket.getLocalPort());
     }
 
     @Override
