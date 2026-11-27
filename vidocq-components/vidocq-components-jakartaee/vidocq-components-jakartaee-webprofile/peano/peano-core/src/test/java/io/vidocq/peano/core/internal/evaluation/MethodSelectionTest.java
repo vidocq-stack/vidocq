@@ -54,6 +54,31 @@ class MethodSelectionTest {
     }
 
     @Test
+    void declaredTypesWithoutValuesMatchOnlyTheCoercionsEl60Allows() {
+        var context=new StandardELContext(ExpressionFactory.newInstance());
+        // EL 6.0 §1.23: String to a number, a Character to a number, a number to a Character, anything to String.
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",int.class)},"m",
+                new Class<?>[]{String.class},null,false));
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",long.class)},"m",
+                new Class<?>[]{Character.class},null,false));
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",char.class)},"m",
+                new Class<?>[]{Integer.class},null,false));
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",String.class)},"m",
+                new Class<?>[]{Boolean.class},null,false));
+        // No coercion from Boolean to a number, nor from a number to Boolean.
+        var number=new MethodDescriptor[]{descriptor("m",int.class)};
+        var flag=new MethodDescriptor[]{descriptor("m",boolean.class)};
+        assertThrows(MethodNotFoundException.class,
+                ()->MethodSelection.select(context,number,"m",new Class<?>[]{Boolean.class},null,false));
+        assertThrows(MethodNotFoundException.class,
+                ()->MethodSelection.select(context,flag,"m",new Class<?>[]{Integer.class},null,false));
+        // On a class, an instance method is no candidate.
+        var instance=new MethodDescriptor[]{descriptor("m",int.class)};
+        assertThrows(MethodNotFoundException.class,
+                ()->MethodSelection.select(context,instance,"m",new Class<?>[]{int.class},null,true));
+    }
+
+    @Test
     void signaturesResolveDeclaredDescriptorsAndKeepUnrelatedMatchesAmbiguous() {
         var context=new StandardELContext(ExpressionFactory.newInstance());
         MethodDescriptor[] overloaded={

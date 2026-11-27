@@ -211,6 +211,24 @@ class PropertyProcessorTest {
                 }
                 """,
                         List.of(),"Type-variable property"),
+                Arguments.of("""
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible
+                public class Model<T> {
+                    public T[] getValues(){ return null; }
+                }
+                """,
+                        List.of(),"Type-variable property"),
+                Arguments.of("""
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible
+                public class Model<T> {
+                    public void setValue(T value) {}
+                }
+                """,
+                        List.of(),"Type-variable property"),
+                Arguments.of("package demo; public class Model {}",
+                        List.of("-Apeano.accessorTypes=,demo.Missing, ,"),"Unknown accessor type"),
                 Arguments.of("package demo; @io.vidocq.peano.annotation.ELAccessible public interface Model { int apply(int value); }",
                         List.of(),"annotated with @FunctionalInterface"),
                 Arguments.of("""

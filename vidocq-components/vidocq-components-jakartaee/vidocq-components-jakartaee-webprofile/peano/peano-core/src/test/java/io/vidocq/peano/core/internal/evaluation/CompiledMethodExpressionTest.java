@@ -107,6 +107,28 @@ class CompiledMethodExpressionTest {
     }
 
     @Test
+    void reflectiveFallbackKeepsTheCovariantNonBridgeMethodAndOnlyStaticMethodsOfAClass() {
+        var bare = new BareContext();
+        String previous = System.getProperty(REFLECTION);
+        try {
+            System.setProperty(REFLECTION, "allow");
+            // StringBuilder.append(CharSequence) has public bridges returning Appendable and AbstractStringBuilder.
+            var append = new Fixture("#{s.append}", null, new Class<?>[]{CharSequence.class}, 2,
+                    new StringBuilder("ab"), "append");
+            assertEquals(StringBuilder.class, append.getMethodReference(bare).getMethodInfo().getReturnType());
+            // On a class, the instance toString() is not a candidate: the static toString(int) is the only match.
+            var format = new Fixture("#{Integer.toString}", null, new Class<?>[]{int.class}, 2,
+                    new ELClass(Integer.class), "toString");
+            var info = format.getMethodReference(bare).getMethodInfo();
+            assertEquals(String.class, info.getReturnType());
+            assertArrayEquals(new Class<?>[]{int.class}, info.getParamTypes());
+        } finally {
+            if (previous == null) System.clearProperty(REFLECTION);
+            else System.setProperty(REFLECTION, previous);
+        }
+    }
+
+    @Test
     void equalityFollowsSourceIdentityReturnAndParameterTypes() {
         var first = new Fixture("#{s.concat}", String.class, new Class<?>[]{String.class}, 2, "abc", "concat");
         var second = new Fixture("#{s.concat}", String.class, new Class<?>[]{String.class}, 2, "xyz", "concat");
