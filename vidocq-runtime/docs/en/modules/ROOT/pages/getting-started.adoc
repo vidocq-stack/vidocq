@@ -2,48 +2,20 @@
 :description: Your first Vidocq Runtime service — install the CLI, scaffold, build and run a REST app in minutes.
 
 [.lead]
-This page installs the Vidocq CLI, scaffolds a REST application, builds it with plain Maven, and serves a first endpoint — every command below is tested end-to-end against the released *{release-version}* artifacts on Maven Central. If you prefer not to use the CLI, jump to <<without-the-cli,the manual annex>>.
+Serve your first Jakarta REST endpoint with Vidocq {project-version}. You need a JDK 25 and a terminal.
+For an existing Maven build, see <<without-the-cli,the manual setup>>.
 
 == Prerequisites
 
-* **Java 25** (Temurin recommended) — check with `java -version`
-* **Maven 3.10.0** or later, only to build without the wrapper — check with `mvn -version`. A project `vidocq create` writes carries `./mvnw`, which downloads Maven 3.10.0, and the CLI runs it rather than the `mvn` of your `PATH`.
-
-TIP: With https://sdkman.io[SDKMAN!]: `sdk install java 25-tem && sdk install maven`.
+Check that `java -version` and `javac -version` both report 25. The generated project includes the Maven wrapper.
 
 == Step 1 — Install the CLI
 
-[source,bash]
-----
-curl -fsSL https://vidocq.dev/install.sh | sh
-----
-
-On Windows (PowerShell):
-
-[source,powershell]
-----
-irm https://vidocq.dev/install.ps1 | iex
-----
-
-The script downloads the latest released CLI from Maven Central into `~/.vidocq/cli` and puts a `vidocq` launcher on your `PATH`. Verify:
-
-[source,bash,subs=attributes+]
-----
-$ vidocq version
-Vidocq CLI {release-version}
-----
-
-TIP: To try what is on `main` before it is released, install the latest SNAPSHOT CLI instead: `curl -fsSL https://vidocq.dev/install.sh | VIDOCQ_VERSION=snapshot sh` (PowerShell: `$env:VIDOCQ_VERSION='snapshot'; irm https://vidocq.dev/install.ps1 | iex`). The projects it scaffolds resolve Vidocq from the Vidocq snapshot repository, `https://maven.vidocq.dev/snapshots/`; see xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
-
-NOTE: No installer needed? Download `vidocq-runtime-cli-<version>-cli.zip` from https://repo1.maven.org/maven2/io/vidocq/runtime/vidocq-runtime-cli/[Maven Central], unzip it anywhere, and add its `bin/` directory to your `PATH`.
+include::partial$first-service.adoc[tag=install]
 
 == Step 2 — Scaffold a project
 
-[source,bash]
-----
-vidocq create --name todo --group-id com.acme --extension cassini-rest
-cd todo
-----
+include::partial$first-service.adoc[tag=create]
 
 `--extension cassini-rest` (short: `-x`) enables Jakarta REST — it transitively brings the Chappe HTTP server, CDI (Vauban) and JSON-B (Champollion). The generated project is a standard Maven project of Java Modules:
 
@@ -57,7 +29,7 @@ todo/
   src/main/resources/
     vidocq.properties                <4>
 ----
-<1> Imports `vidocq-runtime-bom` at `{release-version}`, sets `vidocq.mainModule` and declares `vidocq-runtime-maven-plugin` as a build extension, which gives the build everything else (no parent, Vidocq/vidocq#380), so `mvn package` produces a runnable distribution.
+<1> Imports `vidocq-runtime-bom` at `{project-version}`, sets `vidocq.mainModule` and declares `vidocq-runtime-maven-plugin` as a build extension, which gives the build everything else (no parent, Vidocq/vidocq#380), so `./mvnw package` produces a runnable distribution.
 <2> Module descriptor, pre-filled with the `requires`/`opens` a REST app needs.
 <3> A first resource, written for `cassini-rest` (Step 3).
 <4> MicroProfile-style configuration (`vidocq.http.port=8080`, …).
@@ -70,7 +42,7 @@ xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`].
 
 TIP: Run `vidocq extension list --available` to see all first-party extensions, and `vidocq help create` for the options (`--package`, `--parent-version`, `--main`, …).
 
-NOTE: From 0.4.0, `vidocq create` also writes `src/test/java/com/acme/todo/HelloResourceTest.java`, a first test that starts the application with xref:testing.adoc[`@VidocqTest`] and calls `GET /hello` (run it with `vidocq test` or `mvn test`), a `.gitignore` and a `README.md`. Run without `--name` on a terminal, it asks for the name, the group id and the extensions.
+NOTE: From 0.4.0, `vidocq create` also writes `src/test/java/com/acme/todo/HelloResourceTest.java`, a first test that starts the application with xref:testing.adoc[`@VidocqTest`] and calls `GET /hello` (run it with `vidocq test` or `./mvnw test`), a `.gitignore` and a `README.md`. Run without `--name` on a terminal, it asks for the name, the group id and the extensions.
 
 == Step 3 — Your first resource
 
@@ -103,19 +75,7 @@ No further wiring: the Cassini annotation processor generates the dispatch adapt
 
 == Step 4 — Build and run
 
-[source,bash,subs=attributes+]
-----
-mvn package
-sh target/todo-1.0.0-SNAPSHOT/bin/todo.sh
-----
-
-`mvn package` compiles, runs the code generators, and assembles a standalone distribution under `target/todo-1.0.0-SNAPSHOT/` (launchers in `bin/`, module path in `lib/`). In another terminal:
-
-[source,bash]
-----
-$ curl http://localhost:8080/hello
-Hello from Vidocq!
-----
+include::partial$first-service.adoc[tag=run]
 
 The runtime boots in well under a second — the log line to look for:
 
@@ -131,22 +91,22 @@ NOTE: With a Vauban older than Vidocq/vauban#251, the compilation prints one `[W
 
 [source,bash]
 ----
-mvn vidocq:dev
+./mvnw vidocq:dev
 ----
 
 Dev mode launches the application on its module path and watches your sources. It uses the `vidocq.mainModule` property already set in the generated pom (and `vidocq.mainClass`, when `--main` set it).
 
-Nothing to add: since `todo` already has the Chappe HTTP server (through `cassini-rest`), `mvn vidocq:dev` also serves the xref:dev-console.adoc[dev console] on its own: `Vidocq dev console: http://127.0.0.1:8888/` opens the startup report of the running application and the live values of its extensions.
+Nothing to add: since `todo` already has the Chappe HTTP server (through `cassini-rest`), `./mvnw vidocq:dev` also serves the xref:dev-console.adoc[dev console] on its own: `Vidocq dev console: http://127.0.0.1:8888/` opens the startup report of the running application and the live values of its extensions.
 
-To run the application once, without the watcher, use `mvn vidocq:run`: it compiles, completes the bean index and forks the same JVM, and its exit code is the build's. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the `vidocq:run` goal].
+To run the application once, without the watcher, use `./mvnw vidocq:run`: it compiles, completes the bean index and forks the same JVM, and its exit code is the build's. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the `vidocq:run` goal].
 
-`mvn vidocq:idea` writes IntelliJ IDEA run configurations for what an IDE should run: by
+`./mvnw vidocq:idea` writes IntelliJ IDEA run configurations for what an IDE should run: by
 default, three files per application — a Maven run of `vidocq:dev` suffixed ` (dev)` (the one above, console
 included), one of `vidocq:run` suffixed ` (run)`, and a Remote JVM Debug one suffixed ` (debug)` that attaches to
 `vidocq:dev`'s own debug agent. `vidocq.mainModule` is all it needs: the files are named after the
 `artifactId`, `todo (dev)` and so on. See xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 
-In VS Code, `mvn vidocq:vscode`(`vidocq vscode`) writes `.vscode/`: the Java extension's language
+In VS Code, `./mvnw vidocq:vscode`(`vidocq vscode`) writes `.vscode/`: the Java extension's language
 server on Java 25, which Vauban's annotation processors need; tasks for `vidocq dev`, `run` and `test`; and a debug
 configuration that attaches to `vidocq dev`. The extension compiles an application of one module into
 `target-ide/`, a folder of its own next to `target/`; an application of several modules puts a profile in its parent
@@ -154,12 +114,12 @@ pom for that, and one that another project of the workspace depends on, in its o
 (xref:modules/vidocq-runtime-maven-plugin.adoc#ide-output[what an IDE compiles, and where]). See
 xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
 
-In Eclipse, `mvn vidocq:eclipse`(`vidocq eclipse`) writes `.eclipse/`: Maven builds of `vidocq dev`,
+In Eclipse, `./mvnw vidocq:eclipse`(`vidocq eclipse`) writes `.eclipse/`: Maven builds of `vidocq dev`,
 `run` and `test` and a debug configuration that attaches to `vidocq dev`, under Run Configurations once the project is
 imported. The same folder is expected there, and was not run in Eclipse. See
 xref:modules/vidocq-runtime-maven-plugin.adoc#eclipse[the `vidocq:eclipse` goal].
 
-NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goals) run `mvn vidocq:dev` and `mvn vidocq:run` in the project: they see the extensions declared in your pom.
+NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goals) run `./mvnw vidocq:dev` and `./mvnw vidocq:run` in the project: they see the extensions declared in your pom.
 
 == Step 6 — Add extensions as you grow
 
@@ -167,7 +127,7 @@ NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven
 ----
 vidocq extension list --available
 vidocq extension add knock-health
-mvn package
+./mvnw package
 ----
 
 `extension add` edits your `pom.xml` with the correct coordinates. See xref:usage.adoc[Usage] for the per-extension configuration keys, and xref:modules/vidocq-runtime-examples.adoc[the examples tour] for a full REST + persistence application (Mansart Data + H2).
@@ -315,7 +275,7 @@ xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-m
 vidocq.http.port=8080
 ----
 
-Then add the `HelloResource` from Step 3 and continue from Step 4 (`mvn package`) — the flow is identical.
+Add the `HelloResource` from Step 3. Build with `mvn package` using Maven 3.10.0, then follow Step 4 to launch and query the service.
 
 == Next steps
 
