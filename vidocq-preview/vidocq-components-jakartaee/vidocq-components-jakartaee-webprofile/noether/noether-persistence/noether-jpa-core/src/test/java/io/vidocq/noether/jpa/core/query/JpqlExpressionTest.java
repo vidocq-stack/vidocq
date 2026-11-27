@@ -20,6 +20,7 @@
 package io.vidocq.noether.jpa.core.query;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.vidocq.noether.jpa.core.model.build.fixtures.coll.Sighting;
 import io.vidocq.noether.jpa.core.model.build.fixtures.coll.Suspect;
@@ -250,5 +251,14 @@ class JpqlExpressionTest {
         assertThat(castParameter.setParameter("id", 12L).getSingleResult()).isEqualTo(12L);
         assertThat(em.createQuery("SELECT p.name FROM Player p UNION ALL SELECT p.name FROM Player p ORDER BY p.name", String.class)
             .setMaxResults(2).getResultList()).containsExactly("Coco", "Coco");
+    }
+
+    @Test
+    void theOrderOfASetOperationNamesASelectedItemByItsAlias() { // §4.8: ORDER BY of a set operation
+        assertThat(list("SELECT p.name AS n FROM Player p UNION SELECT t.name FROM Team t ORDER BY n DESC", String.class))
+            .containsExactly("Vidocq", "Sûreté", "Coco", "Brigade");
+        assertThatThrownBy(() -> em.createQuery(
+                "SELECT p.name AS n FROM Player p UNION SELECT t.name FROM Team t ORDER BY other", String.class)
+            .getResultList()).hasMessageContaining("must be selected");
     }
 }
