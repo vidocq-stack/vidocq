@@ -1,0 +1,987 @@
+= Migrating from Quarkus
+:description: Move a Quarkus service to Vidocq: what maps one to one, what maps with a change, what has no equivalent yet, with before and after snippets.
+
+[.lead]
+Quarkus is the closest source. Both run CDI Lite, Jakarta REST and MicroProfile, and both do their work at build
+time. Code written against the standard APIs moves as it is. The work is in what is specific to Quarkus: ArC's
+shortcuts, RESTEasy Reactive's annotations, Mutiny, Panache, the `quarkus.*` keys and the build. This page lists
+them, area by area, and says plainly where Vidocq has nothing yet.
+
+The page was written against Quarkus 3.x. No tool rewrites the code for you yet: the analysis command and the
+automated rewrites are planned for 1.0.0 (Vidocq/vidocq#792).
+
+[#before-you-start]
+== Before you start
+
+* *Java 25.* Vidocq needs Java 25. Quarkus 3.x runs on 17.
+* *A named Java module.* A Vidocq application has a `src/main/java/module-info.java`. A Quarkus application has
+  none. `vidocq extension add` writes the lines each extension needs, and the build tells you the `opens` that are
+  missing (xref:java-modules.adoc[Java modules in a Vidocq application]).
+* *Virtual threads, no event loop.* Each REST request runs on a virtual thread. `@Blocking`, `@NonBlocking` and
+  `@RunOnVirtualThread` have no meaning here: remove them, and write blocking code.
+* *Standard APIs first.* Every Vidocq extension implements a Jakarta EE or MicroProfile specification. What Quarkus
+  adds on top of a specification is where the changes are.
+
+[#at-a-glance]
+== At a glance
+
+The mapping table. *Same* means the code moves as it is, or with a mechanical change of names. *Change* means the
+code changes shape. *None yet* means Vidocq has no equivalent today; the section gives the workaround.
+
+[cols="3,3,1,3",options="header"]
+|===
+| Quarkus | Vidocq | Status | See
+
+| `@ApplicationScoped`, `@Inject`, `@Produces`, interceptors, events
+| The same CDI annotations
+| Same
+| <<cdi>>
+
+| `@Singleton`, `@RequestScoped`, `@Dependent`
+| The same
+| Same
+| <<cdi>>
+
+| Injection without `@Inject` (a qualifier alone, a single constructor)
+| `@Inject` on every injection point
+| Change
+| <<cdi>>
+
+| `private` injected fields
+| Supported, no reflection
+| Same
+| <<cdi>>
+
+| `@io.quarkus.runtime.Startup`, `StartupEvent`, `ShutdownEvent`
+| `@Observes Startup`, `@Observes Shutdown` (CDI 4.1)
+| Change
+| <<cdi>>
+
+| `@DefaultBean`
+| `@Alternative @Priority` on the replacement
+| Change
+| <<cdi>>
+
+| `@IfBuildProfile`, `@UnlessBuildProfile`, `@IfBuildProperty`, `@LookupIfProperty`
+| A producer that reads the configuration
+| Change
+| <<cdi>>
+
+| `@Unremovable`
+| Not needed
+| Same
+| <<cdi>>
+
+| Jakarta REST resources (`@Path`, `@GET`, `ExceptionMapper`, filters)
+| The same, on Cassini
+| Same
+| <<rest>>
+
+| `RestResponse<T>`
+| `Response`
+| Change
+| <<rest>>
+
+| `@RestPath`, `@RestQuery`, `@RestHeader`, `@RestForm`
+| `@PathParam("x")`, `@QueryParam("x")`, `@HeaderParam("x")`, `@FormParam("x")`
+| Change
+| <<rest>>
+
+| `@ServerRequestFilter`, `@ServerResponseFilter`, `@ServerExceptionMapper`
+| `ContainerRequestFilter`, `ContainerResponseFilter`, `ExceptionMapper` classes
+| Change
+| <<rest>>
+
+| `Uni<T>`, `Multi<T>` (Mutiny)
+| `T`, `CompletionStage<T>`, `List<T>` or SSE
+| Change
+| <<mutiny>>
+
+| `quarkus-rest-jackson`
+| JSON-B (Champollion)
+| Change
+| <<rest>>
+
+| `application.properties`, `%dev.`, `%test.`, `%prod.`
+| `vidocq.properties` (`application.properties` is read too), the same prefixes
+| Same
+| <<config>>
+
+| `@ConfigProperty`
+| The same, with `@Inject`
+| Same
+| <<config>>
+
+| `@ConfigMapping` interfaces
+| `@ConfigProperties` classes (MicroProfile Config)
+| Change
+| <<config>>
+
+| `application.yaml` (`quarkus-config-yaml`)
+| None: properties files only
+| Change
+| <<config>>
+
+| `quarkus.*` keys
+| `vidocq.*` keys, for those that have one
+| Change
+| <<config-keys>>
+
+| Hibernate ORM, `EntityManager`
+| Jakarta Persistence on Noether (preview)
+| Change
+| <<data>>
+
+| Panache (active record, repository)
+| Jakarta Data repositories (Mansart), or `EntityManager`
+| Change
+| <<panache>>
+
+| `@Transactional` (Narayana)
+| `@jakarta.transaction.Transactional` (Mansart Transactions)
+| Same
+| <<data>>
+
+| Flyway, Liquibase
+| `migration-flyway`, `migration-liquibase`
+| Same
+| <<flyway>>
+
+| Quarkus extensions
+| Vidocq runtime extensions
+| Change
+| <<extensions>>
+
+| `quarkus-maven-plugin`, `quarkus-bom`
+| `vidocq-runtime-maven-plugin`, `vidocq-runtime-bom`
+| Change
+| <<build>>
+
+| `@QuarkusTest`, `@QuarkusIntegrationTest`
+| `@VidocqTest`
+| Change
+| <<tests>>
+
+| `@InjectMock`, `@TestProfile`, `@QuarkusTestResource`
+| None, `@VidocqTest(properties)`, dev services
+| Change
+| <<tests>>
+
+| `quarkus dev`, Dev UI, continuous testing, Dev Services
+| `vidocq dev`, the dev console, continuous testing, dev services
+| Same
+| <<dev-mode>>
+
+| Native image
+| None yet: jlink image and the JDK's AOT cache
+| None yet
+| <<native>>
+|===
+
+[#cdi]
+== CDI: ArC to Vauban
+
+Vidocq's container is xref:{page-component-version}@vauban::index.adoc[Vauban], an implementation of CDI 4.1 Lite
+that builds the beans at compile time, as ArC does. Code that uses the standard CDI API moves as it is: scopes,
+`@Inject`, producers and `@Disposes`, qualifiers, `Instance<T>`, events and `@ObservesAsync`, interceptors,
+`@Alternative` with `@Priority`, build compatible extensions.
+
+=== What maps one to one
+
+* *`private` injected fields* work, and need no `opens`: Vauban generates the access at compile time. Quarkus'
+  advice to make them package-private does not apply.
+* *`@Unremovable`* is not needed: Vauban removes no bean that nothing injects. Delete the annotation.
+* *A constructor with parameters* on an `@ApplicationScoped` bean needs no constructor without parameters for the
+  client proxy: the build adds the one the proxy uses.
+
+=== What maps with a change
+
+*Injection without `@Inject`.* ArC lets a field with a qualifier, such as `@ConfigProperty` or `@RestClient`, go
+without `@Inject`, and a single constructor too. Vauban follows the CDI rules: put `@Inject` on each.
+
+[source,java]
+----
+// Before (Quarkus)
+@ApplicationScoped
+public class Greeter {
+    @ConfigProperty(name = "greeting.name")
+    String name;
+
+    private final Clock clock;
+
+    Greeter(Clock clock) {
+        this.clock = clock;
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@ApplicationScoped
+public class Greeter {
+    @Inject
+    @ConfigProperty(name = "greeting.name")
+    String name;
+
+    private final Clock clock;
+
+    @Inject
+    Greeter(Clock clock) {
+        this.clock = clock;
+    }
+}
+----
+
+*`@Startup` and the lifecycle events.* `@io.quarkus.runtime.Startup` on a bean, and an observer of `StartupEvent` or
+`ShutdownEvent`, become observers of the CDI 4.1 events `jakarta.enterprise.event.Startup` and `Shutdown`. The
+container fires `Startup` once every bean and context is ready.
+
+[source,java]
+----
+// Before (Quarkus)
+@Startup
+@ApplicationScoped
+public class Warmup {
+    @PostConstruct
+    void init() { /* ... */ }
+
+    void onStop(@Observes ShutdownEvent event) { /* ... */ }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@ApplicationScoped
+public class Warmup {
+    void onStart(@Observes Startup event) { /* ... */ }
+
+    void onStop(@Observes Shutdown event) { /* ... */ }
+}
+----
+
+*`@DefaultBean`.* The standard way to let an application replace a bean: the replacement is an `@Alternative` with a
+`@Priority`, and wins over the default bean, which carries nothing special.
+
+*`@IfBuildProfile`, `@UnlessBuildProfile`, `@IfBuildProperty`, `@LookupIfProperty`.* Vidocq has no annotation that
+keeps a bean out of the application by profile or by property, and no build profile: its profiles are read when the
+application starts. Make the choice in a producer that reads the configuration:
+
+[source,java]
+----
+// Before (Quarkus)
+@ApplicationScoped
+@IfBuildProfile("dev")
+public class FakeMailer implements Mailer { /* ... */ }
+
+@ApplicationScoped
+@UnlessBuildProfile("dev")
+public class SmtpMailer implements Mailer { /* ... */ }
+----
+
+[source,java]
+----
+// After (Vidocq)
+@ApplicationScoped
+@Typed(FakeMailer.class)
+public class FakeMailer implements Mailer { /* ... */ }
+
+@ApplicationScoped
+@Typed(SmtpMailer.class)
+public class SmtpMailer implements Mailer { /* ... */ }
+
+@ApplicationScoped
+public class Mailers {
+    @Inject
+    @ConfigProperty(name = "mail.fake", defaultValue = "false")
+    boolean fake;
+
+    @Produces
+    @ApplicationScoped
+    Mailer mailer(FakeMailer fakeMailer, SmtpMailer smtpMailer) {
+        return fake ? fakeMailer : smtpMailer;
+    }
+}
+----
+
+[source,properties]
+----
+%dev.mail.fake=true
+----
+
+=== What has no equivalent
+
+* *Decorators* (`@Decorator`) are not part of CDI Lite, and Vauban does not apply them (Vidocq/vidocq#691). ArC
+  supports them; use an interceptor or composition.
+* *ArC's own API* (`io.quarkus.arc.Arc`, `InjectableInstance`, `@All`, `@Identified`) has no equivalent. `Instance<T>`
+  and `CDI.current()` are the standard ways.
+
+See xref:{page-component-version}@vauban::migration.adoc#from-quarkus-arc[From Quarkus ArC].
+
+[#rest]
+== REST: RESTEasy Reactive to Cassini
+
+The `rest-cassini` extension serves Jakarta REST 4.0 resources through
+xref:{page-component-version}@cassini::index.adoc[Cassini], with the dispatch generated at compile time. A resource
+written with the standard annotations moves as it is, with its `ExceptionMapper`, its filters (`@Provider`,
+`@NameBinding`, `@PreMatching`), `@Suspended AsyncResponse`, Server-Sent Events and `EntityPart` multipart.
+
+=== What maps with a change
+
+*The `@Rest*` parameter annotations* become the standard ones, with the name written out:
+
+[cols="1,1",options="header"]
+|===
+| RESTEasy Reactive | Jakarta REST
+
+| `@RestPath String id` | `@PathParam("id") String id`
+| `@RestQuery String q` | `@QueryParam("q") String q`
+| `@RestHeader("X-Id") String id` | `@HeaderParam("X-Id") String id`
+| `@RestForm String name` | `@FormParam("name") String name`
+| `@RestCookie String id` | `@CookieParam("id") String id`
+| `RestResponse<T>` | `Response`
+|===
+
+[source,java]
+----
+// Before (Quarkus)
+@Path("/orders")
+public class OrderResource {
+    @GET
+    @Path("/{id}")
+    public RestResponse<Order> find(@RestPath Long id) {
+        return service.find(id)
+                .map(RestResponse::ok)
+                .orElse(RestResponse.notFound());
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@Path("/orders")
+@Produces(MediaType.APPLICATION_JSON)
+public class OrderResource {
+    @Inject
+    OrderService service;
+
+    @GET
+    @Path("/{id}")
+    public Response find(@PathParam("id") Long id) {
+        return service.find(id)
+                .map(order -> Response.ok(order).build())
+                .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+}
+----
+
+A resource class without a scope annotation is `@RequestScoped`.
+
+*Annotated filters and mappers.* `@ServerRequestFilter`, `@ServerResponseFilter` and `@ServerExceptionMapper` on a
+method become classes annotated `@Provider`:
+
+[source,java]
+----
+// Before (Quarkus)
+public class Filters {
+    @ServerRequestFilter
+    public void requestId(ContainerRequestContext context) { /* ... */ }
+
+    @ServerExceptionMapper
+    public RestResponse<String> notFound(OrderNotFound e) {
+        return RestResponse.status(Response.Status.NOT_FOUND, e.getMessage());
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@Provider
+public class RequestIdFilter implements ContainerRequestFilter {
+    @Override
+    public void filter(ContainerRequestContext context) { /* ... */ }
+}
+
+@Provider
+public class OrderNotFoundMapper implements ExceptionMapper<OrderNotFound> {
+    @Override
+    public Response toResponse(OrderNotFound e) {
+        return Response.status(Response.Status.NOT_FOUND).entity(e.getMessage()).build();
+    }
+}
+----
+
+*JSON.* Vidocq binds JSON with JSON-B, through xref:{page-component-version}@champollion::index.adoc[Champollion],
+which `rest-cassini` brings. An application on `quarkus-rest-jsonb` moves as it is. One on `quarkus-rest-jackson`
+rewrites its Jackson annotations: `@JsonProperty` becomes `@JsonbProperty`, `@JsonIgnore` becomes `@JsonbTransient`
+(the whole table: xref:{page-component-version}@champollion::migration.adoc#from-jackson[From Jackson]).
+
+*Bean Validation.* `quarkus-hibernate-validator` has no counterpart: Vidocq checks no `@Valid` and no constraint yet
+(Vidocq/vidocq#64). Check the input in the resource, or in the constructor of the DTO.
+
+[#mutiny]
+=== Mutiny: `Uni` and `Multi`
+
+Vidocq has no Mutiny and no event loop. A resource method runs on a virtual thread, where a blocking call is cheap.
+So a method returns its value directly.
+
+[cols="1,1",options="header"]
+|===
+| Quarkus | Vidocq
+
+| `Uni<T>` | `T`, or `CompletionStage<T>` when the result comes from an asynchronous API
+| `Uni<Void>` | `void`, or a `Response` with `204`
+| `Multi<T>` collected by the client | `List<T>`
+| `Multi<T>` streamed as `text/event-stream` | An `SseEventSink` parameter, events sent with `Sse`
+| A reactive client (Vert.x, reactive SQL) | Its blocking counterpart: JDBC through `pool-mansart`, a Rest Client
+|===
+
+[source,java]
+----
+// Before (Quarkus)
+@GET
+@Produces(MediaType.SERVER_SENT_EVENTS)
+public Multi<Price> prices() {
+    return Multi.createFrom().ticks().every(Duration.ofSeconds(1)).map(tick -> feed.next());
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@GET
+@Produces(MediaType.SERVER_SENT_EVENTS)
+public void prices(@Context SseEventSink sink, @Context Sse sse) throws InterruptedException {
+    try (sink) {
+        while (!sink.isClosed()) {
+            sink.send(sse.newEventBuilder().data(Price.class, feed.next())
+                    .mediaType(MediaType.APPLICATION_JSON_TYPE).build());
+            Thread.sleep(Duration.ofSeconds(1));
+        }
+    }
+}
+----
+
+Cassini sends each event as it is emitted.
+
+[#config]
+== Configuration
+
+Vidocq reads its configuration with MicroProfile Config, as Quarkus does, through the `config-ravel` extension for
+`@ConfigProperty` injection.
+
+=== What maps one to one
+
+* *The file.* `src/main/resources/application.properties` is read. Rename it to `vidocq.properties` when you can, and
+  do not set one key in both files.
+* *Profiles.* `%dev.`, `%test.` and `%prod.` prefixes work as in Quarkus (xref:usage.adoc#profiles[Profiles]).
+* *`@ConfigProperty`*, `Config`, `ConfigProvider.getConfig()`, custom `ConfigSource` and `Converter`: the standard
+  API, unchanged. Add `@Inject` where ArC did without it (<<cdi>>).
+* *Expressions*, `+${key}+` and `+${key:default}+`.
+
+=== What maps with a change
+
+*Which profile is active.* `vidocq.profile` names it (`-Dvidocq.profile=prod`, `VIDOCQ_PROFILE=prod`), in place of
+`quarkus.profile`; `mp.config.profile` works too. The defaults differ:
+
+[cols="1,1,1",options="header"]
+|===
+| Launch | Quarkus | Vidocq
+
+| Dev mode | `dev` | `dev` (`vidocq dev`)
+| Tests | `test` | None: set it with `@VidocqTest(properties = "vidocq.profile=test")`
+| A packaged application | `prod` | None: set `vidocq.profile=prod` where it runs
+|===
+
+So `%prod.` keys apply only once `vidocq.profile=prod` is set. One profile at a time: Quarkus' list of profiles
+(`quarkus.profile=staging,prod`) has no equivalent.
+
+*`@ConfigMapping` interfaces become `@ConfigProperties` classes*, the MicroProfile Config grouping. The class has
+fields, not final; nested groups and `Map` members have no equivalent.
+
+[source,java]
+----
+// Before (Quarkus)
+@ConfigMapping(prefix = "shop")
+public interface ShopConfig {
+    String currency();
+
+    @WithDefault("20")
+    int pageSize();
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@ConfigProperties(prefix = "shop")
+public class ShopConfig {
+    public String currency;
+
+    @ConfigProperty(name = "page-size", defaultValue = "20")
+    public int pageSize;
+}
+
+@ApplicationScoped
+public class Catalog {
+    @Inject
+    @ConfigProperties
+    ShopConfig shop;
+}
+----
+
+The key of a field is its name; SmallRye's kebab-case naming does not apply, so `@ConfigProperty(name = "page-size")`
+keeps the key `shop.page-size`.
+
+*YAML is not read.* `quarkus-config-yaml` has no counterpart: convert `application.yaml` to a properties file.
+
+[#config-keys]
+=== `quarkus.*` keys that have a Vidocq key
+
+Vidocq ignores the `quarkus.*` keys. Those with a Vidocq key:
+
+[cols="1,1,2",options="header"]
+|===
+| Quarkus | Vidocq | Note
+
+| `quarkus.http.port` | `vidocq.http.port` | `8080` by default in both.
+| `quarkus.http.host` | `vidocq.http.host` | `0.0.0.0` by default in Vidocq.
+| `quarkus.rest.path` | `vidocq.rest.context-path` | The prefix of the REST resources.
+| `quarkus.datasource.jdbc.url` | `vidocq.pool.url` |
+| `quarkus.datasource.username`, `quarkus.datasource.password` | `vidocq.pool.username`, `vidocq.pool.password` |
+| `quarkus.datasource.jdbc.max-size` | `vidocq.pool.maxSize` | `10` by default.
+| `quarkus.datasource."orders".jdbc.url` | `vidocq.pool.orders.url` | A named data source, injected as `@Named("orders") DataSource`.
+| `quarkus.datasource.db-kind` | None | The driver follows the URL; add the driver's jar.
+| `quarkus.flyway.migrate-at-start` | `vidocq.migration.enabled` | Vidocq migrates at start by default; Quarkus does not.
+| `quarkus.flyway.locations` | `vidocq.migration.locations` | `classpath:db/migration` by default.
+| `quarkus.hibernate-orm.database.generation` | `vidocq.persistence.<unit>.properties.jakarta.persistence.schema-generation.database.action` | `create`, `drop-and-create` or `none`. `update` and `validate` have no equivalent.
+| `quarkus.profile` | `vidocq.profile` | One profile only.
+| `quarkus.application.name` | `otel.service.name` | For telemetry.
+| `quarkus.otel.exporter.otlp.endpoint` | `otel.exporter.otlp.endpoint` | OTLP over HTTP only, see <<extensions>>.
+| `quarkus.rest-client."stock".url` | `stock/mp-rest/url` | The MicroProfile key, with the client's `configKey`.
+| `mp.jwt.*`, `mp.openapi.*`, `otel.*` | The same | Keys of the MicroProfile specifications, read as they are.
+| `quarkus.http.ssl.*` | None | TLS is not implemented yet: put the service behind a proxy that terminates HTTPS.
+| `quarkus.log.*` | None | The runtime logs through `System.Logger` and `java.util.logging`: set the levels the `java.util.logging` way.
+|===
+
+The other keys of the runtime: xref:reference.adoc#microprofile-config-keys[MicroProfile Config keys].
+
+[#data]
+== Data
+
+=== Hibernate ORM to Noether
+
+Code that uses the `EntityManager` moves to the `persistence-noether` extension, which runs Jakarta Persistence 3.2
+on xref:{page-component-version}@noether::index.adoc[Noether]. Noether is a *preview*: usable, not certified.
+
+* `@Inject EntityManager em;` works, as in Quarkus, and so does `@PersistenceContext`.
+* Without a `persistence.xml`, the application's entities form a unit named `default` on the default pool, set with
+  `vidocq.persistence.<unit>.*` keys
+  (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-keys[Units declared with keys]).
+* `@Transactional` is `jakarta.transaction.Transactional`, as in Quarkus; `transactions-mansart` handles it.
+* Noether supports H2 and PostgreSQL. It implements the standard API only: Hibernate's annotations, its `Session`,
+  `@Formula` or `@NaturalId`, have no equivalent. `@GeneratedValue` with `AUTO` does not use Hibernate's sequences.
+
+What changes, property by property: xref:{page-component-version}@noether::migration.adoc#from-hibernate-orm[From
+Hibernate ORM].
+
+[#panache]
+=== Panache
+
+Panache has no equivalent. Its two styles become standard code.
+
+*The repository style* is closest to Jakarta Data. The `data-mansart` extension implements it, with repositories
+generated at compile time:
+
+[source,java]
+----
+// Before (Quarkus)
+@ApplicationScoped
+public class BookRepository implements PanacheRepository<Book> {
+    public List<Book> byAuthor(String author) {
+        return list("author", author);
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@Repository
+public interface BookRepository extends CrudRepository<Book, Long> {
+    List<Book> findByAuthor(String author);
+
+    @Query("FROM Book WHERE year > :year ORDER BY title")
+    List<Book> publishedAfter(@Param("year") int year);
+}
+----
+
+*The active record style* (`PanacheEntity`, `Book.findAll()`, `book.persist()`) moves to a plain entity and a
+repository, or to the `EntityManager`:
+
+[source,java]
+----
+// Before (Quarkus)
+@Entity
+public class Book extends PanacheEntity {
+    public String title;
+    public String author;
+}
+
+List<Book> books = Book.list("author", author);
+----
+
+[source,java]
+----
+// After (Vidocq)
+@Entity
+public class Book {
+    @Id
+    @GeneratedValue
+    private Long id;
+    private String title;
+    private String author;
+    // getters and setters
+}
+
+List<Book> books = bookRepository.findByAuthor(author);
+----
+
+Panache turns public fields into accessors at build time; nothing does that in Vidocq, so give the entity private
+fields and accessors.
+
+Mansart Data maps basic attributes, embeddables and to-one references, on H2 and PostgreSQL. A `@OneToMany`
+collection needs Jakarta Persistence (Noether). The queries are JDQL, where the leading `SELECT` is implicit.
+
+[#flyway]
+=== Flyway
+
+`quarkus-flyway` becomes `migration-flyway`; `quarkus-liquibase` becomes `migration-liquibase`. The scripts stay in
+`src/main/resources/db/migration`. Two differences:
+
+* Vidocq migrates the default data source at start, whenever `vidocq.pool.url` is set: `vidocq.migration.enabled=false`
+  turns it off. Quarkus waits for `quarkus.flyway.migrate-at-start=true`.
+* A named Java module opens its scripts to Flyway: `vidocq extension add migration-flyway` writes `opens db.migration;`.
+
+Keys: xref:modules/vidocq-runtime-extensions.adoc#schema-migration-keys[Schema migration].
+
+[#extensions]
+== Extensions
+
+Each Quarkus extension an application uses maps to a Vidocq runtime extension, or to none. The ids are those of
+`vidocq extension add` (xref:modules/vidocq-runtime-cli.adoc#extension-ids[Extension ids]).
+
+[cols="2,2,3",options="header"]
+|===
+| Quarkus extension | Vidocq extension | Note
+
+| `quarkus-arc`
+| None needed
+| CDI is built into `vidocq-runtime-core`.
+
+| `quarkus-rest`, `quarkus-rest-jsonb`
+| `rest-cassini`
+| <<rest>>.
+
+| `quarkus-rest-jackson`
+| `rest-cassini`
+| JSON-B only: rewrite the Jackson annotations.
+
+| `quarkus-rest-client`, `quarkus-rest-client-jsonb`
+| `rest-client-cyrano`
+| MicroProfile Rest Client: `@RegisterRestClient`, `@Inject @RestClient`.
+
+| `quarkus-smallrye-health`
+| `health-knock`
+| `/health`, `/health/live`, `/health/ready`, `/health/started` instead of `/q/health/...`.
+
+| `quarkus-micrometer`
+| `metrics-dirac`
+| MicroProfile Metrics 5.1 at `/metrics`: the Micrometer API (`MeterRegistry`) has no equivalent; use `@Counted`,
+  `@Timed` or `MetricRegistry`.
+
+| `quarkus-opentelemetry`
+| `telemetry-humboldt`
+| The OpenTelemetry API and `@WithSpan`. The SDK is off until `otel.sdk.disabled=false`, which
+  `vidocq extension add telemetry-humboldt` writes. The exporter sends OTLP over HTTP with JSON encoding, to port
+  `4318` of a standard collector; there is no gRPC exporter, which Quarkus uses by default.
+
+| `quarkus-smallrye-openapi`
+| `openapi-grimm`, `openapi-ui-grimm`
+| `/openapi` and `/openapi/ui` instead of `/q/openapi` and `/q/swagger-ui`.
+
+| `quarkus-smallrye-fault-tolerance`
+| `fault-tolerance-heisenberg`
+| The MicroProfile annotations move as they are; SmallRye's own (`@RateLimit`, `@ExponentialBackoff`, ...) have no
+  equivalent.
+
+| `quarkus-smallrye-jwt`
+| `jwt-cervantes`
+| The `mp.jwt.*` keys and `@RolesAllowed` move as they are.
+
+| `quarkus-oidc`
+| `jwt-cervantes`, for a service that checks bearer tokens
+| Set `mp.jwt.verify.issuer` and `mp.jwt.verify.publickey.location`; the roles come from the `groups` claim. The
+  authorization code flow of a web application has no equivalent.
+
+| `quarkus-agroal` and a `quarkus-jdbc-*` driver
+| `pool-mansart` and the driver's jar
+| <<config-keys>>.
+
+| `quarkus-narayana-jta`
+| `transactions-mansart`
+|
+
+| `quarkus-hibernate-orm`
+| `persistence-noether` (preview)
+| <<data>>.
+
+| `quarkus-hibernate-orm-panache`
+| `data-mansart`, or `persistence-noether`
+| <<panache>>.
+
+| `quarkus-flyway`, `quarkus-liquibase`
+| `migration-flyway`, `migration-liquibase`
+| <<flyway>>.
+
+| `quarkus-undertow`
+| `servlet-foy`
+| Jakarta Servlet 6.1.
+
+| `quarkus-websockets`
+| `websocket-foy`
+| The programmatic server API only; annotated `@ServerEndpoint` endpoints come later (Vidocq/vidocq#65).
+
+| `quarkus-elytron-security-*`, form login
+| `security-kerckhoffs` (preview)
+| Jakarta Security 4.0, for the servlets of `servlet-foy` only
+  (xref:modules/vidocq-runtime-extensions.adoc#kerckhoffs-security[Jakarta Security (Kerckhoffs)]).
+
+| `quarkus-hibernate-validator`
+| None yet
+| Vidocq/vidocq#64.
+
+| `quarkus-scheduler`, `quarkus-quartz`
+| None yet
+| Jakarta Concurrency, Vidocq/vidocq#72. Until then, a `ScheduledExecutorService` started in an observer of `Startup`
+  and stopped in `@PreDestroy`.
+
+| `quarkus-cache`
+| None
+| Keep a map in an `@ApplicationScoped` bean, or an interceptor of your own.
+
+| `quarkus-messaging-*` (Kafka, AMQP), `quarkus-websockets-next`, `quarkus-grpc`, `quarkus-qute`
+| None
+| Use the library's own client from a bean, where one exists.
+
+| `quarkus-hibernate-reactive`, `quarkus-reactive-*-client`, `quarkus-vertx`
+| None
+| JDBC on virtual threads (<<mutiny>>).
+
+| `quarkus-container-image-*`
+| `vidocq:docker` goal
+| <<build>>.
+
+| `quarkus-kubernetes`, `quarkus-openshift`
+| None
+| Write the manifests yourself.
+|===
+
+[#build]
+== Build
+
+A Vidocq application imports `vidocq-runtime-bom` and declares `vidocq-runtime-maven-plugin` as a build extension,
+which binds the goals, as `quarkus-maven-plugin` does.
+
+Before:
+
+[source,xml]
+----
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.quarkus.platform</groupId>
+            <artifactId>quarkus-bom</artifactId>
+            <version>${quarkus.platform.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-rest</artifactId>
+    </dependency>
+</dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>io.quarkus.platform</groupId>
+            <artifactId>quarkus-maven-plugin</artifactId>
+            <version>${quarkus.platform.version}</version>
+            <extensions>true</extensions>
+        </plugin>
+    </plugins>
+</build>
+----
+
+After:
+
+[source,xml,subs=attributes+]
+----
+<properties>
+    <vidocq.version>{release-version}</vidocq.version>
+    <maven.compiler.release>25</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <vidocq.mainModule>com.acme.shop</vidocq.mainModule>
+</properties>
+
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-bom</artifactId>
+            <version>${vidocq.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-core</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+        <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+    </dependency>
+</dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            <version>${vidocq.version}</version>
+            <extensions>true</extensions>
+        </plugin>
+    </plugins>
+</build>
+----
+
+`vidocq.mainModule` names the application's Java module, which the runtime boots: no main class is needed, as in
+Quarkus. A `@QuarkusMain` class becomes an `@VidocqMain` trampoline that calls `Vidocq.run(args)`
+(xref:usage.adoc#vidocq-main-trampoline[When to add a `@VidocqMain` trampoline]).
+
+The quickest way to get this pom is `vidocq create --name shop --group-id com.acme -x rest-cassini` in an empty
+folder, then moving the sources in. `vidocq pom convert` works on Vidocq poms only: it does not read a Quarkus pom.
+
+*The CLI.*
+
+[cols="1,1",options="header"]
+|===
+| Quarkus | Vidocq
+
+| `quarkus create app` | `vidocq create`
+| `quarkus extension add` | `vidocq extension add`
+| `quarkus dev`, `mvn quarkus:dev` | `vidocq dev`, `mvn vidocq:dev`
+| `quarkus test` | `vidocq test`
+| `quarkus build`, `mvn package` | `vidocq build`, `mvn package`
+| `java -jar target/quarkus-app/quarkus-run.jar` | `target/<artifactId>-<version>/bin/<artifactId>.sh`, or `vidocq run`
+| `-Dquarkus.container-image.build=true` | `vidocq build docker`
+|===
+
+[#native]
+=== Native image
+
+Vidocq does not build a GraalVM native image yet. Two things are in place instead:
+
+* *A jlink image* (`vidocq build jlink`): the application and the JDK modules it needs, in one folder, with no `java`
+  needed on the target.
+* *The JDK's AOT cache* (JEP 483, 514, 515): a training run records the loaded classes, and the next runs start from
+  them. No Vidocq goal records it yet: pass the JDK's options (xref:usage.adoc#aot-cache[Ahead of time]).
+
+[#tests]
+== Tests
+
+*`@QuarkusTest` with REST Assured* becomes `@VidocqTest`. It starts the application in a JVM of its own, on a free
+port, once per test class, closer to `@QuarkusIntegrationTest` than to `@QuarkusTest`. The test sends HTTP requests
+through the `VidocqApplication` parameter.
+
+[source,java]
+----
+// Before (Quarkus)
+@QuarkusTest
+class GreetingResourceTest {
+    @Test
+    void hello() {
+        given().when().get("/hello")
+                .then().statusCode(200).body(is("Hello"));
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@VidocqTest
+class GreetingResourceTest {
+    @Test
+    void hello(VidocqApplication application) {
+        VidocqResponse response = application.get("/hello");
+        assertEquals(200, response.status(), application.log());
+        assertEquals("Hello", response.body());
+    }
+}
+----
+
+[cols="1,1",options="header"]
+|===
+| Quarkus | Vidocq
+
+| `@TestHTTPResource URL url` | A `@VidocqUrl URI base` parameter
+| `@TestProfile` | `@VidocqTest(properties = "key=value")`
+| `%test.` keys | Apply once `vidocq.profile=test` is passed in `properties`
+| `@QuarkusTestResource`, Testcontainers | Dev services (<<dev-mode>>)
+| `@Inject` in the test | None: the test talks to the application over HTTP only
+| `@InjectMock`, `QuarkusMock` | None: the test classes are not part of the application it starts
+|===
+
+For a bean alone, without HTTP, `@VaubanTest` (`vauban-junit`) starts a CDI container with the beans the test names,
+without the runtime's extensions
+(xref:{page-component-version}@vauban::usage.adoc#junit-tests-with-vaubantest[JUnit tests with `@VaubanTest`]).
+The setup of `@VidocqTest` is in xref:testing.adoc[Testing an application].
+
+[#dev-mode]
+== Dev mode
+
+[cols="1,1",options="header"]
+|===
+| Quarkus | Vidocq
+
+| `quarkus dev` | `vidocq dev`: restarts the application on each change, a debug agent on port `5005`
+| Dev UI, `/q/dev-ui` | The xref:dev-console.adoc[dev console], `http://127.0.0.1:8888/`, in dev mode only
+| Continuous testing | Continuous testing, paused at start: `r` then Enter runs the tests
+  (xref:continuous-testing.adoc[Continuous testing])
+| Dev Services | Dev services: PostgreSQL for `pool-mansart`, Keycloak for `jwt-cervantes`, an OpenTelemetry
+  collector with Grafana for `telemetry-humboldt` (xref:dev-services.adoc[Dev services])
+|===
+
+The dev services start under `vidocq dev`, `vidocq test` and `mvn test`, and set the keys the application reads,
+`vidocq.pool.url` or `mp.jwt.verify.issuer` for instance. Other databases and brokers have no dev service.
+
+[#next-steps]
+== Next steps
+
+* xref:getting-started.adoc[Getting started]: a first Vidocq service, to compare with yours.
+* xref:concepts.adoc[Concepts]: the extension model, beside Quarkus'.
+* xref:java-modules.adoc[Java modules in a Vidocq application]: the `module-info.java` the migration adds.
+* xref:migration.adoc[Migration]: the other sources, and the changes between Vidocq versions.

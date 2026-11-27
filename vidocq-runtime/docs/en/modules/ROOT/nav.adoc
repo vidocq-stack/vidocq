@@ -15,6 +15,8 @@
 ** xref:tck.adoc[TCK status]
 ** xref:reference.adoc[Reference]
 ** xref:migration.adoc[Migration]
+*** xref:migrating-from-spring-boot.adoc[From Spring Boot]
+*** xref:migrating-from-quarkus.adoc[From Quarkus]
 // Migrating from a Jakarta EE application server (Vidocq/vidocq#793, #794, #795)
 *** xref:migrating-from/jakarta-ee-server.adoc[From a Jakarta EE server]
 **** xref:migrating-from/open-liberty.adoc[Open Liberty]

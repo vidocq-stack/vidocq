@@ -1,0 +1,1152 @@
+= Migrating from Spring Boot
+:description: Move a Spring Boot service to Vidocq: what maps one to one, what maps with a change, what has no equivalent yet, with before and after snippets.
+
+[.lead]
+Spring Boot and Vidocq do not share a programming model. Spring has its own container and annotations; Vidocq runs
+the Jakarta EE and MicroProfile APIs. A migration therefore rewrites the annotations of the application, not only
+its build. Most concepts have a standard counterpart. This page lists them, area by area, and says plainly where
+Vidocq has nothing yet.
+
+The page was written against Spring Boot 3.x and 4.x. It covers a service that serves REST endpoints and reads a
+relational database. No tool rewrites the code for you yet: the analysis command and the automated rewrites are
+planned for 1.0.0 (Vidocq/vidocq#791).
+
+[#before-you-start]
+== Before you start
+
+* *Java 25.* Vidocq needs Java 25. Spring Boot 3.x runs on 17.
+* *A named Java module.* A Vidocq application has a `src/main/java/module-info.java`. A Spring Boot application
+  usually has none and runs on the class path. `vidocq extension add` writes the lines each extension needs, and
+  the build tells you the `opens` that are missing (xref:java-modules.adoc[Java modules in a Vidocq application]).
+  A library without a module descriptor still works as an automatic module; `vidocq:jlink` gives it a descriptor
+  when it builds an image.
+* *Blocking code on virtual threads.* Each REST request runs on a virtual thread. Blocking calls (JDBC, HTTP) are
+  the normal way to write code. There is no reactive stack (<<webflux>>).
+* *No auto-configuration.* An extension is a dependency of the pom. It does nothing by classpath detection, and
+  nothing is configured behind your back.
+
+[#at-a-glance]
+== At a glance
+
+The mapping table. *Same* means the concept moves with a mechanical change of names. *Change* means the code
+changes shape. *None yet* means Vidocq has no equivalent today; the section gives the workaround.
+
+[cols="3,3,1,3",options="header"]
+|===
+| Spring Boot | Vidocq | Status | See
+
+| `@Component`, `@Service`, `@Repository` (bean)
+| `@ApplicationScoped`
+| Same
+| <<di>>
+
+| `@Autowired`
+| `@Inject`
+| Same
+| <<di>>
+
+| `@Configuration` + `@Bean`
+| A bean class with `@Produces` methods
+| Same
+| <<di>>
+
+| `@Primary`, `@Qualifier`
+| `@Alternative @Priority`, a CDI qualifier
+| Change
+| <<di>>
+
+| `@Profile`, `@ConditionalOnProperty`
+| A producer that reads the configuration
+| Change
+| <<conditional-beans>>
+
+| `@PostConstruct`, `@PreDestroy`
+| The same annotations
+| Same
+| <<di>>
+
+| `ApplicationRunner`, `CommandLineRunner`
+| An observer of `jakarta.enterprise.event.Startup`
+| Change
+| <<di>>
+
+| `ApplicationEventPublisher`, `@EventListener`
+| `Event<T>`, `@Observes`
+| Same
+| <<di>>
+
+| `@RestController`, `@GetMapping`, `@PostMapping`, ...
+| `@Path`, `@GET`, `@POST`, ... (Jakarta REST)
+| Same
+| <<web>>
+
+| `@PathVariable`, `@RequestParam`, `@RequestHeader`, `@RequestBody`
+| `@PathParam`, `@QueryParam`, `@HeaderParam`, an unannotated parameter
+| Same
+| <<web>>
+
+| `ResponseEntity<T>`
+| `jakarta.ws.rs.core.Response`
+| Same
+| <<web>>
+
+| `@ControllerAdvice` + `@ExceptionHandler`
+| `ExceptionMapper<E>`
+| Change
+| <<web>>
+
+| Jackson annotations
+| JSON-B annotations
+| Change
+| <<json>>
+
+| `@Valid`, Bean Validation
+| None yet
+| None yet
+| <<validation>>
+
+| `application.properties`
+| `vidocq.properties` (`application.properties` is read too)
+| Same
+| <<config>>
+
+| `application.yml`
+| None: properties files only
+| Change
+| <<config>>
+
+| `application-<profile>.properties`, `spring.profiles.active`
+| `%<profile>.` keys, `vidocq.profile`
+| Change
+| <<profiles>>
+
+| `+@Value("${key:default}")+`
+| `@Inject @ConfigProperty(name = "key", defaultValue = "default")`
+| Same
+| <<config>>
+
+| `@ConfigurationProperties`
+| `@ConfigProperties` (MicroProfile Config)
+| Change
+| <<config>>
+
+| `server.*`, `spring.datasource.*`, `spring.flyway.*` keys
+| `vidocq.http.*`, `vidocq.pool.*`, `vidocq.migration.*`
+| Same
+| <<config-keys>>
+
+| Spring Data JPA repositories
+| Jakarta Data repositories (Mansart)
+| Same
+| <<data>>
+
+| `EntityManager`, Hibernate ORM
+| Jakarta Persistence on Noether (preview)
+| Change
+| <<data>>
+
+| `@Transactional` (Spring)
+| `@jakarta.transaction.Transactional`
+| Same
+| <<transactions>>
+
+| Flyway, Liquibase
+| `migration-flyway`, `migration-liquibase`
+| Same
+| <<data>>
+
+| Actuator health
+| MicroProfile Health (`/health`)
+| Change
+| <<operations>>
+
+| Actuator metrics, Micrometer
+| MicroProfile Metrics (`/metrics`)
+| Change
+| <<operations>>
+
+| Micrometer Tracing, `@Observed`
+| MicroProfile Telemetry, `@WithSpan`
+| Change
+| <<operations>>
+
+| springdoc-openapi
+| MicroProfile OpenAPI (`/openapi`, `/openapi/ui`)
+| Change
+| <<operations>>
+
+| Spring Security resource server (JWT)
+| MicroProfile JWT (`@RolesAllowed`)
+| Change
+| <<security>>
+
+| Spring Security form login
+| Jakarta Security on Kerckhoffs (preview), servlets only
+| Change
+| <<security>>
+
+| `RestTemplate`, `RestClient`, `WebClient`, OpenFeign
+| MicroProfile Rest Client
+| Change
+| <<http-clients>>
+
+| Resilience4j
+| MicroProfile Fault Tolerance
+| Change
+| <<fault-tolerance>>
+
+| `spring-boot-starter-parent`, `spring-boot-maven-plugin`
+| `vidocq-runtime-bom`, `vidocq-runtime-maven-plugin`, no parent
+| Change
+| <<build>>
+
+| `@SpringBootTest` with a random port
+| `@VidocqTest`
+| Change
+| <<tests>>
+
+| `@MockBean`, `@MockitoBean`, test slices
+| None yet
+| None yet
+| <<tests>>
+
+| Testcontainers, `@ServiceConnection`
+| Dev services
+| Change
+| <<tests>>
+
+| `@Scheduled`, `@Async`
+| None yet for `@Scheduled`; `@Asynchronous` or `@ObservesAsync` for `@Async`
+| None yet
+| <<no-equivalent>>
+
+| `@Cacheable`
+| None yet
+| None yet
+| <<no-equivalent>>
+
+| WebFlux, Reactor
+| None: blocking code on virtual threads
+| None yet
+| <<webflux>>
+
+| Spring Batch, Spring Integration, Spring Cloud
+| None
+| None yet
+| <<no-equivalent>>
+
+| `server.ssl.*` (HTTPS)
+| None yet: TLS is not implemented
+| None yet
+| <<config-keys>>
+|===
+
+[#di]
+== Dependency injection
+
+Vidocq's container is xref:{page-component-version}@vauban::index.adoc[Vauban], an implementation of CDI 4.1 Lite.
+It builds the beans at compile time, from the annotations. A class becomes a bean when it carries a scope
+annotation, such as `@ApplicationScoped`.
+
+=== What maps one to one
+
+* `@Component`, `@Service` and the bean side of `@Repository` become `@ApplicationScoped`: one instance for the
+  application, as a Spring singleton.
+* `@Autowired` becomes `@Inject`. Constructor injection works as in Spring, but the constructor carries `@Inject`
+  even when it is the only one. An `@ApplicationScoped` bean needs no constructor without parameters for its client
+  proxy: the build adds the one the proxy uses.
+* `@Configuration` with `@Bean` methods becomes a bean class with `@Produces` methods. A `@Disposes` method replaces
+  `destroyMethod`.
+* `@PostConstruct` and `@PreDestroy` are the same annotations (`jakarta.annotation`).
+* `ApplicationEventPublisher` and `@EventListener` become `Event<T>` and `@Observes`. `@ObservesAsync` runs the
+  observer on a virtual thread.
+* `ApplicationRunner` and `CommandLineRunner` become an observer of the CDI `Startup` event, fired once the
+  container is complete.
+
+Before:
+
+[source,java]
+----
+@Service
+public class OrderService {
+    private final OrderRepository orders;
+    private final ApplicationEventPublisher events;
+
+    public OrderService(OrderRepository orders, ApplicationEventPublisher events) {
+        this.orders = orders;
+        this.events = events;
+    }
+}
+
+@Configuration
+public class ClockConfig {
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
+}
+
+@Component
+public class Warmup implements ApplicationRunner {
+    @Override
+    public void run(ApplicationArguments args) { /* ... */ }
+}
+----
+
+After:
+
+[source,java]
+----
+@ApplicationScoped
+public class OrderService {
+    private final OrderRepository orders;
+    private final Event<OrderPlaced> events;
+
+    @Inject
+    public OrderService(OrderRepository orders, Event<OrderPlaced> events) {
+        this.orders = orders;
+        this.events = events;
+    }
+}
+
+@ApplicationScoped
+public class ClockConfig {
+    @Produces
+    Clock clock() {
+        return Clock.systemUTC();
+    }
+}
+
+@ApplicationScoped
+public class Warmup {
+    void onStart(@Observes Startup event) { /* ... */ }
+}
+----
+
+A producer without a scope annotation is `@Dependent`: it is called for each injection point. A Spring `@Bean` is a
+singleton; add `@ApplicationScoped` or `@Singleton` to the producer when one instance matters.
+
+=== What maps with a change
+
+* *`@Primary`.* In CDI, the bean that wins is an `@Alternative` with a `@Priority`. Put both on the bean that
+  replaces another one.
+* *`@Qualifier("name")`.* Write a qualifier annotation of your own and put it on the bean and on the injection
+  point. `@Named` works as a qualifier too, but a typed annotation is checked by the compiler.
+* *Several beans of one type.* Spring injects a `List<T>` of every bean. In CDI, inject `Instance<T>` and iterate.
+* *Field injection of a `private` field* works, with no `opens`: Vauban generates the access at compile time.
+
+=== What has no equivalent
+
+* *Decorators* (`@Decorator`) are not part of CDI Lite, and Vauban does not apply them (Vidocq/vidocq#691). Use an
+  interceptor or composition.
+* *Runtime portable extensions* do not exist in CDI Lite. Code that registers beans at run time becomes a build
+  compatible extension.
+* *A `BeanPostProcessor`* has no counterpart. An interceptor covers the common case of wrapping method calls.
+
+See xref:{page-component-version}@vauban::migration.adoc#cdi-4-1-lite-pitfalls[CDI 4.1 Lite pitfalls].
+
+[#conditional-beans]
+=== `@Profile` and conditional beans
+
+Vidocq has no annotation that keeps a bean out of the application by profile or by property. Vauban decides the
+beans when the application compiles, and the active profile is only known when it starts. Two ways out:
+
+* *An alternative that always wins*, when the choice is made at build time, for a test double kept in the test
+  sources for instance: `@Alternative @Priority(1)` on the replacement.
+* *A producer that reads the configuration*, when the choice depends on the profile or on a property. The two
+  implementations are beans of their own class only (`@Typed`), and the producer returns one of them:
+
+[source,java]
+----
+// Before (Spring)
+@Service
+@Profile("dev")
+public class FakeMailer implements Mailer { /* ... */ }
+
+@Service
+@Profile("!dev")
+public class SmtpMailer implements Mailer { /* ... */ }
+----
+
+[source,java]
+----
+// After (Vidocq)
+@ApplicationScoped
+@Typed(FakeMailer.class)
+public class FakeMailer implements Mailer { /* ... */ }
+
+@ApplicationScoped
+@Typed(SmtpMailer.class)
+public class SmtpMailer implements Mailer { /* ... */ }
+
+@ApplicationScoped
+public class Mailers {
+    @Inject
+    @ConfigProperty(name = "mail.fake", defaultValue = "false")
+    boolean fake;
+
+    @Produces
+    @ApplicationScoped
+    Mailer mailer(FakeMailer fakeMailer, SmtpMailer smtpMailer) {
+        return fake ? fakeMailer : smtpMailer;
+    }
+}
+----
+
+[source,properties]
+----
+%dev.mail.fake=true
+----
+
+[#web]
+== Web: controllers to Jakarta REST resources
+
+The `rest-cassini` extension serves Jakarta REST 4.0 resources through
+xref:{page-component-version}@cassini::index.adoc[Cassini]. The dispatch of each resource is generated at compile
+time. `vidocq extension add rest-cassini` adds it.
+
+=== What maps one to one
+
+[cols="1,1",options="header"]
+|===
+| Spring MVC | Jakarta REST
+
+| `@RestController` + `@RequestMapping("/orders")` on the class | `@Path("/orders")` on the class; without a scope annotation the resource is `@RequestScoped`
+| `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping`, `@PatchMapping` | `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, with `@Path` for a sub-path
+| `@PathVariable("id")` | `@PathParam("id")`
+| `@RequestParam("q")` | `@QueryParam("q")`, with `@DefaultValue` for a default
+| `@RequestHeader("X-Id")` | `@HeaderParam("X-Id")`
+| `@CookieValue("id")` | `@CookieParam("id")`
+| `@RequestBody Order order` | `Order order`, an unannotated parameter
+| `produces = "application/json"` | `@Produces(MediaType.APPLICATION_JSON)`
+| `consumes = "application/json"` | `@Consumes(MediaType.APPLICATION_JSON)`
+| `ResponseEntity<T>` | `Response` (`Response.ok(entity).build()`, `Response.status(201)...`)
+| `@ResponseStatus(HttpStatus.CREATED)` | Return a `Response` with that status
+| `HttpServletRequest` as a parameter | `@Context UriInfo`, `@Context HttpHeaders`
+|===
+
+Before:
+
+[source,java]
+----
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+    private final OrderService service;
+
+    public OrderController(OrderService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Order> find(@PathVariable Long id) {
+        return service.find(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    public ResponseEntity<Order> create(@RequestBody Order order) {
+        Order saved = service.create(order);
+        return ResponseEntity.created(URI.create("/orders/" + saved.getId())).body(saved);
+    }
+}
+----
+
+After:
+
+[source,java]
+----
+@ApplicationScoped
+@Path("/orders")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class OrderResource {
+    @Inject
+    OrderService service;
+
+    @GET
+    @Path("/{id}")
+    public Response find(@PathParam("id") Long id) {
+        return service.find(id)
+                .map(order -> Response.ok(order).build())
+                .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+
+    @POST
+    public Response create(Order order) {
+        Order saved = service.create(order);
+        return Response.created(URI.create("/orders/" + saved.getId())).entity(saved).build();
+    }
+}
+----
+
+Jakarta REST needs the name in `@PathParam("id")` and `@QueryParam("q")`; Spring can read it from the parameter.
+
+=== What maps with a change
+
+*`@ControllerAdvice` becomes one `ExceptionMapper` per exception type.* A mapper is a class annotated `@Provider`:
+
+[source,java]
+----
+// Before (Spring)
+@RestControllerAdvice
+public class Errors {
+    @ExceptionHandler(OrderNotFound.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, String> notFound(OrderNotFound e) {
+        return Map.of("error", e.getMessage());
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@Provider
+public class OrderNotFoundMapper implements ExceptionMapper<OrderNotFound> {
+    @Override
+    public Response toResponse(OrderNotFound e) {
+        return Response.status(Response.Status.NOT_FOUND)
+                .entity(Map.of("error", e.getMessage()))
+                .type(MediaType.APPLICATION_JSON)
+                .build();
+    }
+}
+----
+
+An exception no mapper handles answers `500` with an empty body, and Cassini logs it. A malformed JSON body answers
+`400`.
+
+*Filters.* A servlet `Filter` or a `HandlerInterceptor` around controllers becomes a `ContainerRequestFilter` or a
+`ContainerResponseFilter`, annotated `@Provider`. `@NameBinding` limits a filter to the resources that carry its
+annotation.
+
+*Servlets.* An application that also has servlets or JSP pages adds `servlet-foy`, and `pages-ibarra` for JSP.
+Thymeleaf and the other Spring view technologies have no equivalent.
+
+[#json]
+=== JSON
+
+Spring Boot binds JSON with Jackson. Vidocq binds it with JSON-B, through
+xref:{page-component-version}@champollion::index.adoc[Champollion], which `rest-cassini` brings. Jackson
+annotations are not read: rewrite them.
+
+[cols="1,1",options="header"]
+|===
+| Jackson | JSON-B
+
+| `@JsonProperty("foo")` | `@JsonbProperty("foo")`
+| `@JsonIgnore` | `@JsonbTransient`
+| `@JsonFormat(pattern = "yyyy-MM-dd")` | `@JsonbDateFormat("yyyy-MM-dd")`
+| `@JsonCreator` | `@JsonbCreator` (records need none)
+| `ObjectMapper` | `Jsonb` (`JsonbBuilder.create()`)
+|===
+
+The whole table, with naming strategies and custom serializers:
+xref:{page-component-version}@champollion::migration.adoc#from-jackson[From Jackson].
+
+[#validation]
+=== Bean Validation
+
+Vidocq has no Bean Validation (Jakarta Validation) extension yet. `@Valid`, `@NotNull` and the other constraints are
+not checked (Vidocq/vidocq#64). Until then, check the input in the resource method, or in the constructor of the
+DTO, and throw an exception that an `ExceptionMapper` turns into `400`.
+
+[#config]
+== Configuration
+
+Vidocq reads its configuration with MicroProfile Config, through the `config-ravel` extension for
+`@ConfigProperty` injection. The sources, highest priority first: system properties, environment variables, an
+external `vidocq.properties` (`VIDOCQ_CONFIG_DIR`, or `conf/` of a jlink image), then `vidocq.properties` in the
+application's resources.
+
+=== What maps one to one
+
+* *The file.* `src/main/resources/application.properties` is read too. Rename it to `vidocq.properties` when you can,
+  and do not set one key in both files.
+* *`@Value`.* `@Value("${greeting.name:World}") String name;` becomes:
++
+[source,java]
+----
+@Inject
+@ConfigProperty(name = "greeting.name", defaultValue = "World")
+String name;
+----
++
+A value that is required and missing stops the start, with the place where it is injected.
+* *Expressions.* `+${key}+` and `+${key:default}+` work in values, as in Spring.
+* *Environment variables.* `GREETING_NAME` sets `greeting.name`, by the MicroProfile Config rules.
+
+=== What maps with a change
+
+* *YAML is not read.* Convert `application.yml` to a properties file. A nested key `spring: datasource: url:` is the
+  line `spring.datasource.url=`.
+* *`@ConfigurationProperties` becomes `@ConfigProperties`*, the MicroProfile Config grouping. The class has fields,
+  not final, and no setters are needed. It is injected with the same annotation:
++
+[source,java]
+----
+// Before (Spring)
+@ConfigurationProperties(prefix = "shop")
+public record ShopProperties(String currency, int pageSize) {}
+----
++
+[source,java]
+----
+// After (Vidocq)
+@ConfigProperties(prefix = "shop")
+public class ShopProperties {
+    public String currency;
+    @ConfigProperty(defaultValue = "20")
+    public int pageSize;
+}
+
+@ApplicationScoped
+public class Catalog {
+    @Inject
+    @ConfigProperties
+    ShopProperties shop;
+}
+----
++
+The key of a field is its name: `shop.pageSize`. Spring's relaxed binding (`shop.page-size`) does not apply: write
+`@ConfigProperty(name = "page-size")` on the field to keep the old key.
+
+[#profiles]
+=== Profiles
+
+Spring keeps one file per profile. Vidocq keeps one file, with a `%<profile>.` prefix on the keys of a profile:
+
+[source,properties]
+----
+# Before: application.properties and application-dev.properties
+#   server.port=8080
+#   server.port=8081   (in application-dev.properties)
+
+# After: vidocq.properties
+vidocq.http.port=8080
+%dev.vidocq.http.port=8081
+----
+
+* `vidocq.profile` names the active profile (`-Dvidocq.profile=prod`, or `VIDOCQ_PROFILE=prod`), in place of
+  `spring.profiles.active`. `mp.config.profile` works too.
+* One profile at a time: `vidocq.profile=dev,local` is a profile named `dev,local`.
+* `vidocq dev` sets the `dev` profile. Nothing sets a profile otherwise: a packaged application runs without one
+  unless you set it.
+
+See xref:usage.adoc#profiles[Profiles].
+
+[#config-keys]
+=== Keys that have a Vidocq key
+
+[cols="1,1,2",options="header"]
+|===
+| Spring Boot | Vidocq | Note
+
+| `server.port` | `vidocq.http.port` | `8080` by default in both.
+| `server.address` | `vidocq.http.host` | `0.0.0.0` by default.
+| `server.servlet.context-path` | `vidocq.rest.context-path` | For the REST resources. `vidocq.servlet.context-path` for servlets.
+| `spring.datasource.url` | `vidocq.pool.url` |
+| `spring.datasource.username`, `spring.datasource.password` | `vidocq.pool.username`, `vidocq.pool.password` |
+| `spring.datasource.hikari.maximum-pool-size` | `vidocq.pool.maxSize` | `10` by default.
+| `spring.flyway.enabled` | `vidocq.migration.enabled` | `true` by default.
+| `spring.flyway.locations` | `vidocq.migration.locations` | `classpath:db/migration` by default.
+| `spring.jpa.hibernate.ddl-auto` | `vidocq.persistence.<unit>.properties.jakarta.persistence.schema-generation.database.action` | `create`, `drop-and-create` or `none`. `update` and `validate` have no equivalent.
+| `spring.profiles.active` | `vidocq.profile` | One profile only.
+| `spring.application.name` | `otel.service.name` | For telemetry.
+| `spring.security.oauth2.resourceserver.jwt.issuer-uri` | `mp.jwt.verify.issuer` | See <<security>>.
+| `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` | `mp.jwt.verify.publickey.location` | See <<security>>.
+| `server.ssl.*` | None | TLS is not implemented yet: put the service behind a proxy that terminates HTTPS.
+| `management.*` | None | The health, metrics and OpenAPI paths are fixed (<<operations>>).
+| `logging.level.*` | None | The runtime logs through `System.Logger` and `java.util.logging`: set the levels the `java.util.logging` way.
+|===
+
+The other keys of the runtime: xref:reference.adoc#microprofile-config-keys[MicroProfile Config keys].
+
+[#data]
+== Data
+
+Two ways, depending on how the Spring application reads its database.
+
+[#spring-data]
+=== Spring Data repositories to Jakarta Data
+
+Jakarta Data took the shape of Spring Data repositories, and the `data-mansart` extension implements it, with
+repositories generated at compile time. `vidocq extension add data-mansart` adds it with the connection pool,
+`pool-mansart`.
+
+Before:
+
+[source,java]
+----
+public interface BookRepository extends JpaRepository<Book, Long> {
+    List<Book> findByAuthor(String author);
+
+    @Query("SELECT b FROM Book b WHERE b.year > :year")
+    List<Book> publishedAfter(@Param("year") int year);
+}
+----
+
+After:
+
+[source,java]
+----
+@Repository
+public interface BookRepository extends CrudRepository<Book, Long> {
+    List<Book> findByAuthor(String author);
+
+    @Query("FROM Book WHERE year > :year")
+    List<Book> publishedAfter(@Param("year") int year);
+}
+----
+
+* The annotations come from `jakarta.data.repository`. `@Repository` is required: it declares the repository.
+* The entity keeps its `jakarta.persistence` annotations (`@Entity`, `@Id`, `@Column`).
+* `@Query` takes JDQL, where the leading `SELECT` is implicit. JDQL is smaller than JPQL: no explicit join, no
+  subquery.
+* `Pageable` becomes `PageRequest`. There is no `findAll(Sort)` overload: pass `Sort` or `Order` as a parameter.
+* Mansart Data maps basic attributes, embeddables and to-one references. A `@OneToMany` collection has no
+  equivalent: query the owning side, or use Jakarta Persistence below.
+* Mansart Data supports H2 and PostgreSQL.
+
+More: xref:{page-component-version}@mansart::migration.adoc#from-spring-data-jpa[From Spring Data JPA].
+
+[#jpa]
+=== `EntityManager` and Hibernate to Jakarta Persistence
+
+Code that uses the `EntityManager` moves to the `persistence-noether` extension, which runs Jakarta Persistence 3.2
+on xref:{page-component-version}@noether::index.adoc[Noether]. Noether is a *preview*: usable, not certified.
+
+* The units of `META-INF/persistence.xml` are read. Without one, the application's entities form a unit named
+  `default` on the default pool, configured with `vidocq.persistence.<unit>.*` keys
+  (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-keys[Units declared with keys]).
+* `@PersistenceContext EntityManager em;` and `@Inject EntityManager em;` both work.
+* Noether supports H2 and PostgreSQL. It implements the standard API only: Hibernate's own annotations and its
+  `Session` have no equivalent. `@GeneratedValue` with `AUTO` does not use Hibernate's sequences.
+
+What changes, property by property: xref:{page-component-version}@noether::migration.adoc#from-hibernate-orm[From
+Hibernate ORM].
+
+[#schema-migrations]
+=== Flyway and Liquibase
+
+`migration-flyway` and `migration-liquibase` run the scripts at start, before the pool opens, as Spring Boot does.
+The scripts stay in `src/main/resources/db/migration`. `vidocq extension add migration-flyway` writes the
+`opens db.migration;` line a named module needs. Keys:
+xref:modules/vidocq-runtime-extensions.adoc#schema-migration-keys[Schema migration].
+
+[#transactions]
+=== Transactions
+
+`org.springframework.transaction.annotation.Transactional` becomes `jakarta.transaction.Transactional`, handled by
+`transactions-mansart`.
+
+[cols="1,1",options="header"]
+|===
+| Spring | Jakarta Transactions
+
+| `@Transactional` | `@Transactional` (`TxType.REQUIRED`)
+| `propagation = REQUIRES_NEW`, `MANDATORY`, `NEVER`, `NOT_SUPPORTED`, `SUPPORTS` | `value = TxType.REQUIRES_NEW`, ...
+| `propagation = NESTED` | None
+| `rollbackFor = X.class` | `rollbackOn = X.class`
+| `noRollbackFor = X.class` | `dontRollbackOn = X.class`
+| `readOnly = true`, `isolation`, `timeout` | None
+|===
+
+As in Spring, an unchecked exception rolls the transaction back and a checked one does not.
+
+[#operations]
+== Operations
+
+Spring Boot Actuator gathers health, metrics and more under `/actuator`. Vidocq has one extension per MicroProfile
+specification, each on a fixed path.
+
+[cols="1,1,1",options="header"]
+|===
+| Spring Boot | Vidocq extension | Path
+
+| Actuator health | `health-knock` | `/health`, `/health/live`, `/health/ready`, `/health/started`
+| Actuator metrics, Micrometer | `metrics-dirac` | `/metrics` (Prometheus text)
+| Micrometer Tracing | `telemetry-humboldt` | OTLP export to a collector
+| springdoc-openapi | `openapi-grimm`, `openapi-ui-grimm` | `/openapi`, `/openapi/ui`
+|===
+
+*Health.* A `HealthIndicator` becomes a `HealthCheck` bean with `@Liveness`, `@Readiness` or `@Startup`
+(`org.eclipse.microprofile.health`). No check of the data source is added for you: write one, as in
+xref:usage.adoc#health[Health].
+
+[source,java]
+----
+// Before (Spring)
+@Component
+public class StockHealth implements HealthIndicator {
+    @Override
+    public Health health() {
+        return stock.reachable() ? Health.up().build() : Health.down().build();
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@Readiness
+@ApplicationScoped
+public class StockHealth implements HealthCheck {
+    @Override
+    public HealthCheckResponse call() {
+        return stock.reachable() ? HealthCheckResponse.up("stock") : HealthCheckResponse.down("stock");
+    }
+}
+----
+
+*Metrics.* The Micrometer API (`MeterRegistry`, `Counter`, `Timer`) has no equivalent. Vidocq implements
+MicroProfile Metrics 5.1: `@Counted` and `@Timed` on a method, or a `MetricRegistry` injected for code that counts by
+hand.
+
+*Tracing.* Vidocq implements MicroProfile Telemetry with the OpenTelemetry API. Each REST request gets a server
+span. `@Observed` becomes `@WithSpan` (`io.opentelemetry.instrumentation.annotations`), and `Tracer` is the
+OpenTelemetry one. The SDK is off until `otel.sdk.disabled=false`, which `vidocq extension add telemetry-humboldt`
+writes. The exporter sends OTLP over HTTP, with JSON encoding (port `4318` of a standard collector); there is no gRPC
+exporter.
+
+*OpenAPI.* springdoc annotations (`io.swagger.v3.oas.annotations`) become MicroProfile OpenAPI annotations
+(`org.eclipse.microprofile.openapi.annotations`): `@Operation` and `@APIResponse` keep their meaning, in another
+package.
+
+[#security]
+== Security
+
+*A resource server that checks JWT bearer tokens* moves to MicroProfile JWT, with the `jwt-cervantes` extension.
+`@PreAuthorize("hasRole('ADMIN')")` and `@Secured` become `@RolesAllowed("ADMIN")` (`jakarta.annotation.security`).
+`JsonWebToken` is injectable for the claims.
+
+[source,properties]
+----
+# Before (Spring)
+#   spring.security.oauth2.resourceserver.jwt.issuer-uri=https://idp.example.com/realms/shop
+#   spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://idp.example.com/realms/shop/protocol/openid-connect/certs
+
+# After (Vidocq)
+mp.jwt.verify.issuer=https://idp.example.com/realms/shop
+mp.jwt.verify.publickey.location=https://idp.example.com/realms/shop/protocol/openid-connect/certs
+----
+
+Two differences to check:
+
+* MicroProfile JWT reads the roles from the `groups` claim of the token. Spring maps `scope` to `SCOPE_` authorities.
+  Configure the identity provider so that the roles reach `groups`.
+* The key set is not discovered from the issuer: set `mp.jwt.verify.publickey.location`.
+
+Under `vidocq dev` and in the tests, the Keycloak dev service sets both keys
+(xref:dev-services.adoc[Dev services]).
+
+*Form login and sessions* move to Jakarta Security 4.0, with the `security-kerckhoffs` extension, a *preview*.
+`@FormAuthenticationMechanismDefinition` or `@BasicAuthenticationMechanismDefinition` and an `IdentityStore` bean
+protect the servlets that `servlet-foy` serves; the REST resources of `rest-cassini` are not behind it
+(xref:modules/vidocq-runtime-extensions.adoc#kerckhoffs-security[Jakarta Security (Kerckhoffs)]). OAuth2 login and
+OpenID Connect login have no equivalent.
+
+*The `SecurityFilterChain` DSL* has no equivalent. Put the rules on the code: `@RolesAllowed`, `@PermitAll`,
+`@DenyAll` on resources, or `@ServletSecurity` on servlets.
+
+[#http-clients]
+== HTTP clients
+
+`RestTemplate`, `RestClient`, `WebClient` and OpenFeign become a MicroProfile Rest Client interface, with the
+`rest-client-cyrano` extension. The interface uses the Jakarta REST annotations; the implementation is generated at
+compile time.
+
+[source,java]
+----
+// Before (Spring, OpenFeign)
+@FeignClient(name = "stock", url = "${stock.url}")
+public interface StockClient {
+    @GetMapping("/items/{sku}")
+    Item item(@PathVariable("sku") String sku);
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@RegisterRestClient(configKey = "stock")
+@Path("/items")
+public interface StockClient {
+    @GET
+    @Path("/{sku}")
+    Item item(@PathParam("sku") String sku);
+}
+
+@ApplicationScoped
+public class Inventory {
+    @Inject
+    @RestClient
+    StockClient stock;
+}
+----
+
+[source,properties]
+----
+stock/mp-rest/url=https://stock.example.com
+----
+
+A method that returns `CompletionStage<T>` is called asynchronously. A blocking call is the usual choice: it runs on
+the request's virtual thread.
+
+[#fault-tolerance]
+== Fault tolerance
+
+Resilience4j's annotations move to MicroProfile Fault Tolerance, with `fault-tolerance-heisenberg`:
+
+[cols="1,1",options="header"]
+|===
+| Resilience4j | MicroProfile Fault Tolerance
+
+| `@Retry` | `@Retry`
+| `@CircuitBreaker` | `@CircuitBreaker`
+| `@Bulkhead` | `@Bulkhead`
+| `@TimeLimiter` | `@Timeout`
+| `fallbackMethod = "..."` | `@Fallback(fallbackMethod = "...")`
+|===
+
+The settings move from `resilience4j.*` keys to the annotation attributes, which configuration keys can override
+(`<class>/<method>/Retry/maxRetries=5`).
+
+[#build]
+== Build
+
+A Vidocq application has no parent. It imports `vidocq-runtime-bom` and declares `vidocq-runtime-maven-plugin` as a
+build extension, which binds the goals.
+
+Before:
+
+[source,xml]
+----
+<parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.0</version>
+</parent>
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+</dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+    </plugins>
+</build>
+----
+
+After:
+
+[source,xml,subs=attributes+]
+----
+<properties>
+    <vidocq.version>{release-version}</vidocq.version>
+    <maven.compiler.release>25</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <vidocq.mainModule>com.acme.shop</vidocq.mainModule>
+</properties>
+
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-bom</artifactId>
+            <version>${vidocq.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-core</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+        <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+    </dependency>
+</dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            <version>${vidocq.version}</version>
+            <extensions>true</extensions>
+        </plugin>
+    </plugins>
+</build>
+----
+
+The quickest way to get this pom is `vidocq create --name shop --group-id com.acme -x rest-cassini` in an empty
+folder, then moving the sources in. `vidocq pom convert` works on Vidocq poms only: it does not read a Spring Boot
+pom. A company parent can stay: keep it, and declare the plugin with `<extensions>true</extensions>`
+(xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[An application without the parent]).
+
+*The main class.* `@SpringBootApplication` and its `main` go away: the runtime's own main boots the module that
+`vidocq.mainModule` names (xref:usage.adoc#entry-point[The application entry point]). Keep a main only for a
+right-click Run in the IDE; it is then an `@VidocqMain` trampoline that calls `Vidocq.run(args)`.
+
+*Starters to extensions.* Each starter becomes one or more extensions. The ids are those of `vidocq extension add`
+(xref:modules/vidocq-runtime-cli.adoc#extension-ids[Extension ids]):
+
+[cols="1,1",options="header"]
+|===
+| Spring Boot starter | Vidocq extension
+
+| `spring-boot-starter-web` (`spring-boot-starter-webmvc` in 4.x) | `rest-cassini` (and `servlet-foy` for servlets)
+| `spring-boot-starter-data-jpa` | `data-mansart`, or `persistence-noether`
+| `spring-boot-starter-jdbc` | `pool-mansart`
+| `spring-boot-starter-actuator` | `health-knock`, `metrics-dirac`
+| `spring-boot-starter-oauth2-resource-server` | `jwt-cervantes`
+| `spring-boot-starter-security` (form login) | `security-kerckhoffs` (preview)
+| `spring-cloud-starter-openfeign` | `rest-client-cyrano`
+| `springdoc-openapi-starter-webmvc-ui` | `openapi-grimm`, `openapi-ui-grimm`
+| `flyway-core`, `liquibase-core` | `migration-flyway`, `migration-liquibase`
+| `spring-boot-starter-websocket` | `websocket-foy` (programmatic API only, Vidocq/vidocq#65)
+| `spring-boot-starter-validation` | None yet (Vidocq/vidocq#64)
+| `spring-boot-starter-cache` | None yet
+| `spring-boot-starter-webflux` | None
+| `spring-boot-starter-thymeleaf` | None
+| `spring-boot-starter-batch`, `-integration`, `-amqp`, `spring-kafka` | None
+|===
+
+*Running and packaging.*
+
+[cols="1,1",options="header"]
+|===
+| Spring Boot | Vidocq
+
+| `mvn spring-boot:run` | `vidocq run`, or `mvn vidocq:run`
+| Spring Boot DevTools | `vidocq dev`, or `mvn vidocq:dev`: restarts on each change, with a xref:dev-console.adoc[dev console]
+| `java -jar target/app.jar` | `mvn package`, then `target/<artifactId>-<version>/bin/<artifactId>.sh`
+| `spring-boot:build-image` | `vidocq build docker`, or `mvn package vidocq:jlink vidocq:docker`
+| GraalVM native image | None yet; a jlink image (`vidocq build jlink`) and the JDK's AOT cache (xref:usage.adoc#aot[Ahead of time])
+|===
+
+[#tests]
+== Tests
+
+*`@SpringBootTest(webEnvironment = RANDOM_PORT)`* becomes `@VidocqTest`. It starts the application in a JVM of its
+own, on a free port, once per test class. The test sends HTTP requests through the `VidocqApplication` parameter.
+
+[source,java]
+----
+// Before (Spring)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class OrderControllerTest {
+    @Autowired
+    TestRestTemplate rest;
+
+    @Test
+    void findsAnOrder() {
+        ResponseEntity<String> response = rest.getForEntity("/orders/1", String.class);
+        assertEquals(200, response.getStatusCode().value());
+    }
+}
+----
+
+[source,java]
+----
+// After (Vidocq)
+@VidocqTest
+class OrderResourceTest {
+    @Test
+    void findsAnOrder(VidocqApplication application) {
+        VidocqResponse response = application.get("/orders/1");
+        assertEquals(200, response.status(), application.log());
+    }
+}
+----
+
+`@VidocqTest(properties = "key=value")` replaces `@TestPropertySource`. The setup is in
+xref:testing.adoc[Testing an application].
+
+What has no equivalent yet:
+
+* *Injection into the test.* `@VidocqTest` tests from the outside, over HTTP: the test cannot `@Inject` a bean of the
+  application.
+* *`@MockBean` and `@MockitoBean`.* No bean of the application can be replaced from a test: the test classes are
+  not part of the application it starts. Point the application at a stub instead, with
+  `@VidocqTest(properties = ...)`: a Rest Client URL, a dev service, a flag that a producer reads
+  (<<conditional-beans>>).
+* *Test slices* (`@WebMvcTest`, `@DataJpaTest`). For a bean alone, `@VaubanTest` (`vauban-junit`) starts a CDI
+  container with the beans the test names, without the runtime's extensions
+  (xref:{page-component-version}@vauban::usage.adoc#junit-tests-with-vaubantest[JUnit tests with `@VaubanTest`]).
+
+*Testcontainers* gives way to the dev services: a PostgreSQL database for `pool-mansart`, a Keycloak for
+`jwt-cervantes`, an OpenTelemetry collector for `telemetry-humboldt`. They start under `vidocq dev`, `vidocq test`
+and `mvn test`, and set the keys the application reads (xref:dev-services.adoc[Dev services]).
+
+[#webflux]
+== WebFlux and reactive code
+
+Vidocq has no reactive stack: no `Mono`, no `Flux`, no reactive database driver. It runs blocking code on virtual
+threads, which gives the scalability WebFlux was chosen for, with plain method calls.
+
+* A controller method that returns `Mono<T>` returns `T`.
+* One that returns `Flux<T>` returns a `List<T>`, or streams Server-Sent Events through an `SseEventSink` parameter.
+* `WebClient` becomes a MicroProfile Rest Client (<<http-clients>>).
+* R2DBC becomes JDBC, through `pool-mansart`.
+
+[#no-equivalent]
+== What has no equivalent yet
+
+[cols="1,2",options="header"]
+|===
+| Spring | Today
+
+| `@Scheduled`
+| No scheduler (Jakarta Concurrency: Vidocq/vidocq#72). Start a `ScheduledExecutorService` in an observer of
+  `Startup`, and stop it in a `@PreDestroy` method.
+
+| `@Async`
+| `@Asynchronous` of MicroProfile Fault Tolerance, on a method that returns `CompletionStage<T>`; or fire an event
+  that an `@ObservesAsync` observer handles.
+
+| `@Cacheable`, `@CacheEvict`
+| No cache abstraction. Keep a map in an `@ApplicationScoped` bean, or an interceptor of your own.
+
+| `@Valid`, Bean Validation
+| <<validation>> (Vidocq/vidocq#64).
+
+| Spring Batch
+| No batch framework. Write the job as a bean method with `@Transactional` chunks, started by an observer of
+  `Startup` or by a REST call.
+
+| Spring Integration, Spring AMQP, Spring Kafka
+| No messaging extension. Use the broker's own client from a bean; CDI events cover messages inside the
+  application.
+
+| Spring Cloud Config
+| A `ConfigSource` of your own (MicroProfile Config SPI), registered with `provides ... with` in `module-info.java`.
+
+| Spring Cloud discovery, gateway, load balancer
+| None. A Rest Client reads its URL from the configuration (`<configKey>/mp-rest/url`), which an environment variable
+  can set per deployment.
+
+| HTTPS in the application (`server.ssl.*`)
+| TLS is not implemented yet. Terminate HTTPS in a proxy in front of the service.
+|===
+
+[#next-steps]
+== Next steps
+
+* xref:getting-started.adoc[Getting started]: a first Vidocq service, to compare with yours.
+* xref:java-modules.adoc[Java modules in a Vidocq application]: the `module-info.java` the migration adds.
+* xref:migration.adoc[Migration]: the other sources, and the changes between Vidocq versions.

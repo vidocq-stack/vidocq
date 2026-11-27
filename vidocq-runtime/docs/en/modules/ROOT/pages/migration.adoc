@@ -70,38 +70,13 @@
 The numbers above are indicative and will be updated as `BENCH.md` runs land. See `vidocq-runtime/BENCH.md` for exact measurements.
 ====
 
+[#from-quarkus]
 == From Quarkus
 
-Vidocq Runtime explicitly borrows the Quarkus extension pattern.
-
-[cols="1,1,2"]
-|===
-| Quarkus | Vidocq Runtime | Note
-
-| Quarkus deployment build steps + recorders (`io.quarkus.deployment`)
-| `io.vidocq.runtime.spi.VidocqExtension` lifecycle (`configure` / `beforeStart` / `onStart` / `onStop`)
-| Simpler model — `ServiceLoader` discovery, ordered by `priority()`, no build-step graph
-
-| Gizmo bytecode generation (ASM)
-| APT + Class-File API (JEP 484) at compile time
-| No ASM — standard JDK bytecode
-
-| ArC (runtime CDI)
-| xref:vauban::index.adoc[Vauban]
-| Build-time in both cases
-
-| RESTEasy Reactive
-| xref:cassini::index.adoc[Cassini] on xref:chappe::index.adoc[Chappe]
-| No Vert.x — virtual threads
-
-| Hibernate Reactive / ORM
-| xref:mansart::index.adoc[Mansart]
-| JDBC + virtual threads, no Vert.x SQL Client
-
-| Jackson
-| xref:champollion::index.adoc[Champollion]
-| JSON-B 3.0 / JSON-P 2.1 implementation
-|===
+Quarkus is the closest source: CDI Lite, Jakarta REST and MicroProfile, with the work done at build time. What
+changes is what Quarkus adds on top of the specifications: ArC's shortcuts, RESTEasy Reactive's annotations, Mutiny,
+Panache, the `quarkus.*` keys and the build. The guide, area by area, with the mapping table and before and after
+snippets: xref:migrating-from-quarkus.adoc[Migrating from Quarkus].
 
 == From Helidon MP
 
@@ -112,42 +87,12 @@ Vidocq Runtime explicitly borrows the Quarkus extension pattern.
 
 // TODO@user: produce a `helidon-mp-quickstart` migration sample to Vidocq Runtime.
 
+[#from-spring-boot]
 == From Spring Boot
 
-Spring Boot does not naturally align with the MicroProfile model, and migration touches the programming model.
-
-[cols="1,1,2"]
-|===
-| Spring Boot | Vidocq Runtime | Note
-
-| `@SpringBootApplication`
-| `vidocq.mainModule` in the pom
-| No application class required: the runtime's own main boots the module (xref:usage.adoc#entry-point[entry point])
-
-| `@RestController`
-| `@Path` + `@GET/@POST`
-| Standard Jakarta REST
-
-| `@Service`, `@Component`
-| `@ApplicationScoped`
-| CDI Lite
-
-| `@Autowired`
-| `@Inject`
-| Constructor injection preferred
-
-| `@ConfigurationProperties`
-| `@ConfigProperty` injection
-| MicroProfile Config via `vidocq-runtime-ravel-config-extension`
-
-| `application.yml`
-| `vidocq.properties` + MP profiles
-| `%<profile>.` prefix
-
-| Spring Data JPA
-| xref:mansart::index.adoc[Mansart] (Jakarta Data 1.0)
-| APT-generated repositories
-|===
+Spring Boot does not share the Jakarta EE and MicroProfile programming model, so a migration rewrites the
+annotations of the application as well as its build. The guide, area by area, with the mapping table and before and
+after snippets: xref:migrating-from-spring-boot.adoc[Migrating from Spring Boot].
 
 == From Open Liberty, GlassFish or WildFly
 
