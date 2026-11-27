@@ -304,7 +304,7 @@ final class WarJspPages {
     static List<Path> compileModulePath() throws IOException {
         var candidates = new ArrayList<Path>();
         String classPath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
-        for (String item : classPath.split(File.pathSeparator)) {
+        for (String item : classPath.split(File.pathSeparator, -1)) {
             Path jar = item.endsWith(".jar") ? Path.of(item) : null;
             if (jar != null && isModularJar(jar)) candidates.add(jar);
         }

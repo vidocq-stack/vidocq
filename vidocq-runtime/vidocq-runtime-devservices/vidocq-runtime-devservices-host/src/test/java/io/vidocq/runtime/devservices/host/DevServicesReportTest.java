@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.io.StringReader;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
@@ -100,7 +101,7 @@ class DevServicesReportTest {
                 "vidocq.pool.analytics.password", "secret"));
         String text = String.join("\n", lines);
         assertEquals("Connection information:", lines.get(0));
-        assertFalse(text.toLowerCase().contains("datagrip"), "block must not be tool-specific");
+        assertFalse(text.toLowerCase(Locale.ROOT).contains("datagrip"), "block must not be tool-specific");
         assertTrue(text.contains("Datasource: analytics"));
         assertTrue(text.contains("5441"));
         assertTrue(text.contains("Password : secret"));

@@ -46,6 +46,7 @@ import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -555,9 +556,9 @@ class CsvActionsTest {
         PanelAction load = actions.actions().stream().filter(a -> a.id().equals(CsvActions.IMPORT)).findFirst()
                 .orElseThrow();
 
-        export.call().apply(Map.of("statement", "{\"query\":\"SELECT COUNT(this) FROM Gizmo\"}"));
-        load.call().apply(Map.of("file", "{\"entity\":\"Part\",\"csv\":\"label\\r\\nleft\\r\\n\"}",
-                "transaction", "rollback"));
+        assertNotNull(export.call().apply(Map.of("statement", "{\"query\":\"SELECT COUNT(this) FROM Gizmo\"}")));
+        assertNotNull(load.call().apply(Map.of("file", "{\"entity\":\"Part\",\"csv\":\"label\\r\\nleft\\r\\n\"}",
+                "transaction", "rollback")));
 
         RecordedSample sample = new RecordedSample();
         actions.sample(sample);

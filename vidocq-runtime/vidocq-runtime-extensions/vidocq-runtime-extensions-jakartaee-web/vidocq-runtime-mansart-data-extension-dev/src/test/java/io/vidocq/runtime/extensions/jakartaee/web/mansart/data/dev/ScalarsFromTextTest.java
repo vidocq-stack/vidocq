@@ -44,8 +44,8 @@ class ScalarsFromTextTest {
         assertEquals(new BigDecimal("2.50"), Scalars.fromText(BigDecimal.class, "2.50", "price"));
         assertEquals(2.5, Scalars.fromText(double.class, "2.5", "price"));
         assertEquals(1.0E10, Scalars.fromText(Double.class, "1.0E10", "price"), "what Double.toString writes");
-        assertEquals(Boolean.TRUE, Scalars.fromText(boolean.class, "true", "done"));
-        assertEquals(Boolean.FALSE, Scalars.fromText(Boolean.class, "false", "done"));
+        assertEquals(true, Scalars.fromText(boolean.class, "true", "done"));
+        assertEquals(false, Scalars.fromText(Boolean.class, "false", "done"));
         assertEquals(DayOfWeek.MONDAY, Scalars.fromText(DayOfWeek.class, "MONDAY", "day"));
         assertEquals(LocalDate.of(2026, 10, 1), Scalars.fromText(LocalDate.class, "2026-10-01", "due"));
         UUID uuid = UUID.fromString("1b4e28ba-2fa1-11d2-883f-0016d3cca427");

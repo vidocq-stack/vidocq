@@ -165,7 +165,7 @@ final class ResultRows {
 
     private static boolean isFrom(String text, int at) {
         return text.regionMatches(true, at, "FROM", 0, 4) && boundary(text, at + 4)
-                && (at == 0 || !Character.isJavaIdentifierPart(text.charAt(at - 1)) && text.charAt(at - 1) != '.');
+                && (at == 0 || (!Character.isJavaIdentifierPart(text.charAt(at - 1)) && text.charAt(at - 1) != '.'));
     }
 
     private static boolean boundary(String text, int at) {

@@ -54,6 +54,7 @@ class JdbcConnectionDecoratorsTest {
     }
 
     @Test
+    @SuppressWarnings("ReferenceEquality") // the pool's own connection, that very instance: identity
     void aNamedHolderHandsItsConnectionToTheDecoratorsWithItsName() throws Exception {
         Connection traced = new H2Less().connection();
         StringBuilder seen = new StringBuilder();

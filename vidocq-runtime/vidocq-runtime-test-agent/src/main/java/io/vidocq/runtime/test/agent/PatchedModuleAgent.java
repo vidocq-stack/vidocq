@@ -180,7 +180,7 @@ public final class PatchedModuleAgent {
             return missing;
         }
         Set<String> onTheClassPath = new HashSet<>();
-        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
+        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator, -1)) {
             onTheClassPath.addAll(moduleNames(entry));
         }
         missing.retainAll(onTheClassPath);

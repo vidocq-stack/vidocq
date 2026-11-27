@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
  * bound under {@code java:comp/env} when the application has the naming extension (Jakarta EE 11 Platform §5.13,
  * §5.14).
  */
+@SuppressWarnings("BanJNDI") // the JNDI lookups are what this test checks, against Vidocq's own naming
 class NoetherPersistenceReferencesModulePathTest {
 
     private static VidocqBootstrap bootstrap;

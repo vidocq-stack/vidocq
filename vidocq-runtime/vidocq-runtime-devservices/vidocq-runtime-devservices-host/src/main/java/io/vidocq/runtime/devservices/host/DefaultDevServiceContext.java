@@ -137,7 +137,7 @@ public final class DefaultDevServiceContext implements DevServiceContext {
     @Override
     public Optional<String> property(String key) {
         if (isolated && REUSE_KEY.equals(key)) {
-            return Optional.of(Boolean.FALSE.toString());
+            return Optional.of("false");
         }
         if (isolated && key.startsWith(TUNING_PREFIX) && key.endsWith(".port")) {
             return Optional.empty();

@@ -86,8 +86,8 @@ final class Json {
             case '{' -> object(depth);
             case '[' -> array(depth);
             case '"' -> string();
-            case 't' -> literal("true", Boolean.TRUE);
-            case 'f' -> literal("false", Boolean.FALSE);
+            case 't' -> literal("true", true);
+            case 'f' -> literal("false", false);
             case 'n' -> literal("null", null);
             default -> number();
         };

@@ -22,6 +22,7 @@ package io.vidocq.runtime.examples.servlet;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +42,8 @@ public class Kitchen {
     private final AtomicInteger openSessions = new AtomicInteger();
 
     public synchronized Order place(Basket basket) {
-        Order order = new Order(nextNumber.getAndIncrement(), LocalTime.now().truncatedTo(ChronoUnit.SECONDS),
+        Order order = new Order(nextNumber.getAndIncrement(),
+                LocalTime.now(ZoneId.systemDefault()).truncatedTo(ChronoUnit.SECONDS),
                 basket.lines(), basket.totalCents());
         orders.addFirst(order);
         return order;

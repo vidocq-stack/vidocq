@@ -288,8 +288,8 @@ final class JdqlActions {
         Map<String, Object> out = new LinkedHashMap<>();
         for (Map.Entry<?, ?> member : members.entrySet()) {
             Object parameter = member.getValue();
-            boolean nested = parameter instanceof Map<?, ?> || parameter instanceof List<?> list
-                    && list.stream().anyMatch(element -> element instanceof Map<?, ?> || element instanceof List<?>);
+            boolean nested = parameter instanceof Map<?, ?> || (parameter instanceof List<?> list
+                    && list.stream().anyMatch(element -> element instanceof Map<?, ?> || element instanceof List<?>));
             if (nested) {
                 throw new Refused(PARAMS_MEMBER + "." + member.getKey() + ": not a value or a list of values");
             }

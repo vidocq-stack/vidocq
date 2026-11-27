@@ -216,7 +216,7 @@ class TwoPhaseCommitPostgresModulePathTest {
      * {@code <format id>_<global transaction id>_<branch qualifier>}, both ids in Base64, which holds no {@code _}.
      */
     private static String globalId(String branch) {
-        return branch.split("_")[1];
+        return branch.split("_", -1)[1];
     }
 
     /** How many rows of {@code store} have the id {@code id}, outside any transaction. */

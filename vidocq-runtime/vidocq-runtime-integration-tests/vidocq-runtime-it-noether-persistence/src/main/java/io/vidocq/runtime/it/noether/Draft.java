@@ -54,4 +54,8 @@ public class Draft {
     public Long id() {
         return id;
     }
+
+    public String title() {
+        return title;
+    }
 }

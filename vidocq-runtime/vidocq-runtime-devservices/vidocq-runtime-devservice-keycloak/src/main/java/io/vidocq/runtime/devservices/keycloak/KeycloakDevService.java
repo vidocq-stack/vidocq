@@ -120,7 +120,7 @@ public final class KeycloakDevService implements DevService {
         props.put(DEV_PREFIX + "admin-user", BOOTSTRAP_ADMIN);
         // App-mapping: duplicate the issuer into extra app-specific keys (e.g. arago.oidc.issuer).
         ctx.property("vidocq.dev.keycloak.issuer-keys").ifPresent(csv -> {
-            for (String key : csv.split(",")) {
+            for (String key : csv.split(",", -1)) {
                 String trimmed = key.trim();
                 if (!trimmed.isEmpty()) {
                     props.put(trimmed, issuer);

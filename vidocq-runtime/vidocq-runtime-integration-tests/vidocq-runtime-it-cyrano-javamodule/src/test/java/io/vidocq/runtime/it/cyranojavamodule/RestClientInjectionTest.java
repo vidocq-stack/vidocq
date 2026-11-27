@@ -24,6 +24,7 @@ import io.vidocq.runtime.core.VidocqBootstrap;
 import jakarta.enterprise.inject.spi.CDI;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
@@ -39,7 +40,8 @@ class RestClientInjectionTest {
 
     @Test
     void injectsTheRestClientAndCallsThroughIt() throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", GreetingClient.PORT), 0);
+        HttpServer server = HttpServer.create(
+                new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), GreetingClient.PORT), 0);
         server.createContext("/greeting", exchange -> {
             byte[] body = "Hello from the server".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "text/plain");

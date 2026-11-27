@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.StringJoiner;
 import java.util.TreeSet;
 
@@ -110,7 +111,7 @@ final class HealthPanel {
         }
     }
 
-    private static void writeProbe(ProbeType probe, TreeSet<String> names, Map<String, CheckResult> results,
+    private static void writeProbe(ProbeType probe, SortedSet<String> names, Map<String, CheckResult> results,
             ZoneId zone, PanelSample sample) {
         PanelSample group = sample.group(probe.name().toLowerCase(Locale.ROOT));
         CheckKeys keys = new CheckKeys(RESERVED);

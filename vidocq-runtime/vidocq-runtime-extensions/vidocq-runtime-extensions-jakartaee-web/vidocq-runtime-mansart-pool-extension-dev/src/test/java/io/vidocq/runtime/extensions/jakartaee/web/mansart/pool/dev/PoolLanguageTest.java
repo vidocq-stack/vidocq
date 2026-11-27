@@ -65,6 +65,11 @@ class PoolLanguageTest {
     }
 
     @Test
+    void theStatementJsonReadsBothBooleans() {
+        assertEquals(Map.of("cached", true, "stale", false), Json.parse("{\"cached\":true,\"stale\":false}"));
+    }
+
+    @Test
     void eachPoolWhoseTablesWereReadHasItsLanguage() {
         pools = TestPools.boot("vidocq.pool.url", TestPools.h2("default"), "vidocq.pool.reports.url",
                 TestPools.h2("reports"));
@@ -114,7 +119,7 @@ class PoolLanguageTest {
         assertEquals(List.of("SELECT", "FROM", "JOIN", "ON", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT",
                 "OFFSET", "SET", "VALUES", "UPDATE", "DELETE FROM", "INSERT INTO"), dialect.get("clauses"));
         assertEquals(List.of("FROM", "JOIN", "UPDATE", "INTO"), dialect.get("targetAfter"));
-        assertEquals(Boolean.TRUE, dialect.get("aliases"));
+        assertEquals(true, dialect.get("aliases"));
         assertTrue(dialect.containsKey("self") && dialect.get("self") == null, "no self");
         assertEquals("'", dialect.get("quote"));
         assertEquals("\"", dialect.get("identifierQuote"));
@@ -190,7 +195,7 @@ class PoolLanguageTest {
         Map<?, ?> language = language("sql-default");
         assertEquals(Map.of(), language.get("targets"), "no table is known");
         Map<?, ?> dialect = member(language, "dialect");
-        assertEquals(Boolean.TRUE, dialect.get("aliases"), "SQL's, so that Format keeps a comment and a quoted name");
+        assertEquals(true, dialect.get("aliases"), "SQL's, so that Format keeps a comment and a quoted name");
         assertEquals("\"", dialect.get("identifierQuote"));
         assertTrue(((List<?>) dialect.get("keywords")).contains("SELECT"));
         assertFalse(dialect.containsKey("unquotedCase"), "not known without the database");

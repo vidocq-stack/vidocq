@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code vidocq.properties} declares are answered by the running container, and Mansart Data resolves a
  * repository's JNDI data store through them.
  */
+@SuppressWarnings("BanJNDI") // the JNDI lookups are what this test checks, against Vidocq's own naming
 class NamingModulePathTest {
 
     private static VidocqBootstrap bootstrap;

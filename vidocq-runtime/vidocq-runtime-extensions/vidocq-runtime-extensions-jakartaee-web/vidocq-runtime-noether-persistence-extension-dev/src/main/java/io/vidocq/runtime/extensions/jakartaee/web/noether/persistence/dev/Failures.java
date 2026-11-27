@@ -45,6 +45,7 @@ final class Failures {
     }
 
     /** {@code failure}, then its root cause when its message differs. */
+    @SuppressWarnings("ReferenceEquality") // a cause that is the throwable itself ends the chain: identity
     static String text(Throwable failure) {
         Throwable root = failure;
         for (int i = 0; i < MAX_CAUSES && root.getCause() != null && root.getCause() != root; i++) {

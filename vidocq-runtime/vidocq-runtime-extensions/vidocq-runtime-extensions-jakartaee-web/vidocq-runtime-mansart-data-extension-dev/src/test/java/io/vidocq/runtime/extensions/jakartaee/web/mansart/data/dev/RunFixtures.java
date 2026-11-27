@@ -57,6 +57,8 @@ import java.util.Set;
  * through Mansart's own {@code EntityModels.of} (no metamodel is generated here, so Mansart builds their model at
  * run time); the model of Part is written by hand, to hold a reference and a joined attribute.
  */
+// The entity fixtures' fields are set and read by Mansart through method handles, never by the tests.
+@SuppressWarnings("UnusedVariable")
 final class RunFixtures {
 
     private RunFixtures() {}

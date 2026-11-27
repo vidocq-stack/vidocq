@@ -46,6 +46,15 @@ class StateReaderTest {
         {"key":"vidocq.pool.username","value":"vidocq"}]}]}""";
 
     @Test
+    void aBooleanMemberItDoesNotKnowIsReadAndLeftAside() {
+        DevServicesSnapshot s = StateReader.parse("""
+            {"host":"vidocq:dev","state":"running","startedAt":"x","services":[],"reused":false,"isolated":true}""");
+
+        assertEquals("vidocq:dev", s.host());
+        assertEquals(List.of(), s.services());
+    }
+
+    @Test
     void parsesTheHostsFile() {
         DevServicesSnapshot s = StateReader.parse(JSON);
         assertEquals("vidocq:dev", s.host());

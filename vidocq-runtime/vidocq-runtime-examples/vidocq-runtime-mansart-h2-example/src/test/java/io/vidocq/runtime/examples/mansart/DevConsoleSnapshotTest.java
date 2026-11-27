@@ -351,7 +351,7 @@ class DevConsoleSnapshotTest {
                 body.put("transaction", transaction);
             }
             Map<?, ?> answer = json(postAction("mansart-data/jdql." + action, token, jsonb.toJson(body)));
-            assertNotEquals(Boolean.TRUE, answer.get("error"), action + ": " + answer);
+            assertNotEquals(true, answer.get("error"), action + ": " + answer);
             return answer;
         }
     }
@@ -362,7 +362,7 @@ class DevConsoleSnapshotTest {
         String body = "{\"statement\":\"" + statement.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
                 + (transaction == null ? "" : ",\"transaction\":\"" + transaction + "\"") + "}";
         Map<?, ?> answer = json(postAction("mansart-data/jdql." + action, token, body));
-        assertNotEquals(Boolean.TRUE, answer.get("error"), action + ": " + answer);
+        assertNotEquals(true, answer.get("error"), action + ": " + answer);
         return answer;
     }
 
@@ -389,7 +389,7 @@ class DevConsoleSnapshotTest {
         String body = "{\"arguments\":\"" + arguments.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
                 + (transaction == null ? "" : ",\"transaction\":\"" + transaction + "\"") + "}";
         Map<?, ?> answer = json(postAction("mansart-data/m.product-repository." + method, token, body));
-        assertNotEquals(Boolean.TRUE, answer.get("error"), method + ": " + answer);
+        assertNotEquals(true, answer.get("error"), method + ": " + answer);
         return answer;
     }
 
@@ -448,7 +448,7 @@ class DevConsoleSnapshotTest {
     private static List<String> consoleMessages() {
         SimpleFormatter formatter = new SimpleFormatter();
         synchronized (RECORDS) {
-            return RECORDS.stream().filter(r -> r.getLevel() == Level.INFO).map(formatter::formatMessage).toList();
+            return RECORDS.stream().filter(r -> Level.INFO.equals(r.getLevel())).map(formatter::formatMessage).toList();
         }
     }
 

@@ -44,6 +44,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -157,7 +158,7 @@ class TracingConnectionTest {
             assertSame(connection, statement.getConnection());
             assertSame(connection, call.getConnection());
             assertTrue(connection.isWrapperFor(org.h2.jdbc.JdbcConnection.class));
-            assertTrue(connection.unwrap(org.h2.jdbc.JdbcConnection.class) instanceof org.h2.jdbc.JdbcConnection);
+            assertNotNull(connection.unwrap(org.h2.jdbc.JdbcConnection.class));
             assertTrue(call.execute());
         }
         assertEquals(1, databaseSpans().size());

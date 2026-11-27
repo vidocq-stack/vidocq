@@ -207,7 +207,7 @@ record Statement(String query, Map<String, Object> params) {
         for (Map.Entry<?, ?> member : object(PARAMS_MEMBER, value).entrySet()) {
             Object parameter = member.getValue();
             boolean fits = isValue(parameter)
-                    || parameter instanceof List<?> values && values.stream().allMatch(Statement::isValue);
+                    || (parameter instanceof List<?> values && values.stream().allMatch(Statement::isValue));
             if (!fits) {
                 throw new Refused(PARAMS_MEMBER + "." + member.getKey() + ": not a value or a list of values");
             }

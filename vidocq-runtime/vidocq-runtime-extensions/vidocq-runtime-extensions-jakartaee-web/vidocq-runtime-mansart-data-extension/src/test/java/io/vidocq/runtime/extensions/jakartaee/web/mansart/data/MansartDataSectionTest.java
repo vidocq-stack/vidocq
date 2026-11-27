@@ -29,6 +29,7 @@ import io.vidocq.runtime.spi.report.Verbosity;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -270,7 +271,8 @@ class MansartDataSectionTest {
     void theJarNamesItsDevCompanionAndIsNoPanel() throws Exception {
         try (var in = MansartDataIntegrationExtension.class.getClassLoader()
                 .getResourceAsStream("META-INF/vidocq/dev-module")) {
-            assertEquals("vidocq-runtime-mansart-data-extension-dev", new String(in.readAllBytes()).strip());
+            assertEquals("vidocq-runtime-mansart-data-extension-dev",
+                    new String(in.readAllBytes(), StandardCharsets.UTF_8).strip());
         }
         assertFalse(java.util.Arrays.stream(MansartDataIntegrationExtension.class.getInterfaces())
                 .anyMatch(type -> type.getName().startsWith("io.vidocq.runtime.spi.devconsole")));

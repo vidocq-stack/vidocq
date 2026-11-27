@@ -21,6 +21,8 @@ package io.vidocq.runtime.extensions.microprofile.dirac;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -40,7 +42,8 @@ class DiracSectionWithoutPanelTest {
     void theJarNamesItsDevCompanion() throws Exception {
         // This jar's own marker: a class-loader-wide lookup returns the first one among every module.
         try (var in = DiracMetricsExtension.class.getResourceAsStream("/META-INF/vidocq/dev-module")) {
-            assertEquals("vidocq-runtime-dirac-metrics-extension-dev", new String(in.readAllBytes()).strip());
+            assertEquals("vidocq-runtime-dirac-metrics-extension-dev",
+                    new String(in.readAllBytes(), StandardCharsets.UTF_8).strip());
         }
     }
 }

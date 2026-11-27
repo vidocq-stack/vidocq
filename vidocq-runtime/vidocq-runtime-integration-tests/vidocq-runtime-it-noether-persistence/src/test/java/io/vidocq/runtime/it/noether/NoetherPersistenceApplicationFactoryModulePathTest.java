@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
  * its data source (Vidocq/vidocq#676): Noether looks the name up through JNDI, where the naming extension answers
  * the pool of that name, through the application's transactions.
  */
+@SuppressWarnings("BanJNDI") // the JNDI lookups are what this test checks, against Vidocq's own naming
 class NoetherPersistenceApplicationFactoryModulePathTest {
 
     private static final Map<String, String> CREATE_TABLES =

@@ -53,6 +53,8 @@ record ServletSecurity(List<User> users, OptionalInt confidentialPort, Optional<
     static final String ROTATE_SESSION_ID = "vidocq.servlet.rotate-session-id-on-login";
 
     /** A configured user; {@code password} is wiped once handed to Foy. */
+    // A char[], not a String, so that it can be wiped; equals, hashCode and toString are written for it below.
+    @SuppressWarnings("ArrayRecordComponent")
     record User(String name, char[] password, List<String> roles) {
 
         @Override

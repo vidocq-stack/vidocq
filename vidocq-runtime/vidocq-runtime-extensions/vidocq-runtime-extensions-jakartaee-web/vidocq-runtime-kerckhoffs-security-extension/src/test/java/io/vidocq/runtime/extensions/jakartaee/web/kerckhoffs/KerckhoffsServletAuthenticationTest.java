@@ -44,6 +44,7 @@ class KerckhoffsServletAuthenticationTest {
 
     private static final HttpAuthenticationMechanism MECHANISM = (request, response, context) -> null;
 
+    @SuppressWarnings("ReferenceEquality") // a proxy equals itself only: identity
     private static Bean<?> bean() {
         return (Bean<?>) Proxy.newProxyInstance(Bean.class.getClassLoader(), new Class<?>[] {Bean.class},
                 (proxy, method, args) -> switch (method.getName()) {

@@ -89,8 +89,8 @@ final class Json {
             case '{' -> object(depth);
             case '[' -> array(depth);
             case '"' -> string();
-            case 't' -> literal("true", Boolean.TRUE);
-            case 'f' -> literal("false", Boolean.FALSE);
+            case 't' -> bool("true");
+            case 'f' -> bool("false");
             case 'n' -> literal("null", null);
             default -> number();
         };
@@ -184,6 +184,12 @@ final class Json {
         }
         at += 4;
         return (char) code;
+    }
+
+    /** {@code word}, {@code true} or {@code false}, as the boolean it writes. */
+    private Boolean bool(String word) {
+        literal(word, null);
+        return Boolean.valueOf(word);
     }
 
     private Object literal(String word, Object value) {

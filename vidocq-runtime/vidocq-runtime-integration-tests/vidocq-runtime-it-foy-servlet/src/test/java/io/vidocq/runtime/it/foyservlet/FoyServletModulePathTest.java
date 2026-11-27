@@ -174,7 +174,7 @@ class FoyServletModulePathTest {
 
     @Test
     void aProgrammaticLoginRotatesTheSessionId() throws Exception {
-        String[] answer = get(cookieClient(), "/login?user=alice&password=secret").body().split(" ");
+        String[] answer = get(cookieClient(), "/login?user=alice&password=secret").body().split(" ", -1);
 
         assertEquals("alice", answer[0]);
         assertNotEquals(answer[1], answer[2]);

@@ -67,8 +67,8 @@ final class SqlValues {
                  Types.CLOB, Types.NCLOB -> text(results, column);
             default -> null;
         };
-        if (streamed instanceof Streamed read) {
-            return read.value();
+        if (streamed != null) {
+            return streamed.value();
         }
         Object value = results.getObject(column);
         return switch (value) {

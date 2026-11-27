@@ -22,7 +22,6 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy.live;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The servlet deployments of each live boot, keyed by the boot's container, for the {@code servlet}
@@ -31,7 +30,7 @@ import java.util.Map;
  */
 public final class ServletMounts {
 
-    private static final Map<Object, List<ServletMount>> BY_BOOT = new IdentityHashMap<>();
+    private static final IdentityHashMap<Object, List<ServletMount>> BY_BOOT = new IdentityHashMap<>();
 
     private ServletMounts() {}
 

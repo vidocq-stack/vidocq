@@ -22,6 +22,7 @@ package io.vidocq.runtime.devservices.spi;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -96,7 +97,7 @@ class DevContainersTest {
     @Test
     void aRelativeBasedirIsNamedAfterItsDirectory() {
         DevServiceContext ctx = context(Path.of("."), Map.of());
-        String directory = Path.of("").toAbsolutePath().getFileName().toString().toLowerCase();
+        String directory = Path.of("").toAbsolutePath().getFileName().toString().toLowerCase(Locale.ROOT);
 
         assertTrue(DevContainers.name(ctx, "postgres", null, null).contains(directory.replaceAll("[^a-z0-9_.-]+", "-")));
     }

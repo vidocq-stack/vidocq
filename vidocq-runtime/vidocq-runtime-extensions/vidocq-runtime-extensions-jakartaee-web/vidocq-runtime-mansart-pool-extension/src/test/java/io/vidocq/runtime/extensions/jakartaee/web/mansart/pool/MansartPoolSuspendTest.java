@@ -124,10 +124,10 @@ class MansartPoolSuspendTest {
         assertNotEquals(urlBefore, ext.poolConfig().jdbcUrl());
         assertEquals(settings.get("vidocq.pool.url"), ext.poolConfig().jdbcUrl());
         try (Connection c = ext.pool().getConnection()) {
-            assertEquals(settings.get("vidocq.pool.url").split(";")[0], c.getMetaData().getURL());
+            assertEquals(settings.get("vidocq.pool.url").split(";", -1)[0], c.getMetaData().getURL());
         }
         try (Connection c = NamedDataSourceRegistry.require("audit").getConnection()) {
-            assertEquals(settings.get("vidocq.pool.audit.url").split(";")[0], c.getMetaData().getURL());
+            assertEquals(settings.get("vidocq.pool.audit.url").split(";", -1)[0], c.getMetaData().getURL());
         }
     }
 }

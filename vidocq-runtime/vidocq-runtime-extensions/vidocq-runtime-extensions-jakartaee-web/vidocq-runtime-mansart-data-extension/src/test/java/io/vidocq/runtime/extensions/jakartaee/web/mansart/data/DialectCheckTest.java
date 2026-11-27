@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Proxy;
 import java.sql.DatabaseMetaData;
 import java.util.List;
+import java.util.Locale;
 import java.util.ServiceLoader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,7 +43,7 @@ class DialectCheckTest {
         return (DatabaseMetaData) Proxy.newProxyInstance(DialectCheckTest.class.getClassLoader(),
                 new Class<?>[] {DatabaseMetaData.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getDatabaseProductName" -> name;
-                    case "getURL" -> "jdbc:" + name.toLowerCase() + "://db/app";
+                    case "getURL" -> "jdbc:" + name.toLowerCase(Locale.ROOT) + "://db/app";
                     default -> null;
                 });
     }

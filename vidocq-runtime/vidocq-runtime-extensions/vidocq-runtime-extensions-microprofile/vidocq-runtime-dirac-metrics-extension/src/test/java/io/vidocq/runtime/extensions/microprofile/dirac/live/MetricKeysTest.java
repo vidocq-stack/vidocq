@@ -24,6 +24,7 @@ import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -86,7 +87,7 @@ class MetricKeysTest {
         String name = "a".repeat(50);
 
         assertEquals("a".repeat(40), keys.allocate(new MetricID(name)));
-        String second = keys.allocate(new MetricID(name.toUpperCase()));
+        String second = keys.allocate(new MetricID(name.toUpperCase(Locale.ROOT)));
         assertEquals("a".repeat(38) + "-2", second);
         PanelSample.requireKey(second);
     }

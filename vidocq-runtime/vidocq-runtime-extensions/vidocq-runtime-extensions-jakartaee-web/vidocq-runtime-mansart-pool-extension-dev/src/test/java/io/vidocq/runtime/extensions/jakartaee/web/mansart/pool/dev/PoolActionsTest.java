@@ -204,6 +204,8 @@ class PoolActionsTest {
         assertEquals("sql: missing", call("default.query", "statement", "{\"sql\":\" \"}").summary());
         assertEquals("params.id: not a value or a list of values", call("default.query", "statement",
                 "{\"sql\":\"SELECT :id\",\"params\":{\"id\":{\"a\":1}}}").summary());
+        assertEquals("params.ids: not a value or a list of values", call("default.query", "statement",
+                "{\"sql\":\"SELECT :ids\",\"params\":{\"ids\":[1,{\"a\":1}]}}").summary());
     }
 
     @Test

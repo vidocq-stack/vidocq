@@ -52,7 +52,7 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
     public boolean supportsParameter(ParameterContext parameter, ExtensionContext context) {
         Class<?> type = parameter.getParameter().getType();
         return type == VidocqApplication.class
-                || parameter.isAnnotated(VidocqUrl.class) && (type == URI.class || type == String.class);
+                || (parameter.isAnnotated(VidocqUrl.class) && (type == URI.class || type == String.class));
     }
 
     @Override

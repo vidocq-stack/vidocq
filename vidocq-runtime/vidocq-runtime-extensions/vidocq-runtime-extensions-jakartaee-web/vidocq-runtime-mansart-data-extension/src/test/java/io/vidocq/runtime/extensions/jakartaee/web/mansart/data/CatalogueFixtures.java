@@ -52,6 +52,8 @@ import java.util.UUID;
  * and Broken go through Mansart's own {@code EntityModels.of} (no metamodel is generated here, so Mansart builds
  * their model at run time); the model of Order is written by hand, to hold every kind of attribute.
  */
+// The entity fixtures' fields are read by Mansart's model, never by the tests.
+@SuppressWarnings("UnusedVariable")
 final class CatalogueFixtures {
 
     private CatalogueFixtures() {}

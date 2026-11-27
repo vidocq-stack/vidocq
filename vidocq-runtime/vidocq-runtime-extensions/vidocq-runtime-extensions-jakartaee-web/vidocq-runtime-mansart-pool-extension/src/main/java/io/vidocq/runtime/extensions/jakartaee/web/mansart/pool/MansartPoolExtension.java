@@ -37,6 +37,7 @@ import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.inject.spi.BeanManager;
 
+import java.util.Locale;
 import javax.sql.DataSource;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -408,7 +409,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
         cfg.property(prefix + "idleTimeout").map(Duration::parse).ifPresent(b::idleTimeout);
         cfg.property(prefix + "maxLifetime").map(Duration::parse).ifPresent(b::maxLifetime);
         cfg.property(prefix + "validationTimeout").map(Duration::parse).ifPresent(b::validationTimeout);
-        cfg.property(prefix + "validation").map(s -> ValidationMode.valueOf(s.trim().toUpperCase()))
+        cfg.property(prefix + "validation").map(s -> ValidationMode.valueOf(s.trim().toUpperCase(Locale.ROOT)))
                 .ifPresent(b::validation);
         cfg.property(prefix + "validationQuery").ifPresent(b::validationQuery);
         cfg.property(prefix + "leakDetectionThreshold").map(Duration::parse)

@@ -73,7 +73,7 @@ final class BistroApplication {
         command.addAll(List.of(systemProperties));
         List<String> application = new ArrayList<>();
         List<String> modulePath = new ArrayList<>();
-        for (String entry : System.getProperty("jdk.module.path").split(File.pathSeparator)) {
+        for (String entry : System.getProperty("jdk.module.path").split(File.pathSeparator, -1)) {
             if (!entry.isBlank()) {
                 (holdsTheApplication(entry) ? application : modulePath).add(entry);
             }

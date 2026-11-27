@@ -112,7 +112,7 @@ public final class DevServicesSessionListener implements LauncherSessionListener
             if (path == null) {
                 continue;
             }
-            for (String entry : path.split(Pattern.quote(File.pathSeparator))) {
+            for (String entry : path.split(Pattern.quote(File.pathSeparator), -1)) {
                 Path classes = classesUnder(base, entry);
                 if (classes != null) {
                     return classes;

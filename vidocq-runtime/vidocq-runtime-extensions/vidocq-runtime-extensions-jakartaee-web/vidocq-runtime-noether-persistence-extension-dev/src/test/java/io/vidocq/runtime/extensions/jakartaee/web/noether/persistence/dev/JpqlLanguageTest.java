@@ -49,6 +49,11 @@ class JpqlLanguageTest {
     }
 
     @Test
+    void theArgumentJsonReadsFalseAsABoolean() {
+        assertEquals(List.of(false, true), Json.parse("[false,true]"));
+    }
+
+    @Test
     void theDialectHasAliasesAndNoSelf() {
         Map<?, ?> language = (Map<?, ?>) Json.parse(JpqlLanguage.json(List.of(UNIT)));
 

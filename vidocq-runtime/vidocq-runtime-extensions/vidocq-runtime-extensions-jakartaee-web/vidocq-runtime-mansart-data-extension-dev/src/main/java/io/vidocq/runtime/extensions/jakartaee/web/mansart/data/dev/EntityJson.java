@@ -75,7 +75,7 @@ final class EntityJson {
             Settable property = entry.getValue();
             Attribute<?, ?> attribute = property.attribute();
             Map<String, Object> schema = Scalars.schema(property.type());
-            if (attribute instanceof IdAttribute<?, ?> id && id.generated()
+            if ((attribute instanceof IdAttribute<?, ?> id && id.generated())
                     || attribute instanceof VersionAttribute<?, ?>) {
                 schema.put("readOnly", true);
             } else if (!attribute.nullable() && !fieldType(attribute).isPrimitive()) {

@@ -53,7 +53,7 @@ final class FoyDeployments {
     /** A deployment mounted under {@code name} ({@code vidocq.servlet}, or a declarative mount's name). */
     record Live(String name, String listener, FoyChappeBoot.Mounted mounted) {}
 
-    private static final Map<Object, FoyDeployments> BY_BOOT = new IdentityHashMap<>();
+    private static final IdentityHashMap<Object, FoyDeployments> BY_BOOT = new IdentityHashMap<>();
     private static final System.Logger LOG = System.getLogger(FoyDeployments.class.getName());
 
     private final List<Live> live = new ArrayList<>();

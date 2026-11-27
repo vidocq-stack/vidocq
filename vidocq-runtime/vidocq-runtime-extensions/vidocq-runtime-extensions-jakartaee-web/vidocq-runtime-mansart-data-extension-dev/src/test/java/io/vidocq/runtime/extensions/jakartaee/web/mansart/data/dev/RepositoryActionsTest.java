@@ -74,6 +74,7 @@ class RepositoryActionsTest {
         RuntimeException failure;
 
         @Override
+        @SuppressWarnings("ReferenceEquality") // ECHO is a sentinel: identity
         public Object invoke(Object proxy, Method method, Object[] args) {
             methods.add(method.getName());
             Object[] given = args == null ? new Object[0] : args;

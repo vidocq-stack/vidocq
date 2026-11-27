@@ -60,6 +60,7 @@ public class Ledger {
     }
 
     @Transactional
+    @SuppressWarnings("ReferenceEquality") // the persistence context hands back that very instance: identity
     public boolean findsWhatItPersistedWithinOneTransaction(String id) {
         Entry entry = new Entry(id);
         entries.persist(entry);

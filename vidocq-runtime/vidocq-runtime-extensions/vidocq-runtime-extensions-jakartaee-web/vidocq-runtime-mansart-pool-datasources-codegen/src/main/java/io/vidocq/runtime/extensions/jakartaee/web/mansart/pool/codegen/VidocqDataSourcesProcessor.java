@@ -123,7 +123,7 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
         names.addAll(readConfigNames());
 
         Element anchor = anchors.isEmpty() ? declaredModule(roundEnv) : anchorOf(anchors);
-        if (anchor == null || names.isEmpty() && anchors.isEmpty()) {
+        if (anchor == null || (names.isEmpty() && anchors.isEmpty())) {
             return false;
         }
         generated = true;

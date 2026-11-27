@@ -40,6 +40,7 @@ final class Stubs {
      * A {@code type} whose methods answer from {@code answers} by their name, each call added to {@code calls}; a
      * method without an answer throws {@link UnsupportedOperationException}.
      */
+    @SuppressWarnings("ReferenceEquality") // a proxy equals itself only, and SELF is a sentinel: identity
     static <T> T of(Class<T> type, List<String> calls, Map<String, Function<Object[], Object>> answers) {
         return type.cast(Proxy.newProxyInstance(Stubs.class.getClassLoader(), new Class<?>[] {type},
                 (proxy, method, args) -> {

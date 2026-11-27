@@ -27,6 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -83,8 +84,8 @@ class RavelConfigSourceProviderTest {
         }
         // The exact names come from Ravel; we at least check the presence
         // a source of type "system" and an "environment".
-        boolean hasSys = names.stream().anyMatch(n -> n.toLowerCase().contains("system"));
-        boolean hasEnv = names.stream().anyMatch(n -> n.toLowerCase().contains("env"));
+        boolean hasSys = names.stream().anyMatch(n -> n.toLowerCase(Locale.ROOT).contains("system"));
+        boolean hasEnv = names.stream().anyMatch(n -> n.toLowerCase(Locale.ROOT).contains("env"));
         assertTrue(hasSys, "Expected an MP built-in System source, got " + names);
         assertTrue(hasEnv, "Expected an MP built-in Environment source, got " + names);
     }

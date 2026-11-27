@@ -379,7 +379,7 @@ public final class PostgresDevService implements DevService {
 
     private static List<String> parseNames(String csv) {
         Set<String> names = new LinkedHashSet<>();
-        for (String raw : csv.split(",")) {
+        for (String raw : csv.split(",", -1)) {
             String n = raw.trim();
             if (!n.isEmpty() && n.indexOf('.') < 0) {
                 names.add(n);

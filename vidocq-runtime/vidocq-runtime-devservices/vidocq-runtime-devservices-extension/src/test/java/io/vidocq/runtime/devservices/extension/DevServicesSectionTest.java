@@ -40,7 +40,7 @@ class DevServicesSectionTest {
                 new FakeReportContext(Verbosity.DETAILED), section);
         assertEquals("1 service: postgres (postgres:16-alpine at localhost:54321) — vidocq:dev", section.summary);
         assertEquals("postgres:16-alpine, default localhost:54321", section.rows.get("postgres"));
-        assertEquals(Boolean.TRUE, section.secrets.get("postgres vidocq.pool.password"));
+        assertEquals(true, section.secrets.get("postgres vidocq.pool.password"));
         assertEquals("jdbc:postgresql://localhost:54321/vidocq", section.rows.get("postgres vidocq.pool.url"));
         assertEquals("2026-09-24T10:12:03Z by vidocq:dev", section.rows.get("started"));
     }

@@ -278,7 +278,7 @@ class JdqlActionsTest {
         assertTrue(result.summary().matches("first 100 rows in \\d+ ms"), result.summary());
         Map<?, ?> body = (Map<?, ?>) Json.parse(result.body());
         assertEquals(100, ((List<?>) body.get("rows")).size());
-        assertEquals(Boolean.TRUE, body.get("more"), "the 101st says there are more");
+        assertEquals(true, body.get("more"), "the 101st says there are more");
     }
 
     @Test
@@ -292,7 +292,7 @@ class JdqlActionsTest {
         Map<?, ?> body = (Map<?, ?>) Json.parse(result.body());
         int held = ((List<?>) body.get("rows")).size();
         assertTrue(held < 100, "the body was cut: " + held);
-        assertEquals(Boolean.TRUE, body.get("more"));
+        assertEquals(true, body.get("more"));
         assertTrue(result.summary().matches("first " + held + " rows in \\d+ ms"), result.summary());
     }
 

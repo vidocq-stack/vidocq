@@ -30,7 +30,8 @@ public final class Strings {
     public static String escapeXml(String value) {
         if (value == null) return "";
         var out = new StringBuilder(value.length());
-        for (char c : value.toCharArray()) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
             switch (c) {
                 case '<' -> out.append("&lt;");
                 case '>' -> out.append("&gt;");

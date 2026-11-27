@@ -25,6 +25,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -41,7 +42,7 @@ public class DateService {
     /** Current server time as a JSON object (epoch millis, ISO-8601 string, zone id). */
     @GET
     public DateResponse now() {
-        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
         return new DateResponse(
                 now.toInstant().toEpochMilli(),
                 now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
@@ -53,6 +54,6 @@ public class DateService {
     @Path("/iso")
     @Produces(MediaType.TEXT_PLAIN)
     public String iso() {
-        return ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        return ZonedDateTime.now(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 }

@@ -27,6 +27,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
@@ -111,7 +112,7 @@ class FoyWebSocketModulePathTest {
         Handler handler = new Handler() {
             @Override
             public void publish(LogRecord logRecord) {
-                if (logRecord.getLevel() == Level.WARNING) {
+                if (Level.WARNING.equals(logRecord.getLevel())) {
                     warnings.add(formatter.formatMessage(logRecord));
                 }
             }
@@ -152,7 +153,7 @@ class FoyWebSocketModulePathTest {
     void anApplicationStopClosesTheConnectionWith1001AndReports1006BeforeTheServerStops() throws Exception {
         EchoEndpoint.reset();
         boot(null);
-        try (Socket socket = new Socket("127.0.0.1", port)) {
+        try (Socket socket = new Socket(InetAddress.ofLiteral("127.0.0.1"), port)) {
             socket.setSoTimeout(10_000);
             upgrade(socket, FOY_PATH);
             assertTrue(EchoEndpoint.OPENED.get().await(5, TimeUnit.SECONDS), "the endpoint saw the connection open");
@@ -217,7 +218,7 @@ class FoyWebSocketModulePathTest {
                 .get(5, TimeUnit.SECONDS);
         client.sendText(message, true).get(5, TimeUnit.SECONDS);
         String answer = received.get(5, TimeUnit.SECONDS);
-        client.sendClose(WebSocket.NORMAL_CLOSURE, "bye");
+        client.sendClose(WebSocket.NORMAL_CLOSURE, "bye").get(5, TimeUnit.SECONDS);
         return answer;
     }
 
@@ -251,12 +252,12 @@ class FoyWebSocketModulePathTest {
 
     /** A hand-written HTTP/1.1 upgrade request; the status code of the first response line. */
     private int handshakeStatus(String path, String origin) throws IOException {
-        try (Socket socket = new Socket("127.0.0.1", port)) {
+        try (Socket socket = new Socket(InetAddress.ofLiteral("127.0.0.1"), port)) {
             socket.setSoTimeout(5000);
             socket.getOutputStream().write(upgradeRequest(path, origin));
             socket.getOutputStream().flush();
             var in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
-            return Integer.parseInt(in.readLine().split(" ")[1]);
+            return Integer.parseInt(in.readLine().split(" ", -1)[1]);
         }
     }
 }

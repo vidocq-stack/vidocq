@@ -24,6 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.file.FileSystems;
@@ -154,7 +155,7 @@ class VidocqApplicationTest {
             assertEquals(URI.create("http://127.0.0.1:" + port), application.url());
             assertEquals(URI.create("http://127.0.0.1:" + port + "/hello"), application.url("/hello"));
             assertEquals(URI.create("http://127.0.0.1:" + port + "/hello"), application.url("hello"));
-            new Socket("127.0.0.1", port).close();
+            new Socket(InetAddress.ofLiteral("127.0.0.1"), port).close();
             assertTrue(application.log().contains("starting the fake application"), application.log());
         }
 

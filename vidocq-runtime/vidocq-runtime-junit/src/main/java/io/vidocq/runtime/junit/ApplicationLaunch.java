@@ -236,7 +236,7 @@ final class ApplicationLaunch {
     static Layout layout(String modulePath, String module, List<String> properties, Consumer<String> warn) {
         List<LayerSplit.Candidate> candidates = new ArrayList<>();
         List<Path> unreadable = new ArrayList<>();
-        for (String entry : modulePath.split(File.pathSeparator)) {
+        for (String entry : modulePath.split(File.pathSeparator, -1)) {
             if (!entry.isBlank()) {
                 try {
                     candidates.add(LayerSplit.candidate(Path.of(entry), null));
@@ -368,7 +368,10 @@ final class ApplicationLaunch {
         List<String> runtime = List.of(runtimePath.split(File.pathSeparator)).stream()
                 .filter(entry -> !entry.isBlank()).toList();
         Set<String> entries = new LinkedHashSet<>();
-        for (String entry : jdkModulePath.split(File.pathSeparator)) {
+        for (String entry : jdkModulePath.split(File.pathSeparator, -1)) {
+            if (entry.isBlank()) {
+                continue; // an empty entry names no module, as for runtimePath
+            }
             // An enriched copy, same file name, runs in place of the jar Surefire put there.
             entries.add(runtime.stream().filter(r -> isCopyOf(r, entry)).findFirst().orElse(entry));
         }

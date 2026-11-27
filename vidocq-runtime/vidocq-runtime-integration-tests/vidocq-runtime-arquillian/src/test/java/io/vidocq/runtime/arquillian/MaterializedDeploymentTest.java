@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,7 +59,8 @@ class MaterializedDeploymentTest {
             try (InputStream in = deployment.classLoader()
                     .getResourceAsStream("META-INF/services/com.example.Spi")) {
                 assertNotNull(in, "service file must be visible through the class loader");
-                assertEquals("com.example.impl.MySpiImpl", new String(in.readAllBytes()).trim());
+                assertEquals("com.example.impl.MySpiImpl",
+                        new String(in.readAllBytes(), StandardCharsets.UTF_8).trim());
             }
         }
     }

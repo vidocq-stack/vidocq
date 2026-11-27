@@ -73,6 +73,8 @@ final class MetricsPanel {
         }
     }
 
+    // Counts stay far below 2^53, where a double holds a long exactly.
+    @SuppressWarnings("LongDoubleConversion")
     private static void write(MetricsScope scope, PanelSample group) {
         group.gauge(MetricsScope.COUNTERS_KEY, scope.count(Kind.COUNTER), Unit.COUNT)
                 .gauge(MetricsScope.TIMERS_KEY, scope.count(Kind.TIMER), Unit.COUNT)

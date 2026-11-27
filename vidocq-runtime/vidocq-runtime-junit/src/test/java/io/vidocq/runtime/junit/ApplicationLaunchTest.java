@@ -319,6 +319,16 @@ class ApplicationLaunchTest {
                         String.join(sep, "/m2/core.jar", "/m2/postgresql.jar")));
     }
 
+    /** An empty entry of the tests' module path names no module: it is dropped, as an empty runtime entry is. */
+    @Test
+    void anEmptyEntryOfTheTestsModulePathIsDropped() {
+        String sep = java.io.File.pathSeparator;
+
+        assertEquals(String.join(sep, "/app/classes", "/m2/core.jar", "/m2/postgresql.jar"),
+                ApplicationLaunch.modulePath(String.join(sep, "/app/classes", "", "/m2/core.jar", ""),
+                        "/m2/postgresql.jar"));
+    }
+
     /**
      * A dependency {@code vidocq:generate} enriched runs from its copy under {@code target/vidocq-enriched}, as in
      * {@code vidocq dev} and the packaged application: the copy, which {@code vidocq:test-path} names, takes the

@@ -245,9 +245,12 @@ final class Scalars {
     /** Exactly {@code true} or {@code false} as a boolean, anything else as the text itself. */
     private static Object flagOrText(String text) {
         if ("true".equals(text)) {
-            return Boolean.TRUE;
+            return true;
         }
-        return "false".equals(text) ? Boolean.FALSE : text;
+        if ("false".equals(text)) {
+            return false;
+        }
+        return text;
     }
 
     /**

@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -87,7 +88,8 @@ class NoetherPersistenceLiveTest {
         try (InputStream in = NoetherPersistenceExtension.class.getClassLoader()
                 .getResourceAsStream("META-INF/vidocq/dev-module")) {
             assertNotNull(in, "META-INF/vidocq/dev-module");
-            assertEquals("vidocq-runtime-noether-persistence-extension-dev", new String(in.readAllBytes()).strip());
+            assertEquals("vidocq-runtime-noether-persistence-extension-dev",
+                    new String(in.readAllBytes(), StandardCharsets.UTF_8).strip());
         }
         assertFalse(Arrays.stream(NoetherPersistenceExtension.class.getInterfaces())
                 .anyMatch(type -> type.getName().startsWith("io.vidocq.runtime.spi.devconsole")));

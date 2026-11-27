@@ -123,8 +123,8 @@ public final class StateReader {
             case '{' -> readObject(cursor, depth);
             case '[' -> readArray(cursor, depth);
             case '"' -> readString(cursor);
-            case 't' -> readLiteral(cursor, "true", Boolean.TRUE);
-            case 'f' -> readLiteral(cursor, "false", Boolean.FALSE);
+            case 't' -> readLiteral(cursor, "true", true);
+            case 'f' -> readLiteral(cursor, "false", false);
             case 'n' -> readLiteral(cursor, "null", null);
             default -> {
                 if (c == '-' || (c >= '0' && c <= '9')) {

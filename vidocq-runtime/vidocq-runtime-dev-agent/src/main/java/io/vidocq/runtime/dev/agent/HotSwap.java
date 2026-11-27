@@ -69,6 +69,7 @@ public final class HotSwap {
      *         a loaded class it cannot link
      * @throws IllegalStateException when the JVM did not start with this agent
      */
+    @SuppressWarnings("ReferenceEquality") // the classes that very loader defined: identity
     public static Outcome redefine(ClassLoader loader, Collection<String> names, Function<String, byte[]> bytes)
             throws RedefinitionRefused {
         Instrumentation current = INSTRUMENTATION.get();

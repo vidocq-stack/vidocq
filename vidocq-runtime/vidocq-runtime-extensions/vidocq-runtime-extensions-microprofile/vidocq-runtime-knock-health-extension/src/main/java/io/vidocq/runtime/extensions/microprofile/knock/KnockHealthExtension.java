@@ -69,7 +69,7 @@ public final class KnockHealthExtension implements VidocqExtension, StartupRepor
         live.set(KnockLiveBean.of(context.beanManager()));
     }
 
-    /** Clears what {@link #sample} reads first. */
+    /** Forgets the registry bean {@link #onStart} resolved. */
     @Override
     public void onStop() {
         live.set(KnockLiveBean.NONE);

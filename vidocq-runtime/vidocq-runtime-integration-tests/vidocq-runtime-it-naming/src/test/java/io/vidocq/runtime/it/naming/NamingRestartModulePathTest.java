@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * vidocq#297: a context holds no container. One taken from a running Vidocq answers from the Vidocq running
  * at each lookup, fails cleanly while none runs, and the stopped runtime leaves the JVM default as it found it.
  */
+@SuppressWarnings("BanJNDI") // the JNDI lookups are what this test checks, against Vidocq's own naming
 class NamingRestartModulePathTest {
 
     private VidocqBootstrap bootstrap;
