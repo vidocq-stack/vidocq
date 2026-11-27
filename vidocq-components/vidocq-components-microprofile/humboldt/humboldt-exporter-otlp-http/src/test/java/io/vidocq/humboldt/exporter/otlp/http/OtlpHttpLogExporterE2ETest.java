@@ -81,6 +81,7 @@ class OtlpHttpLogExporterE2ETest {
     void e2e_log_record_post_to_collector() {
         OtlpHttpLogExporter exporter = OtlpHttpLogExporter.builder()
                 .setEndpoint(endpoint())
+                .setProtocol(OtlpProtocol.HTTP_JSON)
                 .setRequestTimeout(Duration.ofSeconds(5))
                 .build();
 

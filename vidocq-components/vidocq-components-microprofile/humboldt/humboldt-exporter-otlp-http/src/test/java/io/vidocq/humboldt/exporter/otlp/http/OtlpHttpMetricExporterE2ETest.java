@@ -94,6 +94,7 @@ class OtlpHttpMetricExporterE2ETest {
     void e2e_counter_and_histogram_post_to_collector() {
         OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
                 .setEndpoint(endpoint())
+                .setProtocol(OtlpProtocol.HTTP_JSON)
                 .setRequestTimeout(Duration.ofSeconds(5))
                 .build();
 
@@ -133,6 +134,7 @@ class OtlpHttpMetricExporterE2ETest {
         // BUG-20261004-02: double points were dropped and synchronous gauges had no data field.
         OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
                 .setEndpoint(endpoint())
+                .setProtocol(OtlpProtocol.HTTP_JSON)
                 .setRequestTimeout(Duration.ofSeconds(5))
                 .build();
 
@@ -163,6 +165,7 @@ class OtlpHttpMetricExporterE2ETest {
     void a_metric_whose_points_do_not_match_its_kind_fails_the_export_without_throwing_and_is_logged_once() {
         OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
                 .setEndpoint(endpoint())
+                .setProtocol(OtlpProtocol.HTTP_JSON)
                 .setRequestTimeout(Duration.ofSeconds(5))
                 .build();
         MetricData counterWithAHistogramPoint = new MetricData(

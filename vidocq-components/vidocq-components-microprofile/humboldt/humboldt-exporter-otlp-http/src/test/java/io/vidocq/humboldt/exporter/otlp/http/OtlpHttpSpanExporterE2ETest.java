@@ -92,6 +92,7 @@ class OtlpHttpSpanExporterE2ETest {
 
         OtlpHttpSpanExporter exporter = OtlpHttpSpanExporter.builder()
                 .setEndpoint(endpoint())
+                .setProtocol(OtlpProtocol.HTTP_JSON)
                 .setRequestTimeout(Duration.ofSeconds(5))
                 .build();
         try (SdkTracerProvider p = SdkTracerProvider.builder()
@@ -124,6 +125,7 @@ class OtlpHttpSpanExporterE2ETest {
 
         OtlpHttpSpanExporter exporter = OtlpHttpSpanExporter.builder()
                 .setEndpoint(endpoint())
+                .setProtocol(OtlpProtocol.HTTP_JSON)
                 .setMaxRetries(3)
                 .setRequestTimeout(Duration.ofSeconds(2))
                 .build();
@@ -147,6 +149,7 @@ class OtlpHttpSpanExporterE2ETest {
 
         OtlpHttpSpanExporter exporter = OtlpHttpSpanExporter.builder()
                 .setEndpoint(endpoint())
+                .setProtocol(OtlpProtocol.HTTP_JSON)
                 .addHeader("Authorization", "Bearer secret-token-42")
                 .build();
         try (SdkTracerProvider p = SdkTracerProvider.builder()
