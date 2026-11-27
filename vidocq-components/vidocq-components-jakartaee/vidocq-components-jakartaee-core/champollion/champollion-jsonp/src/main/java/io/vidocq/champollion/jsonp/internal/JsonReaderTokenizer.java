@@ -300,6 +300,9 @@ public final class JsonReaderTokenizer extends JsonTokenizer {
      * original per-char loop, which also owns the precise error messages for
      * literals spanning a refill.
      */
+    // The labelled block is the single-pass fast path, each break a fall back to the per-char loop: kept inline,
+    // on the hot path of every number read.
+    @SuppressWarnings("LabelledBreakTarget")
     private JsonToken readNumber(int first) {
         // 'first' always comes from this buffer when no refill intervened:
         // both the direct read and the peek path took it at buf[bufPos-1].
@@ -309,9 +312,8 @@ public final class JsonReaderTokenizer extends JsonTokenizer {
             int start = bufPos - 1;
             int q = bufPos;
             boolean valid = true;
-            // A loop run once, for the breaks to the slow path: javac emits no test for while (false).
             fast:
-            do {
+            {
                 // integer part — 'first' is '-' or a digit
                 if (first == '-') {
                     if (q >= end) break fast;
@@ -366,7 +368,7 @@ public final class JsonReaderTokenizer extends JsonTokenizer {
                 bufPos = q;
                 valueRange(start, q - start);
                 return JsonToken.NUMBER;
-            } while (false);
+            }
         }
         valueScratchStart();
         buffer.append((char) first);

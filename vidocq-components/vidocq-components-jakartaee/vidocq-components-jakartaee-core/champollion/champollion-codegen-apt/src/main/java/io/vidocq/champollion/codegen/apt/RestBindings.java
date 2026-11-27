@@ -1039,15 +1039,15 @@ final class RestBindings {
         boolean serializer = JSONB_TYPE_SERIALIZER.equals(nameOf(annotation));
         lastReason = "@" + simpleNameOf(annotation) + "(" + name + ".class): ";
         if (propertyType.getKind() != TypeKind.DECLARED || !((DeclaredType) propertyType).getTypeArguments().isEmpty()) {
-            return instanceFail("a primitive, array or generic property, whose type the runtime hands it");
+            return fail("a primitive, array or generic property, whose type the runtime hands it");
         }
         Instance instance = instance(custom, packageOf(owner));
         if (instance == null) return null;
         TypeMirror handled = typeArgument(custom, serializer ? JSONB_SERIALIZER : JSONB_DESERIALIZER);
-        if (handled == null) return instanceFail("its type argument is not a concrete type");
+        if (handled == null) return fail("its type argument is not a concrete type");
         boolean callable = serializer ? env.getTypeUtils().isAssignable(propertyType, handled)
                 : env.getTypeUtils().isAssignable(handled, propertyType);
-        return callable ? instance : instanceFail("it handles " + handled + ", not " + propertyType);
+        return callable ? instance : fail("it handles " + handled + ", not " + propertyType);
     }
 
     /** The type argument of the {@code generic} interface {@code type} implements, or {@code null}. */
@@ -1086,15 +1086,14 @@ final class RestBindings {
         return new Adapter(instance, args.get(1));
     }
 
-    /** Appends {@code why} to {@link #lastReason}: no instance. */
-    private Instance instanceFail(String why) {
+    private Instance fail(String why) {
         lastReason += why;
         return null;
     }
 
-    /** Appends {@code why} to {@link #lastReason}: no adapter. */
+    /** {@link #fail}, for an adapter. */
     private Adapter adapterFail(String why) {
-        lastReason += why;
+        fail(why);
         return null;
     }
 
@@ -1105,18 +1104,18 @@ final class RestBindings {
      */
     private Instance instance(TypeElement type, String pkg) {
         String className = type.getQualifiedName().toString();
-        if (type.getModifiers().contains(Modifier.ABSTRACT)) return instanceFail("abstract");
-        if (!accessibleFrom(type, pkg)) return instanceFail("not accessible from package " + pkg);
+        if (type.getModifiers().contains(Modifier.ABSTRACT)) return fail("abstract");
+        if (!accessibleFrom(type, pkg)) return fail("not accessible from package " + pkg);
         if (type.getNestingKind().isNested() && !type.getModifiers().contains(Modifier.STATIC)
                 && !type.getKind().isInterface()) {
-            return instanceFail("an inner class");
+            return fail("an inner class");
         }
         boolean samePackage = packageOf(type).equals(pkg);
         var constructors = ElementFilter.constructorsIn(type.getEnclosedElements());
         boolean callable = constructors.stream().anyMatch(c -> c.getParameters().isEmpty()
                 && (c.getModifiers().contains(Modifier.PUBLIC) || (samePackage && !c.getModifiers().contains(Modifier.PRIVATE))));
         boolean bean = isLikelyBean(type);
-        if (!callable && !bean) return instanceFail("no no-argument constructor the binding can call");
+        if (!callable && !bean) return fail("no no-argument constructor the binding can call");
         if (bean && !isBeanDefining(type)) {
             // It injects, but nothing makes it a bean in the default (annotated) discovery: the runtime would create it
             // with new, its injections left null.

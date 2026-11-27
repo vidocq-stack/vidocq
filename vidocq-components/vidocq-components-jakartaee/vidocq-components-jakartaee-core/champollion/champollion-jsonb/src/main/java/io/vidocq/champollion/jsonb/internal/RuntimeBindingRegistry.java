@@ -1810,7 +1810,8 @@ final class RuntimeBindingRegistry {
     }
 
     private record MethodAccessor(Method m) implements Accessor {
-        @Override public Object read(Object target) throws Throwable { return m.invoke(target); }
+        @Override
+        public Object read(Object target) throws Throwable { return m.invoke(target); }
     }
 
     /**
@@ -1820,7 +1821,8 @@ final class RuntimeBindingRegistry {
      * and compatible with strict Java Modules.
      */
     private record MhAccessor(java.lang.invoke.MethodHandle mh) implements Accessor {
-        @Override public Object read(Object target) throws Throwable { return mh.invoke(target); }
+        @Override
+        public Object read(Object target) throws Throwable { return mh.invoke(target); }
     }
 
     /**
@@ -1832,7 +1834,8 @@ final class RuntimeBindingRegistry {
      * lookup cannot generate the lambda (class/package not accessible).
      */
     private record LambdaAccessor(java.util.function.UnaryOperator<Object> f) implements Accessor {
-        @Override public Object read(Object target) { return f.apply(target); }
+        @Override
+        public Object read(Object target) { return f.apply(target); }
     }
 
     /**
@@ -1846,16 +1849,20 @@ final class RuntimeBindingRegistry {
      * etc.) for polymorphic paths (visibility, ordering, etc.).
      */
     private record LongAccessor(java.util.function.ToLongFunction<Object> fn) implements Accessor {
-        @Override public Object read(Object target) { return Long.valueOf(fn.applyAsLong(target)); }
+        @Override
+        public Object read(Object target) { return Long.valueOf(fn.applyAsLong(target)); }
     }
     private record IntAccessor(java.util.function.ToIntFunction<Object> fn) implements Accessor {
-        @Override public Object read(Object target) { return Integer.valueOf(fn.applyAsInt(target)); }
+        @Override
+        public Object read(Object target) { return Integer.valueOf(fn.applyAsInt(target)); }
     }
     private record DoubleAccessor(java.util.function.ToDoubleFunction<Object> fn) implements Accessor {
-        @Override public Object read(Object target) { return Double.valueOf(fn.applyAsDouble(target)); }
+        @Override
+        public Object read(Object target) { return Double.valueOf(fn.applyAsDouble(target)); }
     }
     private record BooleanAccessor(java.util.function.Predicate<Object> fn) implements Accessor {
-        @Override public Object read(Object target) { return Boolean.valueOf(fn.test(target)); }
+        @Override
+        public Object read(Object target) { return Boolean.valueOf(fn.test(target)); }
     }
 
     /**
@@ -1928,7 +1935,8 @@ final class RuntimeBindingRegistry {
     }
 
     private record FieldAccessor(Field f) implements Accessor {
-        @Override public Object read(Object target) throws Throwable { return f.get(target); }
+        @Override
+        public Object read(Object target) throws Throwable { return f.get(target); }
     }
 
     private record Property(String name, Accessor accessor, BindingWriter writer, boolean nillable) {

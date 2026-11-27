@@ -726,23 +726,24 @@ public final class ProtobufJsonRuntime {
         String[] paths = s.split(",", -1);
         List<String> out = new ArrayList<>(paths.length);
         for (String p : paths) {
-            if (p.isEmpty()) continue; // an empty path names no field, as protobuf-java's FieldMaskUtil skips it
-            StringBuilder buf = new StringBuilder();
-            String[] segments = p.split("\\.", -1);
-            for (int i = 0; i < segments.length; i++) {
-                if (i > 0) buf.append('.');
-                for (int j = 0; j < segments[i].length(); j++) {
-                    char c = segments[i].charAt(j);
-                    if (Character.isUpperCase(c)) {
-                        buf.append('_').append(Character.toLowerCase(c));
-                    } else {
-                        buf.append(c);
-                    }
-                }
-            }
-            out.add(buf.toString());
+            // An empty path names no field: skipped, as protobuf-java's FieldMaskUtil does.
+            if (!p.isEmpty()) out.add(snakeCasePath(p));
         }
         return new FieldMask(out);
+    }
+
+    /** {@code fooBar.bazQux} to {@code foo_bar.baz_qux}: each upper-case letter becomes {@code _} and its lower case. */
+    private static String snakeCasePath(String path) {
+        StringBuilder buf = new StringBuilder(path.length() + 4);
+        for (int j = 0; j < path.length(); j++) {
+            char c = path.charAt(j);
+            if (Character.isUpperCase(c)) {
+                buf.append('_').append(Character.toLowerCase(c));
+            } else {
+                buf.append(c);
+            }
+        }
+        return buf.toString();
     }
 
     // ============================================================ Read
