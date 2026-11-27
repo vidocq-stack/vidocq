@@ -163,7 +163,7 @@ public final class LiquibaseSchemaMigrator implements SchemaMigrator {
         if (AnalyticsArgs.ENABLED.getCurrentConfiguredValue().found()) {
             return work.run();
         }
-        return Scope.child(Map.of(AnalyticsArgs.ENABLED.getKey(), Boolean.FALSE), work);
+        return Scope.child(Map.of(AnalyticsArgs.ENABLED.getKey(), false), work);
     }
 
     /**

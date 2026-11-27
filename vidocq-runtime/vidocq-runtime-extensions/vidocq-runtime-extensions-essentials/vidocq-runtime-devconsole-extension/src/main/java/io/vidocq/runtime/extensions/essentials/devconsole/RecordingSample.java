@@ -156,6 +156,8 @@ final class RecordingSample implements PanelSample {
         }
 
         /** Reports the gauges, the counters and the absences of this scope, in the order their keys were written. */
+        // A counter stays far below 2^53, where a double holds a long exactly.
+        @SuppressWarnings("LongDoubleConversion")
         void forEachMeasure(String group, PanelHistory.MeasureSink sink) {
             byKey.forEach((key, value) -> {
                 switch (value) {

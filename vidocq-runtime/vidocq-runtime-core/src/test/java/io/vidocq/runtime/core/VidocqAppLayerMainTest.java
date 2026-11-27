@@ -45,6 +45,8 @@ class VidocqAppLayerMainTest {
 
     static final List<String> CALLS = new ArrayList<>();
 
+    // One instance: the test checks that the launcher rethrows that very exception, not a copy or a wrapper.
+    @SuppressWarnings("StaticAssignmentOfThrowable")
     static final RuntimeException UNCHECKED = new IllegalStateException("the application said no");
 
     @AfterEach
@@ -59,12 +61,14 @@ class VidocqAppLayerMainTest {
         }
     }
 
+    @SuppressWarnings("DoNotCallSuggester") // an application main that fails, run by the layer
     public static final class ThrowsUnchecked {
         public static void main() {
             throw UNCHECKED;
         }
     }
 
+    @SuppressWarnings("DoNotCallSuggester") // an application main that fails, run by the layer
     public static final class ThrowsChecked {
         public static void main() throws Exception {
             throw new Exception("checked, from the application");

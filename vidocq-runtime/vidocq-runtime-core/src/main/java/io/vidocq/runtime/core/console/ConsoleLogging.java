@@ -236,6 +236,7 @@ public final class ConsoleLogging {
         replaced = null;
     }
 
+    @SuppressWarnings("ReferenceEquality") // that very handler instance, by identity
     private static boolean isRootHandler(Handler candidate) {
         for (Handler h : LogManager.getLogManager().getLogger("").getHandlers()) {
             if (h == candidate) {

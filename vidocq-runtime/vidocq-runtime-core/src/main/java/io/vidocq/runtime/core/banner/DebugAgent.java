@@ -84,7 +84,7 @@ public record DebugAgent(String address, boolean suspend) {
     static DebugAgent parse(String options) {
         String address = null;
         boolean suspend = false;
-        for (String option : options.split(",")) {
+        for (String option : options.split(",", -1)) {
             int equals = option.indexOf('=');
             if (equals < 0) {
                 continue;

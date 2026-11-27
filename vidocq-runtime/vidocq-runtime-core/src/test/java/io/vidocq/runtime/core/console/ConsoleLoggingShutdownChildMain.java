@@ -56,7 +56,7 @@ public final class ConsoleLoggingShutdownChildMain {
                     return;
                 }
             }
-            Thread.yield();
+            java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
         }
     }
 

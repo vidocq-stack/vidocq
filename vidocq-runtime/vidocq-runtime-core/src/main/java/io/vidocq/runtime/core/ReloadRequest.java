@@ -51,7 +51,8 @@ public sealed interface ReloadRequest permits ReloadRequest.Redefine, ReloadRequ
 
     /** Reads a reload file's content. Never fails: anything it does not understand asks for a swap. */
     static ReloadRequest parse(String content) {
-        String[] lines = content.split("\\R");
+        // -1 keeps a trailing empty line: an empty sessions line drops the sessions silently, as a missing one does
+        String[] lines = content.split("\\R", -1);
         if (lines.length < 2) {
             return new Swap("");
         }

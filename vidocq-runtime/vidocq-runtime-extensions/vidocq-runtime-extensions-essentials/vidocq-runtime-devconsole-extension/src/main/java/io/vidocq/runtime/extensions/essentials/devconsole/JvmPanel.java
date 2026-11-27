@@ -149,6 +149,8 @@ final class JvmPanel implements DevConsolePanel {
     }
 
     /** The values the JVM keeps now, then one group per collector. */
+    // Byte sizes and counts stay far below 2^53, where a double holds a long exactly.
+    @SuppressWarnings("LongDoubleConversion")
     @Override
     public void sample(PanelSample sample) {
         MemoryUsage heap = memory.getHeapMemoryUsage();

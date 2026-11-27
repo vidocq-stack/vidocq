@@ -303,7 +303,7 @@ public final class KeyPattern {
         private static final Comparator<Match> BEST_FIRST = Comparator.comparing(Match::tail)
                 .thenComparing(Match::literals, Comparator.reverseOrder())
                 .thenComparing(Match::named, Comparator.reverseOrder())
-                .thenComparing(Match::absent);
+                .thenComparingInt(Match::absent);
 
         public Match {
             names = Map.copyOf(names);

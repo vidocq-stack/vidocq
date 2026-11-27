@@ -51,6 +51,8 @@ final class RestPanel {
 
     private RestPanel() {}
 
+    // Counts stay far below 2^53, where a double holds a long exactly.
+    @SuppressWarnings("LongDoubleConversion")
     static void sample(List<RestMount> mounts, PanelSample out) {
         if (mounts.isEmpty()) {
             out.absent(REQUESTS, "no REST resource mounted");

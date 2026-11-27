@@ -79,7 +79,7 @@ class ConsoleLanguagesTest {
 
     /** A request of {@code method} for {@code path}, with these headers besides {@code Host}. */
     private static FakeRequest request(HttpMethod method, String path, String host, Map<String, String> headers) {
-        return new FakeRequest(method, path, host, Map.of(), headers, new byte[0]);
+        return new FakeRequest(method, path, host, Map.of(), headers, "");
     }
 
     private static String body(Response response) throws IOException {

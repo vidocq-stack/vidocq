@@ -78,7 +78,7 @@ class ChappeListenerTest {
     @Test
     void ipv4LiteralStaysLiteral() throws Exception {
         assertEquals("http://127.0.0.1:8888/",
-                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 8888)));
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), 8888)));
     }
 
     @Test
@@ -89,26 +89,26 @@ class ChappeListenerTest {
     @Test
     void ipv6WildcardReadsLocalhost() throws Exception {
         assertEquals("http://localhost:8080/",
-                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("::"), 8080)));
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.ofLiteral("::"), 8080)));
     }
 
     @Test
     void ipv6LiteralIsBracketedAndCompressed() throws Exception {
         assertEquals("http://[::1]:8888/",
-                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("::1"), 8888)));
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.ofLiteral("::1"), 8888)));
         assertEquals("http://[2001:db8::1:0:0:1]:80/",
-                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("2001:db8:0:0:1:0:0:1"), 80)));
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.ofLiteral("2001:db8:0:0:1:0:0:1"), 80)));
         assertEquals("http://[2001:db8:0:1:1:1:1:1]:80/",
-                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("2001:db8:0:1:1:1:1:1"), 80)),
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.ofLiteral("2001:db8:0:1:1:1:1:1"), 80)),
                 "a single zero group is not compressed (RFC 5952)");
         assertEquals("http://[fe80::]:80/",
-                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.getByName("fe80::"), 80)));
+                ChappeListener.httpUrl(new InetSocketAddress(InetAddress.ofLiteral("fe80::"), 80)));
     }
 
     @Test
     void ipv6ZoneIsPercentEncoded() throws Exception {
         InetAddress scoped = Inet6Address.getByAddress(null,
-                InetAddress.getByName("fe80::1").getAddress(), 1);
+                InetAddress.ofLiteral("fe80::1").getAddress(), 1);
         assertEquals("http://[fe80::1%251]:80/", ChappeListener.httpUrl(new InetSocketAddress(scoped, 80)));
     }
 

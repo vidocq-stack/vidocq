@@ -220,7 +220,7 @@ class StartupReportRendererTest {
                         new Items("list", List.of(injected)), new Cells(List.of(injected, "b")), new Text(injected)), -1))));
 
         assertTrue(text.lines().noneMatch(line -> line.startsWith("INFO")), text);
-        assertTrue(text.chars().noneMatch(c -> c < 0x20 && c != '\n' || c == 0x7f || c == 0x85 || c == 0x2028
+        assertTrue(text.chars().noneMatch(c -> (c < 0x20 && c != '\n') || c == 0x7f || c == 0x85 || c == 0x2028
                 || c == 0x202e), text);
         assertTrue(text.contains("x?id          head?line"), text);
         assertTrue(text.contains("  key?name    ok?INFO: Vidocq - Started in 1 ms??[31mred????"), text);

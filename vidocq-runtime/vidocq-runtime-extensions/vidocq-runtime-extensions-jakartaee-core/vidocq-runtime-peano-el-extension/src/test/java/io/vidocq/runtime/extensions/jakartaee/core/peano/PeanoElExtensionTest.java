@@ -107,12 +107,12 @@ class PeanoElExtensionTest {
     private static final class Section implements StartupReportSection {
         String summary;
         final Map<String,Object> rows=new LinkedHashMap<>();
-        public StartupReportSection summary(String value) { summary=value; return this; }
-        public StartupReportSection row(String key,Object value) { rows.put(key,value); return this; }
-        public StartupReportSection list(String key,Collection<String> values) { return this; }
-        public StartupReportSection secret(String key,boolean value) { return this; }
-        public StartupReportSection listener(String name,String uri) { return this; }
-        public StartupReportSection route(String listener,String method,String path,String handler) { return this; }
-        public StartupReportSection anomaly(String code,String message,String hint) { throw new AssertionError(message); }
+        @Override public StartupReportSection summary(String value) { summary=value; return this; }
+        @Override public StartupReportSection row(String key,Object value) { rows.put(key,value); return this; }
+        @Override public StartupReportSection list(String key,Collection<String> values) { return this; }
+        @Override public StartupReportSection secret(String key,boolean value) { return this; }
+        @Override public StartupReportSection listener(String name,String uri) { return this; }
+        @Override public StartupReportSection route(String listener,String method,String path,String handler) { return this; }
+        @Override public StartupReportSection anomaly(String code,String message,String hint) { throw new AssertionError(message); }
     }
 }

@@ -81,7 +81,7 @@ public final class ModuleRequirementsDescriptor {
         if (value == null || value.isBlank()) {
             return out;
         }
-        for (String token : value.split(",")) {
+        for (String token : value.split(",", -1)) {
             String trimmed = token.trim();
             if (!trimmed.isEmpty()) {
                 out.add(trimmed);

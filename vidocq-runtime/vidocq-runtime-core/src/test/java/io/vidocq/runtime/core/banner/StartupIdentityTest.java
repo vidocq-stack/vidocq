@@ -284,9 +284,7 @@ class StartupIdentityTest {
         for (String line : lines) {
             assertTrue(line.length() <= 40, line);
             assertFalse(line.endsWith(" "), "trailing space: [" + line + "]");
-            for (char c : line.toCharArray()) {
-                assertTrue(c >= 0x20 && c <= 0x7E, "not printable ASCII: " + (int) c + " in " + line);
-            }
+            line.chars().forEach(c -> assertTrue(c >= 0x20 && c <= 0x7E, "not printable ASCII: " + c + " in " + line));
         }
     }
 

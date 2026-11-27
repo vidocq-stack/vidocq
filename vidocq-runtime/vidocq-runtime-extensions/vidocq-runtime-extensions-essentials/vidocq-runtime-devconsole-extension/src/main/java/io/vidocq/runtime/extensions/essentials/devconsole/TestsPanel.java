@@ -276,6 +276,8 @@ final class TestsPanel implements DevConsolePanel {
         return QUEUED;
     }
 
+    // Counts stay far below 2^53, where a double holds a long exactly.
+    @SuppressWarnings("LongDoubleConversion")
     @Override
     public void sample(PanelSample sample) {
         View current = view.get();

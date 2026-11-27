@@ -163,7 +163,7 @@ class StartupReportContributorBootTest {
             VidocqBootstrap bootstrap = bootstrap(failing, fine).configure().start();
             try {
                 List<LogRecord> warnings = records.all().stream()
-                        .filter(r -> ANOMALY_LOGGER.equals(r.getLoggerName()) && r.getLevel() == Level.WARNING)
+                        .filter(r -> ANOMALY_LOGGER.equals(r.getLoggerName()) && Level.WARNING.equals(r.getLevel()))
                         .toList();
                 assertEquals(1, warnings.size(), warnings.toString());
                 assertEquals("[VIDOCQ-RPT-001] Startup report contributor 'failing' (" + failing.getClass().getName()

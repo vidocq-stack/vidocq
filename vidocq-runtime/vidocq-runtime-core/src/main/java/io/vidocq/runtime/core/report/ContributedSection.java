@@ -59,7 +59,7 @@ final class ContributedSection implements StartupReportSection {
     }
 
     /** What a section keeps in order: a line as it is written, or a route that is joined later. */
-    private sealed interface Entry permits Written, Route, Link {}
+    sealed interface Entry permits Written, Route, Link {}
 
     private record Written(Line line) implements Entry {}
 

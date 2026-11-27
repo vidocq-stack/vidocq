@@ -317,7 +317,7 @@ public final class LayerSplit {
         if (encoded == null || encoded.isBlank()) {
             return pinned;
         }
-        for (String entry : encoded.split(";")) {
+        for (String entry : encoded.split(";", -1)) {
             int eq = entry.indexOf('=');
             if (eq > 0) {
                 pinned.put(entry.substring(0, eq).strip(), entry.substring(eq + 1).strip());

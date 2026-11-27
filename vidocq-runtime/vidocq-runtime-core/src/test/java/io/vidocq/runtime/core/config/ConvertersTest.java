@@ -39,7 +39,7 @@ class ConvertersTest {
     void booleanTrueAliases() {
         Converter<Boolean> c = Converters.forType(Boolean.class);
         for (String v : new String[] {"true", "TRUE", "yes", "on", "1", "y"}) {
-            assertEquals(Boolean.TRUE, c.convert(v), v);
+            assertEquals(true, c.convert(v), v);
         }
     }
 
@@ -47,7 +47,7 @@ class ConvertersTest {
     void booleanFalseAliases() {
         Converter<Boolean> c = Converters.forType(Boolean.class);
         for (String v : new String[] {"false", "NO", "off", "0", "n", ""}) {
-            assertEquals(Boolean.FALSE, c.convert(v), v);
+            assertEquals(false, c.convert(v), v);
         }
     }
 
@@ -68,7 +68,7 @@ class ConvertersTest {
     @Test
     void primitiveTypesShareWrapperConverter() {
         assertEquals(42, Converters.forType(int.class).convert("42"));
-        assertEquals(Boolean.TRUE, Converters.forType(boolean.class).convert("true"));
+        assertEquals(true, Converters.forType(boolean.class).convert("true"));
     }
 
     @Test

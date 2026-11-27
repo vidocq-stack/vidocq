@@ -33,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -203,7 +204,7 @@ class ConsoleActionsTest {
         for (HttpMethod method : new HttpMethod[] {HttpMethod.GET, HttpMethod.HEAD, HttpMethod.PUT,
                 HttpMethod.DELETE, HttpMethod.PATCH, HttpMethod.OPTIONS}) {
             Response response = handler.handle(new FakeRequest(method, "/api/action/acme-actions/clear", HOST,
-                    Map.of(), fromThePage(), "{}".getBytes(StandardCharsets.UTF_8)));
+                    Map.of(), fromThePage(), "{}"));
 
             assertEquals(405, response.status().code(), method.toString());
             assertEquals("POST", response.headers().firstOrNull("Allow"));
@@ -274,7 +275,7 @@ class ConsoleActionsTest {
 
     @Test
     void aMissingOrWrongTokenIsRefusedAndLogged() throws Exception {
-        for (String token : new String[] {null, "", "3f", TOKEN.toUpperCase(), TOKEN + "0",
+        for (String token : new String[] {null, "", "3f", TOKEN.toUpperCase(Locale.ROOT), TOKEN + "0",
                 TOKEN.substring(0, 63) + "0"}) {
             Response response = post("/api/action/acme-actions/clear",
                     fromThePageBut(ConsoleActions.TOKEN_HEADER, token), "{}");

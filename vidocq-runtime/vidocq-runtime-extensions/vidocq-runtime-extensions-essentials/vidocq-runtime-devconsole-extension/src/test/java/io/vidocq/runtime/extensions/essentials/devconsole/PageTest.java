@@ -26,6 +26,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -275,7 +276,7 @@ class PageTest {
                     "--code-parameter", "--json-string", "--json-number").stream().map(name -> {
                         Matcher value = Pattern.compile(Pattern.quote(name) + ":\\s*(#[0-9A-Fa-f]{6});").matcher(theme);
                         assertTrue(value.find(), name + " in " + opening);
-                        return value.group(1).toUpperCase();
+                        return value.group(1).toUpperCase(Locale.ROOT);
                     }).toList();
             assertEquals(7, colours.stream().distinct().count(), "each distinct in " + opening + ": " + colours);
         }

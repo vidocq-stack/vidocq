@@ -40,7 +40,7 @@ import java.util.TreeMap;
 /**
  * Read the config {@code vidocq.http.mount.<name>.*} and save each mount
  * declared on the {@link ChappeMountPoint} via the {@link MountHandlerProvider}
- * denoted by {@code.type}.
+ * denoted by {@code vidocq.http.mount.<name>.type}.
  *
  * <p>Priority 7000 — after programmatic contributing extensions
  * (Cassini: 500, custom apps: generally < 5000) and older than

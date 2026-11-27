@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -95,7 +96,7 @@ class ConfigPanelTest {
         @Override
         public String getValue(String key) {
             String exact = variables.get(key);
-            return exact != null ? exact : variables.get(key.replaceAll("[^A-Za-z0-9]", "_").toUpperCase());
+            return exact != null ? exact : variables.get(key.replaceAll("[^A-Za-z0-9]", "_").toUpperCase(Locale.ROOT));
         }
 
         @Override

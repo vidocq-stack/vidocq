@@ -200,12 +200,14 @@ class ApplicationMainTest {
      * base lives in another package on purpose — inside one package the compiler refuses the
      * visibility reduction, so this case cannot be written at all.
      */
+    @SuppressWarnings({"UnusedMethod", "UnusedVariable"}) // a main shape the test finds by reflection
     static class HidesWithPrivate extends io.vidocq.runtime.core.mainshapes.ArgsAndNoArgsBase {
         private static void main(String[] args) {
             CALLS.add("must not run");
         }
     }
 
+    @SuppressWarnings({"UnusedMethod", "UnusedVariable"}) // a main shape the test finds by reflection
     static class PrivateArgsWithNoArgs {
         private static void main(String[] args) {
             CALLS.add("must not run");
@@ -228,12 +230,14 @@ class ApplicationMainTest {
 
     // --- rejections ------------------------------------------------------------------------
 
+    @SuppressWarnings({"UnusedMethod", "UnusedVariable"}) // a main shape the test finds by reflection
     static class PrivateMain {
         private static void main(String[] args) {
             CALLS.add("must not run");
         }
     }
 
+    @SuppressWarnings("IncorrectMainMethod") // the wrong main shape the launcher must reject
     static class NonVoidMain {
         static int main(String[] args) {
             CALLS.add("must not run");
@@ -291,6 +295,7 @@ class ApplicationMainTest {
 
     // --- what the caller sees --------------------------------------------------------------
 
+    @SuppressWarnings("DoNotCallSuggester") // an application main that fails, run by the launcher
     static class ThrowingMain {
         static void main(String[] args) {
             throw new IllegalArgumentException("boom");

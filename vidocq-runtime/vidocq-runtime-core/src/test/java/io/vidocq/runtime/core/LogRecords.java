@@ -68,7 +68,7 @@ final class LogRecords implements AutoCloseable {
     List<String> messages(String loggerName, Level level) {
         SimpleFormatter formatter = new SimpleFormatter();
         return all().stream()
-                .filter(r -> loggerName.equals(r.getLoggerName()) && r.getLevel() == level)
+                .filter(r -> loggerName.equals(r.getLoggerName()) && level.equals(r.getLevel()))
                 .map(formatter::formatMessage)
                 .toList();
     }

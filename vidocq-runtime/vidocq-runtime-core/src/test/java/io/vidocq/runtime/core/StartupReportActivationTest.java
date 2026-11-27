@@ -267,7 +267,7 @@ class StartupReportActivationTest {
         List<String> warnings() {
             SimpleFormatter formatter = new SimpleFormatter();
             synchronized (records) {
-                return records.stream().filter(r -> r.getLevel() == Level.WARNING).map(formatter::formatMessage)
+                return records.stream().filter(r -> Level.WARNING.equals(r.getLevel())).map(formatter::formatMessage)
                         .toList();
             }
         }

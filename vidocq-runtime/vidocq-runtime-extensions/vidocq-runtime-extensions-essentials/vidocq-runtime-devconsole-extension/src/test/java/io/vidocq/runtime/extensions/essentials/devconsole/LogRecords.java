@@ -65,7 +65,7 @@ final class LogRecords implements AutoCloseable {
         SimpleFormatter formatter = new SimpleFormatter();
         synchronized (records) {
             return records.stream()
-                    .filter(r -> r.getLevel() == level)
+                    .filter(r -> level.equals(r.getLevel()))
                     .map(formatter::formatMessage)
                     .toList();
         }
@@ -75,7 +75,7 @@ final class LogRecords implements AutoCloseable {
     List<Throwable> thrown(Level level) {
         synchronized (records) {
             return records.stream()
-                    .filter(r -> r.getLevel() == level && r.getThrown() != null)
+                    .filter(r -> level.equals(r.getLevel()) && r.getThrown() != null)
                     .map(LogRecord::getThrown)
                     .toList();
         }

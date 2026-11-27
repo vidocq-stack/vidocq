@@ -233,9 +233,9 @@ class ChappeServerEndToEndTest {
                         })
                 .get(5, TimeUnit.SECONDS);
 
-        client.sendText("hi", true);
+        client.sendText("hi", true).get(5, TimeUnit.SECONDS);
         assertEquals("echo:hi", received.get(5, TimeUnit.SECONDS));
-        client.sendClose(java.net.http.WebSocket.NORMAL_CLOSURE, "bye");
+        client.sendClose(java.net.http.WebSocket.NORMAL_CLOSURE, "bye").get(5, TimeUnit.SECONDS);
     }
 
     /**
@@ -327,7 +327,7 @@ class ChappeServerEndToEndTest {
     /** A hand-written HTTP/1.1 upgrade request; the status code of the first response line. */
     private int handshakeStatus(String origin) throws Exception {
         int port = port(ChappeListener.DEFAULT);
-        try (java.net.Socket socket = new java.net.Socket("127.0.0.1", port)) {
+        try (java.net.Socket socket = new java.net.Socket(java.net.InetAddress.ofLiteral("127.0.0.1"), port)) {
             socket.setSoTimeout(5000);
             String key = java.util.Base64.getEncoder().encodeToString(new byte[16]);
             String request = "GET /echo HTTP/1.1\r\n"
@@ -341,7 +341,7 @@ class ChappeServerEndToEndTest {
             socket.getOutputStream().flush();
             var in = new java.io.BufferedReader(new java.io.InputStreamReader(
                     socket.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII));
-            return Integer.parseInt(in.readLine().split(" ")[1]);
+            return Integer.parseInt(in.readLine().split(" ", -1)[1]);
         }
     }
 

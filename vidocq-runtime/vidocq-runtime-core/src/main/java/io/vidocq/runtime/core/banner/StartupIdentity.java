@@ -186,7 +186,7 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
 
     /** {@code io.vidocq.tools.lc4jcdi.mcptimeserver} becomes {@code i.v.t.l.mcptimeserver}. */
     static String abbreviate(String dotted) {
-        String[] parts = dotted.split("\\.");
+        String[] parts = dotted.split("\\.", -1);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < parts.length - 1; i++) {
             if (!parts[i].isEmpty()) {
@@ -282,7 +282,7 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
         if (!moduleName.startsWith("io.vidocq.")) {
             return null;
         }
-        String[] parts = moduleName.split("\\.");
+        String[] parts = moduleName.split("\\.", -1);
         if (parts.length < 3 || parts[2].equals("runtime") || parts[2].equals("tools")) {
             return null;
         }

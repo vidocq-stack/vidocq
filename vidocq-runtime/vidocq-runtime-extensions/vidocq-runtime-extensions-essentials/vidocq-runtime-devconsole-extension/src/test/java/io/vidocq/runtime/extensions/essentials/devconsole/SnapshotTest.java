@@ -106,7 +106,8 @@ class SnapshotTest {
                 new Snapshot.LiveSetup(livePanels, null));
     }
 
-    @SuppressWarnings("unchecked")
+    // The caller names the type it reads from the parsed JSON; a wrong one fails the test with a ClassCastException.
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     private static <T> T at(Object json, Object... path) {
         Object current = json;
         for (Object step : path) {

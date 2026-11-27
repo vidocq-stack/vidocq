@@ -208,7 +208,7 @@ class ChappeListenerBindingTest {
 
     @Test
     void takenPortFallsBackToAFreeOne() throws Exception {
-        try (ServerSocket taken = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))) {
+        try (ServerSocket taken = new ServerSocket(0, 50, InetAddress.ofLiteral("127.0.0.1"))) {
             int takenPort = taken.getLocalPort();
             AtomicReference<InetSocketAddress> handed = new AtomicReference<>();
             ChappeMountPoint mp = ChappeMountPoint.instance();
@@ -229,7 +229,7 @@ class ChappeListenerBindingTest {
 
     @Test
     void takenPortFailsTheBootWithoutTheFallback() throws Exception {
-        try (ServerSocket taken = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))) {
+        try (ServerSocket taken = new ServerSocket(0, 50, InetAddress.ofLiteral("127.0.0.1"))) {
             ChappeMountPoint.instance().declareListener(ChappeListener.http("dev", "127.0.0.1", taken.getLocalPort()),
                     ListenerOptions.DEFAULTS);
 

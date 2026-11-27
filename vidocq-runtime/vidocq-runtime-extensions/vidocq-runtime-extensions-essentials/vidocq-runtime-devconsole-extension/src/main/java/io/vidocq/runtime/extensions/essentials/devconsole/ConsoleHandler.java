@@ -224,7 +224,7 @@ final class ConsoleHandler implements Handler {
     /** Whether an {@code Accept} header takes {@code application/json}: itself, {@code application/*}, or all. */
     private static boolean acceptsJson(List<String> accepts) {
         for (String accept : accepts) {
-            for (String range : accept.split(",")) {
+            for (String range : accept.split(",", -1)) {
                 int semicolon = range.indexOf(';');
                 String type = (semicolon < 0 ? range : range.substring(0, semicolon)).strip();
                 if (type.equalsIgnoreCase("application/json") || type.equalsIgnoreCase("application/*")

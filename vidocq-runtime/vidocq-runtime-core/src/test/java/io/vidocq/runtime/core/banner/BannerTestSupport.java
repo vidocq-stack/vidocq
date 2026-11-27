@@ -195,7 +195,7 @@ final class BannerTestSupport {
         List<String> messages(Level level) {
             SimpleFormatter formatter = new SimpleFormatter();
             synchronized (records) {
-                return records.stream().filter(r -> r.getLevel() == level).map(formatter::formatMessage).toList();
+                return records.stream().filter(r -> level.equals(r.getLevel())).map(formatter::formatMessage).toList();
             }
         }
 

@@ -854,6 +854,7 @@ public final class VidocqBootstrap {
      * {@code onStop} is logged and the stop goes on), is logged at ERROR, releases {@link #awaitShutdown()} all the
      * same, and reaches the caller that ran the stop; the callers that waited for it return normally.
      */
+    @SuppressWarnings("ReferenceEquality") // which thread boots or stops: identity of the current thread
     public void shutdown() {
         if (shutdownLatch.getCount() == 0) {
             return; // idempotent — the JVM hook and the reload loop may both call this

@@ -38,13 +38,13 @@ import java.util.Map;
  * @param host        the {@code Host} header, or {@code null} for none
  * @param queryParams the query parameters, such as {@code since}
  * @param others      the headers besides {@code Host}, by name
- * @param content     the body
+ * @param content     the body, UTF-8
  */
 record FakeRequest(HttpMethod method, String path, String host, Map<String, String> queryParams,
-                   Map<String, String> others, byte[] content) implements Request {
+                   Map<String, String> others, String content) implements Request {
 
     FakeRequest(HttpMethod method, String path, String host, Map<String, String> queryParams) {
-        this(method, path, host, queryParams, Map.of(), new byte[0]);
+        this(method, path, host, queryParams, Map.of(), "");
     }
 
     FakeRequest(HttpMethod method, String path, String host) {
@@ -60,8 +60,7 @@ record FakeRequest(HttpMethod method, String path, String host, Map<String, Stri
      * @param body    the body, UTF-8
      */
     static FakeRequest post(String path, String host, Map<String, String> headers, String body) {
-        return new FakeRequest(HttpMethod.POST, path, host, Map.of(), headers,
-                body.getBytes(StandardCharsets.UTF_8));
+        return new FakeRequest(HttpMethod.POST, path, host, Map.of(), headers, body);
     }
 
     @Override
@@ -104,7 +103,7 @@ record FakeRequest(HttpMethod method, String path, String host, Map<String, Stri
 
     @Override
     public Body body() {
-        return Body.of(content);
+        return Body.of(content.getBytes(StandardCharsets.UTF_8));
     }
 
     @Override

@@ -21,6 +21,8 @@ package io.vidocq.runtime.extensions.jakartaee.core.cassini;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -40,7 +42,8 @@ class CassiniSectionWithoutPanelTest {
     void theJarNamesItsDevCompanion() throws Exception {
         try (var in =
                 CassiniExtension.class.getClassLoader().getResourceAsStream("META-INF/vidocq/dev-module")) {
-            assertEquals("vidocq-runtime-cassini-rest-extension-dev", new String(in.readAllBytes()).strip());
+            assertEquals("vidocq-runtime-cassini-rest-extension-dev",
+                    new String(in.readAllBytes(), StandardCharsets.UTF_8).strip());
         }
     }
 }

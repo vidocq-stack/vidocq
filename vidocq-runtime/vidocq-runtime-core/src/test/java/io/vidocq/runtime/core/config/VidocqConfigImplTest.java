@@ -70,7 +70,7 @@ class VidocqConfigImplTest {
         ));
         VidocqConfig cfg = new VidocqConfigImpl(List.of(s));
         assertEquals(8080, cfg.getValue("port", Integer.class).orElseThrow());
-        assertEquals(Boolean.TRUE, cfg.getValue("enabled", Boolean.class).orElseThrow());
+        assertEquals(true, cfg.getValue("enabled", Boolean.class).orElseThrow());
         assertEquals(Duration.ofSeconds(30), cfg.getValue("timeout", Duration.class).orElseThrow());
         assertEquals(0.5d, cfg.getValue("ratio", Double.class).orElseThrow());
         assertEquals(URI.create("http://example.com"), cfg.getValue("uri", URI.class).orElseThrow());

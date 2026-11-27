@@ -34,7 +34,7 @@ import java.util.function.UnaryOperator;
  *       {@code key} has no value. The default and the key may hold expressions: {@code ${url.${target}}}.</li>
  *   <li>{@code \$} is a literal {@code $}: {@code \${key}} is kept as {@code ${key}}.</li>
  *   <li>An expression without a default whose key has no value leaves the whole property without a value.</li>
- *   <li>An expression that comes back to the key it expands, or a {@code ${} without its closing brace, is an
+ *   <li>An expression that comes back to the key it expands, or a <code>${</code> without its closing brace, is an
  *       {@link IllegalArgumentException}.</li>
  *   <li>{@value #ENABLED_KEY}{@code =false} turns the expansion off: values are read as written.</li>
  * </ul>

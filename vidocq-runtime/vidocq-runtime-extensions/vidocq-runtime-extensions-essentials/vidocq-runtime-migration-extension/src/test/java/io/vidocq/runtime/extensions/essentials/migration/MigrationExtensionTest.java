@@ -307,6 +307,7 @@ class MigrationExtensionTest {
         ext.contribute(new ReportContext(Verbosity.DETAILED), section);
 
         assertEquals("s3cr3t", schema.lastPassword, "the backend gets it");
+        assertEquals(1, schema.cleans, "clean-and-migrate cleaned the schema once");
         for (String text : List.of(results.toString(), ext.outcomes().toString(),
                 MigrationLive.control().outcomes().toString(), section.summary,
                 section.rows.toString(), schema.lastTarget.toString())) {

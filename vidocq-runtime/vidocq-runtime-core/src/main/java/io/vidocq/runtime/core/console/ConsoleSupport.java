@@ -87,6 +87,8 @@ public record ConsoleSupport(String noColor, String term, String osName, boolean
     }
 
     /** Reads the inputs of this JVM: environment, {@code os.name}, console and JVM arguments. */
+    // System.console() still returns null when the JVM has no console (its Javadoc: "if any").
+    @SuppressWarnings("SystemConsoleNull")
     public static ConsoleSupport current() {
         var console = System.console();
         List<String> arguments;

@@ -35,6 +35,8 @@ final class JdbcLeakPrevention {
     private JdbcLeakPrevention() {}
 
     /** Deregisters every driver defined by {@code owner}; returns how many. */
+    // A driver belongs to the layer when its class was defined by that very loader: identity, not equality.
+    @SuppressWarnings("ReferenceEquality")
     public static int deregister(ClassLoader owner) throws SQLException {
         int count = 0;
         for (Driver driver : Collections.list(DriverManager.getDrivers())) {

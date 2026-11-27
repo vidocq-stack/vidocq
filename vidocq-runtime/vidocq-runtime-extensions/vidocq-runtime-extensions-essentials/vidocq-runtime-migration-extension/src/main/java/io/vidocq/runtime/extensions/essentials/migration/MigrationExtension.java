@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -476,7 +477,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         return DEFAULT_DATASOURCE.equals(name) ? DEFAULT_CLEAN_DISABLED_KEY : PREFIX + name + "." + CLEAN_DISABLED_SUFFIX;
     }
 
-    private static TreeSet<String> namedWithLocations(VidocqConfiguration cfg) {
+    private static SortedSet<String> namedWithLocations(VidocqConfiguration cfg) {
         TreeSet<String> names = new TreeSet<>();
         for (String key : cfg.propertyNames()) {
             // vidocq.migration.locations belongs to the @Default datasource: it matches both ends, but has

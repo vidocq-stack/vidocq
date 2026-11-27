@@ -35,11 +35,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RestPanelTest {
 
     /** Figures fixed by the test: what a stack would have counted. */
-    record FixedStatistics(long requests, long inFlight, long[] byClass, long totalNanos, long maxNanos)
+    record FixedStatistics(long requests, long inFlight, List<Long> byClass, long totalNanos, long maxNanos)
             implements CassiniStatistics {
         @Override
         public long responses(int statusClass) {
-            return byClass[statusClass - 1];
+            return byClass.get(statusClass - 1);
         }
     }
 
@@ -55,7 +55,7 @@ class RestPanelTest {
 
     @Test
     void writes_the_figures_of_each_mount_in_its_own_group() {
-        var stats = new FixedStatistics(10, 2, new long[] {0, 7, 1, 1, 1}, 5_000_000, 3_000_000);
+        var stats = new FixedStatistics(10, 2, List.of(0L, 7L, 1L, 1L, 1L), 5_000_000, 3_000_000);
 
         RecordingSample group = sample(List.of(mount("vidocq.rest", stats))).groups().get("vidocq.rest");
 
@@ -71,12 +71,12 @@ class RestPanelTest {
         assertEquals("counter", group.kind("handler-time"));
         assertEquals(5_000_000, group.number("handler-time"));
         assertEquals(String.valueOf(Duration.ofNanos(500_000)), group.text("mean"));
-        assertEquals(String.valueOf(Duration.ofNanos(3_000_000)), group.text("max"));
+        assertEquals(String.valueOf(Duration.ofMillis(3)), group.text("max"));
     }
 
     @Test
     void has_no_mean_before_the_first_request() {
-        var stats = new FixedStatistics(0, 0, new long[5], 0, 0);
+        var stats = new FixedStatistics(0, 0, List.of(0L, 0L, 0L, 0L, 0L), 0, 0);
 
         RecordingSample group = sample(List.of(mount("vidocq.rest", stats))).groups().get("vidocq.rest");
 
@@ -97,7 +97,7 @@ class RestPanelTest {
 
     @Test
     void one_group_per_mount_in_mount_order() {
-        var stats = new FixedStatistics(0, 0, new long[5], 0, 0);
+        var stats = new FixedStatistics(0, 0, List.of(0L, 0L, 0L, 0L, 0L), 0, 0);
 
         RecordingSample sample = sample(List.of(mount("vidocq.rest", stats), mount("health", stats)));
 
@@ -115,7 +115,7 @@ class RestPanelTest {
 
     @Test
     void every_chart_plots_keys_the_sample_writes() {
-        var stats = new FixedStatistics(1, 0, new long[] {0, 1, 0, 0, 0}, 1, 1);
+        var stats = new FixedStatistics(1, 0, List.of(0L, 1L, 0L, 0L, 0L), 1, 1);
         Set<String> written = sample(List.of(mount("vidocq.rest", stats))).groups().get("vidocq.rest").keys();
 
         for (Chart chart : RestPanel.CHARTS) {

@@ -388,7 +388,7 @@ class DevConsoleExtensionTest {
         second.stop();
         boots.remove(second);
 
-        try (var _ = new ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))) {
+        try (var _ = new ServerSocket(port, 50, InetAddress.ofLiteral("127.0.0.1"))) {
             Boot third = boot(context);
 
             int moved = third.console().boundPort();
@@ -402,7 +402,7 @@ class DevConsoleExtensionTest {
 
     @Test
     void aTakenPortMovesTheConsoleAndSaysSoLoudly() throws Exception {
-        try (ServerSocket taken = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))) {
+        try (ServerSocket taken = new ServerSocket(0, 50, InetAddress.ofLiteral("127.0.0.1"))) {
             int configured = taken.getLocalPort();
             FakeExtensionContext context = context(LaunchMode.DEV, DevConsoleSettings.PORT_KEY,
                     String.valueOf(configured));
@@ -471,7 +471,7 @@ class DevConsoleExtensionTest {
             FakeExtensionContext context = context(LaunchMode.DEV, DevConsoleSettings.HOST_KEY, "0.0.0.0");
             console.onStart(context);
 
-            console.bound(new InetSocketAddress(InetAddress.getByName("0.0.0.0"), 8888));
+            console.bound(new InetSocketAddress(InetAddress.ofLiteral("0.0.0.0"), 8888));
             RecordingSection section = new RecordingSection(console.id(), console.title());
             console.contribute(new ConsoleReportContext(LaunchMode.DEV), section);
 

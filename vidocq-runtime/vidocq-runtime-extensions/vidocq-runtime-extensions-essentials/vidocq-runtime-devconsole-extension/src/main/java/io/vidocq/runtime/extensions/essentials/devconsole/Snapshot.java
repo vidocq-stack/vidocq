@@ -405,6 +405,7 @@ final class Snapshot implements Handler {
     }
 
     /** The panels of {@code view}, read on the first poll that sees it. */
+    @SuppressWarnings("ReferenceEquality") // the panels belong to that very view instance: identity
     private Contributed contributed(StartupReportView view) {
         Contributed current = contributed.get();
         if (current != null && current.view() == view) {

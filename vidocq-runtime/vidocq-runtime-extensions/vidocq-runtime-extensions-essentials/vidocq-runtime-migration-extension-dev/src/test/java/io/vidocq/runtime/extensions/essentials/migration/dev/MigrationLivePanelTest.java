@@ -85,7 +85,7 @@ class MigrationLivePanelTest {
             ctor.setAccessible(true);
             return ctor.newInstance(backends);
         } catch (ReflectiveOperationException e) {
-            throw new AssertionError("MigrationExtension(Supplier) is no longer reachable by reflection", e);
+            throw new LinkageError("MigrationExtension(Supplier) is no longer reachable by reflection", e);
         }
     }
 

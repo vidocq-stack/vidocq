@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.Consumer;
 
 /**
  * The types of the format, and what a value has against one of them.
@@ -90,9 +90,9 @@ final class KeyTypes {
         };
     }
 
-    private static Optional<String> unless(Function<String, Object> conversion, String value, String refusal) {
+    private static Optional<String> unless(Consumer<String> conversion, String value, String refusal) {
         try {
-            conversion.apply(value);
+            conversion.accept(value);
             return Optional.empty();
         } catch (NumberFormatException | DateTimeParseException _) {
             return Optional.of(refusal);

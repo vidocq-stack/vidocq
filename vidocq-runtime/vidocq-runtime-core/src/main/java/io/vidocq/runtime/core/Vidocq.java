@@ -367,6 +367,7 @@ public final class Vidocq {
     }
 
     /** The deepest cause of {@code failure}: the container wraps what the application's own code threw. */
+    @SuppressWarnings("ReferenceEquality") // a cause that is the throwable itself ends the chain: identity
     private static Throwable rootCause(Throwable failure) {
         Throwable cause = failure;
         while (cause.getCause() != null && cause.getCause() != cause) {
@@ -382,7 +383,7 @@ public final class Vidocq {
     private static Type typeOfClass(Bean<?> bean, Class<?> layerClass) {
         for (Type type : bean.getTypes()) {
             if (type == layerClass
-                    || type instanceof ParameterizedType parameterized && parameterized.getRawType() == layerClass) {
+                    || (type instanceof ParameterizedType parameterized && parameterized.getRawType() == layerClass)) {
                 return type;
             }
         }

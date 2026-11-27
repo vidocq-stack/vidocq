@@ -317,7 +317,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
     }
 
     private static String artifactIdOf(String pomEntry) {
-        String[] segments = pomEntry.split("/");
+        String[] segments = pomEntry.split("/", -1);
         return segments.length >= 2 ? segments[segments.length - 2] : "";
     }
 
