@@ -669,7 +669,7 @@
                                          RefactorSwitch (17), InlineFormatString (18), UnnecessaryStringBuilder (14),
                                          UnnecessaryLambda (13), AvoidCommonTypeNames (10). javac splits the
                                          plugin's arguments on white space: one per line. -->
-                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*(generated|generated-sources)/.* -XepDisableWarningsInGeneratedCode
+                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*/generated[^/]*/.* -XepDisableWarningsInGeneratedCode
                                         -Xep:MissingSummary:OFF
                                         -Xep:InvalidParam:OFF
                                         -Xep:InvalidBlockTag:OFF
