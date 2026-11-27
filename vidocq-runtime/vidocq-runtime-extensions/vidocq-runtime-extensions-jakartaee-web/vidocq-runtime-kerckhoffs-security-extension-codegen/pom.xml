@@ -67,9 +67,11 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <!-- Only the empty module-info to compile: no processor, not even the
-                         inherited core-codegen path. -->
+                         inherited core-codegen path, and no javac plugin: the errorprone profile's
+                         arguments would name a plugin this empty path does not hold (#269). -->
                     <proc>none</proc>
                     <annotationProcessorPaths combine.self="override" />
+                    <compilerArgs combine.self="override" />
                 </configuration>
             </plugin>
         </plugins>

@@ -2,8 +2,9 @@ name: Nightly build
 
 # The whole reactor built, tested and deployed as SNAPSHOTs once a night (01:00 UTC), whatever the pushes of the day
 # built incrementally (ci.yml), with JaCoCo, then the SonarQube analysis of main from that same build, then the
-# CRaC extension, which needs a CRaC JDK. The nightly TCK (tck-nightly.yml, 03:00 UTC) follows. No sources or javadoc jar: the
-# release builds them. Unlike a push build, it makes the jlink images of the examples and copies the SNAPSHOTs to
+# CRaC extension, which needs a CRaC JDK, then the images of the runtime examples and their Trivy scan. The nightly TCK
+# (tck-nightly.yml, 03:00 UTC) follows. No sources or javadoc jar: the release builds them. Unlike a push build, it runs
+# Error Prone for the SonarQube analysis, makes the jlink and Docker images of the examples and copies the SNAPSHOTs to
 # central-snapshots. A maintainer can run it by hand (workflow_dispatch), on main, or on a maintenance branch
 # (maintenance/x.y) before a patch release: there the whole reactor is built and tested and nothing is deployed, analysed
 # or installed (a jar of the line's version built from the branch must not stand for the released one).
@@ -85,6 +86,7 @@ jobs:
       - uses: ./.ci-action/setup-maven
 
       - name: Build, test & deploy the whole reactor
+        id: deploy
         uses: ./.ci-action/deploy-maven
         with:
           # -Pquality: the JaCoCo reports of the SonarQube analysis below, which reads this build's target/.
@@ -110,8 +112,15 @@ jobs:
           git push -q --force "${SERVER/https:\/\//https://oauth2:${TOKEN}@}/${REPOSITORY}.git" "$GITHUB_SHA:refs/deployed/main"
           echo "refs/deployed/main -> ${GITHUB_SHA:0:10}"
 
+      # Error Prone (#269) reports through the build log of the analysis below, which reads its warnings as external
+      # issues: the sources are compiled again there, with the errorprone profile of vidocq-parent. Touched, the main
+      # sources are newer than their classes, and maven-compiler-plugin recompiles each module whole, its tests with
+      # it. Not in pull requests: a pull request's gate would turn red on findings in code it does not touch.
+      - name: Make the main sources stale, for Error Prone
+        run: find . -path '*/src/main/java/*' -name '*.java' -not -path '*/target/*' -exec touch {} +
+
       # The SonarQube analysis of main, the reference of new code for the next day's pull requests, from the build
-      # above: no second build. Blocking here means a red nightly when the gate of main fails.
+      # above: no tests run again. Blocking here means a red nightly when the gate of main fails.
       - name: SonarQube analysis of main
         uses: ./.ci-action/sonar-analysis
         with:
@@ -119,9 +128,11 @@ jobs:
           sonar-token: ${{ secrets.SONAR_TOKEN }}
           host-url: ${{ vars.SONAR_HOST_URL }}
           bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
-          # No build here: validate only, for the SBOM the dependency scan reads: the modules that ship (root pom).
-          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dvidocq.aggregator.deploy.skip=false validate
-          analysis-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dsonar.scanner.skipJreProvisioning=true
+          # Compiled again with Error Prone, packaged without tests (a module copies the jar of another before its own
+          # package phase), deployed and installed by nobody: Error Prone's warnings, and the SBOM the dependency scan
+          # reads, of the modules that ship (root pom). The JaCoCo and test reports of the build above stay in target/.
+          maven-args: -B -ntp -Pquality,errorprone -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dvidocq.aggregator.deploy.skip=false -DskipTests -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.jlink.skip=true package
+          analysis-args: -B -ntp -Pquality,errorprone -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dsonar.scanner.skipJreProvisioning=true
           blocking: 'true'
           targeted-tests: false
 
@@ -147,6 +158,24 @@ jobs:
           snapshot-password: ${{ secrets.REPOSILITE_PASSWORD }}
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      # Trivy over the jlink and Docker images of the runtime examples (#269), from the SNAPSHOTs the deploy above
+      # installed: the examples with a dist profile, as build-images.sh lists them. Report mode, like the scans of the
+      # SonarQube analysis: the table goes to the job summary, a HIGH or CRITICAL finding and a scan that could not run
+      # to the warnings, and neither turns the nightly red, which a release requires (release-gate.py).
+      - name: Build the images of the runtime examples
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          EXAMPLES: vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cassini-rest-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cyrano-rest-client-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cervantes-jwt-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-knock-health-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-petstore-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-noether-persistence-example
+        run: mvn -B -ntp -Pdist -Dgib.disable=true -DskipTests -Dvidocq.build-info.dirty=^none package -pl "$EXAMPLES"
+
+      - name: Scan the images of the runtime examples (Trivy)
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          EXAMPLES: vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cassini-rest-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cyrano-rest-client-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-cervantes-jwt-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-knock-health-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-petstore-example,vidocq-runtime/vidocq-runtime-examples/vidocq-runtime-noether-persistence-example
+        run: python3 -I -B .forgejo/scripts/scan-images.py ${EXAMPLES//,/ }
 
       - name: Notify Slack on failure
         if: failure()
