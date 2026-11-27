@@ -175,6 +175,7 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
                 if (pf == null) continue;
                 pw.println("                case " + pf.number() + ": {");
                 emitFieldRead(pw, rc, pf);
+                emitOneofClear(pw, comps, rc, pf);
                 pw.println("                    break;");
                 pw.println("                }");
             }
@@ -333,6 +334,22 @@ public final class ProtobufStaticProcessor extends AbstractProcessor {
             return;
         }
         pw.println("                    " + name + " = " + scalarRead(pf.type(), javaTypeName(tm)) + ";");
+    }
+
+    /**
+     * Proto3 §oneof: of the members of a oneof read on the wire, the last one wins. After a member is read, the
+     * other members of its {@code oneofGroup} go back to null (a primitive member, which cannot be unset, stays).
+     */
+    private static void emitOneofClear(PrintWriter pw, List<? extends RecordComponentElement> comps,
+                                       RecordComponentElement read, ProtobufField pf) {
+        if (pf.oneofGroup().isEmpty()) return;
+        for (RecordComponentElement other : comps) {
+            ProtobufField opf = other.getAnnotation(ProtobufField.class);
+            if (other != read && opf != null && pf.oneofGroup().equals(opf.oneofGroup())
+                    && !other.asType().getKind().isPrimitive()) {
+                pw.println("                    " + other.getSimpleName() + " = null;");
+            }
+        }
     }
 
     private static String scalarRead(FieldType type, String javaElemType) {

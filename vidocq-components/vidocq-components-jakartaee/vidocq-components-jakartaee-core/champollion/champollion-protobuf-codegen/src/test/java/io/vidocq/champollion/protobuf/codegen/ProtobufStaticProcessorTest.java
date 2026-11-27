@@ -345,7 +345,7 @@ class ProtobufStaticProcessorTest {
 
     record CompileResult(Path sourcesOutput, Path classesOutput) {}
 
-    private static CompileResult compile(Path tmp, Map<String, String> sources) throws Exception {
+    static CompileResult compile(Path tmp, Map<String, String> sources) throws Exception {
         Attempt attempt = attempt(tmp, sources);
         if (!attempt.ok()) {
             StringBuilder sb = new StringBuilder("Compilation failed:\n").append(attempt.diagnostics());

@@ -167,10 +167,11 @@ class ProtoGrammarEdgeTest {
                 """);
         MessageDecl m = f.messages().get(0);
         List<String> names = m.fields().stream().map(FieldDecl::name).toList();
-        assertEquals(List.of("id", "ref", "refs"), names);
-        assertEquals(FieldKind.SINGULAR, m.fields().get(0).kind());
-        assertEquals(new NamedType(".other.Type"), m.fields().get(1).type());
-        assertEquals(FieldKind.REPEATED, m.fields().get(2).kind());
+        assertEquals(List.of("a", "b", "id", "ref", "refs"), names);
+        assertEquals("choice", m.fields().get(1).oneofName());
+        assertEquals(FieldKind.SINGULAR, m.fields().get(2).kind());
+        assertEquals(new NamedType(".other.Type"), m.fields().get(3).type());
+        assertEquals(FieldKind.REPEATED, m.fields().get(4).kind());
         EnumDecl e = f.enums().get(0);
         assertEquals(List.of(0, -1, 16), e.values().stream().map(ProtoAst.EnumValueDecl::number).toList());
     }

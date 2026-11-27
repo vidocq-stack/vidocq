@@ -4,4 +4,4 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+* xref:reference.adoc#proto-oneof[The members of a `oneof` are generated] [.tag-new]#NEW# — the `.proto` parser used to drop a `oneof` block with its fields, without a word (BUG-20261127-84). Its members are now fields of the message: boxed components of the record with `explicitPresence` and `oneofGroup`, a constructor that refuses two members set, and a `<name>Case()` method; the static parser keeps the last member read on the wire, as the reflective runtime does.

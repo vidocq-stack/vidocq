@@ -84,16 +84,6 @@ final class OtlpProtoSchema {
     /** Ids written as hex in OTLP/JSON (and not base64, as the proto3 JSON mapping would). */
     private static final Set<String> HEX_IDS = Set.of("trace_id", "span_id", "parent_span_id");
 
-    /** The {@code oneof} members of the OTLP messages Humboldt writes: their default value is still present. */
-    private static final Set<String> ONEOF_MEMBERS = Set.of(
-            "opentelemetry.proto.common.v1.AnyValue.string_value",
-            "opentelemetry.proto.common.v1.AnyValue.bool_value",
-            "opentelemetry.proto.common.v1.AnyValue.int_value",
-            "opentelemetry.proto.common.v1.AnyValue.double_value",
-            "opentelemetry.proto.common.v1.AnyValue.bytes_value",
-            "opentelemetry.proto.metrics.v1.NumberDataPoint.as_double",
-            "opentelemetry.proto.metrics.v1.NumberDataPoint.as_int");
-
     private static final Map<String, Descriptor> MESSAGES = load();
 
     private OtlpProtoSchema() {}
@@ -104,7 +94,7 @@ final class OtlpProtoSchema {
             try (InputStream in = OtlpProtoSchema.class.getClassLoader().getResourceAsStream(file)) {
                 if (in == null) throw new IllegalStateException("missing test resource " + file);
                 String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-                files.add(ProtoParser.parse(file, withoutOneofBlocks(source)));
+                files.add(ProtoParser.parse(file, source));
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -114,28 +104,6 @@ final class OtlpProtoSchema {
             file.messageTypes().forEach(message -> index(message, messages));
         }
         return messages;
-    }
-
-    /**
-     * Lifts the members of each {@code oneof} block to plain fields of their message. Champollion's {@code .proto}
-     * parser skips a {@code oneof} block with its fields (BUG-20261127-84), and AnyValue, Metric and
-     * NumberDataPoint keep theirs in one. On the wire a member is an ordinary field; {@link #ONEOF_MEMBERS} keeps
-     * the presence of the ones Humboldt writes.
-     */
-    private static String withoutOneofBlocks(String source) {
-        StringBuilder out = new StringBuilder(source.length());
-        boolean inOneof = false;
-        for (String line : source.split("\n", -1)) {
-            String code = line.strip();
-            if (code.startsWith("oneof ") && code.endsWith("{")) {
-                inOneof = true;
-            } else if (inOneof && code.equals("}")) {
-                inOneof = false;
-            } else {
-                out.append(line).append('\n');
-            }
-        }
-        return out.toString();
     }
 
     private static void index(Descriptor message, Map<String, Descriptor> messages) {
@@ -270,9 +238,9 @@ final class OtlpProtoSchema {
     private static Map<String, Object> withoutDefaults(Descriptor message, Map<String, Object> fields) {
         for (FieldDescriptor field : message.fields()) {
             Object value = fields.get(field.jsonName());
+            // A oneof member has explicit presence in the descriptor: its default value stays.
             boolean implicit = field.cardinality() == Cardinality.IMPLICIT
-                    && field.type() != FieldType.MESSAGE
-                    && !ONEOF_MEMBERS.contains(message.fullName() + "." + field.name());
+                    && field.type() != FieldType.MESSAGE;
             boolean emptyList = value instanceof List<?> list && list.isEmpty();
             if (emptyList || (implicit && isDefault(value))) {
                 fields.remove(field.jsonName());

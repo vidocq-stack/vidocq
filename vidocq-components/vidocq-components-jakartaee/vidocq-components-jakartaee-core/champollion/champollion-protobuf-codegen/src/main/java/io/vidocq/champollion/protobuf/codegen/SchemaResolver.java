@@ -37,6 +37,7 @@ import io.vidocq.champollion.protobuf.codegen.ProtoAst.ServiceDecl;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -245,7 +246,15 @@ public final class SchemaResolver {
         String full = join(scope, m.name());
         Descriptors.Features msgFeatures = featuresFromOptions(m.options(), inherited);
         List<Descriptors.FieldDescriptor> fields = new ArrayList<>();
-        for (FieldDecl f : m.fields()) fields.add(resolveField(f, full, table, msgFeatures));
+        Map<Integer, String> numbers = new HashMap<>();
+        for (FieldDecl f : m.fields()) {
+            String previous = numbers.putIfAbsent(f.number(), f.name());
+            if (previous != null) {
+                throw new SchemaResolutionException("Field number " + f.number() + " is used by both "
+                        + full + "." + previous + " and " + full + "." + f.name());
+            }
+            fields.add(resolveField(f, full, table, msgFeatures));
+        }
         List<Descriptors.Descriptor> nested = new ArrayList<>();
         for (MessageDecl n : m.nestedMessages()) nested.add(resolveMessage(n, full, table, msgFeatures));
         List<Descriptors.EnumDescriptor> nestedE = new ArrayList<>();
@@ -259,7 +268,8 @@ public final class SchemaResolver {
         Descriptors.Cardinality card = switch (f.kind()) {
             case REPEATED -> Descriptors.Cardinality.REPEATED;
             case OPTIONAL -> Descriptors.Cardinality.EXPLICIT;
-            case SINGULAR -> Descriptors.Cardinality.IMPLICIT;
+            // A member of a oneof always tracks its presence (proto3 §oneof).
+            case SINGULAR -> f.oneofName() != null ? Descriptors.Cardinality.EXPLICIT : Descriptors.Cardinality.IMPLICIT;
         };
 
         FieldType type;
@@ -301,7 +311,8 @@ public final class SchemaResolver {
                 packed,
                 messageTypeName,
                 enumTypeName,
-                inherited);
+                inherited,
+                f.oneofName());
     }
 
     private static String canonicalFullName(String scope, String simpleName,

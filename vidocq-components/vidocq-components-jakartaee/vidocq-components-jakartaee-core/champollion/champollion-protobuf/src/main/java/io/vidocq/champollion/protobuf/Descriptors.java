@@ -87,7 +87,14 @@ public final class Descriptors {
 
     private static FieldDescriptor fieldDescriptor(RecordComponent rc, ProtobufField pf) {
         boolean repeated = List.class.isAssignableFrom(rc.getType());
-        Cardinality card = repeated ? Cardinality.REPEATED : Cardinality.IMPLICIT;
+        String oneof = pf.oneofGroup().isEmpty() ? null : pf.oneofGroup();
+        Cardinality card;
+        if (repeated) {
+            card = Cardinality.REPEATED;
+        } else {
+            // A member of a oneof always tracks its presence (proto3 §oneof).
+            card = oneof != null ? Cardinality.EXPLICIT : Cardinality.IMPLICIT;
+        }
         Class<?> element = repeated ? resolveListElement(rc) : rc.getType();
         String messageTypeName = pf.type() == FieldType.MESSAGE ? element.getName() : null;
         String enumTypeName = pf.type() == FieldType.ENUM ? element.getName() : null;
@@ -99,7 +106,9 @@ public final class Descriptors {
                 card,
                 pf.packed() && pf.type().packable(),
                 messageTypeName,
-                enumTypeName);
+                enumTypeName,
+                Features.PROTO3_DEFAULTS,
+                oneof);
     }
 
     private static Class<?> resolveListElement(RecordComponent rc) {
@@ -286,6 +295,13 @@ public final class Descriptors {
         }
     }
 
+    /**
+     * A field of a message.
+     *
+     * @param containingOneof the name of the {@code oneof} the field is a member of, or {@code null} when it is
+     *                        not in one. A member always has {@link Cardinality#EXPLICIT} presence, and at most one
+     *                        member of a oneof is set (proto3 §oneof).
+     */
     public record FieldDescriptor(
             String name,
             String jsonName,
@@ -295,7 +311,8 @@ public final class Descriptors {
             boolean packed,
             String messageTypeName,
             String enumTypeName,
-            Features features) {
+            Features features,
+            String containingOneof) {
 
         public FieldDescriptor {
             if (number < WireFormat.FIRST_FIELD_NUMBER || number > WireFormat.MAX_FIELD_NUMBER) {
@@ -306,14 +323,23 @@ public final class Descriptors {
             // jsonName auto-derived si null
             jsonName = jsonName == null ? toJsonName(name) : jsonName;
             features = features == null ? Features.PROTO3_DEFAULTS : features;
+            containingOneof = containingOneof == null || containingOneof.isEmpty() ? null : containingOneof;
         }
 
-        /** Compatibility constructor (without features) — proto3 defaults. */
+        /** Compatibility constructor (not in a oneof). */
+        public FieldDescriptor(String name, String jsonName, int number,
+                               FieldType type, Cardinality cardinality, boolean packed,
+                               String messageTypeName, String enumTypeName, Features features) {
+            this(name, jsonName, number, type, cardinality, packed,
+                    messageTypeName, enumTypeName, features, null);
+        }
+
+        /** Compatibility constructor (without features, not in a oneof) — proto3 defaults. */
         public FieldDescriptor(String name, String jsonName, int number,
                                FieldType type, Cardinality cardinality, boolean packed,
                                String messageTypeName, String enumTypeName) {
             this(name, jsonName, number, type, cardinality, packed,
-                    messageTypeName, enumTypeName, Features.PROTO3_DEFAULTS);
+                    messageTypeName, enumTypeName, Features.PROTO3_DEFAULTS, null);
         }
 
         public boolean isRepeated() {

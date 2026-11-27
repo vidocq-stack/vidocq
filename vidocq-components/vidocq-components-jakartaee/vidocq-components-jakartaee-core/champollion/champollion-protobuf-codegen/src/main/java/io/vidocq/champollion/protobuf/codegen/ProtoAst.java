@@ -30,8 +30,8 @@ import java.util.Objects;
  *
  * <p>M2.1 — covers {@code syntax} / {@code edition}, {@code package},
  * {@code import}, {@code message}, scalars, {@code repeated}, nested message
- * and {@code enum}. {@code service}, {@code oneof}, {@code map}, complex
- * options, and extensions deferred to M2.2/M2.3.</p>
+ * and {@code enum}, then {@code service} and {@code oneof} (its members are fields of the message, each naming
+ * its block in {@link FieldDecl#oneofName()}). {@code map}, complex options and extensions are not mapped.</p>
  */
 public final class ProtoAst {
 
@@ -52,12 +52,24 @@ public final class ProtoAst {
     /** A simple key = value option (string, identifier, or number). */
     public record OptionEntry(String name, String value) {}
 
-    /** Field definition in a message. */
+    /**
+     * Field definition in a message.
+     *
+     * @param oneofName the name of the {@code oneof} block that declares the field, or {@code null} for a field
+     *                  declared in the message body itself
+     */
     public record FieldDecl(
             String name,
             int number,
             FieldKind kind,
-            FieldTypeRef type) {}
+            FieldTypeRef type,
+            String oneofName) {
+
+        /** A field declared in the message body itself, not in a {@code oneof}. */
+        public FieldDecl(String name, int number, FieldKind kind, FieldTypeRef type) {
+            this(name, number, kind, type, null);
+        }
+    }
 
     public enum FieldKind { SINGULAR, OPTIONAL, REPEATED }
 

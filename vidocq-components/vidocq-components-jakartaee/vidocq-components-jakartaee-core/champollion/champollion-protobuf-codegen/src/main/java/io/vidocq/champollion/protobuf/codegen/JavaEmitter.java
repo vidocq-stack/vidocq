@@ -21,6 +21,7 @@ package io.vidocq.champollion.protobuf.codegen;
 
 import io.vidocq.champollion.protobuf.Descriptors;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -162,18 +163,25 @@ public final class JavaEmitter {
             if (f.isRepeated() && f.type().packable() && !f.packed()) {
                 sb.append(", packed = false");
             }
+            if (f.containingOneof() != null) {
+                sb.append(", explicitPresence = true, oneofGroup = \"").append(f.containingOneof()).append('"');
+            }
             sb.append(") ");
             sb.append(javaTypeOf(f)).append(' ').append(safeIdent(f.name()));
             if (i < d.fields().size() - 1) sb.append(',');
             sb.append('\n');
         }
         sb.append(indent).append(") implements Message {");
-        if (d.nestedMessageTypes().isEmpty() && d.nestedEnumTypes().isEmpty()) {
+        Map<String, List<Descriptors.FieldDescriptor>> oneofs = oneofsOf(d);
+        if (oneofs.isEmpty() && d.nestedMessageTypes().isEmpty() && d.nestedEnumTypes().isEmpty()) {
             sb.append("}\n");
             return;
         }
         sb.append("\n\n");
         String childIndent = indent + "    ";
+        if (!oneofs.isEmpty()) {
+            emitOneofs(sb, d, oneofs, childIndent);
+        }
         for (Descriptors.Descriptor n : d.nestedMessageTypes()) {
             emitMessageType(sb, n, childIndent);
             sb.append('\n');
@@ -183,6 +191,84 @@ public final class JavaEmitter {
             sb.append('\n');
         }
         sb.append(indent).append("}\n");
+    }
+
+    // ============================================================ Oneof
+
+    /** The members of each {@code oneof} of {@code d}, by oneof name, in declaration order. */
+    private static Map<String, List<Descriptors.FieldDescriptor>> oneofsOf(Descriptors.Descriptor d) {
+        Map<String, List<Descriptors.FieldDescriptor>> oneofs = new LinkedHashMap<>();
+        for (Descriptors.FieldDescriptor f : d.fields()) {
+            if (f.containingOneof() != null) {
+                oneofs.computeIfAbsent(f.containingOneof(), _ -> new ArrayList<>()).add(f);
+            }
+        }
+        return oneofs;
+    }
+
+    /**
+     * The API of the oneofs of a record (proto3 §oneof): a compact constructor that refuses two members set in the
+     * same oneof, and for each oneof an enum {@code <Name>Case} with a method {@code <name>Case()} that names the
+     * member set, {@code <NAME>_NOT_SET} when none is.
+     */
+    private static void emitOneofs(StringBuilder sb, Descriptors.Descriptor d,
+                                   Map<String, List<Descriptors.FieldDescriptor>> oneofs, String indent) {
+        String body = indent + "    ";
+        boolean checks = oneofs.values().stream().anyMatch(members -> members.size() > 1);
+        if (checks) {
+            sb.append(indent).append("public ").append(d.name()).append(" {\n");
+            for (Map.Entry<String, List<Descriptors.FieldDescriptor>> oneof : oneofs.entrySet()) {
+                if (oneof.getValue().size() < 2) continue;
+                sb.append(body).append("if (");
+                List<Descriptors.FieldDescriptor> members = oneof.getValue();
+                for (int i = 0; i < members.size(); i++) {
+                    if (i > 0) sb.append(" + ");
+                    sb.append('(').append(safeIdent(members.get(i).name())).append(" != null ? 1 : 0)");
+                }
+                sb.append(" > 1) {\n");
+                sb.append(body).append("    throw new IllegalArgumentException(\"At most one member of oneof '")
+                        .append(oneof.getKey()).append("' can be set\");\n");
+                sb.append(body).append("}\n");
+            }
+            sb.append(indent).append("}\n\n");
+        }
+        for (Map.Entry<String, List<Descriptors.FieldDescriptor>> oneof : oneofs.entrySet()) {
+            String caseType = upperCamel(oneof.getKey()) + "Case";
+            String notSet = upperSnake(oneof.getKey()) + "_NOT_SET";
+            sb.append(indent).append("/** The member of oneof {@code ").append(oneof.getKey())
+                    .append("} that is set. */\n");
+            sb.append(indent).append("public enum ").append(caseType).append(" {\n");
+            for (Descriptors.FieldDescriptor member : oneof.getValue()) {
+                sb.append(body).append(upperSnake(member.name())).append(",\n");
+            }
+            sb.append(body).append(notSet).append(";\n");
+            sb.append(indent).append("}\n\n");
+            sb.append(indent).append("public ").append(caseType).append(' ')
+                    .append(decapitalize(caseType)).append("() {\n");
+            for (Descriptors.FieldDescriptor member : oneof.getValue()) {
+                sb.append(body).append("if (").append(safeIdent(member.name())).append(" != null) return ")
+                        .append(caseType).append('.').append(upperSnake(member.name())).append(";\n");
+            }
+            sb.append(body).append("return ").append(caseType).append('.').append(notSet).append(";\n");
+            sb.append(indent).append("}\n\n");
+        }
+    }
+
+    /** {@code test_oneof} → {@code TestOneof}, {@code kind} → {@code Kind}. */
+    private static String upperCamel(String protoName) {
+        String camel = Descriptors.toJsonName(protoName);
+        return camel.isEmpty() ? camel : Character.toUpperCase(camel.charAt(0)) + camel.substring(1);
+    }
+
+    /** {@code string_value} or {@code stringValue} → {@code STRING_VALUE}. */
+    private static String upperSnake(String protoName) {
+        StringBuilder sb = new StringBuilder(protoName.length() + 4);
+        for (int i = 0; i < protoName.length(); i++) {
+            char c = protoName.charAt(i);
+            if (Character.isUpperCase(c) && i > 0 && protoName.charAt(i - 1) != '_') sb.append('_');
+            sb.append(Character.toUpperCase(c));
+        }
+        return sb.toString();
     }
 
     // ============================================================ Enum
@@ -215,7 +301,9 @@ public final class JavaEmitter {
 
     private String javaTypeOf(Descriptors.FieldDescriptor f) {
         String base = baseJavaType(f);
-        return f.isRepeated() ? "List<" + boxIfPrimitive(base) + ">" : base;
+        if (f.isRepeated()) return "List<" + boxIfPrimitive(base) + ">";
+        // A oneof member is null when it is not set: a primitive cannot say so.
+        return f.containingOneof() != null ? boxIfPrimitive(base) : base;
     }
 
     private String baseJavaType(Descriptors.FieldDescriptor f) {

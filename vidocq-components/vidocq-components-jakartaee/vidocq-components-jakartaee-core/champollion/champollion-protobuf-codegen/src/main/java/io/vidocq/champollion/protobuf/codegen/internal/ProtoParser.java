@@ -41,6 +41,7 @@ import io.vidocq.champollion.protobuf.codegen.internal.ProtoLexer.TokenKind;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * .proto parser (proto3 / Editions 2023) — recursive descent.
@@ -50,6 +51,7 @@ import java.util.Map;
 public final class ProtoParser {
 
     private static final String OPTION = "option";
+    private static final Set<String> LABELS = Set.of("repeated", "optional", "required");
 
     private static final Map<String, Scalar> SCALARS = Map.ofEntries(
             Map.entry("double", Scalar.DOUBLE), Map.entry("float", Scalar.FLOAT),
@@ -265,7 +267,7 @@ public final class ProtoParser {
                     case "reserved" -> skipUntilSemi();
                     case "extensions" -> skipUntilSemi();
                     case OPTION -> options.add(parseOption());
-                    case "oneof" -> skipBlock(); // M2.1 : ignore oneof
+                    case "oneof" -> parseOneof(fields);
                     case "map" -> skipUntilSemi();      // M2.1 : ignore map
                     default -> fields.add(parseField());
                 }
@@ -275,6 +277,32 @@ public final class ProtoParser {
         }
         expect(TokenKind.RBRACE);
         return new MessageDecl(name.text(), fields, nested, nestedEnums, options);
+    }
+
+    /**
+     * {@code oneof name { member; ... }}: each member becomes a field of the message that names the block.
+     *
+     * <p>Spec: <a href="https://protobuf.dev/reference/protobuf/proto3-spec/#oneof_and_oneof_field">Proto3 §oneof</a>
+     * — {@code oneofField = type fieldName "=" fieldNumber [ "[" fieldOptions "]" ] ";"}: no label.</p>
+     */
+    private void parseOneof(List<FieldDecl> fields) {
+        consume(); // 'oneof'
+        String oneof = expect(TokenKind.IDENT).text();
+        expect(TokenKind.LBRACE);
+        while (peek().kind() != TokenKind.RBRACE && peek().kind() != TokenKind.EOF) {
+            Token t = peek();
+            if (t.kind() == TokenKind.SEMI) {
+                consume();
+            } else if (t.kind() == TokenKind.IDENT && t.text().equals(OPTION)) {
+                parseOption();
+            } else if (t.kind() == TokenKind.IDENT && LABELS.contains(t.text())) {
+                throw err("A member of oneof '" + oneof + "' cannot be '" + t.text() + "'", t);
+            } else {
+                FieldDecl member = parseField();
+                fields.add(new FieldDecl(member.name(), member.number(), member.kind(), member.type(), oneof));
+            }
+        }
+        expect(TokenKind.RBRACE);
     }
 
     private FieldDecl parseField() {
@@ -377,13 +405,6 @@ public final class ProtoParser {
     private void skipUntilSemi() {
         while (peek().kind() != TokenKind.SEMI && peek().kind() != TokenKind.EOF) consume();
         if (peek().kind() == TokenKind.SEMI) consume();
-    }
-
-    private void skipBlock() {
-        consume(); // keyword
-        // Optionally consume name
-        if (peek().kind() == TokenKind.IDENT) consume();
-        skipBalanced(TokenKind.LBRACE, TokenKind.RBRACE);
     }
 
     private void skipBalanced(TokenKind open, TokenKind close) {

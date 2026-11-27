@@ -96,4 +96,14 @@ class OneofJsonDuplicateTest {
         assertEquals("hello", h.notInOneof());
         assertEquals("x", h.choiceString());
     }
+
+    @Test
+    @DisplayName("Descriptor of a record: the members name their oneof and have explicit presence")
+    void descriptorNamesTheOneof() {
+        Descriptors.Descriptor d = Descriptors.forRecord(OneofHolder.class);
+        assertEquals("choice", d.findFieldByNumber(1).containingOneof());
+        assertEquals(Descriptors.Cardinality.EXPLICIT, d.findFieldByNumber(2).cardinality());
+        assertNull(d.findFieldByNumber(4).containingOneof());
+        assertEquals(Descriptors.Cardinality.IMPLICIT, d.findFieldByNumber(4).cardinality());
+    }
 }

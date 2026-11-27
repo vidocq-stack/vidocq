@@ -9,7 +9,7 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 ## BUG-20261127-84 — Codegen: the `.proto` parser skips a `oneof` block with its fields
 
 - **Date** : 2026-11-27
-- **Statut** : OPEN
+- **Statut** : FIXED on `fix/champollion-proto-oneof`
 - **Module touché** : `champollion-protobuf-codegen` — `ProtoParser` (`case "oneof" -> skipBlock(); // M2.1 : ignore oneof`)
 - **Symptôme** : the fields declared inside a `oneof` are missing from the resolved `Descriptor` and from the generated
   record: no error, no warning. Found by Humboldt (Vidocq/vidocq#830), whose test decodes OTLP/protobuf with the
@@ -18,10 +18,17 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 - **Reproduction minimale** : `SchemaResolver.resolveAll(List.of(ProtoParser.parse("a.proto", "syntax = \"proto3\";
   message A { oneof v { string s = 1; int64 i = 2; } }")))` → `A` has no field.
 - **Cause** : `oneof` support was left for later at M2.1; the block is skipped rather than refused.
-- **Contournement** : Humboldt's test (`OtlpProtoSchema.withoutOneofBlocks`) lifts the members to plain fields before
+- **Contournement** (until the fix) : Humboldt's test (`OtlpProtoSchema.withoutOneofBlocks`) lifts the members to plain fields before
   parsing; on the wire a `oneof` member is an ordinary field.
-- **Correction suggérée** : parse the members as fields of the message, with their `oneof` index in the descriptor
-  (presence semantics of a member), or at least fail on a `oneof` instead of dropping its fields.
+- **Correction** : `ProtoParser.parseOneof` reads each member as a field of the message that names its block
+  (`FieldDecl.oneofName`; a label on a member is refused). `SchemaResolver` gives a member `Cardinality.EXPLICIT` and
+  `FieldDescriptor.containingOneof`, and refuses two fields with one number. `JavaEmitter` makes a member a boxed
+  component with `explicitPresence = true, oneofGroup = "<oneof>"`, adds a compact constructor that refuses two
+  members set and a `<Name>Case` enum with its `<name>Case()` method. The parser `ProtobufStaticProcessor` generates
+  clears the other members after reading one (last wins on the wire, as `RuntimeBinding` already did).
+  `Descriptors.forRecord` fills `containingOneof` from `oneofGroup`. Tests: `OneofCodegenTest` (scalar, message,
+  enum and string members; reflective and static parsers), `ProtoParserTest`, `OneofJsonDuplicateTest`. Humboldt's
+  workaround (`withoutOneofBlocks`, `ONEOF_MEMBERS`) is removed: its test reads the official files unchanged.
 
 ## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
 

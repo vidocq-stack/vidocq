@@ -284,21 +284,40 @@ class ProtoParserTest {
         }
 
         @Test
-        void oneof_skipped() {
+        void oneof_members_are_fields_of_the_message() {
+            // BUG-20261127-84: the members of a oneof used to be dropped with their block.
             String src = """
                     syntax = "proto3";
                     message M {
                       string a = 1;
                       oneof choice {
+                        option (my.opt) = true;
                         string x = 2;
-                        int32 y = 3;
+                        .pkg.Other y = 3 [deprecated = true];
+                        ;
                       }
+                      int32 z = 4;
                     }
                     """;
-            ProtoFile f = parse(src);
-            // Le champ avant l'oneof est conservé ; les champs dans l'oneof
-            // sont silencieusement ignorés en M2.1.
-            assertEquals(1, f.messages().get(0).fields().size());
+            MessageDecl m = parse(src).messages().get(0);
+            assertEquals(java.util.List.of("a", "x", "y", "z"),
+                    m.fields().stream().map(ProtoAst.FieldDecl::name).toList());
+            assertEquals(null, m.fields().get(0).oneofName());
+            assertEquals("choice", m.fields().get(1).oneofName());
+            assertEquals("choice", m.fields().get(2).oneofName());
+            assertEquals(new NamedType(".pkg.Other"), m.fields().get(2).type());
+            assertEquals(FieldKind.SINGULAR, m.fields().get(1).kind());
+            assertEquals(null, m.fields().get(3).oneofName());
+        }
+
+        @Test
+        void a_oneof_member_takes_no_label() {
+            // Proto3 spec §oneof: "oneofField = type fieldName = fieldNumber [ fieldOptions ];".
+            for (String label : java.util.List.of("repeated", "optional", "required")) {
+                ProtoSyntaxException ex = assertThrows(ProtoSyntaxException.class, () -> parse(
+                        "syntax = \"proto3\"; message M { oneof c { " + label + " string x = 1; } }"));
+                assertTrue(ex.getMessage().contains("oneof"), ex.getMessage());
+            }
         }
 
         @Test
