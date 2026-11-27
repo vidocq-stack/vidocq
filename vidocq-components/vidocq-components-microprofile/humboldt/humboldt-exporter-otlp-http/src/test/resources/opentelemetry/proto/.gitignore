@@ -1,0 +1,2 @@
+# The OTLP logs messages, which the "logs/" rule of the Humboldt .gitignore would leave out.
+!logs/
