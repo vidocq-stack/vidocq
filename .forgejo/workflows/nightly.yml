@@ -115,7 +115,7 @@ jobs:
       # Error Prone (#269) reports through the build log of the analysis below, which reads its warnings as external
       # issues: the sources are compiled again there, with the errorprone profile of vidocq-parent. Touched, the main
       # sources are newer than their classes, and maven-compiler-plugin recompiles each module whole, its tests with
-      # it. Not in pull requests: a pull request's gate would turn red on findings in code it does not touch.
+      # it. A pull request does the same over the modules it analyses (pr.yml, #832).
       - name: Make the main sources stale, for Error Prone
         run: find . -path '*/src/main/java/*' -name '*.java' -not -path '*/target/*' -exec touch {} +
 

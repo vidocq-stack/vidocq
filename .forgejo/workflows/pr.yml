@@ -8,7 +8,9 @@
 #                      pull request changes, their upstream without tests and every downstream module with its
 #                      tests, with JaCoCo (-Pquality). Then the SonarQube analysis of the modules holding a
 #                      changed file, from that same build (blocking; it replaces the separate sonar.yml, which
-#                      built and tested the whole reactor a second time). No TCK: they run once a day, on
+#                      built and tested the whole reactor a second time). The analysed modules are compiled
+#                      again there with Error Prone, whose warnings become issues of severity INFO (#832). No
+#                      TCK: they run once a day, on
 #                      demand and for a release (tck-nightly.yml); a pull request that needs one dispatches
 #                      `TCK nightly` on its branch with its component.
 #   impacted           no repository outside depends on a pull request any more: a shared API change fixes every
@@ -193,6 +195,26 @@ jobs:
           print("Modules analysed: %d" % len(chosen), file=sys.stderr)
           PY
 
+      # Error Prone (#269, #832) reports through the build log of the analysis below, which reads its warnings as
+      # external issues: the analysed modules are compiled again there, with the errorprone profile of vidocq-parent,
+      # as the nightly analysis of main does. Touched, their main sources are newer than their classes, and
+      # maven-compiler-plugin recompiles each of these modules whole, its tests with it. Only the modules holding a
+      # changed file: not the upstream nor the downstream modules the build above compiled, whose findings a pull
+      # request analysis would not show (it reports new code only). An aggregator has no sources of its own: its
+      # submodules are not touched.
+      - name: Make the analysed main sources stale, for Error Prone
+        if: steps.changes.outputs.docs-only != 'true' && steps.sonar-scope.outputs.pl != ''
+        env:
+          PL: ${{ steps.sonar-scope.outputs.pl }}
+        run: |
+          set -euo pipefail
+          IFS=, read -ra modules <<< "$PL"
+          for m in "${modules[@]}"; do
+            if [ "$m" != "." ] && [ -d "$m/src/main/java" ]; then
+              find "$m/src/main/java" -name '*.java' -exec touch {} +
+            fi
+          done
+
       - name: SonarQube analysis
         if: steps.changes.outputs.docs-only != 'true' && steps.sonar-scope.outputs.pl != ''
         uses: https://codefloe.com/Vidocq/ci/sonar-analysis@main
@@ -201,13 +223,19 @@ jobs:
           sonar-token: ${{ secrets.SONAR_TOKEN }}
           host-url: ${{ vars.SONAR_HOST_URL }}
           bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
-          # No build here: validate only, for the SBOM the dependency scan reads, over the analysed modules that ship (root pom).
-          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dvidocq.aggregator.deploy.skip=false -pl ${{ steps.sonar-scope.outputs.pl }} validate
+          # The analysed modules compiled again with Error Prone and packaged without tests (a module copies the jar of
+          # another before its own package phase), deployed and installed by nobody: Error Prone's warnings, and the SBOM
+          # the dependency scan reads, of the analysed modules that ship (root pom). What they depend on comes from the
+          # build above, installed in the job's local repository; the JaCoCo and test reports it left in target/ stay.
+          maven-args: -B -ntp -Pquality,errorprone -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dvidocq.aggregator.deploy.skip=false -DskipTests -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.jlink.skip=true -pl ${{ steps.sonar-scope.outputs.pl }} package
           # skipJreProvisioning: the scanner runs on the runner's Java 25 instead of downloading a JRE from the
           # server at each analysis; that download hung for ten minutes on 2026-11-23 and the job was cut (#765).
-          analysis-args: -B -ntp -Pquality -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dsonar.scanner.skipJreProvisioning=true -pl ${{ steps.sonar-scope.outputs.pl }}
+          analysis-args: -B -ntp -Pquality,errorprone -Dgib.disable=true -Dvidocq.build-info.dirty=^none -P!dist -Dsonar.scanner.skipJreProvisioning=true -pl ${{ steps.sonar-scope.outputs.pl }}
           blocking: 'true'
           targeted-tests: false
+          # INFO until the cleanup of #832, as in the nightly analysis: Error Prone's findings on new code show in
+          # SonarQube and in the pull request's issues without failing the gate.
+          errorprone-severity: INFO
 
   impacted:
     needs: [governance-checks, pr-state]
