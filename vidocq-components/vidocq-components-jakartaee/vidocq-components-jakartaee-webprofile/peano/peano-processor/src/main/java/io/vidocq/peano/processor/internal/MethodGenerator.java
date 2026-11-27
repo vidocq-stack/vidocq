@@ -276,8 +276,8 @@ final class MethodGenerator {
         }
         for(Element current=declared.asElement();current instanceof TypeElement;current=current.getEnclosingElement()) {
             if(current.getModifiers().contains(Modifier.PRIVATE)
-                    || !current.getModifiers().contains(Modifier.PUBLIC)
-                    && !environment.getElementUtils().getPackageOf(current).getQualifiedName().contentEquals(pkg)) {
+                    || (!current.getModifiers().contains(Modifier.PUBLIC)
+                    && !environment.getElementUtils().getPackageOf(current).getQualifiedName().contentEquals(pkg))) {
                 throw new IOException("Method metadata type is inaccessible from the generated table: "+type);
             }
         }

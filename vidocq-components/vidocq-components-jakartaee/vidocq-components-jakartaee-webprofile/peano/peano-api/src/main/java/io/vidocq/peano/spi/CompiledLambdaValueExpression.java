@@ -56,7 +56,8 @@ public abstract class CompiledLambdaValueExpression extends CompiledFunctionValu
         Body(CompiledLambdaValueExpression owner,int ordinal,Map<String,Object> captured) {
             this.owner=owner; this.ordinal=ordinal; this.captured=captured;
         }
-        @Override @SuppressWarnings("unchecked")
+        // The signature of jakarta.el.ValueExpression#getValue, which the Jakarta EL API imposes.
+        @Override @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
         public <T> T getValue(ELContext context) {
             Objects.requireNonNull(context,"context");
             context.enterLambdaScope(captured);

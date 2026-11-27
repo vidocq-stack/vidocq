@@ -285,10 +285,10 @@ public final class Interpreter {
     }
 
     public static boolean isEmpty(Object value) {
-        return value == null || value instanceof String text && text.isEmpty()
-                || value instanceof Collection<?> collection && collection.isEmpty()
-                || value instanceof Map<?, ?> map && map.isEmpty()
-                || value.getClass().isArray() && Array.getLength(value) == 0;
+        return value == null || (value instanceof String text && text.isEmpty())
+                || (value instanceof Collection<?> collection && collection.isEmpty())
+                || (value instanceof Map<?, ?> map && map.isEmpty())
+                || (value.getClass().isArray() && Array.getLength(value) == 0);
     }
 }
 

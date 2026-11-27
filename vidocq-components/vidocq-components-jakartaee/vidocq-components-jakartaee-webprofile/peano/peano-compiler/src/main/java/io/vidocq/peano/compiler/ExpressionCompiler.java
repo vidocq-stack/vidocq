@@ -202,7 +202,7 @@ public final class ExpressionCompiler {
                 ? evaluation.body() : null;
         boolean literal=template.kind()==Template.Kind.LITERAL;
         if (!literal && !(body instanceof Ast.Identifier || body instanceof Ast.Property
-                || body instanceof Ast.Call call && call.target() instanceof Ast.Property))
+                || (body instanceof Ast.Call call && call.target() instanceof Ast.Property)))
             throw new ELException("Method expression must reference a method or a single variable");
         int shape=literal ? 0 : body instanceof Ast.Identifier ? 1 : body instanceof Ast.Call ? 3 : 2;
         String literalValue=literal ? ((Template.Text)template.parts().getFirst()).value() : null;
@@ -1127,7 +1127,7 @@ public final class ExpressionCompiler {
 
     private static boolean dynamicNumber(Ast node) {
         ClassDesc type=rawType(node);
-        return OBJECT.equals(type) || STRING.equals(type) && !(node instanceof Ast.Literal);
+        return OBJECT.equals(type) || (STRING.equals(type) && !(node instanceof Ast.Literal));
     }
 
     private static boolean floating(Ast node) {

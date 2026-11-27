@@ -55,7 +55,8 @@ public abstract class CompiledValueExpression extends ValueExpression {
     /** Captured bindings contribute to identity when a generated expression uses them. */
     protected Object bindingIdentity() { return java.util.Map.of(); }
 
-    @Override @SuppressWarnings("unchecked")
+    // The signature of jakarta.el.ValueExpression#getValue, which the Jakarta EL API imposes.
+    @Override @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     public final <T> T getValue(ELContext context) {
         Objects.requireNonNull(context,CONTEXT);
         context.notifyBeforeEvaluation(source);

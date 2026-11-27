@@ -95,8 +95,9 @@ final class PeanoValueExpression extends ValueExpression {
         return new PeanoValueExpression(instance, expectedType);
     }
 
+    // The signature of jakarta.el.ValueExpression#getValue, which the Jakarta EL API imposes.
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     public <T> T getValue(ELContext context) {
         Objects.requireNonNull(context, CONTEXT);
         if (!objectExpression) context.notifyBeforeEvaluation(source);

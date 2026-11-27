@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 class ParsedExpressionCacheTest {
     @Test void exactSourceChecksSurviveHashCollisionsAndRetainTheLocalMiss() {
         var cache=new ParsedExpressionCache(8,128,4096);
-        String first="\u0024{Aa+1}",second="\u0024{BB+1}";
+        String first="${Aa+1}",second="${BB+1}";
         assertEquals(first.hashCode(),second.hashCode());
         var left=cache.parse(first);
         var right=cache.parse(second);
@@ -42,25 +42,25 @@ class ParsedExpressionCacheTest {
 
     @Test void retentionIsBoundedAndOversizedEntriesDoNotReplaceHotSources() {
         var cache=new ParsedExpressionCache(8,128,4096);
-        var hot=cache.parse("\u0024{a}");
-        for (int i=0;i<300;i++) cache.parse("\u0024{a+"+i+"}");
+        var hot=cache.parse("${a}");
+        for (int i=0;i<300;i++) cache.parse("${a+"+i+"}");
         assertTrue(cache.retainedEntries()<=8);
         assertTrue(cache.retainedEstimatedBytes()<=8L*4096);
         var tiny=new ParsedExpressionCache(8,128,1);
-        tiny.parse("\u0024{a}"); assertEquals(0,tiny.retainedEntries());
+        tiny.parse("${a}"); assertEquals(0,tiny.retainedEntries());
         var shortSources=new ParsedExpressionCache(8,8,4096);
-        shortSources.parse("\u0024{a}");
-        shortSources.parse("\u0024{'"+"x".repeat(200)+"'}");
+        shortSources.parse("${a}");
+        shortSources.parse("${'"+"x".repeat(200)+"'}");
         assertEquals(1,shortSources.retainedEntries());
-        assertEquals(hot.identity(),shortSources.parse("\u0024{a}").identity());
+        assertEquals(hot.identity(),shortSources.parse("${a}").identity());
         var disabled=new ParsedExpressionCache(0,128,4096);
-        disabled.parse("\u0024{a}"); assertEquals(0,disabled.retainedEntries());
+        disabled.parse("${a}"); assertEquals(0,disabled.retainedEntries());
     }
 
     @Test void expressionInstancesOwnNonemptyStringsWhileEachValueRemainsStable() {
         var factory=new PeanoExpressionFactory();
         var context=new StandardELContext(factory); context.putContext(ExpressionFactory.class,factory);
-        String[] sources={"\u0024{'hello'}","\u0024{true ? 'hello' : 'other'}","\u0024{[{'key':'hello'}][0]['key']}"};
+        String[] sources={"${'hello'}","${true ? 'hello' : 'other'}","${[{'key':'hello'}][0]['key']}"};
         for (String source:sources) {
             var first=factory.createValueExpression(context,source,Object.class);
             var second=factory.createValueExpression(context,source,Object.class);
@@ -79,8 +79,8 @@ class ParsedExpressionCacheTest {
         first.putContext(ExpressionFactory.class,factory); second.putContext(ExpressionFactory.class,factory);
         first.getVariableMapper().setVariable("a",factory.createValueExpression(11L,Long.class));
         second.getVariableMapper().setVariable("a",factory.createValueExpression(22L,Long.class));
-        var left=factory.createValueExpression(first,"\u0024{a+1}",Object.class);
-        var right=factory.createValueExpression(second,"\u0024{a+1}",String.class);
+        var left=factory.createValueExpression(first,"${a+1}",Object.class);
+        var right=factory.createValueExpression(second,"${a+1}",String.class);
         first.getVariableMapper().setVariable("a",factory.createValueExpression(99L,Long.class));
         assertEquals(12L,left.<Object>getValue(first));
         assertEquals("23",right.<Object>getValue(second));
@@ -89,16 +89,16 @@ class ParsedExpressionCacheTest {
 
     @Test void cachesNoFailureOrThrowableAndPreservesLazyNumericErrors() {
         var cache=new ParsedExpressionCache(8,128,4096);
-        var first=assertThrows(ELException.class,()->cache.parse("\u0024{a+}"));
-        var second=assertThrows(ELException.class,()->cache.parse("\u0024{a+}"));
+        var first=assertThrows(ELException.class,()->cache.parse("${a+}"));
+        var second=assertThrows(ELException.class,()->cache.parse("${a+}"));
         assertNotSame(first,second); assertEquals(0,cache.retainedEntries());
         var factory=new PeanoExpressionFactory();
         var context=new StandardELContext(factory); context.putContext(ExpressionFactory.class,factory);
         for (int i=0;i<2;i++) {
-            assertEquals(true,factory.createValueExpression(context,"\u0024{true or 9223372036854775808}",Object.class).<Object>getValue(context));
-            assertEquals(Long.MIN_VALUE,factory.createValueExpression(context,"\u0024{-09223372036854775808}",Object.class).<Object>getValue(context));
+            assertEquals(true,factory.createValueExpression(context,"${true or 9223372036854775808}",Object.class).<Object>getValue(context));
+            assertEquals(Long.MIN_VALUE,factory.createValueExpression(context,"${-09223372036854775808}",Object.class).<Object>getValue(context));
         }
-        var expression=factory.createValueExpression(context,"\u0024{9223372036854775808}",Object.class);
+        var expression=factory.createValueExpression(context,"${9223372036854775808}",Object.class);
         var error1=assertThrows(ELException.class,()->expression.getValue(context));
         var error2=assertThrows(ELException.class,()->expression.getValue(context));
         assertNotSame(error1.getCause(),error2.getCause());
@@ -117,9 +117,9 @@ class ParsedExpressionCacheTest {
                     var context=new StandardELContext(factory); context.putContext(ExpressionFactory.class,factory);
                     context.getVariableMapper().setVariable("a",factory.createValueExpression(value,Long.class));
                     for (int i=0;i<80;i++) {
-                        String source=i%2==0 ? "\u0024{Aa+1}" : "\u0024{BB+1}";
+                        String source=i%2==0 ? "${Aa+1}" : "${BB+1}";
                         assertEquals(List.of(i%2==0 ? "Aa" : "BB"),cache.parse(source).variableNames());
-                        assertEquals(value+1,factory.createValueExpression(context,"\u0024{a+1}",Object.class).<Object>getValue(context));
+                        assertEquals(value+1,factory.createValueExpression(context,"${a+1}",Object.class).<Object>getValue(context));
                     }
                 }));
             }

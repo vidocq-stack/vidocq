@@ -44,7 +44,7 @@ public class EvaluationBenchmark {
         var factory=Fixtures.factory(engine);
         context=Fixtures.context(factory);
         expression=engine.equals("compiled")
-                ? (ValueExpression)Class.forName(Fixtures.binaryName(fixture))
+                ? Class.forName(Fixtures.binaryName(fixture)).asSubclass(ValueExpression.class)
                     .getConstructor(ELContext.class,Class.class).newInstance(context,Object.class)
                 : factory.createValueExpression(context,Fixtures.source(fixture),Object.class);
         if (!expression.getClass().getModule().isNamed())

@@ -92,7 +92,7 @@ class ExpressionCompilerTest {
         };
         instanceOracle.getVariableMapper().setVariable("left",factory.createValueExpression(instanceOracle,"${'hello'}",Object.class));
         instanceOracle.getVariableMapper().setVariable("right",factory.createValueExpression(instanceOracle,"${'hello'}",Object.class));
-        assertEquals(Boolean.FALSE,factory.createValueExpression(instanceOracle,"${left==right}",Object.class).getValue(instanceOracle));
+        assertEquals(false,factory.createValueExpression(instanceOracle,"${left==right}",Object.class).getValue(instanceOracle));
         assertEquals(2,oracleConversions[0]);
         for (int i=0;i<sources.size();i++) {
             assertNoBuildToolingReference(writeCompiled(classes,"E"+i,sources.get(i)));

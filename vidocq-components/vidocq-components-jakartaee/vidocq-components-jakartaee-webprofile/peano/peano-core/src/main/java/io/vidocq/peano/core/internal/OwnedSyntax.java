@@ -26,6 +26,8 @@ import io.vidocq.peano.core.internal.syntax.Template;
 import io.vidocq.peano.core.internal.syntax.Token;
 
 /** Materializes expression-owned String values while reusing unaffected immutable syntax. */
+// Every == here asks whether a copy returned that very node or list, unchanged: identity, not equality.
+@SuppressWarnings("ReferenceEquality")
 final class OwnedSyntax {
     private OwnedSyntax() {}
 

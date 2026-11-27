@@ -63,8 +63,8 @@ public final class ReflectionGuard extends ELResolver {
         return unresolved(context,base);
     }
 
-    /** Checks the base and leaves the property unresolved for the next resolver. */
-    private static <T> T unresolved(ELContext context,Object base) {
+    /** Checks the base and leaves the property unresolved for the next resolver: always null. */
+    private static Class<?> unresolved(ELContext context,Object base) {
         property(context,base);
         return null;
     }

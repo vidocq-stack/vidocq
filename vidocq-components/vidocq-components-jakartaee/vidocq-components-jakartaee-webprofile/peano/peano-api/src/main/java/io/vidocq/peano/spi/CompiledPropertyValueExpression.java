@@ -107,11 +107,11 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
     }
 
     private record LocationWrite(ELContext context,ValueReference location) implements java.util.function.Consumer<Object> {
-        public void accept(Object value) { CompiledRootValueExpression.writeReference(context,location,value); }
+        @Override public void accept(Object value) { CompiledRootValueExpression.writeReference(context,location,value); }
     }
 
     private record BindingWrite(ELContext context,ValueExpression binding) implements java.util.function.Consumer<Object> {
-        public void accept(Object value) { binding.setValue(context,value); }
+        @Override public void accept(Object value) { binding.setValue(context,value); }
     }
 
     @Override protected Object bindingIdentity() { return bindings; }

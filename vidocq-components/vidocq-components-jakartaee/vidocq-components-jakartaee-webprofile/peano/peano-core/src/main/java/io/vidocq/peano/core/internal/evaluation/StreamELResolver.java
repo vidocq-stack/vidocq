@@ -48,7 +48,7 @@ public final class StreamELResolver extends ELResolver {
     public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] parameters) {
         String name = method instanceof String text ? text : "";
         Object[] args = parameters == null ? new Object[0] : parameters;
-        boolean source = base instanceof Collection<?> || base != null && base.getClass().isArray();
+        boolean source = base instanceof Collection<?> || (base != null && base.getClass().isArray());
         if (source && name.equals("stream")) {
             context.setPropertyResolved(base, method);
             arity(name, args, 0);

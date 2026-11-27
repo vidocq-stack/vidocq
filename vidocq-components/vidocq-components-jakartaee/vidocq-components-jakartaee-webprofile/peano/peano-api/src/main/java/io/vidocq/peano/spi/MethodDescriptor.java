@@ -34,6 +34,7 @@ import jakarta.el.MethodInfo;
  * @param staticMethod whether the method is static
  * @param annotations runtime annotation literals, defensively copied
  */
+@SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString compare the array contents; a published signature
 public record MethodDescriptor(String name, Class<?> returnType, Class<?>[] parameterTypes,
         boolean varargs, boolean staticMethod, Annotation[] annotations) {
     public MethodDescriptor {

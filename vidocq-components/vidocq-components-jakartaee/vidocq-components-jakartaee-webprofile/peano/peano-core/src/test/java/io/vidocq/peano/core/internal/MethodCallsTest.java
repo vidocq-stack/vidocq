@@ -74,6 +74,7 @@ class MethodCallsTest {
         }
 
         @Override
+        @SuppressWarnings("ReferenceEquality") // that very target instance: identity
         public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] args) {
             if (base == target && ("echo".equals(method) || "nil".equals(method))) {
                 context.setPropertyResolved(base, method);

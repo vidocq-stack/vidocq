@@ -41,6 +41,7 @@ public final class Comparison {
         return new Comparison(context).equalValues(a, b);
     }
 
+    @SuppressWarnings("ReferenceEquality") // EL 6.0 §1.8.2: "If A==B, return true", identity first
     private boolean equalValues(Object a, Object b) {
         try {
             if (a == b) return true;
@@ -56,7 +57,10 @@ public final class Comparison {
 
     private boolean equalNumbers(Object a, Object b) {
         if (a instanceof BigDecimal || b instanceof BigDecimal) {
-            return convert(a, BigDecimal.class).equals(convert(b, BigDecimal.class));
+            // EL 6.0 §1.8.2 prescribes A.equals(B) for BigDecimal, scale included: 1.0 != 1.00.
+            @SuppressWarnings("BigDecimalEquals")
+            boolean equal = convert(a, BigDecimal.class).equals(convert(b, BigDecimal.class));
+            return equal;
         }
         if (floating(a) || floating(b)) {
             return convert(a, Double.class).doubleValue() == convert(b, Double.class).doubleValue();
@@ -91,6 +95,7 @@ public final class Comparison {
         return new Comparison(context).relateValues(operator, a, b);
     }
 
+    @SuppressWarnings("ReferenceEquality") // EL 6.0 §1.8.1: "If A==B, if operator is <= or >= return true", identity first
     private boolean relateValues(TokenKind operator, Object a, Object b) {
         try {
             if (a == b) {

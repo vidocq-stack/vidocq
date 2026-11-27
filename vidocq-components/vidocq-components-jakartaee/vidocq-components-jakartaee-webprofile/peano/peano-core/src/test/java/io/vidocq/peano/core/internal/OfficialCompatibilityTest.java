@@ -60,14 +60,14 @@ class OfficialCompatibilityTest {
         var context = new StandardELContext(factory) {
             @Override public ELResolver getELResolver() { return empty; }
         };
-        var vector = new java.util.Vector<Object>();
-        context.getVariableMapper().setVariable("vect",factory.createValueExpression(vector,Object.class));
+        var list = new java.util.ArrayList<Object>();
+        context.getVariableMapper().setVariable("vect",factory.createValueExpression(list,Object.class));
         var method = factory.createMethodExpression(context,"#{vect.add}",boolean.class,new Class<?>[]{Object.class});
         assertEquals(true,method.invoke(context,new Object[]{"Peano"}));
-        assertEquals(java.util.List.of("Peano"),vector);
+        assertEquals(java.util.List.of("Peano"),list);
         var call=factory.createValueExpression(context,"${vect.add('next')}",Object.class);
         assertThrows(MethodNotFoundException.class,()->call.getValue(context));
-        assertEquals(1,vector.size());
+        assertEquals(1,list.size());
     }
 }
 

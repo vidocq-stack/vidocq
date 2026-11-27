@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.processing.AbstractProcessor;
@@ -129,7 +130,8 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         if (optionsProcessed) return;
         optionsProcessed = true;
         String configured = processingEnv.getOptions().getOrDefault("peano.accessorTypes", "");
-        for (String name : configured.split(",")) {
+        // -1 keeps every field; the blank ones, trailing or not, are skipped below.
+        for (String name : configured.split(",", -1)) {
             if (!name.isBlank()) pendingTypes.add(name.trim());
         }
     }
@@ -352,7 +354,7 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
     }
 
     /** A getter (or a boolean is-getter, which wins) for the property its name spells. */
-    private void collectReader(TreeMap<String, ExecutableElement> readers, ExecutableElement method) {
+    private void collectReader(Map<String, ExecutableElement> readers, ExecutableElement method) {
         if (!method.getParameters().isEmpty() || method.getReturnType().getKind() == TypeKind.VOID) return;
         String name = method.getSimpleName().toString();
         boolean is = name.startsWith("is") && name.length() > 2 && method.getReturnType().getKind() == TypeKind.BOOLEAN;
@@ -363,11 +365,11 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         ExecutableElement previous = readers.get(property);
         boolean previousIs = previous != null && previous.getSimpleName().toString().startsWith("is")
                 && previous.getReturnType().getKind() == TypeKind.BOOLEAN;
-        if (previous == null || is || !previousIs && processingEnv.getTypeUtils().isSubtype(
-                method.getReturnType(), previous.getReturnType())) readers.put(property, method);
+        if (previous == null || is || (!previousIs && processingEnv.getTypeUtils().isSubtype(
+                method.getReturnType(), previous.getReturnType()))) readers.put(property, method);
     }
 
-    private static void collectWriter(TreeMap<String, List<ExecutableElement>> writers, ExecutableElement method) {
+    private static void collectWriter(Map<String, List<ExecutableElement>> writers, ExecutableElement method) {
         String name = method.getSimpleName().toString();
         if (name.startsWith("set") && name.length() > 3 && method.getParameters().size() == 1
                 && method.getReturnType().getKind() == TypeKind.VOID) {
@@ -388,8 +390,8 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
             return null;
         }
         ExecutableElement setter = candidates.isEmpty() ? null : candidates.getFirst();
-        if (getter != null && typeVariable(getter.getReturnType())
-                || setter != null && typeVariable(setter.getParameters().getFirst().asType())) {
+        if ((getter != null && typeVariable(getter.getReturnType()))
+                || (setter != null && typeVariable(setter.getParameters().getFirst().asType()))) {
             error("Type-variable property adapters are not supported yet: " + name, type);
             return null;
         }
@@ -398,7 +400,7 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
 
     private static boolean typeVariable(TypeMirror type) {
         return type.getKind() == TypeKind.TYPEVAR
-                || type instanceof ArrayType array && typeVariable(array.getComponentType());
+                || (type instanceof ArrayType array && typeVariable(array.getComponentType()));
     }
 
     private static boolean privateEnclosing(Element element) {

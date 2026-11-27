@@ -27,8 +27,8 @@ import jakarta.el.ELException;
 /** Registry integration deliberately enabled by installing this optional module. */
 public final class PropertyEditorConversions implements TypeConversionProvider {
     public PropertyEditorConversions() {}
-    public int priority() { return Integer.MIN_VALUE; }
-    public ConversionResult convert(Object value,Class<?> target) {
+    @Override public int priority() { return Integer.MIN_VALUE; }
+    @Override public ConversionResult convert(Object value,Class<?> target) {
         if (!(value instanceof String text)) return ConversionResult.unhandled();
         try {
             var editor=PropertyEditorManager.findEditor(target);

@@ -134,12 +134,14 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
      * context class loader gets a snapshot cached in the context, as before. The snapshot hangs
      * off the application's own generated class, never off a shared JDK class.
      */
+    @SuppressWarnings("ReferenceEquality") // that very class loader: identity, not equality
     static AccessorTable registered(ELContext context,Class<?> expression,Class<?> owner) {
         if (expression.getClassLoader()==Thread.currentThread().getContextClassLoader())
             return REGISTRIES.get(expression).tables().get(owner);
         return registered(context,owner);
     }
 
+    @SuppressWarnings("ReferenceEquality") // the snapshot belongs to that very class loader: identity
     protected static AccessorTable registered(ELContext context,Class<?> owner) {
         ClassLoader loader=Thread.currentThread().getContextClassLoader();
         Object cached=context.getContext(Registry.class);

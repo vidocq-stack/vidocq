@@ -61,6 +61,7 @@ class ComparisonTest {
 
     @Test
     void usesComparableFromEitherSideAndWrapsErrors() {
+        @SuppressWarnings("ComparableType") // EL compares a Comparable with any other value: the fixture accepts any type
         class Rank implements Comparable<Object> {
             @Override
             public int compareTo(Object other) {

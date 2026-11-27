@@ -43,8 +43,9 @@ final class LambdaBody extends ValueExpression {
         captured = Bindings.captureLambdaArguments(lambda, context);
     }
 
+    // The signature of jakarta.el.ValueExpression#getValue, which the Jakarta EL API imposes.
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     public <T> T getValue(ELContext context) {
         Objects.requireNonNull(context, "context");
         context.enterLambdaScope(captured);

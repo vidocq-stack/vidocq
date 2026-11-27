@@ -127,8 +127,8 @@ public final class Arithmetic {
 
     private static boolean floating(Object value) {
         return value instanceof Float || value instanceof Double
-                || value instanceof String text && (text.indexOf('.') >= 0 || text.indexOf('e') >= 0
-                        || text.indexOf('E') >= 0);
+                || (value instanceof String text && (text.indexOf('.') >= 0 || text.indexOf('e') >= 0
+                        || text.indexOf('E') >= 0));
     }
 
     private static BigDecimal decimal(TokenKind op, BigDecimal a, BigDecimal b) {

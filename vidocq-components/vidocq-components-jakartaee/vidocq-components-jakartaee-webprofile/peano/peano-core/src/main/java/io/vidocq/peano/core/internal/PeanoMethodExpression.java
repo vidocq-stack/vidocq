@@ -59,6 +59,7 @@ final class PeanoMethodExpression extends MethodExpression {
     /** The creating factory's accessor catalog; absent after deserialization (EL-019). */
     private final transient Supplier<AccessorCatalog> accessors;
 
+    @SuppressWarnings("ArrayRecordComponent") // a private carrier between two steps, never compared, hashed or printed
     private record Resolved(ResolverAccess.Location location, Class<?>[] types, Object[] arguments) {
     }
 
@@ -76,7 +77,7 @@ final class PeanoMethodExpression extends MethodExpression {
                 ? evaluated : null;
         boolean literal = template.kind() == Template.Kind.LITERAL;
         if (!literal && !(body instanceof Ast.Identifier || body instanceof Ast.Property
-                || body instanceof Ast.Call call && call.target() instanceof Ast.Property)) {
+                || (body instanceof Ast.Call call && call.target() instanceof Ast.Property))) {
             throw new ELException("Method expression must reference a method or a single variable");
         }
         parametersProvided = body instanceof Ast.Call;

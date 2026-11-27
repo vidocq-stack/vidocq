@@ -127,6 +127,7 @@ class ResolverValueExpressionTest {
         assertNull(expression(context, "claimedNull").getValue(context));
     }
 
+    @SuppressWarnings("ReferenceEquality") // base == target asks for that very target instance: identity
     static final class FixtureResolver extends ELResolver {
         final Object target = new Object();
         Object value = "original";

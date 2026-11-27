@@ -33,12 +33,14 @@ import jakarta.el.ValueExpression;
  * Serialization proxy retaining source and captured bindings, without parser or context state.
  * Function descriptors restore public metadata only; invocation still uses the Jakarta resolver.
  */
+// A serialization proxy, never compared or hashed: its array is copied in and read once by readResolve.
+@SuppressWarnings("ArrayRecordComponent")
 record ExpressionSerialization(boolean methodExpression, boolean objectExpression,
         String source, Object instance, Class<?> expectedType, Class<?>[] parameterTypes,
         Map<String, ValueExpression> variables, Map<String, Function> functions) implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private record Function(Class<?> declaringClass, String name, List<Class<?>> parameterTypes)
+    record Function(Class<?> declaringClass, String name, List<Class<?>> parameterTypes)
             implements Serializable {
         private static final long serialVersionUID = 1L;
 

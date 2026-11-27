@@ -25,10 +25,10 @@ import jakarta.el.ELException;
 import org.junit.jupiter.api.Test;
 class RegisteredConversionsTest {
     static class ZProvider implements TypeConversionProvider {
-        public ConversionResult convert(Object value,Class<?> type) { return ConversionResult.handled("z"); }
+        @Override public ConversionResult convert(Object value,Class<?> type) { return ConversionResult.handled("z"); }
     }
     static class AProvider implements TypeConversionProvider {
-        public ConversionResult convert(Object value,Class<?> type) { return ConversionResult.handled("a"); }
+        @Override public ConversionResult convert(Object value,Class<?> type) { return ConversionResult.handled("a"); }
     }
     @Test void ordersProvidersWithoutDependingOnRegistrationOrder() {
         assertEquals("a",new RegisteredConversions(List.of(new ZProvider(),new AProvider())).convert("x",String.class).value());

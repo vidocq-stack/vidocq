@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 class ExpressionAnalysisTest {
     @Test void capturesEachMapperInItsOriginalPhaseAndLookupOrder() {
-        var analysis=ExpressionAnalysis.parse("\u0024{a+p:f(b)} text \u0024{b+p:f(a)+q:g(a)}");
+        var analysis=ExpressionAnalysis.parse("${a+p:f(b)} text ${b+p:f(a)+q:g(a)}");
         var context=new TrackingContext();
         var variables=Bindings.capture(analysis,context);
         var functions=Bindings.captureFunctions(analysis,context);
@@ -44,14 +44,14 @@ class ExpressionAnalysisTest {
     }
 
     @Test void excludesNestedLambdaParametersFromVariableAndFunctionBindings() {
-        var analysis=ExpressionAnalysis.parse("\u0024{(x -> (y -> x(y)+a))(b)}");
+        var analysis=ExpressionAnalysis.parse("${(x -> (y -> x(y)+a))(b)}");
         var context=new TrackingContext();
         Bindings.capture(analysis,context); Bindings.captureFunctions(analysis,context);
         assertEquals(List.of("getVariables","v:a","v:b","getFunctions"),context.calls);
     }
 
     @Test void reusedAnalysisNeverReusesBoundValues() {
-        var analysis=ExpressionAnalysis.parse("\u0024{a}");
+        var analysis=ExpressionAnalysis.parse("${a}");
         var context=new TrackingContext();
         var first=Bindings.capture(analysis,context);
         var replacement=context.factory.createValueExpression(99L,Object.class);
@@ -63,14 +63,14 @@ class ExpressionAnalysisTest {
     }
 
     @Test void obtainsFunctionMapperForEveryEvaluationPartEvenWithoutFunctions() {
-        var analysis=ExpressionAnalysis.parse("\u0024{a} and \u0024{b}");
+        var analysis=ExpressionAnalysis.parse("${a} and ${b}");
         var context=new TrackingContext();
         assertTrue(Bindings.captureFunctions(analysis,context).isEmpty());
         assertEquals(List.of("getFunctions","getFunctions"),context.calls);
     }
 
     @Test void preservesUnmappedQualifiedFunctionFailureAfterVariableCapture() {
-        var analysis=ExpressionAnalysis.parse("\u0024{missing:f(a)}");
+        var analysis=ExpressionAnalysis.parse("${missing:f(a)}");
         var context=new TrackingContext();
         Bindings.capture(analysis,context);
         var error=assertThrows(ELException.class,()->Bindings.captureFunctions(analysis,context));
@@ -79,7 +79,7 @@ class ExpressionAnalysisTest {
     }
 
     @Test void canonicalIdentityRemainsEquivalentAcrossDelimitersAndSpacing() {
-        var immediate=ExpressionAnalysis.parse("\u0024{a+1}");
+        var immediate=ExpressionAnalysis.parse("${a+1}");
         var deferred=ExpressionAnalysis.parse("#{ a + 1 }");
         assertEquals(immediate.identity(),deferred.identity());
         assertEquals(immediate.identity().hashCode(),deferred.identity().hashCode());
@@ -95,7 +95,7 @@ class ExpressionAnalysisTest {
         final Method max;
         TrackingContext() {
             try { abs=Math.class.getMethod("abs",long.class); max=Math.class.getMethod("max",long.class,long.class); }
-            catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+            catch (ReflectiveOperationException error) { throw new LinkageError(error.getMessage(),error); }
             putContext(ExpressionFactory.class,factory);
             values.put("a",factory.createValueExpression(7L,Object.class));
             values.put("b",factory.createValueExpression(8L,Object.class));

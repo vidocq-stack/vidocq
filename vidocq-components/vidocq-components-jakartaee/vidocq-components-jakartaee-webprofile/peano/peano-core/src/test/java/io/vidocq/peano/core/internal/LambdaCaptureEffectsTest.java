@@ -59,7 +59,7 @@ class LambdaCaptureEffectsTest {
     @Test void capturesOuterArgumentsFromEveryNestedSyntaxForm() {
         var context=new CaptureContext();
         var scope=new HashMap<String,Object>();
-        for (String name:List.of("a","b","c","d","e","f","g","h")) scope.put(name,name.toUpperCase());
+        for (String name:List.of("a","b","c","d","e","f","g","h")) scope.put(name,name.toUpperCase(java.util.Locale.ROOT));
         context.enterLambdaScope(scope);
         try {
             var lambda=(Ast.Lambda)Parser.parseBody("(x -> -a + fn:call(b) + {c} + {d: e} + [f] + (g ? x.y : h[x]) + 'z')");
@@ -88,15 +88,15 @@ class LambdaCaptureEffectsTest {
         context.enterLambdaScope(scope);
         LambdaExpression closure;
         try {
-            closure=context.factory.createValueExpression(context,"\u0024{x -> seed}",Object.class).getValue(context);
+            closure=context.factory.createValueExpression(context,"${x -> seed}",Object.class).getValue(context);
             scope.put("seed",99L);
         } finally { context.exitLambdaScope(); }
         assertEquals(7L,closure.invoke(context,1L));
         assertFalse(context.isLambdaArgument("seed"));
-        var failed=context.factory.createValueExpression(context,"\u0024{x -> 1 div 0}",Object.class).<LambdaExpression>getValue(context);
+        var failed=context.factory.createValueExpression(context,"${x -> 1 div 0}",Object.class).<LambdaExpression>getValue(context);
         failed.invoke(context,1L);
         assertFalse(context.isLambdaArgument("x"));
-        var error=context.factory.createValueExpression(context,"\u0024{x -> 1 mod 0}",Object.class).<LambdaExpression>getValue(context);
+        var error=context.factory.createValueExpression(context,"${x -> 1 mod 0}",Object.class).<LambdaExpression>getValue(context);
         assertThrows(ELException.class,()->error.invoke(context,1L));
         assertFalse(context.isLambdaArgument("x"));
     }

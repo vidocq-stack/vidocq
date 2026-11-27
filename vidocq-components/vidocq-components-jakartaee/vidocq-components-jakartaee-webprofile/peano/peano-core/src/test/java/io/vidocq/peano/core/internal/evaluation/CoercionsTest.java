@@ -71,7 +71,8 @@ class CoercionsTest {
                 Arguments.of(3.9d, Long.class, 3L),
                 Arguments.of(new BigDecimal("3.9"), BigInteger.class, BigInteger.valueOf(3)),
                 Arguments.of(BigInteger.TEN, BigDecimal.class, new BigDecimal(BigInteger.TEN)),
-                Arguments.of(0.1d, BigDecimal.class, new BigDecimal(0.1d)),
+                // EL 6.0 §1.23.3: a Double becomes new BigDecimal(A.doubleValue()), the exact binary value of 0.1d.
+                Arguments.of(0.1d, BigDecimal.class, new BigDecimal("0.1000000000000000055511151231257827021181583404541015625")),
                 Arguments.of('A', Long.class, 65L),
                 Arguments.of('\uffff', Long.class, -1L),
                 Arguments.of(65L, Character.class, 'A'),

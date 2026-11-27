@@ -105,7 +105,7 @@ final class MapEntryAccessorTable extends AccessorTable {
         };
         if (descriptor == null) return null;
         int arity = descriptor.parameterTypes().length;
-        if (types != null && (types.length != arity || arity == 1 && types[0] != Object.class)) return null;
+        if (types != null && (types.length != arity || (arity == 1 && types[0] != Object.class))) return null;
         if (arguments != null && arguments.length != arity) return null;
         if (types == null && arguments == null && arity != 0) return null;
         return descriptor;
@@ -121,7 +121,7 @@ final class MapEntryAccessorTable extends AccessorTable {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "ReferenceEquality"}) // shape returns one of the three descriptor constants: identity
     public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] arguments) {
         Object[] actual = arguments == null ? new Object[0] : arguments;
         MethodDescriptor descriptor = shape(context, base, method, types, actual);

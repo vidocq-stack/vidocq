@@ -118,6 +118,7 @@ public final class AccessorCatalog {
     }
 
     /** A table class this catalog holds that {@code loader} itself defines, or null: the class that anchors the catalog. */
+    @SuppressWarnings("ReferenceEquality") // defined by that very loader: identity, not equality
     Class<?> definedBy(ClassLoader loader) {
         for (AccessorTable table : tables.values()) {
             if (table.getClass().getClassLoader() == loader && loader != null) return table.getClass();

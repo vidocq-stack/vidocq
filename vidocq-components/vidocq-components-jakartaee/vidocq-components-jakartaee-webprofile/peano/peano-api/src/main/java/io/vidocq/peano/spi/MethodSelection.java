@@ -83,7 +83,7 @@ public final class MethodSelection {
 
     private static Score candidateScore(ELContext context, MethodDescriptor descriptor, String name,
             boolean staticOnly, Class<?>[] actual, Object[] values) {
-        if (!descriptor.name().equals(name) || staticOnly && !descriptor.staticMethod()) return null;
+        if (!descriptor.name().equals(name) || (staticOnly && !descriptor.staticMethod())) return null;
         return score(context,descriptor,actual,values);
     }
 
@@ -92,7 +92,7 @@ public final class MethodSelection {
     private static Score score(ELContext context, MethodDescriptor descriptor, Class<?>[] actual, Object[] values) {
         Class<?>[] formal = descriptor.parameterTypes();
         boolean varargs = descriptor.varargs();
-        if (!varargs && actual.length!=formal.length || varargs && actual.length<formal.length-1) return null;
+        if ((!varargs && actual.length!=formal.length) || (varargs && actual.length<formal.length-1)) return null;
         int exact = 0;
         int assignable = 0;
         int coercible = 0;
@@ -130,10 +130,10 @@ public final class MethodSelection {
         }
         Class<?> from=boxed(source);
         Class<?> to=boxed(target);
-        return to==String.class || from==String.class && (Number.class.isAssignableFrom(to)
-                || to==Boolean.class || to==Character.class || to.isEnum())
-                || Number.class.isAssignableFrom(from) && (Number.class.isAssignableFrom(to) || to==Character.class)
-                || from==Character.class && Number.class.isAssignableFrom(to);
+        return to==String.class || (from==String.class && (Number.class.isAssignableFrom(to)
+                || to==Boolean.class || to==Character.class || to.isEnum()))
+                || (Number.class.isAssignableFrom(from) && (Number.class.isAssignableFrom(to) || to==Character.class))
+                || (from==Character.class && Number.class.isAssignableFrom(to));
     }
 
     private static boolean moreSpecific(MethodDescriptor a,MethodDescriptor b) {

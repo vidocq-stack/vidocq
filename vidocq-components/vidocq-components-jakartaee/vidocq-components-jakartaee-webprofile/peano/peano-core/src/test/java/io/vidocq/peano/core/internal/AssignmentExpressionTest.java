@@ -52,6 +52,7 @@ class AssignmentExpressionTest {
         context.getVariableMapper().setVariable("helper", factory.createValueExpression(helper, Object.class));
         context.addELResolver(new MethodCallsTest.InvocationResolver(helper) {
             @Override
+            @SuppressWarnings("ReferenceEquality") // that very helper instance: identity
             public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] args) {
                 if (base != helper) return null;
                 context.setPropertyResolved(true);

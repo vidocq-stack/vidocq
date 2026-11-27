@@ -45,15 +45,15 @@ public class SourceCreationBenchmark {
         Fixtures.verifyModules();
         factory=Fixtures.factory(engine); context=Fixtures.context(factory);
         sources=new String[64];
-        for (int i=0;i<sources.length;i++) sources[i]="\u0024{a+"+i+"}";
+        for (int i=0;i<sources.length;i++) sources[i]="${a+"+i+"}";
         sequence=0;
     }
 
     private String nextSource() {
         return switch (workload) {
             case "repeated" -> { operand=0; yield sources[0]; }
-            case "rotating" -> { operand=(sequence++) & 63; yield sources[(int)operand]; }
-            case "unique" -> { operand=sequence++; yield "\u0024{a+"+operand+"}"; }
+            case "rotating" -> { operand=sequence++ & 63; yield sources[(int)operand]; }
+            case "unique" -> { operand=sequence++; yield "${a+"+operand+"}"; }
             default -> throw new IllegalArgumentException("Unknown workload "+workload);
         };
     }

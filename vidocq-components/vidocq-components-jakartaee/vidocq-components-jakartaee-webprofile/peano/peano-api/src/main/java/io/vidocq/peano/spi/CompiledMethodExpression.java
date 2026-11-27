@@ -129,6 +129,7 @@ public abstract class CompiledMethodExpression extends MethodExpression {
         else arguments=parameters==null ? new Object[0] : parameters.clone();
         return new Resolved(base,name,parameterTypes==null ? null : parameterTypes.clone(),arguments);
     }
+    @SuppressWarnings("ArrayRecordComponent") // a private carrier between two steps, never compared, hashed or printed
     private record Resolved(Object base,String name,Class<?>[] types,Object[] arguments) {}
     private MethodReference metadata(ELContext context,Resolved resolved) {
         Class<?> type=resolved.base() instanceof ELClass owner ? owner.getKlass() : resolved.base().getClass();
@@ -171,8 +172,8 @@ public abstract class CompiledMethodExpression extends MethodExpression {
     }
     /** A non-bridge method, or a covariant override, wins over the signature already collected. */
     private static boolean replaces(Method previous,Method method) {
-        return previous.isBridge() && !method.isBridge()
-                || previous.getReturnType()!=method.getReturnType() && previous.getReturnType().isAssignableFrom(method.getReturnType());
+        return (previous.isBridge() && !method.isBridge())
+                || (previous.getReturnType()!=method.getReturnType() && previous.getReturnType().isAssignableFrom(method.getReturnType()));
     }
     private static void requireReflection(Object base) {
         switch (System.getProperty("peano.reflection","allow")) {
@@ -234,7 +235,7 @@ public abstract class CompiledMethodExpression extends MethodExpression {
     }
     private void readObject(java.io.ObjectInputStream input) throws java.io.IOException,ClassNotFoundException {
         input.defaultReadObject();
-        if (source==null || bridge==null || shape<0 || shape>3 || shape!=3 && parameterTypes==null)
+        if (source==null || bridge==null || shape<0 || shape>3 || (shape!=3 && parameterTypes==null))
             throw new java.io.InvalidObjectException("Invalid compiled method expression metadata");
     }
 }

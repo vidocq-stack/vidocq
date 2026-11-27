@@ -45,8 +45,9 @@ class NumericExpressionCompilerTest {
     }
 
     record Token(int value) {}
+    @SuppressWarnings("ComparableType") // EL compares a Comparable with any other value: the fixture accepts any type
     record AnyComparable(int result) implements Comparable<Object> {
-        public int compareTo(Object other) { return result; }
+        @Override public int compareTo(Object other) { return result; }
     }
 
     @Test
@@ -73,16 +74,16 @@ class NumericExpressionCompilerTest {
         var oracle=new StandardELContext(factory);
         var roots=new HashMap<String,Object>();
         oracle.addELResolver(new ELResolver() {
-            public Object getValue(ELContext c,Object base,Object property) {
+            @Override public Object getValue(ELContext c,Object base,Object property) {
                 if (base==null && roots.containsKey(property)) { c.setPropertyResolved(base,property); return roots.get(property); }
                 return null;
             }
-            public Class<?> getType(ELContext c,Object b,Object p) { return Object.class; }
-            public boolean isReadOnly(ELContext c,Object b,Object p) { return true; }
-            public void setValue(ELContext c,Object b,Object p,Object v) {
+            @Override public Class<?> getType(ELContext c,Object b,Object p) { return Object.class; }
+            @Override public boolean isReadOnly(ELContext c,Object b,Object p) { return true; }
+            @Override public void setValue(ELContext c,Object b,Object p,Object v) {
                 // Read-only test resolver: isReadOnly answers true, nothing is written.
             }
-            public Class<?> getCommonPropertyType(ELContext c,Object b) { return String.class; }
+            @Override public Class<?> getCommonPropertyType(ELContext c,Object b) { return String.class; }
         });
         var cases=new ArrayList<String>();
         for (int op=0;op<bodies.size();op++) {

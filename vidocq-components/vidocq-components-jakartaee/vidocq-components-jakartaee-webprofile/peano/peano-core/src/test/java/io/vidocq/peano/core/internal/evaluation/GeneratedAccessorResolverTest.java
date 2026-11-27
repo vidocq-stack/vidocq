@@ -261,7 +261,8 @@ class GeneratedAccessorResolverTest {
             accepts(context,base,property);
         }
         @Override public boolean isReadOnly(ELContext context, Object base, Object property) {
-            return accepts(context,base,property) && false;
+            accepts(context,base,property);
+            return false;
         }
         @Override public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] args) {
             consulted++;

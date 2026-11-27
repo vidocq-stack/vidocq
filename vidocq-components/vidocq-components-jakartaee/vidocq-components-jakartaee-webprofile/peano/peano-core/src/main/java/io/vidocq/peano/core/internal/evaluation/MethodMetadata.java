@@ -68,13 +68,13 @@ public final class MethodMetadata {
         if (type == null || !visited.add(type)) return;
         for (Method method : type.getMethods()) {
             if (!method.getName().equals(name) || !Modifier.isPublic(method.getModifiers())
-                    || staticOnly && !Modifier.isStatic(method.getModifiers())
+                    || (staticOnly && !Modifier.isStatic(method.getModifiers()))
                     || !accessible(method.getDeclaringClass())) continue;
             Signature key = new Signature(name, Arrays.asList(method.getParameterTypes()));
             Method previous = candidates.get(key);
-            if (previous == null || previous.isBridge() && !method.isBridge()
-                    || previous.getReturnType() != method.getReturnType()
-                    && previous.getReturnType().isAssignableFrom(method.getReturnType())) {
+            if (previous == null || (previous.isBridge() && !method.isBridge())
+                    || (previous.getReturnType() != method.getReturnType()
+                    && previous.getReturnType().isAssignableFrom(method.getReturnType()))) {
                 candidates.put(key, method);
             }
         }
