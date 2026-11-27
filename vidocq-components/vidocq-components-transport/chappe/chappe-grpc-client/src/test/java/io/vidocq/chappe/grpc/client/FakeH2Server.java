@@ -272,5 +272,28 @@ final class FakeH2Server implements AutoCloseable {
         }
     }
 
-    record Request(int streamId, Map<String, String> fields, byte[] body) {}
+    /** A request as the server read it; a class, not a record, since its body is an array. */
+    static final class Request {
+        private final int streamId;
+        private final Map<String, String> fields;
+        private final byte[] body;
+
+        Request(int streamId, Map<String, String> fields, byte[] body) {
+            this.streamId = streamId;
+            this.fields = fields;
+            this.body = body.clone();
+        }
+
+        int streamId() {
+            return streamId;
+        }
+
+        Map<String, String> fields() {
+            return fields;
+        }
+
+        byte[] body() {
+            return body.clone();
+        }
+    }
 }

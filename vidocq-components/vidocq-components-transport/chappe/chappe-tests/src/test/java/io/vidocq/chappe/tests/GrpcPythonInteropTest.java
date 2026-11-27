@@ -100,7 +100,7 @@ class GrpcPythonInteropTest {
                 })
                 .get(30, TimeUnit.SECONDS);
         assertTrue(ready != null && ready.startsWith("ready "), "the interop server did not start: " + ready);
-        String[] ports = ready.split(" ");
+        String[] ports = ready.split(" ", -1);
         cleartextPort = Integer.parseInt(ports[1]);
         tlsPort = Integer.parseInt(ports[2]);
     }
