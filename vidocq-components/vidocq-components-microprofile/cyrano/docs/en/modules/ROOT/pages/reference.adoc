@@ -124,7 +124,7 @@ NOTE: `cyrano-tck` is **in-reactor, gated behind the `tck` Maven profile** (TCK 
 | Async through `HttpClient.sendAsync`. The response is processed (filters, readers, `AsyncInvocationInterceptor.applyContext`) on a new virtual thread, or on the builder's `executorService` when one is set — never on the caller's thread. See xref:usage.adoc#async[Async].
 
 | `org.reactivestreams.Publisher<T>`
-| Server-sent events (MP Rest Client 4.0). Needs the Reactive Streams dependency: see <<reactive-streams,Reactive Streams for `Publisher`>>.
+| Server-sent events (MP Rest Client 4.0). Needs the Reactive Streams dependency: see <<reactive-streams,Reactive Streams for `Publisher`>>. The request is sent when the publisher gets its first subscriber; see <<sse-response-filters>> for the filters.
 
 | `void`
 | The response is consumed and discarded.
@@ -147,6 +147,13 @@ An application whose client methods return `Publisher` declares the dependency i
 ----
 
 Such an application cannot be linked with jlink until an explicit `org.reactivestreams` module exists; it runs on the module path as usual.
+
+[#sse-response-filters]
+=== Response filters of a `Publisher` method [.tag-new]#NEW#
+
+The `ClientResponseFilter`s of a `Publisher` method run once the response headers arrive, before the first event is delivered, and not when the stream ends: MP Rest Client 4.0 invokes them "when a response is received", server-sent events included. They see the status and the headers, and no entity: the body is the event stream, read after them. The status they leave decides the stream: `400` and above fail it with a `WebApplicationException`, anything else streams the events. A filter that throws fails the stream with its exception. A request a `ClientRequestFilter` aborts with `abortWith` runs them on the abort response, as a synchronous call does.
+
+A connection that fails before any response runs no response filter; it hands its cause to the <<call-failure-listener,call failure listener>>, then fails the stream with a `ProcessingException`. Until 0.4.0, a `Publisher` method ran no response filter at all, so the CLIENT span of the Telemetry filters never ended (Vidocq/vidocq#822).
 
 [[mp-config]]
 == MicroProfile Config keys
@@ -247,7 +254,7 @@ A call that ends before its response filters all ran runs no `ClientResponseFilt
 * a call that gets no response: refused connection, read or connect timeout, I/O error, interrupt; for a `CompletionStage` method, the exception the stage fails with, without its `CompletionException` wrapper;
 * a response filter that throws.
 
-It is called once, on the thread that sees the failure, before the caller receives the exception; Cyrano removes the property first. What the listener throws is added to the exception as suppressed. A call whose response filters ran, even with an error status, does not call it. A `Publisher` (SSE) method runs no response filter and does not call it either. Humboldt's client filter uses it to end the CLIENT span of a failed call in error (Vidocq/vidocq#686); `cassini-client` reads the same property.
+It is called once, on the thread that sees the failure, before the caller receives the exception; Cyrano removes the property first. What the listener throws is added to the exception as suppressed. A call whose response filters ran, even with an error status, does not call it. For a `Publisher` (SSE) method, it is called when the connection fails before any response, or when a response filter throws (<<sse-response-filters>>); a failure of the stream after the response is reported to the subscriber only. Humboldt's client filter uses it to end the CLIENT span of a failed call in error (Vidocq/vidocq#686); `cassini-client` reads the same property.
 
 [#runtime-prerequisites]
 == Runtime prerequisites

@@ -263,15 +263,31 @@ public class CyranoInvocationHandler implements io.vidocq.cyrano.spi.gen.ClientI
         return failure;
     }
 
+    /**
+     * The response filters of a {@code Publisher} method run once the response headers arrive, before the first
+     * event, and the status they leave decides whether the stream fails: MP Rest Client 4.0 invokes them "when a
+     * response is received", SSE included. A connection that fails before any response tells the failure listener,
+     * as {@link #invokeAsync} does (Vidocq/vidocq#822).
+     */
     private Object ssePublisher(CyranoClientRequestContext reqCtx, RequestSpec spec) {
         if (reqCtx.isAborted()) {
-            int abortStatus = reqCtx.abortResponse() != null
-                    ? reqCtx.abortResponse().getStatus() : 200;
+            int abortStatus = 200;
+            if (reqCtx.abortResponse() != null) {
+                CyranoClientResponseContext respCtx = CyranoClientResponseContext.fromAbort(reqCtx.abortResponse());
+                runResponseFilters(reqCtx, respCtx);
+                abortStatus = respCtx.getStatus();
+            }
             return io.vidocq.cyrano.internal.sse.SseReturnSupport.abortedPublisher(abortStatus);
         }
         HttpRequest sseReq = buildHttpRequest(reqCtx);
         return io.vidocq.cyrano.internal.sse.SseReturnSupport.createPublisher(
-                transport, sseReq, innerType(spec.genericReturnType()), configuration);
+                transport, sseReq, innerType(spec.genericReturnType()), configuration,
+                response -> {
+                    CyranoClientResponseContext respCtx = CyranoClientResponseContext.ofStreamed(response);
+                    runResponseFilters(reqCtx, respCtx);
+                    return respCtx.getStatus();
+                },
+                failure -> notifyFailure(reqCtx, failure));
     }
 
     private CompletableFuture<Object> invokeAsync(CyranoClientRequestContext reqCtx, RequestSpec spec) {

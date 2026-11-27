@@ -110,6 +110,15 @@
             <version>${cassini.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- Test only: the Publisher return type of a MicroProfile Rest Client SSE method, whose CLIENT span ends
+             once the stream opens (Vidocq/vidocq#822). -->
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+            <!-- Cyrano's reactive.streams.version -->
+            <version>1.0.4</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -154,10 +163,13 @@
                     <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent).
                          add-opens: FailedClientCallSpanTest builds a MicroProfile Rest Client of a test interface,
                          and Cyrano defines its proxy in the package of that interface; the module itself opens
-                         nothing to Cyrano. -->
+                         nothing to Cyrano. add-modules/add-reads: SseClientSpanTest declares a Publisher method
+                         (Vidocq/vidocq#822); org.reactivestreams is a test dependency the module does not read. -->
                     <argLine>
                         @{argLine}
                         --add-opens io.vidocq.humboldt.rest/io.vidocq.humboldt.rest=io.vidocq.cyrano.core
+                        --add-modules org.reactivestreams
+                        --add-reads io.vidocq.humboldt.rest=org.reactivestreams
                     </argLine>
                 </configuration>
             </plugin>

@@ -30,8 +30,11 @@ import org.reactivestreams.FlowAdapters;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
 
 /**
  * Bridge between the invocation handler and the SSE machinery for
@@ -62,12 +65,29 @@ public final class SseReturnSupport {
      */
     public static Object createPublisher(CyranoHttpTransport transport, HttpRequest request,
                                          Type elementType, CyranoClientConfiguration configuration) {
+        return createPublisher(transport, request, elementType, configuration,
+                HttpResponse::statusCode, failure -> { /* nobody to tell */ });
+    }
+
+    /**
+     * Same as {@link #createPublisher(CyranoHttpTransport, HttpRequest, Type, CyranoClientConfiguration)}, with the
+     * callbacks of the invocation handler (Vidocq/vidocq#822).
+     *
+     * @param onResponse runs once the response headers arrive, before the body is read (the response filters), and
+     *                   returns the status the stream goes on with: 400 and above fail it
+     * @param onFailure  receives the cause of a connection that fails before any response, unwrapped from its
+     *                   {@code CompletionException}, before the stream fails
+     */
+    public static Object createPublisher(CyranoHttpTransport transport, HttpRequest request,
+                                         Type elementType, CyranoClientConfiguration configuration,
+                                         ToIntFunction<HttpResponse<?>> onResponse,
+                                         Consumer<Throwable> onFailure) {
         SseDataDeserializer deserializer = new SseDataDeserializer(configuration);
         Function<SseEventParser.SseEventData, InboundSseEvent> eventFactory =
                 raw -> new InboundSseEventImpl(raw, deserializer);
         Function<InboundSseEvent, Object> mapper = mapperFor(elementType, deserializer);
         var publisher = new SseEventPublisher<>(
-                () -> transport.sendForSse(request), eventFactory, mapper);
+                () -> transport.sendForSse(request), eventFactory, mapper, onResponse, onFailure);
         return FlowAdapters.toPublisher(publisher);
     }
 

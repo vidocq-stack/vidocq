@@ -52,12 +52,25 @@ final class CyranoClientResponseContext implements ClientResponseContext {
 
     /** Builds the context from an actual HTTP response. */
     static CyranoClientResponseContext of(java.net.http.HttpResponse<String> resp) {
+        byte[] body = resp.body() == null ? new byte[0] : resp.body().getBytes(StandardCharsets.UTF_8);
+        return new CyranoClientResponseContext(resp.statusCode(), headersOf(resp), new ByteArrayInputStream(body));
+    }
+
+    /**
+     * Builds the context of a streamed response from its status and headers alone: the body is the event stream,
+     * read after the response filters ran, so the filters see no entity ({@code Publisher} methods, MP Rest Client
+     * 4.0 SSE support; Vidocq/vidocq#822).
+     */
+    static CyranoClientResponseContext ofStreamed(java.net.http.HttpResponse<?> resp) {
+        return new CyranoClientResponseContext(resp.statusCode(), headersOf(resp), new ByteArrayInputStream(new byte[0]));
+    }
+
+    private static MultivaluedMap<String, String> headersOf(java.net.http.HttpResponse<?> resp) {
         MultivaluedMap<String, String> h = new MultivaluedHashMap<>();
         resp.headers().map().forEach((k, vs) -> {
             for (String v : vs) h.add(k, v);
         });
-        byte[] body = resp.body() == null ? new byte[0] : resp.body().getBytes(StandardCharsets.UTF_8);
-        return new CyranoClientResponseContext(resp.statusCode(), h, new ByteArrayInputStream(body));
+        return h;
     }
 
     /** Builds the context from a response aborted by a filter. */

@@ -642,5 +642,19 @@ request filter leaves a listener that ends the span in error.
 **Regression tests**: `CyranoCallFailureListenerTest` (8 tests); Humboldt's `FailedClientCallSpanTest` drives Cyrano
 with the Telemetry filters.
 
-**Not covered**: a `Publisher<T>` (SSE) method runs no `ClientResponseFilter`, even when the stream opens, so its
-CLIENT span does not end either. Not changed here.
+**Formerly not covered, FIXED 2026-11-27 (fix/cyrano-sse-client-span, Vidocq/vidocq#822)**: a `Publisher<T>` (SSE)
+method ran no `ClientResponseFilter`, even when the stream opened, and told the listener nothing when the connection
+failed, so its CLIENT span never ended. MP Rest Client 4.0 invokes response filters "when a response is received",
+with no exception for SSE (*Provider Declaration*; the SSE chapter says nothing of filters, and no TCK test registers
+a filter on an SSE client). `SseEventPublisher` now takes two callbacks from the invocation handler: once the response
+headers arrive, before the body is read, the response filters run on a context with the status and headers and no
+entity (`CyranoClientResponseContext.ofStreamed`), and the status they leave decides the stream (`>= 400` fails it); a
+connection that fails before any response hands its cause, unwrapped, to the failure listener before the stream fails.
+A request aborted with `abortWith` runs the response filters on the abort response. The old constructor and
+`SseReturnSupport.createPublisher` overload stay. Not covered: a `Publisher` nobody subscribes to sends no request, so
+a span its request filters opened never ends.
+
+**Regression tests**: `CyranoSseResponseFiltersTest` (8 tests: filters run once before the first event while the stream
+is open; error status; a filter that changes the status; refused connection tells the listener; a filter that throws;
+aborted request; the two former factories); Humboldt's `SseClientSpanTest` (3 tests, one ended CLIENT span each: stream that opens, 404, refused
+connection; red on the unfixed Cyrano).

@@ -38,8 +38,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Flow;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 
 /**
  * {@link Flow.Publisher} of mapped SSE events backed by a single
@@ -72,12 +74,29 @@ public final class SseEventPublisher<T> implements Flow.Publisher<T> {
     private final Supplier<CompletableFuture<HttpResponse<Flow.Publisher<List<ByteBuffer>>>>> connection;
     private final Function<SseEventParser.SseEventData, InboundSseEvent> eventFactory;
     private final Function<InboundSseEvent, T> mapper;
+    private final ToIntFunction<HttpResponse<?>> onResponse;
+    private final Consumer<Throwable> onFailure;
     private final AtomicBoolean started = new AtomicBoolean();
 
     public SseEventPublisher(
             Supplier<CompletableFuture<HttpResponse<Flow.Publisher<List<ByteBuffer>>>>> connection,
             Function<SseEventParser.SseEventData, InboundSseEvent> eventFactory,
             Function<InboundSseEvent, T> mapper) {
+        this(connection, eventFactory, mapper, HttpResponse::statusCode, failure -> { /* nobody to tell */ });
+    }
+
+    /**
+     * @param onResponse runs once the response headers arrive, before the body is read (the client response
+     *                   filters), and returns the status the stream goes on with: 400 and above fail it; what it
+     *                   throws fails the stream
+     * @param onFailure  receives the cause of a connection that fails before any response, before the stream fails
+     */
+    public SseEventPublisher(
+            Supplier<CompletableFuture<HttpResponse<Flow.Publisher<List<ByteBuffer>>>>> connection,
+            Function<SseEventParser.SseEventData, InboundSseEvent> eventFactory,
+            Function<InboundSseEvent, T> mapper,
+            ToIntFunction<HttpResponse<?>> onResponse,
+            Consumer<Throwable> onFailure) {
         //Virtual-thread executor: SubmissionPublisher delivery tasks are cheap,
         //possibly blocking (subscriber code) — one virtual thread per task.
         this.delegate = new SubmissionPublisher<>(
@@ -85,6 +104,8 @@ public final class SseEventPublisher<T> implements Flow.Publisher<T> {
         this.connection = connection;
         this.eventFactory = eventFactory;
         this.mapper = mapper;
+        this.onResponse = onResponse;
+        this.onFailure = onFailure;
     }
 
     @Override
@@ -99,19 +120,10 @@ public final class SseEventPublisher<T> implements Flow.Publisher<T> {
         connection.get().whenComplete((response, failure) -> {
             try {
                 if (failure != null) {
-                    delegate.closeExceptionally(asProcessingException(failure));
-                    return;
+                    failBeforeResponse(unwrap(failure));
+                } else {
+                    open(response);
                 }
-                int status = response.statusCode();
-                if (status >= 400) {
-                    //Release the connection, then fail the stream (spec §8 default
-                    //mapping). CyranoLightResponse: no RuntimeDelegate needed.
-                    response.body().subscribe(new CancellingSubscriber());
-                    delegate.closeExceptionally(new WebApplicationException(
-                            "HTTP " + status, CyranoLightResponse.ofStatus(status)));
-                    return;
-                }
-                response.body().subscribe(new EventStreamSubscriber());
             } catch (RuntimeException e) {
                 //whenComplete swallows callback exceptions — fail the stream instead.
                 delegate.closeExceptionally(e);
@@ -119,9 +131,43 @@ public final class SseEventPublisher<T> implements Flow.Publisher<T> {
         });
     }
 
-    private static Throwable asProcessingException(Throwable failure) {
-        Throwable cause = failure instanceof CompletionException ce && ce.getCause() != null
-                ? ce.getCause() : failure;
+    /** Tells {@code onFailure}, then fails the stream, even when {@code onFailure} throws. */
+    private void failBeforeResponse(Throwable cause) {
+        try {
+            onFailure.accept(cause);
+        } finally {
+            delegate.closeExceptionally(asProcessingException(cause));
+        }
+    }
+
+    private void open(HttpResponse<Flow.Publisher<List<ByteBuffer>>> response) {
+        int status = statusAfterResponseHook(response);
+        if (status >= 400) {
+            //Release the connection, then fail the stream (spec §8 default
+            //mapping). CyranoLightResponse: no RuntimeDelegate needed.
+            response.body().subscribe(new CancellingSubscriber());
+            delegate.closeExceptionally(new WebApplicationException(
+                    "HTTP " + status, CyranoLightResponse.ofStatus(status)));
+            return;
+        }
+        response.body().subscribe(new EventStreamSubscriber());
+    }
+
+    /** Runs {@code onResponse}; when it throws, the exchange is released before the stream fails. */
+    private int statusAfterResponseHook(HttpResponse<Flow.Publisher<List<ByteBuffer>>> response) {
+        try {
+            return onResponse.applyAsInt(response);
+        } catch (RuntimeException e) {
+            response.body().subscribe(new CancellingSubscriber());
+            throw e;
+        }
+    }
+
+    private static Throwable unwrap(Throwable failure) {
+        return failure instanceof CompletionException ce && ce.getCause() != null ? ce.getCause() : failure;
+    }
+
+    private static Throwable asProcessingException(Throwable cause) {
         return cause instanceof ProcessingException ? cause : new ProcessingException(cause);
     }
 

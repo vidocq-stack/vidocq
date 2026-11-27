@@ -368,6 +368,8 @@ The warning is logged when a scope is closed while another context, attached aft
 
 The `ProcessingException`, `CompletionException` or `ExecutionException` the client wraps the failure in is unwrapped first. The span ends once, by the listener or by the response filter. Another Jakarta REST client (the server's own, on an application server) does not call the listener: there, the span of a call that gets no response is not ended, so not exported (Vidocq/vidocq#686).
 
+[.tag-new]#NEW# A MicroProfile Rest Client method that returns a `Publisher` (server-sent events) ends its span once the response headers arrive, with `http.response.status_code`, while the stream goes on: the OpenTelemetry HTTP conventions end a client span "after the HTTP response headers are fully read (or when they fail to be read)", and the span is not held open for the life of the stream. A status `≥ 400` sets `ERROR`, as for any call; a connection that fails before any response ends it in error as above. A failure of the stream after the response, or its cancellation, does not change the span. The request, and so the end of the span, waits for the publisher's first subscriber: the span of a `Publisher` nobody subscribes to is never ended. Cyrano runs the response filters of a `Publisher` method since Vidocq/vidocq#822; before, the span of an SSE call never ended.
+
 For other client-side attributes (DB, messaging…), Humboldt does not generate them automatically: set them in application code (either as plain `AttributeKey`s, or with the constants from `opentelemetry-semconv` — an artifact Humboldt itself does not ship). Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
 
 [#exception-attributes]
