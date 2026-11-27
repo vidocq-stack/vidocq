@@ -51,6 +51,8 @@ package io.vidocq.cassini.spi.gen;
  *                        method it overrides or implements may carry them), so that no annotation is scanned at
  *                        startup; {@code null} when the generated class cannot name it (CASSINI-042)
  */
+// Published SPI: the arrays stay; equals, hashCode and toString below compare and print their contents.
+@SuppressWarnings("ArrayRecordComponent")
 public record RouteDescriptor(
         Class<?> beanClass,
         String methodName,

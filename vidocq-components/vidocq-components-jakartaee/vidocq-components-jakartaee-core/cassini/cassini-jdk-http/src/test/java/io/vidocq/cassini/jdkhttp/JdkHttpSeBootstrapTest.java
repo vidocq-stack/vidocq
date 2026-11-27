@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.ServerSocketChannel;
@@ -45,6 +46,7 @@ class JdkHttpSeBootstrapTest {
 
     private static final String HELLO = "hello";
     private static final String LOOPBACK = "127.0.0.1";
+    private static final InetAddress LOOPBACK_ADDRESS = InetAddress.ofLiteral(LOOPBACK);
 
     @Path(HELLO)
     public static class HelloResource {
@@ -84,7 +86,7 @@ class JdkHttpSeBootstrapTest {
             try {
                 ServerSocketChannel channel = ServerSocketChannel.open();
                 try {
-                    channel.bind(new InetSocketAddress(LOOPBACK, port));
+                    channel.bind(new InetSocketAddress(LOOPBACK_ADDRESS, port));
                     return channel;
                 } catch (IOException _) {
                     channel.close();
@@ -102,7 +104,7 @@ class JdkHttpSeBootstrapTest {
      */
     private static int nextEphemeralLoopbackPort() throws IOException {
         try (ServerSocketChannel probe = ServerSocketChannel.open()) {
-            probe.bind(new InetSocketAddress(LOOPBACK, 0));
+            probe.bind(new InetSocketAddress(LOOPBACK_ADDRESS, 0));
             int port = ((InetSocketAddress) probe.getLocalAddress()).getPort();
             return port < 65_535 ? port + 1 : port;
         }
@@ -120,7 +122,7 @@ class JdkHttpSeBootstrapTest {
 
     /** The body of a {@code GET path} on the instance's loopback address, over a plain HTTP/1.1 socket. */
     private static String get(SeBootstrap.Instance instance, String path) throws IOException {
-        try (Socket socket = new Socket(LOOPBACK, instance.configuration().port())) {
+        try (Socket socket = new Socket(LOOPBACK_ADDRESS, instance.configuration().port())) {
             // a listener that is not the instance accepts the connection and never answers
             socket.setSoTimeout(10_000);
             OutputStream out = socket.getOutputStream();

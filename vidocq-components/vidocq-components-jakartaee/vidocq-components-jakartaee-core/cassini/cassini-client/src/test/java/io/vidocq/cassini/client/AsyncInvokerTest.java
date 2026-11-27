@@ -154,24 +154,27 @@ class AsyncInvokerTest {
     @Test
     void callback_type_is_found_on_a_superclass() throws Exception {
         StringCallback callback = new StringCallback() { };
-        async().post(text(), callback);
+        Future<String> future = async().post(text(), callback);
         assertEquals(POST_ECHO, callback.result.get(TIMEOUT_S, TimeUnit.SECONDS));
+        assertEquals(POST_ECHO, await(future));
     }
 
     @Test
     void callback_with_an_unresolved_type_receives_the_response() throws Exception {
         GenericCallback<Response> callback = new GenericCallback<>();
-        async().get(callback);
+        Future<Response> future = async().get(callback);
         assertEquals(200, callback.result.get(TIMEOUT_S, TimeUnit.SECONDS).getStatus());
+        assertEquals(200, await(future).getStatus());
     }
 
     @Test
     void typed_callback_fails_on_an_error_status() {
         StringCallback callback = new StringCallback();
-        client.target(server.baseUrl()).path("/missing").request().async().get(callback);
+        Future<String> future = client.target(server.baseUrl()).path("/missing").request().async().get(callback);
         ExecutionException e = assertThrows(ExecutionException.class,
                 () -> callback.result.get(TIMEOUT_S, TimeUnit.SECONDS));
         assertInstanceOf(NotFoundException.class, e.getCause());
+        assertInstanceOf(NotFoundException.class, assertThrows(ExecutionException.class, () -> await(future)).getCause());
     }
 
     @Test
@@ -187,10 +190,12 @@ class AsyncInvokerTest {
         assertInstanceOf(ProcessingException.class, e.getCause());
 
         ResponseCallback callback = new ResponseCallback();
-        invoker.get(callback);
+        Future<Response> withCallback = invoker.get(callback);
         ExecutionException failed = assertThrows(ExecutionException.class,
                 () -> callback.result.get(TIMEOUT_S, TimeUnit.SECONDS));
         assertInstanceOf(ProcessingException.class, failed.getCause());
+        assertInstanceOf(ProcessingException.class,
+                assertThrows(ExecutionException.class, () -> await(withCallback)).getCause());
     }
 
     // ---- callbacks ---------------------------------------------------------------------------

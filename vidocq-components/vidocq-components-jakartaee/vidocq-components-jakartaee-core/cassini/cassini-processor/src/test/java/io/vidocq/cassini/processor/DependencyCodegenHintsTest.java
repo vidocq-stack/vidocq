@@ -144,7 +144,7 @@ class DependencyCodegenHintsTest {
             layer.configuration().modules().forEach(module -> module.reference().location()
                     .filter(uri -> "file".equals(uri.getScheme())).ifPresent(uri -> entries.add(Path.of(uri))));
         }
-        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
+        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator, -1)) {
             if (!entry.isBlank()) {
                 entries.add(Path.of(entry));
             }

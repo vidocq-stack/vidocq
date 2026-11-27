@@ -124,6 +124,7 @@ final class CassiniClientRequestContext implements ClientRequestContext {
     }
 
     @Override
+    @SuppressWarnings("StringSplitter") // the separator is the caller's regex; a trailing empty value is no value
     public boolean containsHeaderString(String name, String valueSeparatorRegex, Predicate<String> valuePredicate) {
         String header = getHeaderString(name);
         if (header == null) return false;
@@ -142,7 +143,9 @@ final class CassiniClientRequestContext implements ClientRequestContext {
         String accept = getHeaderString(HttpHeaders.ACCEPT);
         if (accept == null) return List.of(MediaType.WILDCARD_TYPE);
         List<MediaType> out = new ArrayList<>();
-        for (String tok : accept.split(",")) out.add(MediaType.valueOf(tok.trim()));
+        for (String tok : accept.split(",", -1)) {
+            if (!tok.isBlank()) out.add(MediaType.valueOf(tok.trim()));
+        }
         return out;
     }
 
@@ -151,7 +154,9 @@ final class CassiniClientRequestContext implements ClientRequestContext {
         String al = getHeaderString(HttpHeaders.ACCEPT_LANGUAGE);
         if (al == null) return List.of();
         List<Locale> out = new ArrayList<>();
-        for (String tok : al.split(",")) out.add(Locale.forLanguageTag(tok.trim()));
+        for (String tok : al.split(",", -1)) {
+            if (!tok.isBlank()) out.add(Locale.forLanguageTag(tok.trim()));
+        }
         return out;
     }
 
@@ -195,6 +200,7 @@ final class CassiniClientRequestContext implements ClientRequestContext {
     }
 
     /** Whether a filter replaced the entity stream, so the entity has to be written through it. */
+    @SuppressWarnings("ReferenceEquality") // replaced means another stream object than the buffer: identity
     boolean entityStreamReplaced() { return entityStream != entityBuffer; }
 
     /** The bytes that reached the original entity buffer. */

@@ -168,7 +168,7 @@ public class CassiniRuntimeDelegate extends RuntimeDelegate {
         @Override public jakarta.ws.rs.core.NewCookie fromString(String s) {
             if (s == null) throw new IllegalArgumentException("value is null");
             // Parsing basique name=value; attr=val; ...
-            String[] parts = s.split(";");
+            String[] parts = s.split(";", -1);
             String name = null;
             String value = null;
             String path = null;
@@ -225,7 +225,7 @@ public class CassiniRuntimeDelegate extends RuntimeDelegate {
             String path = null;
             String domain = null;
             int version = 0;
-            for (String pair : s.split(";")) {
+            for (String pair : s.split(";", -1)) {
                 String p = pair.trim();
                 if (p.isEmpty()) continue;
                 int eq = p.indexOf('=');
@@ -326,7 +326,7 @@ public class CassiniRuntimeDelegate extends RuntimeDelegate {
         /** A quoted field list ("a,b") expands to its individual field names. */
         private static void addFields(java.util.List<String> target, String value) {
             if (value.isEmpty()) return;
-            for (String f : value.split(",")) {
+            for (String f : value.split(",", -1)) {
                 String trimmed = stripQuotes(f.trim());
                 if (!trimmed.isEmpty()) target.add(trimmed);
             }
@@ -369,7 +369,7 @@ public class CassiniRuntimeDelegate extends RuntimeDelegate {
             jakarta.ws.rs.core.Link.Builder b = jakarta.ws.rs.core.Link.fromUri(uri);
             if (gt > 0 && gt < trimmed.length() - 1) {
                 String rest = trimmed.substring(gt + 1);
-                for (String p : rest.split(";")) {
+                for (String p : rest.split(";", -1)) {
                     String pp = p.trim();
                     int eq = pp.indexOf('=');
                     if (eq < 0) continue;
@@ -519,7 +519,7 @@ public class CassiniRuntimeDelegate extends RuntimeDelegate {
         }
         /** Adds the {@code ;name=value} parameters that follow the URI of a Link header. */
         private void putParams(String rest) {
-            for (String p : rest.split(";")) {
+            for (String p : rest.split(";", -1)) {
                 String pp = p.trim();
                 int eq = pp.indexOf('=');
                 if (eq >= 0) params.put(pp.substring(0, eq).trim(), stripQuotes(pp.substring(eq + 1).trim()));

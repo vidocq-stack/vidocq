@@ -28,6 +28,7 @@ import jakarta.ws.rs.ext.RuntimeDelegate;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -138,7 +139,7 @@ class CassiniHttpHeadersTest {
 
     @Test
     void the_date_is_parsed_or_null() {
-        assertEquals(new Date(784111777000L), headers("Date", "Sun, 06 Nov 1994 08:49:37 GMT").getDate());
+        assertEquals(Date.from(Instant.ofEpochMilli(784111777000L)), headers("Date", "Sun, 06 Nov 1994 08:49:37 GMT").getDate());
         assertNull(headers("Date", "yesterday").getDate());
         assertNull(new CassiniHttpHeaders(exchange()).getDate());
     }

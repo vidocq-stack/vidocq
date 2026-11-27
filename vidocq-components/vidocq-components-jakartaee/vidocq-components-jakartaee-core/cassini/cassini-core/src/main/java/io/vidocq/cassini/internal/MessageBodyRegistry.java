@@ -47,6 +47,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -125,8 +126,8 @@ public final class MessageBodyRegistry {
             if (!typeOk) return false;
             String dSub = declared.getSubtype();
             String rSub = requested.getSubtype();
-            if (dSub.startsWith("*+") && rSub.toLowerCase().endsWith(dSub.substring(1).toLowerCase())) return true;
-            return rSub.startsWith("*+") && dSub.toLowerCase().endsWith(rSub.substring(1).toLowerCase());
+            if (dSub.startsWith("*+") && rSub.toLowerCase(Locale.ROOT).endsWith(dSub.substring(1).toLowerCase(Locale.ROOT))) return true;
+            return rSub.startsWith("*+") && dSub.toLowerCase(Locale.ROOT).endsWith(rSub.substring(1).toLowerCase(Locale.ROOT));
         }
 
         /**
@@ -685,7 +686,7 @@ public final class MessageBodyRegistry {
         if (mt == null) return false;
         String ty = mt.getType();
         String st = mt.getSubtype();
-        if ("application".equalsIgnoreCase(ty) && ("xml".equalsIgnoreCase(st) || st.toLowerCase().endsWith("+xml"))) return true;
+        if ("application".equalsIgnoreCase(ty) && ("xml".equalsIgnoreCase(st) || st.toLowerCase(Locale.ROOT).endsWith("+xml"))) return true;
         return "text".equalsIgnoreCase(ty) && "xml".equalsIgnoreCase(st);
     }
 

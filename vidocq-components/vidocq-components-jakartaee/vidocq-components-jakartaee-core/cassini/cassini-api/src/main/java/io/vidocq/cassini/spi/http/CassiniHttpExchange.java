@@ -76,7 +76,7 @@ public interface CassiniHttpExchange {
         String raw = requestUri().getRawQuery();
         if (raw == null || raw.isEmpty()) return Map.of();
         java.util.Map<String, java.util.List<String>> out = new java.util.LinkedHashMap<>();
-        for (String pair : raw.split("&")) {
+        for (String pair : raw.split("&", -1)) {
             if (pair.isEmpty()) continue;
             int eq = pair.indexOf('=');
             String k = eq < 0 ? pair : pair.substring(0, eq);

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -72,9 +73,9 @@ class AsyncDisconnectTest {
     void connectionCallbackFiresWhenClientDisconnectsWhileSuspended() throws Exception {
         var events = AsyncResource.reset();
 
-        try (var socket = new Socket("127.0.0.1", server.port())) {
+        try (var socket = new Socket(InetAddress.ofLiteral("127.0.0.1"), server.port())) {
             socket.getOutputStream().write(
-                    ("GET /async/suspend HTTP/1.1\r\nHost: x\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                    "GET /async/suspend HTTP/1.1\r\nHost: x\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
             socket.getOutputStream().flush();
             Thread.sleep(400); // let the request suspend and the probe arm
         } // client gone

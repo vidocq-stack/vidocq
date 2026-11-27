@@ -66,7 +66,7 @@ public final class VaubanApp {
             // StaticFileHandler uses pathInfo() — we guarantee it is set.
             // Rewrite / → /index.html (the internal indexFile fallback is broken
             // when getResource("static/") returns the directory URL in classpath mode).
-            String resolved = (path.endsWith("/")) ? path + "index.html" : path;
+            String resolved = path.endsWith("/") ? path + "index.html" : path;
             return staticH.handle(stripContext(req, "", resolved));
         };
     }

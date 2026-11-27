@@ -29,6 +29,7 @@ import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,7 +57,7 @@ public final class TlsTestServer implements AutoCloseable {
     public TlsTestServer(Path dir, boolean needClientAuth) throws Exception {
         this.keyStore = generate(dir.resolve("store.p12"));
         SSLContext context = serverContext(keyStore);
-        server = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpsServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), 0), 0);
         server.setHttpsConfigurator(new HttpsConfigurator(context) {
             @Override public void configure(HttpsParameters params) {
                 SSLParameters parameters = context.getDefaultSSLParameters();

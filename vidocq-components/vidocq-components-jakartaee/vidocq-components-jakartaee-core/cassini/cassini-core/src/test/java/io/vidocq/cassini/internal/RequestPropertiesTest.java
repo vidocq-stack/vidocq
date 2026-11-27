@@ -220,7 +220,7 @@ class RequestPropertiesTest {
     /** What the global writer interceptor saw of the property a pre-matching filter set: "e", or "null" when its store
      *  was not the request's. */
     private static String seenByTheWriter(InMemoryExchange exchange) {
-        return String.valueOf(exchange.responseHeader("X-Writer")).split("\\|")[0];
+        return String.valueOf(exchange.responseHeader("X-Writer")).split("\\|", -1)[0];
     }
 
     @Test

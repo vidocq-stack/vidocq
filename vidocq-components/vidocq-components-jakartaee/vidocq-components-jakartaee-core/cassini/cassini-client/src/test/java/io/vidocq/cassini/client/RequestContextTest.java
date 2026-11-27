@@ -27,6 +27,7 @@ import jakarta.ws.rs.client.ClientRequestFilter;
 import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.client.Invocation;
 import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.MediaType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,9 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -105,19 +108,34 @@ class RequestContextTest {
         assertEquals("text/plain", server.last().header("Accept"));
     }
 
+    // ---- acceptable media types and languages --------------------------------------------------
+
+    @Test
+    void empty_members_of_the_accept_lists_are_no_values() {
+        AtomicReference<List<MediaType>> types = new AtomicReference<>();
+        AtomicReference<List<Locale>> languages = new AtomicReference<>();
+        send(ctx -> {
+            types.set(ctx.getAcceptableMediaTypes());
+            languages.set(ctx.getAcceptableLanguages());
+        }, b -> b.header("Accept", null).header("Accept", "text/plain, ,application/json,")
+                .header("Accept-Language", "en,, fr,"), null);
+        assertEquals(List.of(MediaType.TEXT_PLAIN_TYPE, MediaType.APPLICATION_JSON_TYPE), types.get());
+        assertEquals(List.of(Locale.ENGLISH, Locale.FRENCH), languages.get());
+    }
+
     // ---- date, language, cookies --------------------------------------------------------------
 
     @Test
     void getDate_reads_the_date_header() {
         AtomicReference<Date> date = new AtomicReference<>();
         send(ctx -> date.set(ctx.getDate()), b -> b.header("Date", HTTP_DATE), null);
-        assertEquals(new Date(HTTP_DATE_MILLIS), date.get());
+        assertEquals(Date.from(Instant.ofEpochMilli(HTTP_DATE_MILLIS)), date.get());
     }
 
     @Test
     void getDate_accepts_a_date_object() {
         AtomicReference<Date> date = new AtomicReference<>();
-        Date sent = new Date(HTTP_DATE_MILLIS);
+        Date sent = Date.from(Instant.ofEpochMilli(HTTP_DATE_MILLIS));
         send(ctx -> date.set(ctx.getDate()), b -> b.header("Date", sent), null);
         assertEquals(sent, date.get());
     }

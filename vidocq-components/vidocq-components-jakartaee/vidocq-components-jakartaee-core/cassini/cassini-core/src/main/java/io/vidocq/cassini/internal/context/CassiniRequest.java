@@ -104,13 +104,13 @@ public final class CassiniRequest implements jakarta.ws.rs.core.Request {
             return false;
         }
         return v.getEncoding() == null || acceptEnc == null
-                || acceptEnc.toLowerCase().contains(v.getEncoding().toLowerCase());
+                || acceptEnc.toLowerCase(Locale.ROOT).contains(v.getEncoding().toLowerCase(Locale.ROOT));
     }
 
     /** RFC 7231 §5.3: an Accept-Language/Encoding may contain "*" which matches
      *  any value (or as part of a list, e.g. "en-US, *;q=0.5"). */
     private static boolean containsWildcard(String header) {
-        for (String tok : header.split(",")) {
+        for (String tok : header.split(",", -1)) {
             int semi = tok.indexOf(';');
             String v = (semi < 0 ? tok : tok.substring(0, semi)).trim();
             if ("*".equals(v)) return true;
@@ -123,7 +123,7 @@ public final class CassiniRequest implements jakarta.ws.rs.core.Request {
     }
     private static List<Locale> parseLocales(String raw) {
         List<Locale> out = new java.util.ArrayList<>();
-        for (String tok : raw.split(",")) {
+        for (String tok : raw.split(",", -1)) {
             int semi = tok.indexOf(';');
             String tag = (semi < 0 ? tok : tok.substring(0, semi)).trim();
             if (tag.isEmpty() || "*".equals(tag)) continue;
@@ -151,12 +151,13 @@ public final class CassiniRequest implements jakarta.ws.rs.core.Request {
     @Override public Response.ResponseBuilder evaluatePreconditions(Date lastModified) {
         if (lastModified == null) throw new IllegalArgumentException("lastModified");
         if (delegate == null) return null;
-        Date ifModSince = parseHttpDate(delegate.firstHeader("If-Modified-Since"));
-        Date ifUnmodSince = parseHttpDate(delegate.firstHeader("If-Unmodified-Since"));
-        if (ifUnmodSince != null && lastModified.after(ifUnmodSince)) {
+        java.time.Instant modified = lastModified.toInstant();
+        java.time.Instant ifModSince = parseHttpDate(delegate.firstHeader("If-Modified-Since"));
+        java.time.Instant ifUnmodSince = parseHttpDate(delegate.firstHeader("If-Unmodified-Since"));
+        if (ifUnmodSince != null && modified.isAfter(ifUnmodSince)) {
             return Response.status(Response.Status.PRECONDITION_FAILED);
         }
-        if (ifModSince != null && !lastModified.after(ifModSince)) {
+        if (ifModSince != null && !modified.isAfter(ifModSince)) {
             boolean safe = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
             if (safe) return Response.notModified();
         }
@@ -187,7 +188,7 @@ public final class CassiniRequest implements jakarta.ws.rs.core.Request {
         if (header.trim().equals("*")) return true;
         if (strong && eTag.isWeak()) return false;
         String tag = HeaderValues.format(eTag);
-        for (String token : header.split(",")) {
+        for (String token : header.split(",", -1)) {
             String candidate = token.trim();
             if (strong ? candidate.equals(tag) : candidate.replace("W/", "").equals(tag.replace("W/", ""))) {
                 return true;
@@ -196,7 +197,9 @@ public final class CassiniRequest implements jakarta.ws.rs.core.Request {
         return false;
     }
 
-    private static Date parseHttpDate(String s) {
-        return HeaderValues.httpDate(s);
+    /** The instant of an HTTP date header, or null when it is absent or malformed. */
+    private static java.time.Instant parseHttpDate(String s) {
+        Date date = HeaderValues.httpDate(s);
+        return date == null ? null : date.toInstant();
     }
 }

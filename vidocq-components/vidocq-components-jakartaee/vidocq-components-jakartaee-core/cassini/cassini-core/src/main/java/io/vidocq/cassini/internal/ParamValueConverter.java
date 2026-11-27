@@ -206,7 +206,7 @@ public final class ParamValueConverter {
 
     public static Object defaultForType(Class<?> type) {
         if (!type.isPrimitive()) return null;
-        if (type == boolean.class) return Boolean.FALSE;
+        if (type == boolean.class) return false;
         if (type == char.class)    return Character.valueOf('\0');
         if (type == byte.class)    return Byte.valueOf((byte) 0);
         if (type == short.class)   return Short.valueOf((short) 0);

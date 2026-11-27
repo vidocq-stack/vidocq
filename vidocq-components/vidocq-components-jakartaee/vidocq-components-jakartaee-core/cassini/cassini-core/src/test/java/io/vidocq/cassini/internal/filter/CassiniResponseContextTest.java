@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.lang.annotation.Annotation;
 import java.net.URI;
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -54,7 +55,7 @@ class CassiniResponseContextTest {
     private static final String NEXT = "next";
     private static final String EXPIRES = "Expires";
     private static final String DATE_TEXT = "Sun, 06 Nov 1994 08:49:37 GMT";
-    private static final Date RFC_DATE = new Date(784111777000L);
+    private static final Date RFC_DATE = Date.from(Instant.ofEpochMilli(784111777000L));
 
     @BeforeAll
     static void installDelegate() {
@@ -168,6 +169,7 @@ class CassiniResponseContextTest {
     void allowed_methods_are_upper_cased() {
         assertEquals(Set.of(), empty().getAllowedMethods());
         assertEquals(Set.of("GET", "POST"), context("Allow", "get, Post").getAllowedMethods());
+        assertEquals(Set.of("GET", "POST"), context("Allow", "get, ,Post,").getAllowedMethods());
     }
 
     @Test

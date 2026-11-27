@@ -56,7 +56,7 @@ public class ExampleServer implements AutoCloseable {
         // Port 0 on the address the tests call: the server keeps the free port the system gives it, and no other
         // listener can take 127.0.0.1 on that port (CASSINI-048). JdkHttpAdapter.serve(int) binds the wildcard
         // address, which a listener on 127.0.0.1 and the same port shadows, so the test binds the server itself.
-        this.server = HttpServer.create(new InetSocketAddress(InetAddress.getByName(LOOPBACK), 0), 0);
+        this.server = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral(LOOPBACK), 0), 0);
         server.createContext("/", new JdkHttpAdapter(stack.adapter()).asHandler());
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();

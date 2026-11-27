@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -68,11 +69,11 @@ class SuspendedLoadBench {
             var sockets = new ArrayList<Socket>(n);
             long t0 = System.nanoTime();
             for (int i = 0; i < n; i++) {
-                var s = new Socket("127.0.0.1", server.port());
+                var s = new Socket(InetAddress.ofLiteral("127.0.0.1"), server.port());
                 s.setSoTimeout(120_000);
                 sockets.add(s);
                 s.getOutputStream().write(
-                        ("GET /async/park HTTP/1.1\r\nHost: x\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        "GET /async/park HTTP/1.1\r\nHost: x\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
                 s.getOutputStream().flush();
             }
 

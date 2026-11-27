@@ -101,7 +101,7 @@ class ProviderContextInjectionTest {
         @Override
         public void filter(ContainerRequestContext request) {
             CALLS.incrementAndGet();
-            request.setProperty(name, Boolean.TRUE);
+            request.setProperty(name, true);
         }
     }
 

@@ -69,6 +69,8 @@ import java.util.Map;
  */
 public final class ParamExtractor {
 
+    // equals, hashCode and toString below compare and print the contents of the array
+    @SuppressWarnings("ArrayRecordComponent")
     public record ResolvedArgs(Object[] args, int bodyIndex) {
         @Override
         public boolean equals(Object o) {
@@ -358,6 +360,7 @@ public final class ParamExtractor {
         return s != null ? s : new io.vidocq.cassini.internal.sse.CassiniSseEventSink(null);
     }
 
+    @SuppressWarnings("ReferenceEquality") // USE_FALLBACK is a sentinel object: identity
     private static Object coerce(MethodParameters.Param p, List<String> raws) {
         Class<?> raw = p.type();
         Class<?> element = p.element();

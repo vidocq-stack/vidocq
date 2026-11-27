@@ -74,7 +74,8 @@ class CassiniTestHarnessTest {
         @GET
         @Produces(TEXT)
         public String count() {
-            return "call " + (++calls);
+            calls++;
+            return "call " + calls;
         }
     }
 
@@ -264,7 +265,7 @@ class CassiniTestHarnessTest {
 
     @Test
     void aFixedPortThatStaysBusyFailsTheStart() throws IOException {
-        try (var busy = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))) {
+        try (var busy = new ServerSocket(0, 50, InetAddress.ofLiteral("127.0.0.1"))) {
             var builder = CassiniTestHarness.builder().resourceClass(PlainResource.class).port(busy.getLocalPort());
             assertThrows(RuntimeException.class, builder::start);
         }

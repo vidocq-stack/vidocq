@@ -37,12 +37,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Every request used to start a virtual thread for its dispatch, and the connection thread
@@ -144,7 +146,7 @@ class InlineDispatchTest {
      */
     @Test
     void anInterruptedDispatchKeepsTheInterruptStatusOfItsThread() {
-        var interruptedAfter = new AtomicReference<Boolean>();
+        var interruptedAfter = new AtomicBoolean();
         ChappeHttpAdapter.Scoped scoped = action -> {
             action.run();
             interruptedAfter.set(Thread.currentThread().isInterrupted());
@@ -164,7 +166,7 @@ class InlineDispatchTest {
         var adapter = new ChappeHttpAdapter(engine, scoped);
         var request = request();
         assertThrows(InterruptedException.class, () -> adapter.handle(request));
-        assertEquals(Boolean.TRUE, interruptedAfter.get(), "the dispatch swallowed the interrupt status");
+        assertTrue(interruptedAfter.get(), "the dispatch swallowed the interrupt status");
     }
 
     private static Request request() {

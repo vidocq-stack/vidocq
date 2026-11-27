@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.ServerSocketChannel;
@@ -91,7 +92,7 @@ class ChappeSeBootstrapTest {
             try {
                 ServerSocketChannel channel = ServerSocketChannel.open();
                 try {
-                    channel.bind(new InetSocketAddress(LOOPBACK, port));
+                    channel.bind(new InetSocketAddress(LOOPBACK_ADDRESS, port));
                     return channel;
                 } catch (IOException _) {
                     channel.close();
@@ -104,6 +105,7 @@ class ChappeSeBootstrapTest {
     }
 
     private static final String LOOPBACK = "127.0.0.1";
+    private static final InetAddress LOOPBACK_ADDRESS = InetAddress.ofLiteral(LOOPBACK);
 
     /**
      * The loopback port the system hands out next on macOS, which allocates its ephemeral ports in sequence; on
@@ -111,7 +113,7 @@ class ChappeSeBootstrapTest {
      */
     private static int nextEphemeralLoopbackPort() throws IOException {
         try (ServerSocketChannel probe = ServerSocketChannel.open()) {
-            probe.bind(new InetSocketAddress(LOOPBACK, 0));
+            probe.bind(new InetSocketAddress(LOOPBACK_ADDRESS, 0));
             int port = ((InetSocketAddress) probe.getLocalAddress()).getPort();
             return port < 65_535 ? port + 1 : port;
         }
@@ -128,7 +130,7 @@ class ChappeSeBootstrapTest {
 
     private static Reply get(SeBootstrap.Instance instance, String path) throws Exception {
         int port = (Integer) instance.configuration().property(SeBootstrap.Configuration.PORT);
-        try (Socket socket = new Socket(LOOPBACK, port)) {
+        try (Socket socket = new Socket(LOOPBACK_ADDRESS, port)) {
             // a listener that is not the instance accepts the connection and never answers
             socket.setSoTimeout(10_000);
             OutputStream out = socket.getOutputStream();

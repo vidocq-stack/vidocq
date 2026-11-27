@@ -201,5 +201,10 @@ class CassiniEntityPartTest {
         public int read() throws IOException {
             throw new IOException("broken");
         }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            throw new IOException("broken");
+        }
     }
 }

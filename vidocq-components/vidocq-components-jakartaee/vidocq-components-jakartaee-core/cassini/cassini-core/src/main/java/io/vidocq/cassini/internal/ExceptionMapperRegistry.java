@@ -65,10 +65,10 @@ public final class ExceptionMapperRegistry {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public void register(Object instance, Class<?> registeredClass) {
-        if (!(instance instanceof ExceptionMapper)) return;
+        if (!(instance instanceof ExceptionMapper mapper)) return;
         Class<? extends Throwable> excType = exceptionType(registeredClass);
         if (excType == null) return;
-        mappers.add(new Registration(excType, (ExceptionMapper) instance, registeredClass));
+        mappers.add(new Registration(excType, mapper, registeredClass));
     }
 
     /** §4.4: if an ExceptionMapper itself throws an exception during

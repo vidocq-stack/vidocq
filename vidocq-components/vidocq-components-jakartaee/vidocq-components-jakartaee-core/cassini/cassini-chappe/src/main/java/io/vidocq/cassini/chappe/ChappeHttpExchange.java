@@ -110,6 +110,7 @@ public final class ChappeHttpExchange implements CassiniHttpExchange {
             }
         }
 
+        @SuppressWarnings("ReferenceEquality") // EOF is a sentinel array: identity
         private boolean ensureCurrent() throws IOException {
             while (pos >= current.length) {
                 if (current == EOF) return false;
@@ -164,7 +165,8 @@ public final class ChappeHttpExchange implements CassiniHttpExchange {
     /** Set once by the dispatch thread when it commits a stream, read by the transport thread:
      *  published through {@link #STREAMING_INFO} (release / acquire), as a volatile would, without
      *  an extra object per request. */
-    @SuppressWarnings("java:S1068") // read and written through STREAMING_INFO, which SonarQube does not see
+    // read and written through STREAMING_INFO, which neither SonarQube nor Error Prone sees
+    @SuppressWarnings({"java:S1068", "UnusedVariable"})
     private StreamingInfo streamingInfo;
     private static final java.lang.invoke.VarHandle STREAMING_INFO;
     static {

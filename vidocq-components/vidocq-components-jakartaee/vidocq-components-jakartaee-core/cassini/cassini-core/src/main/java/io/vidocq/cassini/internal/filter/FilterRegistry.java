@@ -66,7 +66,7 @@ public final class FilterRegistry {
     private final List<ContextResolver<?>> contextResolvers = new ArrayList<>();
     private final List<ParamConverterProvider> paramConverterProviders = new ArrayList<>();
     /** The priority of each converter provider, read on the class it was registered as (CASSINI-066). */
-    private final Map<ParamConverterProvider, Integer> converterPriorities = new IdentityHashMap<>();
+    private final IdentityHashMap<ParamConverterProvider, Integer> converterPriorities = new IdentityHashMap<>();
     private final List<jakarta.ws.rs.container.DynamicFeature> dynamicFeatures = new ArrayList<>();
 
     /** A resource method, as a dynamic feature sees it: its resource class and its Java method. */

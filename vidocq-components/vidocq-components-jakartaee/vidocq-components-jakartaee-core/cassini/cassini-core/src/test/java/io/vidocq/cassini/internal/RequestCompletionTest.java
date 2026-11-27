@@ -305,7 +305,7 @@ class RequestCompletionTest {
         } finally {
             logger.removeHandler(handler);
         }
-        assertTrue(records.stream().anyMatch(r -> r.getLevel() == java.util.logging.Level.WARNING
+        assertTrue(records.stream().anyMatch(r -> java.util.logging.Level.WARNING.equals(r.getLevel())
                 && r.getMessage().contains("not a Runnable")), () -> "no warning among " + records);
     }
 

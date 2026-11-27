@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -68,7 +69,7 @@ class JdkHttpAdapterFailureTest {
 
     /** Starts the adapter on a free port over {@code engine}. */
     private URI serve(CassiniHttpAdapter engine) throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), 0), 0);
         server.createContext("/", new JdkHttpAdapter(engine).asHandler());
         server.start();
         return URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/resource");
@@ -201,7 +202,7 @@ class JdkHttpAdapterFailureTest {
             Thread.currentThread().interrupt();
             return new CompletableFuture<>();
         }).asHandler();
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), 0), 0);
         server.createContext("/", exchange -> {
             try {
                 handler.handle(exchange);

@@ -85,8 +85,8 @@ class WeldPortabilityTest {
 
     @Test
     void requestScopedBeanIsOnePerRequest() throws Exception {
-        String[] firstRequest = get("/greetings/token").split("\\|");
-        String[] secondRequest = get("/greetings/token").split("\\|");
+        String[] firstRequest = get("/greetings/token").split("\\|", -1);
+        String[] secondRequest = get("/greetings/token").split("\\|", -1);
 
         assertEquals(firstRequest[0], firstRequest[1], "one instance within a request");
         assertNotEquals(firstRequest[0], secondRequest[0], "a new instance for each request");

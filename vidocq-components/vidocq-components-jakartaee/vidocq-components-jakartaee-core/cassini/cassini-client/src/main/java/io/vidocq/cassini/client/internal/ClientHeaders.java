@@ -66,7 +66,7 @@ final class ClientHeaders {
         if (values == null) return out;
         for (Object value : values) {
             if (value == null) continue;
-            for (String token : value.toString().split(",")) {
+            for (String token : value.toString().split(",", -1)) {
                 String method = token.trim();
                 if (!method.isEmpty()) out.add(method.toUpperCase(Locale.ROOT));
             }
@@ -118,7 +118,7 @@ final class ClientHeaders {
     }
 
     private static void parsePairs(String header, Map<String, Cookie> into) {
-        for (String pair : header.split(";")) {
+        for (String pair : header.split(";", -1)) {
             int eq = pair.indexOf('=');
             String name = (eq < 0 ? pair : pair.substring(0, eq)).trim();
             // $Version, $Path, $Domain: RFC 2109 attributes of the cookie before them, not cookies.

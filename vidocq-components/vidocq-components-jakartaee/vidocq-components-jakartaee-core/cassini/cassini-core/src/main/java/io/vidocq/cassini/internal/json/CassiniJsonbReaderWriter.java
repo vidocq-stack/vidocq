@@ -161,7 +161,7 @@ public final class CassiniJsonbReaderWriter
         if (mt.isCompatible(MediaType.APPLICATION_JSON_TYPE)) return true;
         // +json suffix (RFC 6839): application/foo+json, etc.
         String sub = mt.getSubtype();
-        return sub != null && sub.toLowerCase().endsWith("+json");
+        return sub != null && sub.toLowerCase(java.util.Locale.ROOT).endsWith("+json");
     }
 
     /** Avoid capturing types that have a dedicated MBR/MBW — otherwise the

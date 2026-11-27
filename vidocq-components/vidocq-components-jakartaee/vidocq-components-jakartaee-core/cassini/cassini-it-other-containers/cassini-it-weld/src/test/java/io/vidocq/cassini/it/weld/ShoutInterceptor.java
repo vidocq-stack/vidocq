@@ -32,6 +32,6 @@ public class ShoutInterceptor {
 
     @AroundInvoke
     public Object shout(InvocationContext context) throws Exception {
-        return String.valueOf(context.proceed()).toUpperCase();
+        return String.valueOf(context.proceed()).toUpperCase(java.util.Locale.ROOT);
     }
 }

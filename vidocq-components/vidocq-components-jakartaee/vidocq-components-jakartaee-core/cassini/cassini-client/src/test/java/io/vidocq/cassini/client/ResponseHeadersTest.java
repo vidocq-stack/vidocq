@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.Set;
@@ -54,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ResponseHeadersTest {
 
     private static final String LAST_MODIFIED = "Wed, 16 Nov 1994 09:00:00 GMT";
-    private static final Date LAST_MODIFIED_DATE = new Date(784976400000L);
+    private static final Date LAST_MODIFIED_DATE = Date.from(Instant.ofEpochMilli(784976400000L));
     private static final String NEXT = "http://example.com/next";
     private static final String PREV = "http://example.com/prev";
 

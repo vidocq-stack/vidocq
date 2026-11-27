@@ -264,6 +264,7 @@ class RouteRegistryEquivalenceTest {
     void descriptorConversion_primitiveParamType() throws Exception {
         // Test resolving primitive parameter types
         @Path("/calc")
+        @SuppressWarnings({"UnusedMethod", "EffectivelyPrivate"}) // a public resource method the descriptor names
         class CalcResource {
             @GET
             @Path("/{n}")

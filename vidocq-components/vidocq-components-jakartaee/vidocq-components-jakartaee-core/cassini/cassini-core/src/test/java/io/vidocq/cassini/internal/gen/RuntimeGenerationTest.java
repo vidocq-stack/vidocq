@@ -77,14 +77,14 @@ class RuntimeGenerationTest {
         assertTrue(warning.contains("  - " + Started.class.getName() + "\n"), warning);
         assertTrue(warning.contains("cassini-processor"), warning);
 
-        AdapterRegistry.lookup(Started.class).orElseThrow();
+        assertTrue(AdapterRegistry.lookup(Started.class).isPresent());
         assertEquals(1, warnings.size(), "generating an announced adapter adds nothing");
     }
 
     @Test
     void aClassGeneratedLaterIsAnnouncedOnFirstUse() {
-        AdapterRegistry.lookup(Later.class).orElseThrow();
-        AdapterRegistry.lookup(Later.class).orElseThrow();
+        assertTrue(AdapterRegistry.lookup(Later.class).isPresent());
+        assertTrue(AdapterRegistry.lookup(Later.class).isPresent());
 
         assertEquals(1, warnings.size(), () -> String.valueOf(warnings));
         assertTrue(warnings.getFirst().contains("generated on first use"), warnings.getFirst());

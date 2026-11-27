@@ -50,7 +50,7 @@ public record UriRouter(List<ResourceMethod> routes) {
                     .thenComparing(Comparator.comparingInt((ResourceMethod r) -> r.template().literalChars()).reversed())
                     .thenComparing(Comparator.comparingInt((ResourceMethod r) -> r.template().totalCaptures()).reversed())
                     .thenComparing(Comparator.comparingInt(r -> r.template().defaultCaptures()))
-                    .thenComparing(r -> r.isLocated() ? 1 : 0); // routes directes avant locatées
+                    .thenComparingInt(r -> r.isLocated() ? 1 : 0); // direct routes before located ones
 
     /** Keeps an immutable copy of {@code routes}, sorted by decreasing specificity. */
     public UriRouter {

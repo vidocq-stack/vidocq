@@ -159,7 +159,7 @@ final class MethodParameters {
             boolean anyJaxRs = false;
             for (Annotation a : annotations) {
                 Source s = sourceOf(a);
-                if (s != null && (chosen == null || s.ordinal() < chosen.ordinal())) {
+                if (s != null && (chosen == null || s.compareTo(chosen) < 0)) {
                     chosen = s;
                     from = a;
                 }

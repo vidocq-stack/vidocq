@@ -92,7 +92,7 @@ class CassiniMaintenanceLayerLeakTest {
         } finally {
             Thread.currentThread().setContextClassLoader(before);
         }
-        assertEquals("{\"name\":\"probe\"}", out.toString(), "the generated binding of the layer wrote the entity");
+        assertEquals("{\"name\":\"probe\"}", out.toString(StandardCharsets.UTF_8), "the generated binding of the layer wrote the entity");
         return new WeakReference<>(loader);
     }
 

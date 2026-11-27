@@ -179,7 +179,9 @@ public final class CassiniRequestContext implements ContainerRequestContext {
         return String.join(",", v);
     }
 
-    @Override public boolean containsHeaderString(String n, String sep, java.util.function.Predicate<String> p) {
+    @Override
+    @SuppressWarnings("StringSplitter") // the separator is the caller's regex; a trailing empty value is no value
+    public boolean containsHeaderString(String n, String sep, java.util.function.Predicate<String> p) {
         List<String> vs = headers().get(n);
         if (vs == null) return false;
         for (String v : vs) for (String tok : v.split(sep)) if (p.test(tok.trim())) return true;

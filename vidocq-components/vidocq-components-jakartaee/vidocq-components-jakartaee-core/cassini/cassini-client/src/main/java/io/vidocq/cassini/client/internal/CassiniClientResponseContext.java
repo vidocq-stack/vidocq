@@ -117,6 +117,7 @@ final class CassiniClientResponseContext implements ClientResponseContext {
     }
 
     @Override
+    @SuppressWarnings("StringSplitter") // the separator is the caller's regex; a trailing empty value is no value
     public boolean containsHeaderString(String name, String valueSeparatorRegex, Predicate<String> valuePredicate) {
         String h = getHeaderString(name);
         if (h == null) return false;

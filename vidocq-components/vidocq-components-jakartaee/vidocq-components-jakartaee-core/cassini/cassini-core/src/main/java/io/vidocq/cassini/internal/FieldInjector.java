@@ -298,7 +298,7 @@ public final class FieldInjector {
 
     /** The value of the cookie {@code name} in one Cookie header, unquoted, or null. */
     private static String cookieIn(String header, String name) {
-        for (String pair : header.split(";")) {
+        for (String pair : header.split(";", -1)) {
             int eq = pair.indexOf('=');
             if (eq >= 0 && pair.substring(0, eq).trim().equals(name)) {
                 String v = pair.substring(eq + 1).trim();
@@ -314,7 +314,7 @@ public final class FieldInjector {
         List<String> out = new ArrayList<>();
         String path = request.requestUri() == null ? null : request.requestUri().getRawPath();
         if (path == null) return out;
-        for (String seg : path.split("/")) {
+        for (String seg : path.split("/", -1)) {
             int semi = seg.indexOf(';');
             if (semi >= 0) addMatrixValues(seg.substring(semi + 1), name, encoded, out);
         }
@@ -323,7 +323,7 @@ public final class FieldInjector {
 
     /** Adds the values of {@code name} found in the {@code ;}-separated parameters of one segment. */
     private static void addMatrixValues(String parameters, String name, boolean encoded, List<String> out) {
-        for (String pair : parameters.split(";")) {
+        for (String pair : parameters.split(";", -1)) {
             int eq = pair.indexOf('=');
             String n = eq < 0 ? pair : pair.substring(0, eq);
             if (URLDecoder.decode(n, StandardCharsets.UTF_8).equals(name)) {

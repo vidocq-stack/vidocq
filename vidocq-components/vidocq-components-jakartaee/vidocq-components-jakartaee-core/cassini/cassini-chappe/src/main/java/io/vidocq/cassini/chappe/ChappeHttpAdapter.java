@@ -70,6 +70,7 @@ public final class ChappeHttpAdapter implements Handler {
     }
 
     /** Test seam: lets a test make the Chappe response build fail on any Chappe version. */
+    @SuppressWarnings("ReferenceEquality") // no hook at all is the IDENTITY constant itself: identity
     ChappeHttpAdapter(CassiniHttpAdapter engine, Scoped scoped, Supplier<Response.Builder> builders) {
         this.engine = engine;
         this.scoped = scoped == null ? Scoped.IDENTITY : scoped;
@@ -77,7 +78,7 @@ public final class ChappeHttpAdapter implements Handler {
         this.inline = !engine.mayStream() && this.scoped != Scoped.IDENTITY;
     }
 
-    /** Whether requests are dispatched on the calling thread, see {@link #handleHere}. */
+    /** Whether requests are dispatched on the calling thread, see {@link #handle}. */
     private final boolean inline;
 
     /**

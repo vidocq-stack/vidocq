@@ -90,7 +90,7 @@ class CassiniResourceProcessorTest {
         // 1. java.class.path property (set when running on classpath)
         String cpProp = System.getProperty("java.class.path", "");
         if (!cpProp.isBlank()) {
-            for (String entry : cpProp.split(File.pathSeparator)) {
+            for (String entry : cpProp.split(File.pathSeparator, -1)) {
                 if (!entry.isBlank()) cpFiles.add(new File(entry));
             }
         }

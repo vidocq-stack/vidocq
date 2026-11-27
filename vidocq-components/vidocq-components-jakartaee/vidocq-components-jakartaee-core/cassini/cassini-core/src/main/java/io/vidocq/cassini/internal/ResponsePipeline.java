@@ -157,6 +157,7 @@ final class ResponsePipeline {
         if (err[0] instanceof IOException io) throw new UncheckedIOException(io);
     }
 
+    @SuppressWarnings("ReferenceEquality") // whether a filter replaced the stream object: identity
     private CassiniHttpResponse writeFromContext(CassiniResponseContext rctx, ResourceMethod route, MediaType chosen,
                                                  CassiniHttpExchange exchange) throws IOException {
         Object entity = rctx.getEntity();

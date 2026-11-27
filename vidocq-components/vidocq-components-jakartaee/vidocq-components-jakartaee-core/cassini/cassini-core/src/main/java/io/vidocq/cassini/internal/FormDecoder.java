@@ -57,7 +57,7 @@ public final class FormDecoder {
     public static Map<String, List<String>> parse(String body, boolean decode) {
         Map<String, List<String>> out = new LinkedHashMap<>();
         if (body == null || body.isEmpty()) return out;
-        for (String pair : body.split("&")) {
+        for (String pair : body.split("&", -1)) {
             if (!pair.isEmpty()) addPair(out, pair, decode);
         }
         return out;

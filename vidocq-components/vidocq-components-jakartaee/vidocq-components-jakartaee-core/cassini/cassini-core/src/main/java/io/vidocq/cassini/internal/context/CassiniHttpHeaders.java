@@ -56,7 +56,9 @@ public final class CassiniHttpHeaders implements HttpHeaders {
         return all.isEmpty() ? null : String.join(",", all);
     }
 
-    @Override public boolean containsHeaderString(String n, String valueSep, java.util.function.Predicate<String> match) {
+    @Override
+    @SuppressWarnings("StringSplitter") // the separator is the caller's regex; a trailing empty value is no value
+    public boolean containsHeaderString(String n, String valueSep, java.util.function.Predicate<String> match) {
         for (String v : exchange.headers(n)) {
             for (String tok : v.split(valueSep)) if (match.test(tok.trim())) return true;
         }
@@ -84,7 +86,7 @@ public final class CassiniHttpHeaders implements HttpHeaders {
         String raw = exchange.firstHeader("Accept-Language");
         if (raw == null || raw.isBlank()) return ANY_LANGUAGE;
         java.util.List<java.util.Map.Entry<Locale, Double>> entries = new java.util.ArrayList<>();
-        for (String tok : raw.split(",")) {
+        for (String tok : raw.split(",", -1)) {
             int semi = tok.indexOf(';');
             String tag = (semi < 0 ? tok : tok.substring(0, semi)).trim();
             if (tag.isEmpty()) continue;
@@ -100,7 +102,7 @@ public final class CassiniHttpHeaders implements HttpHeaders {
     /** The {@code q} parameter among the {@code ;}-separated parameters of a language range, 1.0 if absent or malformed. */
     private static double languageQ(String params) {
         double q = 1.0;
-        for (String p : params.split(";")) {
+        for (String p : params.split(";", -1)) {
             String pt = p.trim();
             if (pt.startsWith("q=")) {
                 try { q = Double.parseDouble(pt.substring(2)); } catch (NumberFormatException _) {
@@ -150,7 +152,7 @@ public final class CassiniHttpHeaders implements HttpHeaders {
         String pendingValue = null;
         String pendingPath = null;
         String pendingDomain = null;
-        for (String pair : header.split(";")) {
+        for (String pair : header.split(";", -1)) {
             int eq = pair.indexOf('=');
             if (eq < 0) continue;
             String n = pair.substring(0, eq).trim();

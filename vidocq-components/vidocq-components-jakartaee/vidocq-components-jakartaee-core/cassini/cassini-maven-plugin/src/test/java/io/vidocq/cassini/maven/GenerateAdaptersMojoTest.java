@@ -55,6 +55,7 @@ class GenerateAdaptersMojoTest {
     @Path("/hello")
     public static class HelloResource {
         @Context
+        @SuppressWarnings("UnusedVariable") // a @Context field the generated adapter must inject
         private SecurityContext securityContext;
 
         @GET

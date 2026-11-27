@@ -30,6 +30,7 @@ import jakarta.ws.rs.ext.RuntimeDelegate;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -59,10 +60,10 @@ class CassiniRequestTest {
     private static final String ACCEPT_ENCODING = "Accept-Encoding";
     private static final String GZIP = "gzip";
     /** 1994-11-06T08:49:37Z, the RFC 9110 §5.6.7 example date. */
-    private static final Date RFC_DATE = new Date(784111777000L);
+    private static final Date RFC_DATE = Date.from(Instant.ofEpochMilli(784111777000L));
     private static final String RFC_DATE_TEXT = "Sun, 06 Nov 1994 08:49:37 GMT";
-    private static final Date EARLIER = new Date(RFC_DATE.getTime() - 60_000);
-    private static final Date LATER = new Date(RFC_DATE.getTime() + 60_000);
+    private static final Date EARLIER = Date.from(RFC_DATE.toInstant().minusSeconds(60));
+    private static final Date LATER = Date.from(RFC_DATE.toInstant().plusSeconds(60));
     private static final EntityTag A = new EntityTag("a");
 
     @BeforeAll

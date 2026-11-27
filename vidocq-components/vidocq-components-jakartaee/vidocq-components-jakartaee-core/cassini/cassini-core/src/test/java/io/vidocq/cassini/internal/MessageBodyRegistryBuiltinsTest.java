@@ -195,7 +195,7 @@ class MessageBodyRegistryBuiltinsTest {
         MediaType text = MediaType.TEXT_PLAIN_TYPE;
         assertArrayEquals(utf8("42"), write(42, Integer.class, text));
         assertEquals(Integer.valueOf(42), read(int.class, text, utf8("42")));
-        assertEquals(Boolean.TRUE, read(Boolean.class, text, utf8("TRUE")));
+        assertTrue(read(Boolean.class, text, utf8("TRUE")));
         assertEquals(Character.valueOf('z'), read(Character.class, text, utf8("zz")));
         assertEquals(Byte.valueOf((byte) 1), read(Byte.class, text, utf8("1")));
         assertEquals(Short.valueOf((short) 2), read(Short.class, text, utf8("2")));

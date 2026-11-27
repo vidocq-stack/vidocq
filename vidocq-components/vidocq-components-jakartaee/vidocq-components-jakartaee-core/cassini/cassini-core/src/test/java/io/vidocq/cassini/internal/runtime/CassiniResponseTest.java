@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.Annotation;
 import java.net.URI;
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -68,7 +69,7 @@ class CassiniResponseTest {
     private static final String CONTENT_LOCATION = "Content-Location";
     private static final String X_OLD = "X-Old";
     /** 1994-11-06T08:49:37Z, the RFC 9110 §5.6.7 example date. */
-    private static final Date RFC_DATE = new Date(784111777000L);
+    private static final Date RFC_DATE = Date.from(Instant.ofEpochMilli(784111777000L));
 
     @BeforeAll
     static void installDelegate() {

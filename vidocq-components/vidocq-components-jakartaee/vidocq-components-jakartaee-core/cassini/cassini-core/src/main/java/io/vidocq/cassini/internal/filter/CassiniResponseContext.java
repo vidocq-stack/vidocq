@@ -121,8 +121,10 @@ public final class CassiniResponseContext implements ContainerResponseContext {
         return hd == null ? v.toString() : hd.toString(v);
     }
 
-    @Override public boolean containsHeaderString(String n, String sep, java.util.function.Predicate<String> p) {
-        // §6.7.4 : recherche d'header case-insensitive (RFC 7230).
+    @Override
+    @SuppressWarnings("StringSplitter") // the separator is the caller's regex; a trailing empty value is no value
+    public boolean containsHeaderString(String n, String sep, java.util.function.Predicate<String> p) {
+        // §6.7.4: header names are looked up case-insensitively (RFC 7230).
         java.util.List<Object> vs = caseInsensitiveLookup(n);
         for (Object v : vs) for (String tok : v.toString().split(sep)) if (p.test(tok.trim())) return true;
         return false;
@@ -145,7 +147,10 @@ public final class CassiniResponseContext implements ContainerResponseContext {
         Object v = headers.getFirst("Allow");
         if (v == null) return Set.of();
         Set<String> out = new java.util.LinkedHashSet<>();
-        for (String tok : v.toString().split(",")) out.add(tok.trim().toUpperCase(Locale.ROOT));
+        for (String tok : v.toString().split(",", -1)) {
+            String method = tok.trim();
+            if (!method.isEmpty()) out.add(method.toUpperCase(Locale.ROOT));
+        }
         return out;
     }
     @Override public Date getDate() { return HeaderValues.httpDate(headers.getFirst("Date")); }

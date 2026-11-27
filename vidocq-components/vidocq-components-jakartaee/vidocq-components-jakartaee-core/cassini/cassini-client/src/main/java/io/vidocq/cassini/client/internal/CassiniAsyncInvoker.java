@@ -91,6 +91,8 @@ final class CassiniAsyncInvoker implements AsyncInvoker {
      * The callback receives the entity read as its own type argument ({@code Response} when it is
      * {@code Response} or cannot be resolved), and {@code failed} the exception itself.
      */
+    // The stage whenComplete returns only carries the callback's own outcome; the caller gets the invocation's.
+    @SuppressWarnings("FutureReturnValueIgnored")
     private <T> Future<T> asyncCallback(String method, Entity<?> entity, InvocationCallback<T> callback) {
         GenericType<T> type = new GenericType<>(callbackType(callback));
         CompletableFuture<T> future = supply(method, entity, r -> CassiniInvocationBuilder.readTyped(r, type));

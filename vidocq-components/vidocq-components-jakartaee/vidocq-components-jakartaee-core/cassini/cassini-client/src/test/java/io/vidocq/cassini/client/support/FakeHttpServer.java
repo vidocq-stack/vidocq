@@ -24,6 +24,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
@@ -37,7 +38,7 @@ public final class FakeHttpServer implements AutoCloseable {
     private final HttpServer server;
 
     public FakeHttpServer(HttpHandler handler) throws IOException {
-        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), 0), 0);
         server.createContext("/", handler);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();

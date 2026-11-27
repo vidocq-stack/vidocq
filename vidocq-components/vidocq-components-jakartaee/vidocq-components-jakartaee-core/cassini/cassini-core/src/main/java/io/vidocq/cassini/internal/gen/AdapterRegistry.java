@@ -131,6 +131,7 @@ public final class AdapterRegistry {
      * @param beanClass the JAX-RS resource class (concrete class, not a CDI proxy)
      * @return an adapter if one could be resolved, otherwise empty (triggers reflective fallback)
      */
+    @SuppressWarnings("ReferenceEquality") // SENTINEL caches a miss: identity
     public static Optional<ResourceAdapter> lookup(Class<?> beanClass) {
         ResourceAdapter cached = CACHE.get(beanClass);
         if (cached != null) {

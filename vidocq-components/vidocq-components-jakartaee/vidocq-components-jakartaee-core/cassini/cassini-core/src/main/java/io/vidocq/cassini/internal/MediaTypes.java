@@ -74,7 +74,7 @@ public final class MediaTypes {
     }
 
     private static MediaType parseUncached(String raw) {
-        String[] parts = raw.split(";");
+        String[] parts = raw.split(";", -1);
         String[] ts = parts[0].trim().split("/", 2);
         if (ts.length < 2) {
             throw new IllegalArgumentException("Invalid media type: " + raw);
@@ -115,7 +115,7 @@ public final class MediaTypes {
         List<MediaType> cached = PARSED_LISTS.get(raw);
         if (cached != null) return cached;
         List<MediaType> out = new ArrayList<>();
-        for (String tok : raw.split(",")) {
+        for (String tok : raw.split(",", -1)) {
             if (!tok.isBlank()) out.add(parse(tok));
         }
         return remember(PARSED_LISTS, raw, List.copyOf(out));
@@ -213,7 +213,7 @@ public final class MediaTypes {
             // Jersey/RestEasy allow @Consumes/@Produces("a,b") — a single
             // String containing multiple media-types separated by comma.
             if (r != null && r.indexOf(',') >= 0 && r.indexOf(';') < 0) {
-                for (String tok : r.split(",")) if (!tok.isBlank()) out.add(parse(tok));
+                for (String tok : r.split(",", -1)) if (!tok.isBlank()) out.add(parse(tok));
             } else {
                 out.add(parse(r));
             }

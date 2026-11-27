@@ -181,34 +181,40 @@ class FiltersTest {
     static class HighPrioFilter implements ClientRequestFilter {
         final List<String> order;
         HighPrioFilter(List<String> order) { this.order = order; }
+        @Override
         public void filter(jakarta.ws.rs.client.ClientRequestContext ctx) { order.add("auth"); }
     }
     @Priority(Priorities.HEADER_DECORATOR) // 3000
     static class MidPrioFilter implements ClientRequestFilter {
         final List<String> order;
         MidPrioFilter(List<String> order) { this.order = order; }
+        @Override
         public void filter(jakarta.ws.rs.client.ClientRequestContext ctx) { order.add("deco"); }
     }
     @Priority(Priorities.USER) // 5000
     static class LowPrioFilter implements ClientRequestFilter {
         final List<String> order;
         LowPrioFilter(List<String> order) { this.order = order; }
+        @Override
         public void filter(jakarta.ws.rs.client.ClientRequestContext ctx) { order.add("user"); }
     }
     @Priority(Priorities.AUTHENTICATION)
     static class HighPrioRespFilter implements ClientResponseFilter {
         final List<String> order;
         HighPrioRespFilter(List<String> order) { this.order = order; }
+        @Override
         public void filter(jakarta.ws.rs.client.ClientRequestContext rq, jakarta.ws.rs.client.ClientResponseContext rs) { order.add("auth"); }
     }
     @Priority(Priorities.USER)
     static class LowPrioRespFilter implements ClientResponseFilter {
         final List<String> order;
         LowPrioRespFilter(List<String> order) { this.order = order; }
+        @Override
         public void filter(jakarta.ws.rs.client.ClientRequestContext rq, jakarta.ws.rs.client.ClientResponseContext rs) { order.add("user"); }
     }
     @Priority(Priorities.AUTHENTICATION)
     static class AbortingFilter implements ClientRequestFilter {
+        @Override
         public void filter(jakarta.ws.rs.client.ClientRequestContext ctx) {
             ctx.abortWith(Response.status(503).entity("unavailable").build());
         }
@@ -217,6 +223,7 @@ class FiltersTest {
     static class MarkerFilter implements ClientRequestFilter {
         final AtomicBoolean ran;
         MarkerFilter(AtomicBoolean ran) { this.ran = ran; }
+        @Override
         public void filter(jakarta.ws.rs.client.ClientRequestContext ctx) { ran.set(true); }
     }
 }

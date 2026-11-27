@@ -170,6 +170,9 @@ public final class InMemoryExchange implements CassiniHttpExchange {
                 @Override public int read() throws java.io.IOException {
                     throw new java.io.IOException("connection reset");
                 }
+                @Override public int read(byte[] b, int off, int len) throws java.io.IOException {
+                    throw new java.io.IOException("connection reset");
+                }
             };
         }
         return body == null ? null : new ByteArrayInputStream(body);

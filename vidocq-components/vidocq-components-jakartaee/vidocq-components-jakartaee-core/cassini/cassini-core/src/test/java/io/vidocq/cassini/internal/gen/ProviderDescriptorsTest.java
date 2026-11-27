@@ -147,6 +147,8 @@ class ProviderDescriptorsTest {
         }
     }
 
+    // the accessors of ProviderDescriptor return arrays; the test never compares two descriptors
+    @SuppressWarnings("ArrayRecordComponent")
     private record Descriptor(Class<?> providerClass, Integer priority, String[] produces, String[] consumes,
                               boolean preMatching, String constrainedTo,
                               List<Class<? extends Annotation>> nameBindings,

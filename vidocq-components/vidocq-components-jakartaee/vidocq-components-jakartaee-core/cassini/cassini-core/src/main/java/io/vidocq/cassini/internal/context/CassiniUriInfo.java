@@ -122,7 +122,7 @@ public final class CassiniUriInfo implements UriInfo {
     @Override public List<PathSegment> getPathSegments(boolean decode) {
         // Split the raw path: an escaped '/' or ';' belongs to its segment (§9.2.1, CASSINI-029).
         List<PathSegment> segs = new ArrayList<>();
-        for (String raw : getPath(false).split("/")) {
+        for (String raw : getPath(false).split("/", -1)) {
             if (raw.isEmpty()) continue;
             PathSegment segment = io.vidocq.cassini.internal.ParamValueConverter.parsePathSegment(raw);
             segs.add(decode ? decoded(segment) : segment);
@@ -211,7 +211,7 @@ public final class CassiniUriInfo implements UriInfo {
     /** Adds the still-encoded {@code name=value} pairs of {@code rawQuery} to {@code m}. */
     private static void addRawQueryParameters(String rawQuery, MultivaluedMap<String, String> m) {
         if (rawQuery == null || rawQuery.isEmpty()) return;
-        for (String pair : rawQuery.split("&")) {
+        for (String pair : rawQuery.split("&", -1)) {
             if (pair.isEmpty()) continue;
             int eq = pair.indexOf('=');
             String k = eq < 0 ? pair : pair.substring(0, eq);

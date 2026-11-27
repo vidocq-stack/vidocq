@@ -171,7 +171,7 @@ class RuntimeAdapterGeneratorTest {
         public int add(int a, int b) { return a + b; }
 
         /** Returns the argument string uppercased. */
-        public String echo(String s) { return s == null ? null : s.toUpperCase(); }
+        public String echo(String s) { return s == null ? null : s.toUpperCase(java.util.Locale.ROOT); }
 
         /** Void method — side effect captured via field. */
         public String lastVoidArg;
@@ -971,7 +971,7 @@ class RuntimeAdapterGeneratorTest {
     /** Public enum with a public static fromString method. */
     public enum Status {
         ACTIVE, INACTIVE;
-        public static Status fromString(String s) { return valueOf(s.toUpperCase()); }
+        public static Status fromString(String s) { return valueOf(s.toUpperCase(java.util.Locale.ROOT)); }
     }
 
     /** Public class with valueOf(String) factory. */

@@ -130,7 +130,7 @@ public final class CassiniResponse extends Response {
         Set<String> out = new java.util.LinkedHashSet<>();
         for (Object v : vs) {
             if (v == null) continue;
-            for (String tok : v.toString().split(",")) {
+            for (String tok : v.toString().split(",", -1)) {
                 String t = tok.trim();
                 if (!t.isEmpty()) out.add(t.toUpperCase(Locale.ROOT));
             }

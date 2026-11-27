@@ -110,6 +110,8 @@ public final class CassiniUriBuilder extends UriBuilder {
         if (uri.getRawFragment() != null) this.fragment = uri.getRawFragment();
     }
 
+    // A trailing '&' adds no parameter; an empty pair inside the query is kept as written.
+    @SuppressWarnings("StringSplitter")
     private void parseQueryInto(String q) {
         for (String pair : q.split("&")) {
             int eq = pair.indexOf('=');
@@ -343,7 +345,7 @@ public final class CassiniUriBuilder extends UriBuilder {
         StringBuilder rebuilt = new StringBuilder();
         rebuilt.append(path, 0, start);
         String segment = path.substring(start);
-        String[] parts = segment.split(";");
+        String[] parts = segment.split(";", -1);
         boolean first = true;
         String encName = encodeKeepingTemplates(name, Comp.MATRIX_PARAM);
         for (String p : parts) {
