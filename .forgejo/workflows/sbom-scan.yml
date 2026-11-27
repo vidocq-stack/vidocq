@@ -1,0 +1,48 @@
+# OSV-Scanner over the CycloneDX SBOMs of the released versions, once a day (Vidocq/vidocq#269). A pull request and
+# the nightly scan the SBOM of the build at hand; a vulnerability published after a release is caught only by scanning
+# again what that release shipped. Scanned: the latest release of the newest line and of every line with a
+# maintenance/x.y branch, from the SBOMs on Maven Central: the aggregate one of a release (io.vidocq:vidocq-build, from
+# #796 on), or one per published module (0.4.0). No Maven build and no repository credential: the SBOMs are read from
+# repo1.maven.org, the vulnerabilities from osv.dev (.forgejo/scripts/scan-released-sboms.py).
+#
+# A known vulnerability turns the job red and Slack says so, with the table in the job summary; it blocks no merge and
+# no release. A maintainer can run it by hand (workflow_dispatch), for chosen versions.
+name: Released SBOM scan
+
+on:
+  schedule:
+    # 05:30 UTC: after the nightly (01:00) and the start of the TCKs (03:00); no Maven, a minute of a runner.
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: 'Released versions, space separated (e.g. 0.4.0); empty scans the latest release of each maintained line'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  scan:
+    runs-on: vidocq-runner
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release tags
+
+      - name: OSV-Scanner on the SBOMs of the released versions
+        env:
+          VERSIONS: ${{ inputs.versions }}
+        run: |
+          set -euo pipefail
+          read -r -a versions <<< "${VERSIONS:-}"
+          python3 -I -B .forgejo/scripts/scan-released-sboms.py "${versions[@]}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: https://codefloe.com/Vidocq/ci/notify-slack@main
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: failure
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
