@@ -72,14 +72,7 @@ class ClaimsNoAnnotationTest {
     @Test
     @DisplayName("process returns false in every round")
     void processNeverClaims() throws IOException {
-        var rounds = new java.util.ArrayList<Boolean>();
-        var vauban = new VaubanProcessor() {
-            @Override
-            public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-                rounds.add(super.process(annotations, roundEnv));
-                return false;
-            }
-        };
+        var vauban = new RecordingVauban();
 
         var result = ProcessorCompiler.compile(tempDir, Map.of("app/Greeter.java", """
                 package app;
@@ -91,8 +84,39 @@ class ClaimsNoAnnotationTest {
                 """), List.of(), List.of(new Companion(), vauban));
 
         assertTrue(result.success(), () -> String.join("\n", result.messages()));
-        assertTrue(rounds.size() >= 2, "rounds " + rounds);
-        assertEquals(List.of(), rounds.stream().filter(Boolean::booleanValue).toList(), "rounds that claimed");
+        assertTrue(vauban.rounds.size() >= 2, "rounds " + vauban.rounds);
+        assertEquals(List.of(), vauban.rounds.stream().filter(Boolean::booleanValue).toList(), "rounds that claimed");
+    }
+
+    @Test
+    @DisplayName("process returns false for a compilation without a bean")
+    void processNeverClaimsWithoutABean() throws IOException {
+        var vauban = new RecordingVauban();
+        vauban.overrideBceClasses(List.of());
+
+        // Indexed, as it carries a scope, but no bean: an interface is not a managed bean
+        var result = ProcessorCompiler.compile(tempDir, Map.of("app/Service.java", """
+                package app;
+
+                @jakarta.enterprise.context.ApplicationScoped
+                public interface Service {
+                }
+                """), List.of(), List.of(vauban));
+
+        assertTrue(result.success(), () -> String.join("\n", result.messages()));
+        assertEquals(List.of(), vauban.rounds.stream().filter(Boolean::booleanValue).toList(), "rounds that claimed");
+    }
+
+    /** Vauban's processor, recording what it returned in each round. */
+    private static final class RecordingVauban extends VaubanProcessor {
+
+        final List<Boolean> rounds = new java.util.ArrayList<>();
+
+        @Override
+        public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+            rounds.add(super.process(annotations, roundEnv));
+            return false;
+        }
     }
 
     /** A companion processor: generates the bean {@code app.Generated} in the first round, as Mansart Data does. */

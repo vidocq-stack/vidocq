@@ -313,6 +313,7 @@ public class VaubanProcessor extends AbstractProcessor {
     }
 
     @Override
+    @SuppressWarnings("java:S3516") // always false: it claims no annotation (BUG-20261127-57)
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         round++;
         if (finalized) {

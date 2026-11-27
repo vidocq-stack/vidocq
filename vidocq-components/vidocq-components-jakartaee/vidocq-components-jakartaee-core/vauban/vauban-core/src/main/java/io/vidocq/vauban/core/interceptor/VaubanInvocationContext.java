@@ -395,7 +395,7 @@ public final class VaubanInvocationContext implements InvocationContext {
      * Represents one interceptor in the chain.
      */
     public record InterceptorInvocation(Object target, Method method) {
-        // CDI spec requires reflective access; container exceptions propagate as RuntimeException;
+        // The CDI spec requires reflective access, container exceptions propagate as RuntimeException, and
         // NOT_INVOKED is a sentinel, compared by identity
         @SuppressWarnings({"java:S3011", "java:S112", "ReferenceEquality"})
         public Object invoke(InvocationContext ctx) throws Exception {
