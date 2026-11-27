@@ -67,7 +67,6 @@
         <!-- Quality -->
         <spotless.version>2.46.1</spotless.version>
         <palantir.version>2.84.0</palantir.version>
-        <errorprone.version>2.50.0</errorprone.version>
         <japicmp.version>0.26.3</japicmp.version>
         <!-- The API compatibility report (quality profile) covers the modules that turn it on: chappe-api,
              chappe-http and chappe-core, each with the packages its module-info.java exports. -->
@@ -212,40 +211,6 @@
                         </executions>
                     </plugin>
                 </plugins>
-            </build>
-        </profile>
-        <!-- Error Prone (Vidocq/vidocq#269): run locally with -Perrorprone, and by the SonarQube job, which
-             imports its warnings as external issues. Report mode, like the rest of the analysis: every
-             finding is a warning (-XepAllErrorsAsWarnings), none stops the build. -->
-        <profile>
-            <id>errorprone</id>
-            <build>
-                <pluginManagement>
-                    <plugins>
-                        <plugin>
-                            <groupId>org.apache.maven.plugins</groupId>
-                            <artifactId>maven-compiler-plugin</artifactId>
-                            <configuration>
-                                <compilerArgs combine.children="append">
-                                    <arg>-XDcompilePolicy=simple</arg>
-                                    <arg>--should-stop=ifError=FLOW</arg>
-                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*(generated|generated-sources)/.* -XepDisableWarningsInGeneratedCode</arg>
-                                    <!-- javac stops printing warnings after 100 per module by default: SonarQube
-                                         would only import the first 100 findings of a module. -->
-                                    <arg>-Xmaxwarns</arg>
-                                    <arg>100000</arg>
-                                </compilerArgs>
-                                <annotationProcessorPaths>
-                                    <path>
-                                        <groupId>com.google.errorprone</groupId>
-                                        <artifactId>error_prone_core</artifactId>
-                                        <version>${errorprone.version}</version>
-                                    </path>
-                                </annotationProcessorPaths>
-                            </configuration>
-                        </plugin>
-                    </plugins>
-                </pluginManagement>
             </build>
         </profile>
     </profiles>

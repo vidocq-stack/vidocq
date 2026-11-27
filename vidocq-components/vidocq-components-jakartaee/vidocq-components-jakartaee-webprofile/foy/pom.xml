@@ -69,7 +69,6 @@
         <vauban.version>${project.version}</vauban.version>
 
         <!-- Quality (Vidocq/vidocq#269), as in Chappe -->
-        <errorprone.version>2.50.0</errorprone.version>
         <japicmp.version>0.26.3</japicmp.version>
         <!-- The API compatibility report (quality profile) covers the modules that turn it on: foy-api,
              foy-chappe and foy-cdi-vauban, each with the packages its module-info.java exports. foy-core
@@ -244,41 +243,6 @@
                         </executions>
                     </plugin>
                 </plugins>
-            </build>
-        </profile>
-        <!-- Error Prone (Vidocq/vidocq#269): run locally with -Perrorprone, and by the SonarQube job, which
-             imports its warnings as external issues. Report mode, like the rest of the analysis: every
-             finding is a warning (-XepAllErrorsAsWarnings), none stops the build. Error Prone needs the
-             javac internals .mvn/jvm.config opens. -->
-        <profile>
-            <id>errorprone</id>
-            <build>
-                <pluginManagement>
-                    <plugins>
-                        <plugin>
-                            <groupId>org.apache.maven.plugins</groupId>
-                            <artifactId>maven-compiler-plugin</artifactId>
-                            <configuration>
-                                <compilerArgs combine.children="append">
-                                    <arg>-XDcompilePolicy=simple</arg>
-                                    <arg>--should-stop=ifError=FLOW</arg>
-                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*(generated|generated-sources)/.* -XepDisableWarningsInGeneratedCode</arg>
-                                    <!-- javac stops printing warnings after 100 per module by default: SonarQube
-                                         would only import the first 100 findings of a module. -->
-                                    <arg>-Xmaxwarns</arg>
-                                    <arg>100000</arg>
-                                </compilerArgs>
-                                <annotationProcessorPaths combine.children="append">
-                                    <path>
-                                        <groupId>com.google.errorprone</groupId>
-                                        <artifactId>error_prone_core</artifactId>
-                                        <version>${errorprone.version}</version>
-                                    </path>
-                                </annotationProcessorPaths>
-                            </configuration>
-                        </plugin>
-                    </plugins>
-                </pluginManagement>
             </build>
         </profile>
     </profiles>
