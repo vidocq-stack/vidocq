@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
           host="${MIRROR_URL#https://}"; host="${host#http://}"; host="${host%/}"
-          ci_sha=f79ddba722c722227e6d5b013d4b94a39c68009b
+          ci_sha=6f4659e3811fb1e8b1dab63ecb9193ac97b105ed
           git clone --quiet --branch main \
             "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
             .ci-action
@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
           host="${MIRROR_URL#https://}"; host="${host#http://}"; host="${host%/}"
-          ci_sha=f79ddba722c722227e6d5b013d4b94a39c68009b
+          ci_sha=6f4659e3811fb1e8b1dab63ecb9193ac97b105ed
           git clone --quiet --branch main \
             "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
             .ci-action
@@ -135,6 +135,8 @@ jobs:
           analysis-args: -B -ntp -Pquality,errorprone -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dsonar.scanner.skipJreProvisioning=true
           blocking: 'true'
           targeted-tests: false
+          # INFO until the cleanup of #832: Error Prone's findings show in SonarQube without failing the gate.
+          errorprone-severity: INFO
 
       # vidocq-runtime-crac-extension requires jdk.crac: its own artifact, in the `crac` profile, built on Azul Zulu
       # CRaC against the runtime the step above installed. Also built by the release.
