@@ -98,6 +98,7 @@
         <module>chappe-api</module>
         <module>chappe-http</module>
         <module>chappe-core</module>
+        <module>chappe-grpc-client</module>
         <module>chappe-tests</module>
         <module>chappe-bench</module>
         <module>chappe-conformance</module>
@@ -122,6 +123,11 @@
             <dependency>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.chappe</groupId>
+                <artifactId>chappe-grpc-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

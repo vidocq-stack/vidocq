@@ -63,13 +63,15 @@ final class ArchitectureRules {
     /**
      * CLAUDE.md, Modules: chappe-api is the public API, chappe-http implements the protocols on it, chappe-core
      * runs the server on both. Neither the API nor the protocols reach into the engine, and the API knows no
-     * protocol class.
+     * protocol class. chappe-grpc-client (Vidocq/vidocq#837) is a client on the protocols, beside the engine:
+     * it never reaches into the server, and nothing of Chappe depends on it.
      */
     static final ArchRule LAYERS = VidocqArchRules.layers(
             "CLAUDE.md, Modules",
             Layer.named("API").in("io.vidocq.chappe.api.."),
-            Layer.named("HTTP").in("io.vidocq.chappe.http..").accessibleOnlyBy("Core"),
-            Layer.named("Core").in("io.vidocq.chappe.core..").accessibleByNone());
+            Layer.named("HTTP").in("io.vidocq.chappe.http..").accessibleOnlyBy("Core", "GrpcClient"),
+            Layer.named("Core").in("io.vidocq.chappe.core..").accessibleByNone(),
+            Layer.named("GrpcClient").in("io.vidocq.chappe.grpc.client..").accessibleByNone());
 
     private ArchitectureRules() {}
 }

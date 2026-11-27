@@ -49,6 +49,10 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-grpc-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-cli</artifactId>
             <version>${project.version}</version>
         </dependency>

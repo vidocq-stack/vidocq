@@ -27,14 +27,18 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 
 /**
- * The architecture rules on the classes Chappe ships: chappe-api, chappe-http and chappe-core, test classes
+ * The architecture rules on the classes Chappe ships: chappe-api, chappe-http, chappe-core and chappe-grpc-client, test classes
  * left out (Vidocq/vidocq#289). A failure names each class and the dependency or call that breaks the rule.
  */
 class ArchitectureRulesTest {
 
     private static final JavaClasses SHIPPED = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("io.vidocq.chappe.api", "io.vidocq.chappe.http", "io.vidocq.chappe.core");
+            .importPackages(
+                    "io.vidocq.chappe.api",
+                    "io.vidocq.chappe.http",
+                    "io.vidocq.chappe.core",
+                    "io.vidocq.chappe.grpc.client");
 
     @Test
     void theShippedClassesAreFound() {
@@ -42,6 +46,7 @@ class ArchitectureRulesTest {
         assertTrue(SHIPPED.contain("io.vidocq.chappe.core.ChappeServer"), "chappe-core imported");
         assertTrue(SHIPPED.contain("io.vidocq.chappe.http.HttpConnection"), "chappe-http imported");
         assertTrue(SHIPPED.contain("io.vidocq.chappe.api.Server"), "chappe-api imported");
+        assertTrue(SHIPPED.contain("io.vidocq.chappe.grpc.client.GrpcClient"), "chappe-grpc-client imported");
     }
 
     @Test

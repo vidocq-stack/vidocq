@@ -36,6 +36,13 @@
             <artifactId>chappe-core</artifactId>
         </dependency>
 
+        <!-- The gRPC client (Vidocq/vidocq#837), tested against Chappe's own gRPC server. -->
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-grpc-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

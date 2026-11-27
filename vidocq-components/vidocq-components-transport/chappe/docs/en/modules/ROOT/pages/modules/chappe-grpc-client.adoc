@@ -1,0 +1,109 @@
+= gRPC client (`chappe-grpc-client`)
+:description: A gRPC unary client over HTTP/2, cleartext with prior knowledge or TLS with ALPN h2, with no dependency outside the JDK and Chappe.
+
+[.lead]
+[.tag-new]#NEW# `chappe-grpc-client` calls a unary gRPC method of any gRPC server, over HTTP/2: in cleartext with prior knowledge (`http://`, the way OTLP collectors listen on port 4317), or over TLS with ALPN `h2` (`https://`). It runs on Chappe's own HTTP/2 framing and HPACK codec, because the JDK `HttpClient` does not give access to the trailers, which carry `grpc-status` and `grpc-message`. It depends on `chappe-api` and `chappe-http` only, and on nothing outside the JDK (Vidocq/vidocq#837).
+
+The messages are opaque bytes: the caller encodes the request and decodes the response (protobuf for OTLP). The client adds and reads the five-byte gRPC prefix, sends the deadline as `grpc-timeout`, and maps everything that can happen to a gRPC status.
+
+== Getting the module
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.chappe</groupId>
+    <artifactId>chappe-grpc-client</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+[source,java]
+----
+module my.app {
+    requires io.vidocq.chappe.grpc.client; // requires transitive io.vidocq.chappe.api, for GrpcStatus
+}
+----
+
+== A call
+
+[source,java]
+----
+try (var client = GrpcClient.builder(URI.create("http://collector:4317"))
+        .deadline(Duration.ofSeconds(10))      // the default deadline of a call
+        .build()) {
+    GrpcResponse response = client.unary(GrpcRequest.builder(
+                    "opentelemetry.proto.collector.trace.v1.TraceService", "Export")
+            .message(exportRequestBytes)             // already encoded by the caller
+            .metadata("authorization", "Bearer " + token)
+            .build());
+    if (response.isOk()) {
+        byte[] reply = response.message().orElseThrow();
+    } else if (response.status() == GrpcStatus.UNAVAILABLE) {
+        // retry later: response.statusMessage() and response.cause() say why
+    }
+}
+----
+
+`client.unary(service, method, bytes)` is the short form, under the client's default deadline.
+
+A call does not throw because of the network: it returns a `GrpcResponse` whose status is the server's, or one the client sets itself:
+
+[cols="1,3"]
+|===
+| Status | When
+
+| the server's `grpc-status`
+| from the trailers, or from the headers of a trailers-only response; `grpc-message` is percent-decoded as UTF-8
+| `UNAVAILABLE`
+| the server cannot be reached, the TLS handshake fails, the server does not speak HTTP/2, the connection drops, a `GOAWAY` leaves the call unprocessed, `RST_STREAM(REFUSED_STREAM)`, or HTTP status 429, 502, 503 or 504
+| `DEADLINE_EXCEEDED`
+| the deadline expires first; the stream is reset with `RST_STREAM(CANCEL)` and the connection serves the next call
+| `RESOURCE_EXHAUSTED`
+| the response message is larger than `maxResponseMessageSize` (4 MiB by default); the stream is reset with `RST_STREAM(CANCEL)`. Also `RST_STREAM(ENHANCE_YOUR_CALM)`
+| `INTERNAL`
+| a compressed response message (the status message names its `grpc-encoding`), an OK response without exactly one message, a truncated message, an HTTP/2 protocol error, or HTTP status 400
+| `UNKNOWN`
+| a response that is not `application/grpc`, a missing or unknown `grpc-status`, an HTTP status the gRPC mapping does not name
+| `UNIMPLEMENTED`, `UNAUTHENTICATED`, `PERMISSION_DENIED`
+| HTTP status 404, 401 and 403 (gRPC's `http-grpc-status-mapping.md`); `RST_STREAM(INADEQUATE_SECURITY)` is `PERMISSION_DENIED`, `RST_STREAM(CANCEL)` is `CANCELLED`
+|===
+
+`GrpcResponse.headers()` and `trailers()` hold the response metadata; `cause()` the exception behind a status the client set itself. Only a closed client (`IllegalStateException`) and an interrupted caller (`InterruptedException`, the call is then cancelled) throw.
+
+== What goes on the wire
+
+* `HEADERS`: `:method POST`, `:scheme`, `:authority` (`host:port`), `:path /<service>/<method>`, `content-type: application/grpc`, `te: trailers`, `grpc-accept-encoding: identity`, `user-agent: chappe-grpc-client`, `grpc-timeout` when the call has a deadline (the time left, rounded up, at most eight digits in the finest unit), then the custom metadata.
+* `DATA`: the message behind its prefix (flag `0`, uncompressed, then its length on four bytes), split within the server's flow-control windows and `SETTINGS_MAX_FRAME_SIZE`.
+* The connection preface carries `SETTINGS_ENABLE_PUSH 0`, a stream window of 1 MiB and `SETTINGS_MAX_HEADER_LIST_SIZE` 64 KiB, and opens the connection window to 1 MiB; what the client reads is given back in `WINDOW_UPDATE` frames.
+
+== Metadata
+
+`GrpcRequest.Builder.metadata(name, value)` adds an ASCII entry; `metadata(name, bytes)` a binary one, whose name must end in `-bin`, sent in base64 without padding. A name is lower-cased and must hold only lower-case letters, digits, `_`, `-` and `.`. The names the client writes itself are refused: `grpc-*`, `content-type`, `te`, `host` and the connection-specific fields.
+
+== Connections and threads
+
+The client opens one HTTP/2 connection on its first call and runs every call on it, concurrently, within the server's `SETTINGS_MAX_CONCURRENT_STREAMS`: a call past it waits for a slot until its deadline. When the server sends `GOAWAY`, or the connection drops, the next call opens a new connection; a call the connection turned away before sending anything runs once on the new one. A virtual thread reads the frames of a connection, and each call sends its request from a virtual thread of its own: the caller only waits, up to its deadline, even behind a stalled socket. TCP keep-alive is on; there is no HTTP/2 `PING` keep-alive.
+
+[cols="1,1,3"]
+|===
+| Builder | Default | Role
+
+| `sslContext(SSLContext)` | the JVM's default | trust and keys of an `https://` target; the host name is checked against the certificate, and sent as SNI unless it is an IP address
+| `connectTimeout(Duration)` | 10 s | bounds the TCP connect, the TLS handshake and the wait for the server's `SETTINGS`, and never passes the deadline of the call
+| `deadline(Duration)` | none | the deadline of a call whose `GrpcRequest` names none
+| `maxResponseMessageSize(int)` | 4 MiB | the largest response message accepted
+|===
+
+The target is `scheme://host:port` and nothing else: a path, a query or user information is refused, since the call names the method.
+
+== Out of scope
+
+* Streaming calls (server, client and bidirectional streaming): unary only.
+* Compression: requests are sent uncompressed and a compressed response is refused with `INTERNAL`.
+* Retries, load balancing and name resolution beyond the JDK's: the caller decides on the status.
+* HTTP/1.1 upgrade to h2c: an `http://` target is spoken to in HTTP/2 from the first byte.
+
+== Tests
+
+* `chappe-grpc-client` — the framing, the `grpc-timeout` encoding, the status mapping, the metadata rules, and a scripted HTTP/2 server for resets, `GOAWAY`, split header blocks, `PING`, flow control, `SETTINGS_MAX_CONCURRENT_STREAMS`, oversized responses and dropped connections.
+* `chappe-tests` — `GrpcClientTest` against Chappe's own gRPC server, cleartext and TLS; `GrpcPythonInteropTest` against grpcio, the Python binding of the gRPC C core, cleartext and TLS. The latter is skipped unless `python3` imports `grpc`; `-Dchappe.grpc.python.path=<dir>` adds a directory filled by `pip install --target <dir> grpcio`.

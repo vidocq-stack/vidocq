@@ -22,6 +22,7 @@ package io.vidocq.chappe.http.h2;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -108,26 +109,65 @@ public final class HpackEncoder {
      *         dynamic table is then left untouched
      */
     public byte[] encode(int statusCode, Headers headers) {
-        // All fields are checked before the first one is encoded: a failure must leave the dynamic
-        // table untouched, or it would no longer match the peer's (CHAPPE-008). The fields are read
-        // once into a snapshot, so a custom Headers cannot hand back other text after the check.
+        return encodeBlock(
+                new String[][] {{":status", String.valueOf(statusCode)}}, snapshot("response header", headers));
+    }
+
+    /**
+     * Encodes request headers into an HPACK header block: the four request pseudo-header fields, in
+     * the order RFC 9113 §8.3.1 lists them, then {@code headers} under the rules of
+     * {@link #encode(int, Headers)} (lower-case names, no connection-specific field, values trimmed).
+     * Chappe's gRPC client writes its requests with it.
+     *
+     * @param method the {@code :method}, an RFC 9110 token
+     * @param scheme the {@code :scheme}, such as {@code http} or {@code https}
+     * @param authority the {@code :authority}, {@code host[:port]}
+     * @param path the {@code :path}, not empty
+     * @param headers the request header fields
+     * @return the encoded header block
+     * @throws IllegalArgumentException if a pseudo-header field is empty or not a valid field value,
+     *     the method is not a token, or a header field is invalid as for {@link #encode(int, Headers)};
+     *     the dynamic table is then left untouched
+     */
+    public byte[] encodeRequest(String method, String scheme, String authority, String path, Headers headers) {
+        if (!HeaderFields.isToken(method)) {
+            throw new IllegalArgumentException("Invalid request method: not an RFC 9110 token");
+        }
+        String[][] pseudo = {{":method", method}, {":scheme", scheme}, {":authority", authority}, {":path", path}};
+        for (String[] field : pseudo) {
+            if (field[1] == null || field[1].isEmpty() || !HeaderFields.isFieldValue(field[1])) {
+                throw new IllegalArgumentException("Invalid request pseudo-header field " + field[0]);
+            }
+        }
+        return encodeBlock(pseudo, snapshot("request header", headers));
+    }
+
+    /**
+     * Checks every field and reads them once into a snapshot, lower-cased, trimmed, without the
+     * connection-specific ones. All fields are checked before the first one is encoded: a failure
+     * must leave the dynamic table untouched, or it would no longer match the peer's (CHAPPE-008);
+     * and a custom Headers cannot hand back other text after the check.
+     */
+    private static List<String[]> snapshot(String kind, Headers headers) {
         var fields = new ArrayList<String[]>(Math.max(0, headers.size()));
         for (var entry : headers) {
-            HeaderFields.requireValid("response header", entry.name(), entry.value());
+            HeaderFields.requireValid(kind, entry.name(), entry.value());
             String name = entry.name().toLowerCase(Locale.ROOT);
             String value = trimWhitespace(entry.value());
             if (!connectionSpecific(name, value)) fields.add(new String[] {name, value});
         }
+        return fields;
+    }
+
+    /** Encodes the pseudo-header fields, then the checked fields, under the lock. */
+    private byte[] encodeBlock(String[][] pseudoFields, List<String[]> fields) {
         var out = new ByteArrayOutputStream(256);
         lock.lock();
         try {
             writePendingSizeUpdate(out);
-
-            // :status pseudo-header
-            String statusValue = String.valueOf(statusCode);
-            encodeHeader(out, ":status", statusValue);
-
-            // Regular headers
+            for (String[] field : pseudoFields) {
+                encodeHeader(out, field[0], field[1]);
+            }
             for (String[] field : fields) {
                 encodeHeader(out, field[0], field[1]);
             }

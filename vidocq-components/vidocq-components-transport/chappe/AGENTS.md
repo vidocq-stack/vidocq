@@ -7,6 +7,7 @@ Chappe is a Maven multi-module Java 25 project using the standard Maven layout:
 - `chappe-api`: public API types, including `Server`, `Router`, `Request`, and `Response`.
 - `chappe-http`: HTTP/1.1, HTTP/2, TLS, parsing, and wire-level code.
 - `chappe-core`: server runtime, provider integration, lifecycle, and virtual threads.
+- `chappe-grpc-client`: gRPC unary client over HTTP/2 (h2c prior knowledge, TLS with ALPN `h2`) on the `chappe-http` framing and HPACK.
 - `chappe-cli`: standalone `chappe serve` launcher and mini-YAML configuration.
 - `chappe-tests`: integration tests with real server sockets.
 - `chappe-conformance`: protocol conformance tests.

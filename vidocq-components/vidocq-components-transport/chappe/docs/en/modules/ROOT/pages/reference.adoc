@@ -19,6 +19,9 @@ This page is the canonical Chappe reference: Maven artifacts, exported Java modu
 | `io.vidocq.chappe:chappe-core:{project-version}`
 | Server engine (virtual threads, protocol detection, lifecycle, `ChappeServerProvider`).
 
+| `io.vidocq.chappe:chappe-grpc-client:{project-version}`
+| [.tag-new]#NEW# gRPC unary client over HTTP/2, cleartext with prior knowledge or TLS with ALPN `h2`: `GrpcClient`, `GrpcRequest`, `GrpcResponse`. See xref:modules/chappe-grpc-client.adoc[gRPC client].
+
 | `io.vidocq.chappe:chappe-cli:{project-version}`
 | Standalone `chappe serve` launcher (fat jar + scripts).
 
@@ -64,6 +67,11 @@ This page is the canonical Chappe reference: Maven artifacts, exported Java modu
 `exports io.vidocq.chappe.core;` +
 `provides io.vidocq.chappe.api.ServerProvider with io.vidocq.chappe.core.ChappeServerProvider;`
 
+| `io.vidocq.chappe.grpc.client`
+| `requires transitive io.vidocq.chappe.api;` +
+`requires io.vidocq.chappe.http;` +
+`exports io.vidocq.chappe.grpc.client;`
+
 | `io.vidocq.chappe.cli`
 | `requires io.vidocq.chappe.api;` +
 `requires io.vidocq.chappe.core;` +
@@ -71,6 +79,9 @@ This page is the canonical Chappe reference: Maven artifacts, exported Java modu
 |===
 
 `chappe-api` does not `opens` anything. No module exposes its internals through reflection: every dependency goes through the `exports` listed above.
+
+[[hpack-request]]
+[.tag-new]#NEW# `io.vidocq.chappe.http.h2.HpackEncoder.encodeRequest(method, scheme, authority, path, headers)` encodes a request header block, which `chappe-grpc-client` writes with: the four request pseudo-header fields in the order of RFC 9113 §8.3.1, then the fields under the rules of `encode(status, headers)` (lower-case names, no connection-specific field, `te` only as `trailers`, values trimmed). An invalid field, an empty or invalid pseudo-header value, or a method that is not a token throws `IllegalArgumentException` before the dynamic table is touched.
 
 == Major public API (`io.vidocq.chappe.api`)
 
@@ -541,6 +552,7 @@ Served zero-copy by `StaticFileHandler.preferPrecompressed(true)`.
 | RFC 7541 (HPACK)          | OK | static table, dynamic table, Huffman encode/decode; the decoder's table bounded by the advertised `SETTINGS_HEADER_TABLE_SIZE` and the encoder's by the peer's (§4.2), a size update past it or after the first field and a length or integer the block cannot hold answered `GOAWAY(COMPRESSION_ERROR)` (§5.1, §5.2, §6.3)
 | RFC 6455 (WebSocket)      | OK | handshake, TEXT/BINARY framing, fragmentation, UTF-8 validation, client masking, close handshake, auto-PONG (until the peer's Close arrives) — over HTTP/1.1
 | gRPC over HTTP/2          | OK | transport framing (5-byte prefix), trailers, unary / server-stream / client-stream / bidi, gRPC-Web via `grpcWeb()`
+| gRPC client               | OK | [.tag-new]#NEW# unary calls over h2c (prior knowledge) and TLS (ALPN `h2`), `grpc-timeout`, metadata, flow control: xref:modules/chappe-grpc-client.adoc[`chappe-grpc-client`]
 | RFC 9114 (HTTP/3)         | planned | QUIC via the JDK, targeting JDK 26+ — see link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/ROADMAP.md[ROADMAP.md]
 | RFC 8441 (WebSocket H2)   | planned | WebSocket runs over HTTP/1.1 today
 | RFC 9113 §8.4 (server push) | not supported | no `PUSH_PROMISE` is ever sent; deprecated by browsers and by Servlet 6.1

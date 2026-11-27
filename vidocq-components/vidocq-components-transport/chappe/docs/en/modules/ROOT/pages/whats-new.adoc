@@ -4,4 +4,7 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+== gRPC
+
+* xref:modules/chappe-grpc-client.adoc[A gRPC client] [.tag-new]#NEW# — the new module `chappe-grpc-client` calls unary gRPC methods over HTTP/2, in cleartext with prior knowledge or over TLS with ALPN `h2`, on Chappe's own framing and HPACK codec (Vidocq/vidocq#837). It reads `grpc-status` and `grpc-message` from the trailers, which the JDK `HttpClient` cannot, sends the deadline as `grpc-timeout`, honours both flow-control windows and `SETTINGS_MAX_CONCURRENT_STREAMS`, and reports every failure of the network as a gRPC status (`UNAVAILABLE`, `DEADLINE_EXCEEDED`). Messages are opaque bytes; no dependency outside the JDK.
+* xref:reference.adoc#hpack-request[`HpackEncoder.encodeRequest`] [.tag-new]#NEW# — `chappe-http` encodes request header blocks too: the four request pseudo-header fields, then the fields under the rules of a response.

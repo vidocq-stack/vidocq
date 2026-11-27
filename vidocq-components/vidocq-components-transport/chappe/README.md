@@ -365,6 +365,27 @@ Runtime guarantees:
 - **Handler error** — if the handler throws an exception without having called `complete`,
   the transport layer automatically emits `grpc-status: 13 (INTERNAL)`.
 
+### gRPC client
+
+`chappe-grpc-client` calls unary gRPC methods of any gRPC server, over HTTP/2 in cleartext
+with prior knowledge (`http://`) or over TLS with ALPN `h2` (`https://`), on Chappe's own
+framing and HPACK codec: the JDK `HttpClient` cannot read the trailers that carry
+`grpc-status`. Messages are opaque bytes; no dependency outside the JDK.
+
+```java
+try (var client = GrpcClient.builder(URI.create("http://collector:4317"))
+        .deadline(Duration.ofSeconds(10))
+        .build()) {
+    GrpcResponse response = client.unary(
+            "opentelemetry.proto.collector.trace.v1.TraceService", "Export", requestBytes);
+    if (!response.isOk()) log(response.status() + " " + response.statusMessage());
+}
+```
+
+The deadline goes to the server as `grpc-timeout`; a failure of the network is a status
+(`UNAVAILABLE`, `DEADLINE_EXCEEDED`), never an exception. See the
+`gRPC client` page of the documentation.
+
 Out of scope for v1 (to be implemented in extensions or later):
 - `grpc-encoding: gzip|deflate` compression (`identity` only supported)
 - `grpc-timeout` (deadline propagation)
@@ -405,6 +426,7 @@ Chappe's goal is a transport that holds under load and over time; no ranking aga
 | `chappe-api` | Public API: routing, handling, static files, filters, `Accept-Encoding` negotiation, extension SPI |
 | `chappe-http` | HTTP/1.1 and HTTP/2 protocols, TLS, buffer pool |
 | `chappe-core` | Server engine, virtual threads, protocol detection |
+| `chappe-grpc-client` | gRPC unary client over HTTP/2 (h2c prior knowledge or TLS with ALPN `h2`), on `chappe-http` |
 | `chappe-cli` | Standalone `chappe serve` CLI launcher (mini-YAML, fat jar, jlink) |
 | `chappe-tests` | 114 integration tests |
 | `chappe-conformance` | 45 RFC conformance tests |
