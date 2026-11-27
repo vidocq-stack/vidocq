@@ -3316,7 +3316,7 @@ suspected cause, status. Updated on every investigation.
 ## BUG-20261117-25 — An observer's or a disposer's parameter is resolved by its erased class
 
 - **Date**: 2026-11-17
-- **Status**: FIXED on `fix/raw-type-assignability`
+- **Status**: FIXED on `main` in a8d26d2a7, released in 0.4.0 (developed on `fix/raw-type-assignability`)
 - **Module**: `vauban-core` (`VaubanContainer.checkResolvable`, `DisposerInvoker.validateDisposerParameter` and
   `disposerArgument`, `EventDispatcher.beanArgument`)
 - **Symptom**: `void on(@Observes Ping ping, Holder<String> holder)` with a bean of `TextHolder implements
@@ -3352,7 +3352,7 @@ suspected cause, status. Updated on every investigation.
 ## BUG-20261117-24 — The resolution of an injection point reads a bean's type variable otherwise than `getBeans`
 
 - **Date**: 2026-11-17
-- **Status**: FIXED on `fix/raw-type-assignability`
+- **Status**: FIXED on `main` in a8d26d2a7, released in 0.4.0 (developed on `fix/raw-type-assignability`)
 - **Module**: `vauban-core` (`AssignabilityRules.wildcardAdmits`, `actualTypeAdmits`, `isRawEquivalentArgument`)
 - **Symptom**: for a bean type with a type variable among its type arguments, the resolution of an injection point,
   at build and at start, answered otherwise than `BeanManager.getBeans` and CDI 4.1, 5.2.4:
@@ -3663,7 +3663,7 @@ suspected cause, status. Updated on every investigation.
 ## BUG-20261117-19 — The descriptor of a `@Typed` producer names its types raw
 
 - **Date**: 2026-11-17
-- **Status**: FIXED on `fix/raw-type-assignability`
+- **Status**: FIXED on `main` in a8d26d2a7, released in 0.4.0 (developed on `fix/raw-type-assignability`)
 - **Module**: `vauban-core` (`BeanDiscovery.computeProducerTypesWithTyped`)
 - **Symptom**: `@Produces @Typed(Repo.class) Box<String> strings()` and `@Produces @Typed(Repo.class) Box<Integer>
   integers()`, where `Box<T> implements Repo<T>`: an `@Inject Repo<String>` is ambiguous at build (`Ambiguous
@@ -3791,7 +3791,7 @@ suspected cause, status. Updated on every investigation.
 ## BUG-20261117-16 — A raw bean type satisfies an injection point of any parameterization
 
 - **Date**: 2026-11-17
-- **Status**: FIXED on `fix/raw-type-assignability`
+- **Status**: FIXED on `main` in a8d26d2a7, released in 0.4.0 (developed on `fix/raw-type-assignability`)
 - **Module**: `vauban-core` (`AssignabilityRules.isAssignableToParameterized`, `VaubanBeanManager.typesMatch`,
   `BeanDiscovery.computeBeanTypes`)
 - **Symptom**: a producer of a raw `Foo`, `@Produces Foo foo()` with `Foo<T>` generic, satisfies an `@Inject
