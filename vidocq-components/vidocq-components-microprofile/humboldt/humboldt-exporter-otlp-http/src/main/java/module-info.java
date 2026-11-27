@@ -18,18 +18,18 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Humboldt OTLP HTTP Exporter — pushes spans to an OTel Collector
- * via OTLP/HTTP-JSON.
+ * Humboldt OTLP HTTP Exporter — pushes spans, metrics and logs to an OpenTelemetry Collector over OTLP/HTTP.
  *
- * <p>M3 minimum viable implementation:</p>
  * <ul>
- *   <li>OTLP/JSON encoding (direct StringBuilder, resourceSpans/scopeSpans/spans/attributes schema)</li>
- *   <li>transport via the JDK {@link java.net.http.HttpClient}</li>
+ *   <li>two encodings, chosen per exporter with {@link io.vidocq.humboldt.exporter.otlp.http.OtlpProtocol}:
+ *       {@code http/protobuf} (the protobuf binary format of the opentelemetry-proto messages,
+ *       {@code application/x-protobuf}) and {@code http/json} (OTLP/JSON, {@code application/json}, the default);
+ *       both encoders are hand-written, with no dependency beyond the Humboldt SDK</li>
+ *   <li>transport via the JDK {@link java.net.http.HttpClient}, on virtual threads</li>
  *   <li>simple retry on 5xx (bounded exponential backoff)</li>
  * </ul>
  *
- * <p>The OTLP/HTTP-protobuf variant and the transport switch to
- * {@code chappe-client} are planned for M3b (see PLAN.md §13).</p>
+ * <p>OTLP over gRPC is not supported yet: it needs gRPC on Chappe.</p>
  */
 module io.vidocq.humboldt.exporter.otlp.http {
 

@@ -37,7 +37,9 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 - [x] `humboldt-propagator-w3c` : `W3CPropagators.get()` facade combining the public OTel API's W3CTraceContextPropagator + W3CBaggagePropagator (no reimplementation — both are concrete on the API side). 5 tests: composite fields, inject W3C traceparent format, extract restore remote SpanContext, baggage roundtrip, stable singleton
 - [x] `humboldt-exporter-otlp-http` MVP: manual OTLP/JSON encoder (`OtlpJsonEncoder` via StringBuilder, resourceSpans/scopeSpans/spans/attributes schema, AnyValue stringValue/boolValue/intValue/doubleValue/arrayValue, minimal JSON escaping), `java.net.http.HttpClient` transport with virtual thread executor, builder (endpoint, headers, requestTimeout, connectTimeout, maxRetries), bounded exponential retry (100ms × 2^attempt, ceiling 5s) on 5xx and network errors
 - [x] E2E tests with in-process JDK fake server `com.sun.net.httpserver.HttpServer`: valid OTLP/JSON POST, retry 503→503→200, custom Authorization header, capped backoff. 4 EncoderTest unit tests (single span, parentSpanId, events+links+status, JSON escaping, empty collection)
-- [ ] **M3b** (deferred) : OTLP/HTTP-protobuf, transport via chappe-client, Jaeger E2E tests via testcontainers — see [`PLAN.md`](PLAN.md) §3.4
+- [x] **M3b, part 1** : OTLP/HTTP-protobuf, hand-written encoders checked against the official opentelemetry-proto messages (Vidocq/vidocq#830)
+- [ ] **M3b** (deferred) : transport via chappe-client, Jaeger E2E tests via testcontainers — see [`PLAN.md`](PLAN.md) §3.4
+- [ ] OTLP over gRPC (`humboldt-exporter-otlp-grpc`), once Chappe speaks gRPC: its own ticket
 - [ ] **Tracing TCK gate** : deferred to M7 (official TCK runner, in-reactor behind the `tck` profile since 2026-07-15)
 
 ## M4 — SDK Metric (synchronous MVP) _(completed 2026-05-20)_
@@ -87,7 +89,8 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 - [x] Auto pipeline : `in-memory` exporter → Simple processor + PeriodicMetricReader 60min ; `otlp` exporter → Batch processor + PeriodicMetricReader 60s ; `none` → no processor registered
 - [x] Propagators W3C composite (TraceContext + Baggage) installed by default
 - [x] Tests: 15 (8 EnvConfigTest + 7 HumboldtAutoConfigureTest) — service.name default+override, RESOURCE_ATTRIBUTES parsing 3 pairs, trace+metric+log E2E pipeline via a single `configure()`, always_off sampler, traceidratio ratio description, exporter=none disables, exposed W3C propagators traceparent+baggage
-- [ ] **Deferred to M7** : `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_EXPORTER_OTLP_PROTOCOL` (json vs protobuf), `MP_TELEMETRY_SDK_DISABLED`, `MP_TELEMETRY_PROPAGATORS`, Ravel integration for MP Config
+- [x] `OTEL_EXPORTER_OTLP_PROTOCOL` and its per-signal forms: `http/protobuf`, `http/json` (default), `grpc` refused at start (Vidocq/vidocq#830)
+- [ ] **Deferred to M7** : `OTEL_EXPORTER_OTLP_TIMEOUT`, `MP_TELEMETRY_SDK_DISABLED`, `MP_TELEMETRY_PROPAGATORS`, Ravel integration for MP Config
 
 ### M6d — MPS extension + Vauban runtime validation _(structure delivered 2026-05-21)_
 

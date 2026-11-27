@@ -6,6 +6,23 @@ Statuts : `OPEN` → `INVESTIGATING` → `FIXED` (commit hash) → `CLOSED`.
 
 ---
 
+## BUG-20261127-84 — Codegen: the `.proto` parser skips a `oneof` block with its fields
+
+- **Date** : 2026-11-27
+- **Statut** : OPEN
+- **Module touché** : `champollion-protobuf-codegen` — `ProtoParser` (`case "oneof" -> skipBlock(); // M2.1 : ignore oneof`)
+- **Symptôme** : the fields declared inside a `oneof` are missing from the resolved `Descriptor` and from the generated
+  record: no error, no warning. Found by Humboldt (Vidocq/vidocq#830), whose test decodes OTLP/protobuf with the
+  official opentelemetry-proto files: `AnyValue` came out with no field at all, `Metric` without `gauge`/`sum`/
+  `histogram`, `NumberDataPoint` without `as_double`/`as_int`.
+- **Reproduction minimale** : `SchemaResolver.resolveAll(List.of(ProtoParser.parse("a.proto", "syntax = \"proto3\";
+  message A { oneof v { string s = 1; int64 i = 2; } }")))` → `A` has no field.
+- **Cause** : `oneof` support was left for later at M2.1; the block is skipped rather than refused.
+- **Contournement** : Humboldt's test (`OtlpProtoSchema.withoutOneofBlocks`) lifts the members to plain fields before
+  parsing; on the wire a `oneof` member is an ordinary field.
+- **Correction suggérée** : parse the members as fields of the message, with their `oneof` index in the descriptor
+  (presence semantics of a member), or at least fail on a `oneof` instead of dropping its fields.
+
 ## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
 
 - **Date** : 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Mansart, Kerckhoffs and Noether)

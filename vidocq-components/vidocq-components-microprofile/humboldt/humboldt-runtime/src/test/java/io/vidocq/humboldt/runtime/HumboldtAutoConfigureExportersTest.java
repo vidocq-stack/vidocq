@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** OTLP, logging and sampler selection of {@link HumboldtAutoConfigure}. */
@@ -59,8 +60,13 @@ class HumboldtAutoConfigureExportersTest {
     private static final String NONE = "none";
     private static final String LOGGING = "logging";
     private static final String OTLP = "otlp";
+    private static final String PROTOCOL = "OTEL_EXPORTER_OTLP_PROTOCOL";
+    private static final String JSON = "application/json";
+    private static final String PROTOBUF = "application/x-protobuf";
 
     private final List<String> requests = new CopyOnWriteArrayList<>();
+    /** Path → Content-Type of the last request to it. */
+    private final Map<String, String> contentTypes = new java.util.concurrent.ConcurrentHashMap<>();
     private ServerSocket server;
     private String endpoint;
 
@@ -87,6 +93,7 @@ class HumboldtAutoConfigureExportersTest {
             String requestLine;
             while ((requestLine = readLine(in)) != null && !requestLine.isEmpty()) {
                 String team = null;
+                String contentType = null;
                 int length = 0;
                 String header;
                 while ((header = readLine(in)) != null && !header.isEmpty()) {
@@ -94,10 +101,13 @@ class HumboldtAutoConfigureExportersTest {
                     String name = header.substring(0, colon).trim().toLowerCase(Locale.ROOT);
                     String value = header.substring(colon + 1).trim();
                     if (name.equals("x-team")) team = value;
+                    if (name.equals("content-type")) contentType = value;
                     if (name.equals("content-length")) length = Integer.parseInt(value);
                 }
                 in.readNBytes(length);
-                requests.add(requestLine.split(" ")[1] + " x-team=" + team);
+                String path = requestLine.split(" ")[1];
+                if (contentType != null) contentTypes.put(path, contentType);
+                requests.add(path + " x-team=" + team);
                 out.write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
                 out.flush();
             }
@@ -188,6 +198,97 @@ class HumboldtAutoConfigureExportersTest {
         }
         assertTrue(requests.contains("/t x-team=null"), requests::toString);
         assertTrue(requests.contains("/m x-team=null"), requests::toString);
+    }
+
+    /** Exports one span, one metric and one log record through OTLP with {@code env}, to the local collector. */
+    private void exportOneOfEach(Map<String, String> env) {
+        env.put("OTEL_EXPORTER_OTLP_ENDPOINT", endpoint);
+        env.put("OTEL_METRIC_EXPORT_INTERVAL", "3600000");
+        try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(env, Map.of()))) {
+            h.getTracerProvider().get("otlp").spanBuilder("exported").startSpan().end();
+            h.getMeterProvider().get("otlp").counterBuilder("hits").build().add(1);
+            h.getLogsBridge().get("otlp").logRecordBuilder().setBody("hello").emit();
+            assertTrue(h.flush().join(10, TimeUnit.SECONDS).isSuccess());
+        }
+    }
+
+    @Test
+    void otlp_exporters_speak_http_json_when_no_protocol_is_set() {
+        exportOneOfEach(enabled(OTLP, OTLP, OTLP));
+
+        assertEquals(Map.of("/v1/traces", JSON, "/v1/metrics", JSON, "/v1/logs", JSON), contentTypes);
+    }
+
+    @Test
+    void otel_exporter_otlp_protocol_http_protobuf_switches_every_signal_to_protobuf() {
+        Map<String, String> env = enabled(OTLP, OTLP, OTLP);
+        env.put(PROTOCOL, "http/protobuf");
+
+        exportOneOfEach(env);
+
+        assertEquals(Map.of("/v1/traces", PROTOBUF, "/v1/metrics", PROTOBUF, "/v1/logs", PROTOBUF), contentTypes);
+    }
+
+    @Test
+    void the_protocol_is_read_from_the_system_property_form_too() {
+        Map<String, String> env = enabled(OTLP, NONE, NONE);
+        env.put("OTEL_EXPORTER_OTLP_ENDPOINT", endpoint);
+        try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(
+                EnvConfig.of(env, Map.of("otel.exporter.otlp.protocol", "http/protobuf")))) {
+            h.getTracerProvider().get("otlp").spanBuilder("exported").startSpan().end();
+            assertTrue(h.flush().join(10, TimeUnit.SECONDS).isSuccess());
+        }
+
+        assertEquals(PROTOBUF, contentTypes.get("/v1/traces"));
+    }
+
+    @Test
+    void a_per_signal_protocol_overrides_the_general_one() {
+        Map<String, String> env = enabled(OTLP, OTLP, OTLP);
+        env.put(PROTOCOL, "http/protobuf");
+        env.put("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "http/json");
+        env.put("OTEL_EXPORTER_OTLP_LOGS_PROTOCOL", "http/json");
+
+        exportOneOfEach(env);
+
+        assertEquals(Map.of("/v1/traces", PROTOBUF, "/v1/metrics", JSON, "/v1/logs", JSON), contentTypes);
+    }
+
+    @Test
+    void grpc_fails_the_configuration_with_a_clear_message() {
+        Map<String, String> env = enabled(OTLP, NONE, NONE);
+        env.put(PROTOCOL, "grpc");
+
+        EnvConfig config = EnvConfig.of(env, Map.of());
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> HumboldtAutoConfigure.configure(config));
+
+        assertTrue(e.getMessage().contains("OTEL_EXPORTER_OTLP_PROTOCOL")
+                && e.getMessage().contains("gRPC is not supported yet"), e.getMessage());
+    }
+
+    @Test
+    void a_per_signal_grpc_names_its_key() {
+        Map<String, String> env = enabled(NONE, NONE, OTLP);
+        env.put("OTEL_EXPORTER_OTLP_LOGS_PROTOCOL", "grpc");
+
+        EnvConfig config = EnvConfig.of(env, Map.of());
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> HumboldtAutoConfigure.configure(config));
+
+        assertTrue(e.getMessage().contains("OTEL_EXPORTER_OTLP_LOGS_PROTOCOL"), e.getMessage());
+    }
+
+    @Test
+    void the_protocol_of_a_signal_without_an_otlp_exporter_is_not_read() {
+        Map<String, String> env = enabled(NONE, LOGGING, NONE);
+        env.put(PROTOCOL, "grpc");
+
+        try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(env, Map.of()))) {
+            assertTrue(h.sdkTracerProvider().getSpanProcessors().isEmpty());
+        }
     }
 
     @Test

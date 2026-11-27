@@ -28,7 +28,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,22 +39,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Shared HTTP/JSON sender for the 3 OTLP exporters (traces / metrics / logs).
+ * Shared OTLP/HTTP sender for the 3 OTLP exporters (traces / metrics / logs).
  *
  * <p>Encapsulates {@link HttpClient} + endpoint + headers + timeouts + bounded
  * exponential retry. The signal-specific exporters (span/metric/log) delegate here
- * to send an already-encoded JSON payload.</p>
+ * to send an already-encoded payload, OTLP/JSON or protobuf, with the {@code Content-Type} the builder set.</p>
  *
- * <p>Async: each {@link #send(String)} launches a virtual thread that executes
+ * <p>Async: each {@link #send(byte[])} launches a virtual thread that executes
  * the HTTP request + retry. Returns a {@link CompletableResultCode} that completes
  * at the end (success / definitive failure after {@code maxRetries}).</p>
  *
  * <p>{@link Releasable}: the client keeps its connections to the collector in a pool, which a CRaC checkpoint
  * refuses; {@link #release()} closes the client once what was sent is answered, {@link #reopen()} builds another.</p>
  */
-public final class OtlpHttpJsonSender implements Releasable {
+public final class OtlpHttpSender implements Releasable {
 
-    private static final Logger LOG = System.getLogger(OtlpHttpJsonSender.class.getName());
+    private static final Logger LOG = System.getLogger(OtlpHttpSender.class.getName());
 
     private final URI endpoint;
     private final Map<String, String> headers;
@@ -65,16 +64,18 @@ public final class OtlpHttpJsonSender implements Releasable {
     /** Empty while released: an export then fails at once. */
     private final AtomicReference<HttpClient> client = new AtomicReference<>();
     private final String signalLabel;
+    private final String contentType;
     /** The results of the requests sent and not answered yet. */
     private final Set<CompletableResultCode> inFlight = ConcurrentHashMap.newKeySet();
 
-    private OtlpHttpJsonSender(Builder b) {
+    private OtlpHttpSender(Builder b) {
         this.endpoint = b.endpoint;
         this.headers = Map.copyOf(b.headers);
         this.requestTimeout = b.requestTimeout;
         this.connectTimeout = b.connectTimeout;
         this.maxRetries = b.maxRetries;
         this.signalLabel = b.signalLabel;
+        this.contentType = b.contentType;
         this.client.set(newClient());
     }
 
@@ -122,14 +123,14 @@ public final class OtlpHttpJsonSender implements Releasable {
     }
 
     /**
-     * @param jsonBody already-encoded OTLP/JSON payload
+     * @param body already-encoded OTLP payload, in the encoding of the builder's {@code Content-Type}
      * @return an asynchronous result — success if status 2xx (possibly after retry).
      */
-    public CompletableResultCode send(String jsonBody) {
+    public CompletableResultCode send(byte[] body) {
         HttpRequest.Builder reqB = HttpRequest.newBuilder(endpoint)
                 .timeout(requestTimeout)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+                .header("Content-Type", contentType)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body));
         headers.forEach(reqB::header);
         HttpRequest req = reqB.build();
 
@@ -206,6 +207,7 @@ public final class OtlpHttpJsonSender implements Releasable {
         private Duration connectTimeout = Duration.ofSeconds(10);
         private int maxRetries = 3;
         private String signalLabel = "?";
+        private String contentType = "application/json";
 
         public Builder setEndpoint(URI endpoint) {
             this.endpoint = endpoint;
@@ -247,9 +249,15 @@ public final class OtlpHttpJsonSender implements Releasable {
             return this;
         }
 
-        public OtlpHttpJsonSender build() {
-            if (endpoint == null) throw new IllegalStateException("endpoint manquant");
-            return new OtlpHttpJsonSender(this);
+        /** {@code Content-Type} of the requests, that of the payload's encoding; {@code application/json} by default. */
+        public Builder setContentType(String contentType) {
+            if (contentType != null) this.contentType = contentType;
+            return this;
+        }
+
+        public OtlpHttpSender build() {
+            if (endpoint == null) throw new IllegalStateException("no endpoint set");
+            return new OtlpHttpSender(this);
         }
     }
 }

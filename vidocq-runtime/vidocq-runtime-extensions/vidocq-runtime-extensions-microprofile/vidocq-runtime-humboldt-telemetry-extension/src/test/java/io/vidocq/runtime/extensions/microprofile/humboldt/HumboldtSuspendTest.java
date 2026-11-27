@@ -50,7 +50,7 @@ class HumboldtSuspendTest {
 
     /** The logger of Humboldt's OTLP sender, which warns when a released exporter drops a batch. */
     private static final Logger SENDER_LOG =
-            Logger.getLogger("io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender");
+            Logger.getLogger("io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpSender");
 
     private final List<String> warnings = new CopyOnWriteArrayList<>();
     private final Handler recorder = new Handler() {

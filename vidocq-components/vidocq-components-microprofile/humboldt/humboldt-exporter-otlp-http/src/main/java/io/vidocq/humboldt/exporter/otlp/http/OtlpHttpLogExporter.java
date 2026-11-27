@@ -19,8 +19,9 @@
  */
 package io.vidocq.humboldt.exporter.otlp.http;
 
-import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpSender;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonLogEncoder;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpProtoLogEncoder;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.log.data.LogRecordData;
 import io.vidocq.humboldt.sdk.log.export.LogRecordExporter;
@@ -28,15 +29,15 @@ import io.vidocq.humboldt.sdk.log.export.LogRecordExporter;
 import java.util.Collection;
 
 /**
- * OTLP/HTTP-JSON exporter for LogRecord — delegates transport to
- * {@link OtlpHttpJsonSender}.
+ * OTLP/HTTP exporter (http/json or http/protobuf) for LogRecord — delegates transport to
+ * {@link OtlpHttpSender}.
  *
  * <p>Default endpoint: {@code http://localhost:4318/v1/logs}.</p>
  */
 public final class OtlpHttpLogExporter extends OtlpHttpExporter implements LogRecordExporter {
 
-    private OtlpHttpLogExporter(OtlpHttpJsonSender sender) {
-        super(sender);
+    private OtlpHttpLogExporter(OtlpHttpSender sender, OtlpProtocol protocol) {
+        super(sender, protocol);
     }
 
     public static Builder builder() {
@@ -47,7 +48,7 @@ public final class OtlpHttpLogExporter extends OtlpHttpExporter implements LogRe
     public CompletableResultCode export(Collection<LogRecordData> records) {
         if (stopped()) return CompletableResultCode.ofFailure();
         if (records.isEmpty()) return CompletableResultCode.ofSuccess();
-        return sender.send(OtlpJsonLogEncoder.encode(records));
+        return send(() -> OtlpProtoLogEncoder.encode(records), () -> OtlpJsonLogEncoder.encode(records));
     }
 
     /** Builder of {@link OtlpHttpLogExporter}; default endpoint {@code http://localhost:4318/v1/logs}. */
@@ -62,7 +63,7 @@ public final class OtlpHttpLogExporter extends OtlpHttpExporter implements LogRe
         }
 
         public OtlpHttpLogExporter build() {
-            return new OtlpHttpLogExporter(newSender());
+            return new OtlpHttpLogExporter(newSender(), protocol());
         }
     }
 }

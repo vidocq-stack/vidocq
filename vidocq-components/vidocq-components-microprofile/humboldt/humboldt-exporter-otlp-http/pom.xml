@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-exporter-otlp-http</artifactId>
     <name>Humboldt :: Exporter OTLP HTTP</name>
-    <description>Exporter OTLP/HTTP-JSON (M3) via java.net.http.HttpClient. Variante protobuf + transport chappe-client = M3b.</description>
+    <description>OTLP/HTTP exporter (traces, metrics, logs) over java.net.http.HttpClient: http/protobuf and http/json encodings, both hand-written, no runtime dependency beyond the Humboldt SDK.</description>
 
     <dependencies>
         <dependency>
@@ -26,6 +26,18 @@
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-sdk-log</artifactId>
+        </dependency>
+
+        <!--
+            Test only: Champollion's .proto parser and wire reader decode what the protobuf encoders write against
+            the official opentelemetry-proto messages (src/test/resources/opentelemetry/proto). Nothing of
+            Champollion ships with the exporter.
+        -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-protobuf-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>

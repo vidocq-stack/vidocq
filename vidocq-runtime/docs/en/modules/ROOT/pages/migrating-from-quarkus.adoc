@@ -706,8 +706,9 @@ Each Quarkus extension an application uses maps to a Vidocq runtime extension, o
 | `quarkus-opentelemetry`
 | `telemetry-humboldt`
 | The OpenTelemetry API and `@WithSpan`. The SDK is off until `otel.sdk.disabled=false`, which
-  `vidocq extension add telemetry-humboldt` writes. The exporter sends OTLP over HTTP with JSON encoding, to port
-  `4318` of a standard collector; there is no gRPC exporter, which Quarkus uses by default.
+  `vidocq extension add telemetry-humboldt` writes. The exporter sends OTLP over HTTP to port `4318` of a standard
+  collector, protobuf-encoded with the `otel.exporter.otlp.protocol=http/protobuf` the same command writes
+  (`http/json` also works); there is no gRPC exporter, which Quarkus uses by default, and `grpc` stops the start.
 
 | `quarkus-smallrye-openapi`
 | `openapi-grimm`, `openapi-ui-grimm`

@@ -9,7 +9,8 @@ tracing, metrics, logs) into the Vidocq lifecycle.
   via `VidocqConfiguration` (priority: sys-prop > env > vidocq.properties).
 - **`beforeStart()`**: calls `HumboldtAutoConfigure.configure(env)` which assembles
   the 3 SDKs (`SdkTracerProvider` + `SdkMeterProvider` + `SdkLoggerProvider`)
-  with OTLP HTTP-JSON exporters and W3C propagators, then installs the
+  with OTLP/HTTP exporters (`otel.exporter.otlp.protocol`: `http/protobuf` or
+  `http/json`, the default) and W3C propagators, then installs the
   result as `GlobalOpenTelemetry`.
 - **`onStop()`**: ordered flush + shutdown (5 s timeout each).
 

@@ -19,24 +19,40 @@
  */
 package io.vidocq.humboldt.exporter.otlp.http;
 
-import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpSender;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.common.Releasable;
 
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
- * What the three OTLP exporters share: the {@link OtlpHttpJsonSender} they send through, their shutdown, and the
- * release of its connections for a checkpoint ({@link Releasable}).
+ * What the three OTLP exporters share: the {@link OtlpHttpSender} they send through, the {@link OtlpProtocol} they
+ * encode with, their shutdown, and the release of its connections for a checkpoint ({@link Releasable}).
  */
 abstract sealed class OtlpHttpExporter implements Releasable
         permits OtlpHttpSpanExporter, OtlpHttpMetricExporter, OtlpHttpLogExporter {
 
-    final OtlpHttpJsonSender sender;
+    final OtlpHttpSender sender;
+    private final OtlpProtocol protocol;
     private final AtomicBoolean stopped = new AtomicBoolean(false);
 
-    OtlpHttpExporter(OtlpHttpJsonSender sender) {
+    OtlpHttpExporter(OtlpHttpSender sender, OtlpProtocol protocol) {
         this.sender = sender;
+        this.protocol = protocol;
+    }
+
+    /** The encoding of this exporter's requests. */
+    public final OtlpProtocol protocol() {
+        return protocol;
+    }
+
+    /** Sends a batch encoded with {@link #protocol()}: {@code protobuf} for http/protobuf, else {@code json}. */
+    final CompletableResultCode send(Supplier<byte[]> protobuf, Supplier<String> json) {
+        return sender.send(protocol == OtlpProtocol.HTTP_PROTOBUF
+                ? protobuf.get()
+                : json.get().getBytes(StandardCharsets.UTF_8));
     }
 
     /** Whether {@link #shutdown()} was called: an export then fails. */

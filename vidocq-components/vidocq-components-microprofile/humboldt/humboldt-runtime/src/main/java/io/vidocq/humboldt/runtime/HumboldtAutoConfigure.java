@@ -25,6 +25,7 @@ import io.opentelemetry.context.propagation.ContextPropagators;
 import io.vidocq.humboldt.exporter.otlp.http.OtlpHttpLogExporter;
 import io.vidocq.humboldt.exporter.otlp.http.OtlpHttpMetricExporter;
 import io.vidocq.humboldt.exporter.otlp.http.OtlpHttpSpanExporter;
+import io.vidocq.humboldt.exporter.otlp.http.OtlpProtocol;
 import io.vidocq.humboldt.propagator.w3c.W3CPropagators;
 import io.vidocq.humboldt.sdk.common.Releasable;
 import io.vidocq.humboldt.sdk.common.Resource;
@@ -72,9 +73,17 @@ import static io.opentelemetry.api.common.AttributeKey.stringKey;
  *   <li>{@code OTEL_TRACES_SAMPLER} — {@code always_on} | {@code always_off} | {@code traceidratio} | {@code parentbased_always_on}</li>
  *   <li>{@code OTEL_TRACES_SAMPLER_ARG} — ratio (double) for {@code traceidratio}</li>
  *   <li>{@code OTEL_EXPORTER_OTLP_HEADERS} — comma-separated {@code key=value} pairs</li>
+ *   <li>{@code OTEL_EXPORTER_OTLP_PROTOCOL} — {@code http/json} (default) | {@code http/protobuf}; {@code grpc} is
+ *       refused (not supported yet), as is any other value</li>
+ *   <li>{@code OTEL_EXPORTER_OTLP_TRACES_PROTOCOL} / {@code _METRICS_PROTOCOL} / {@code _LOGS_PROTOCOL} —
+ *       per-signal overrides</li>
  * </ul>
  *
- * <p>Deferred to M7: {@code OTEL_EXPORTER_OTLP_TIMEOUT}, {@code OTEL_EXPORTER_OTLP_PROTOCOL},
+ * <p>The protocol of a signal is read only when its exporter is {@code otlp}. Unlike the OpenTelemetry SDK, whose
+ * default is {@code http/protobuf}, Humboldt keeps {@code http/json} when none is set: it is what Humboldt exported
+ * before it read the key.</p>
+ *
+ * <p>Deferred to M7: {@code OTEL_EXPORTER_OTLP_TIMEOUT},
  * {@code MP_TELEMETRY_SDK_DISABLED}, {@code MP_TELEMETRY_PROPAGATORS}.</p>
  */
 public final class HumboldtAutoConfigure {
@@ -372,21 +381,24 @@ public final class HumboldtAutoConfigure {
 
     private static OtlpHttpSpanExporter buildOtlpSpanExporter(EnvConfig env) {
         String endpoint = otlpEndpoint(env, "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "/v1/traces");
-        OtlpHttpSpanExporter.Builder b = OtlpHttpSpanExporter.builder().setEndpoint(endpoint);
+        OtlpHttpSpanExporter.Builder b = OtlpHttpSpanExporter.builder().setEndpoint(endpoint)
+                .setProtocol(otlpProtocol(env, "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"));
         applyHeaders(env, b::addHeader);
         return b.build();
     }
 
     private static OtlpHttpMetricExporter buildOtlpMetricExporter(EnvConfig env) {
         String endpoint = otlpEndpoint(env, "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "/v1/metrics");
-        OtlpHttpMetricExporter.Builder b = OtlpHttpMetricExporter.builder().setEndpoint(endpoint);
+        OtlpHttpMetricExporter.Builder b = OtlpHttpMetricExporter.builder().setEndpoint(endpoint)
+                .setProtocol(otlpProtocol(env, "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"));
         applyHeaders(env, b::addHeader);
         return b.build();
     }
 
     private static OtlpHttpLogExporter buildOtlpLogExporter(EnvConfig env) {
         String endpoint = otlpEndpoint(env, "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "/v1/logs");
-        OtlpHttpLogExporter.Builder b = OtlpHttpLogExporter.builder().setEndpoint(endpoint);
+        OtlpHttpLogExporter.Builder b = OtlpHttpLogExporter.builder().setEndpoint(endpoint)
+                .setProtocol(otlpProtocol(env, "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL"));
         applyHeaders(env, b::addHeader);
         return b.build();
     }
@@ -395,6 +407,23 @@ public final class HumboldtAutoConfigure {
     private static String otlpEndpoint(EnvConfig env, String signalEndpointKey, String signalPath) {
         return env.getOrDefault(signalEndpointKey,
                 env.getOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", DEFAULT_ENDPOINT) + signalPath);
+    }
+
+    /**
+     * The signal-specific protocol if set, otherwise {@code OTEL_EXPORTER_OTLP_PROTOCOL}, otherwise
+     * {@code http/json}.
+     *
+     * @throws IllegalArgumentException naming the key, for {@code grpc} (not supported yet) or an unknown value
+     */
+    private static OtlpProtocol otlpProtocol(EnvConfig env, String signalProtocolKey) {
+        String key = env.get(signalProtocolKey).isPresent() ? signalProtocolKey : "OTEL_EXPORTER_OTLP_PROTOCOL";
+        return env.get(key).map(value -> {
+            try {
+                return OtlpProtocol.fromConfigValue(value);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(key + " (" + EnvConfig.envToProp(key) + "): " + e.getMessage(), e);
+            }
+        }).orElse(OtlpProtocol.HTTP_JSON);
     }
 
     private static void applyHeaders(EnvConfig env, java.util.function.BiConsumer<String, String> setter) {

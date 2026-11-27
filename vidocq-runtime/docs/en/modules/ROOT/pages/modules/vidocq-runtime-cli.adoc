@@ -615,8 +615,10 @@ same blocks. `\{app}` below is the project's artifactId.
 
 | `telemetry-humboldt`
 | `otel.sdk.disabled=false`, `otel.service.name=\{app}`, `otel.exporter.otlp.endpoint=http://localhost:4318` and
-  `otel.exporter.otlp.protocol=http/protobuf`: a local collector. Under `vidocq dev`, the OpenTelemetry dev service
-  sets the endpoint and the protocol to its own, as system properties, which outrank the file.
+  `otel.exporter.otlp.protocol=http/protobuf`: a local collector, which Humboldt exports to in the protobuf
+  encoding (`http/json` is the other value it accepts; `grpc` stops the start, OTLP over gRPC is not supported yet).
+  Under `vidocq dev`, the OpenTelemetry dev service sets the endpoint and the protocol to its own, as system
+  properties, which outrank the file.
 
 | `jwt-cervantes`
 | Comments only. The Keycloak dev service sets `mp.jwt.verify.issuer` and `mp.jwt.verify.publickey.location` under

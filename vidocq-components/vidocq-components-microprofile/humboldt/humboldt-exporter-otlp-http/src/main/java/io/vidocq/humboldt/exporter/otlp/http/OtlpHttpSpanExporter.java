@@ -19,8 +19,9 @@
  */
 package io.vidocq.humboldt.exporter.otlp.http;
 
-import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpSender;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonEncoder;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpProtoSpanEncoder;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
@@ -28,15 +29,15 @@ import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 import java.util.Collection;
 
 /**
- * OTLP/HTTP-JSON exporter for spans — delegates transport to
- * {@link OtlpHttpJsonSender} (shared with metrics and logs).
+ * OTLP/HTTP exporter (http/json or http/protobuf) for spans — delegates transport to
+ * {@link OtlpHttpSender} (shared with metrics and logs).
  *
  * <p>Default endpoint: {@code http://localhost:4318/v1/traces}.</p>
  */
 public final class OtlpHttpSpanExporter extends OtlpHttpExporter implements SpanExporter {
 
-    private OtlpHttpSpanExporter(OtlpHttpJsonSender sender) {
-        super(sender);
+    private OtlpHttpSpanExporter(OtlpHttpSender sender, OtlpProtocol protocol) {
+        super(sender, protocol);
     }
 
     public static Builder builder() {
@@ -47,15 +48,15 @@ public final class OtlpHttpSpanExporter extends OtlpHttpExporter implements Span
     public CompletableResultCode export(Collection<SpanData> spans) {
         if (stopped()) return CompletableResultCode.ofFailure();
         if (spans.isEmpty()) return CompletableResultCode.ofSuccess();
-        return sender.send(OtlpJsonEncoder.encode(spans));
+        return send(() -> OtlpProtoSpanEncoder.encode(spans), () -> OtlpJsonEncoder.encode(spans));
     }
 
     /**
-     * Bounded exponential backoff — delegated to {@link OtlpHttpJsonSender#computeBackoffMillis(int)}.
+     * Bounded exponential backoff — delegated to {@link OtlpHttpSender#computeBackoffMillis(int)}.
      * Kept public for backwards compatibility (used by E2E tests).
      */
     public static long computeBackoffMillis(int attempt) {
-        return OtlpHttpJsonSender.computeBackoffMillis(attempt);
+        return OtlpHttpSender.computeBackoffMillis(attempt);
     }
 
     /** Builder of {@link OtlpHttpSpanExporter}; default endpoint {@code http://localhost:4318/v1/traces}. */
@@ -70,7 +71,7 @@ public final class OtlpHttpSpanExporter extends OtlpHttpExporter implements Span
         }
 
         public OtlpHttpSpanExporter build() {
-            return new OtlpHttpSpanExporter(newSender());
+            return new OtlpHttpSpanExporter(newSender(), protocol());
         }
     }
 }

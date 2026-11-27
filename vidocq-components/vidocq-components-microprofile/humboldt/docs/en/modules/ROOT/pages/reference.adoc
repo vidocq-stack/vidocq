@@ -264,9 +264,29 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | Not read by Humboldt — the request timeout is the exporter-builder default (10 s).
 
 | `OTEL_EXPORTER_OTLP_PROTOCOL`
-| _(not read)_
-| **Not read** — the exporter always sends OTLP/HTTP with JSON encoding; there is no protobuf variant to switch to.
+| `http/json`
+| Encoding of the OTLP/HTTP requests: `http/protobuf` (the protobuf binary format, `Content-Type:
+application/x-protobuf`) or `http/json` (OTLP/JSON, `application/json`). `grpc` fails the start: OTLP over gRPC is not
+supported yet. Any other value fails the start too. Read only for a signal whose exporter is `otlp`.
+
+| `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`
+| _(inherited)_
+| Traces override.
+
+| `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`
+| _(inherited)_
+| Metrics override.
+
+| `OTEL_EXPORTER_OTLP_LOGS_PROTOCOL`
+| _(inherited)_
+| Logs override.
 |===
+
+NOTE: The OpenTelemetry SDK defaults to `http/protobuf`; Humboldt defaults to `http/json`, the only encoding it had up
+to 0.4.0, so that an application that sets no protocol sends what it sent before. `vidocq extension add
+telemetry-humboldt` and the OpenTelemetry dev service set `http/protobuf`. Both encoders are hand-written in
+`humboldt-exporter-otlp-http` against the opentelemetry-proto messages (`ExportTraceServiceRequest`,
+`ExportMetricsServiceRequest`, `ExportLogsServiceRequest`) and add no runtime dependency.
 
 [[checkpoint-restore]]
 === Checkpoint and restore (CRaC)
@@ -409,7 +429,7 @@ No B3 by default. With the optional `humboldt-otel-interop` bridge on the module
 | Exporter | Output
 
 | `otlp`
-| OTLP/HTTP POST, JSON encoding — always; `OTEL_EXPORTER_OTLP_PROTOCOL` is not read and there is no protobuf encoder.
+| OTLP/HTTP POST, protobuf (`http/protobuf`) or JSON (`http/json`, the default) encoding, chosen by `OTEL_EXPORTER_OTLP_PROTOCOL`; no gRPC.
 
 | `in-memory`
 | `InMemorySpanExporter` / `InMemoryMetricExporter` / `InMemoryLogRecordExporter` buffers — used by tests, accessible via the `AutoConfiguredHumboldt` accessors.

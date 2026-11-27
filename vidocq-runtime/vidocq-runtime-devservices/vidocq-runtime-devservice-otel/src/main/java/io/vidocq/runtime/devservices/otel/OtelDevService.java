@@ -36,7 +36,7 @@ import java.util.Map;
  * Starts a Grafana LGTM container ({@code grafana/otel-lgtm}: an OpenTelemetry collector in front of Grafana, Tempo,
  * Loki and Prometheus) for a {@code vidocq:dev} session or a test run, and publishes the OTLP endpoint the application
  * exports its traces, metrics and logs to: {@code otel.exporter.otlp.endpoint} and {@code otel.exporter.otlp.protocol}
- * ({@code http/protobuf}, the protocol Humboldt speaks). Grafana's URL is in the startup report and the dev console.
+ * ({@code http/protobuf}, which Humboldt exports in, like the block {@code vidocq extension add} writes). Grafana's URL is in the startup report and the dev console.
  *
  * <p>Applies when MicroProfile Telemetry (Humboldt) is on the application's class path and no OTLP endpoint is given
  * ({@code otel.exporter.otlp.endpoint} or {@code OTEL_EXPORTER_OTLP_ENDPOINT} as a {@code -D}, an environment variable

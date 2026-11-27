@@ -243,7 +243,7 @@ public final class HumboldtExtension implements VidocqExtension, Suspendable {
      * {@link OtelSpiAutoConfiguration#discover(Map, ClassLoader)} and
      * {@link EnvConfig#of(Map, Map)}.</p>
      */
-    private static Map<String, String> bridgeFromVidocqConfig(VidocqConfiguration cfg) {
+    static Map<String, String> bridgeFromVidocqConfig(VidocqConfiguration cfg) {
         Map<String, String> env = new LinkedHashMap<>();
         // MP Telemetry §Configuration: every otel.* key is read through
         // MicroProfile Config when an implementation is assembled — including
@@ -328,6 +328,11 @@ public final class HumboldtExtension implements VidocqExtension, Suspendable {
             "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
             "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
             "OTEL_EXPORTER_OTLP_HEADERS",
+            // OTLP/HTTP encoding: http/protobuf or http/json (grpc fails the start), general then per signal.
+            "OTEL_EXPORTER_OTLP_PROTOCOL",
+            "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+            "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+            "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL",
             "OTEL_TRACES_EXPORTER",
             "OTEL_METRICS_EXPORTER",
             "OTEL_LOGS_EXPORTER",

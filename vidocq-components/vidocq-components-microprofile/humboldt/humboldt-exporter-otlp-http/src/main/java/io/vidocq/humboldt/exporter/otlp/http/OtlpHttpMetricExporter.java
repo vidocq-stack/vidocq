@@ -19,8 +19,9 @@
  */
 package io.vidocq.humboldt.exporter.otlp.http;
 
-import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpSender;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonMetricEncoder;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpProtoMetricEncoder;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.metric.data.MetricData;
 import io.vidocq.humboldt.sdk.metric.export.MetricExporter;
@@ -29,8 +30,8 @@ import java.util.Collection;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * OTLP/HTTP-JSON exporter for metrics — delegates transport to
- * {@link OtlpHttpJsonSender}.
+ * OTLP/HTTP exporter (http/json or http/protobuf) for metrics — delegates transport to
+ * {@link OtlpHttpSender}.
  *
  * <p>Default endpoint: {@code http://localhost:4318/v1/metrics}.</p>
  */
@@ -40,8 +41,8 @@ public final class OtlpHttpMetricExporter extends OtlpHttpExporter implements Me
 
     private final AtomicBoolean unencodableBatchLogged = new AtomicBoolean(false);
 
-    private OtlpHttpMetricExporter(OtlpHttpJsonSender sender) {
-        super(sender);
+    private OtlpHttpMetricExporter(OtlpHttpSender sender, OtlpProtocol protocol) {
+        super(sender, protocol);
     }
 
     public static Builder builder() {
@@ -50,17 +51,16 @@ public final class OtlpHttpMetricExporter extends OtlpHttpExporter implements Me
 
     /**
      * Encodes and sends {@code metrics}. A batch that cannot be encoded — a metric whose data points do not match
-     * its kind, which {@link OtlpJsonMetricEncoder} rejects — is not sent: the export fails, as an exporter
-     * reports it (a failed result, never an exception), and the first such batch of this exporter is logged at
-     * {@code WARNING}.
+     * its kind, which {@link OtlpJsonMetricEncoder} and {@link OtlpProtoMetricEncoder} reject — is not sent: the
+     * export fails, as an exporter reports it (a failed result, never an exception), and the first such batch of
+     * this exporter is logged at {@code WARNING}.
      */
     @Override
     public CompletableResultCode export(Collection<MetricData> metrics) {
         if (stopped()) return CompletableResultCode.ofFailure();
         if (metrics.isEmpty()) return CompletableResultCode.ofSuccess();
-        String body;
         try {
-            body = OtlpJsonMetricEncoder.encode(metrics);
+            return send(() -> OtlpProtoMetricEncoder.encode(metrics), () -> OtlpJsonMetricEncoder.encode(metrics));
         } catch (IllegalArgumentException e) {
             if (unencodableBatchLogged.compareAndSet(false, true)) {
                 LOG.log(System.Logger.Level.WARNING,
@@ -69,7 +69,6 @@ public final class OtlpHttpMetricExporter extends OtlpHttpExporter implements Me
             }
             return CompletableResultCode.ofFailure();
         }
-        return sender.send(body);
     }
 
     /** Builder of {@link OtlpHttpMetricExporter}; default endpoint {@code http://localhost:4318/v1/metrics}. */
@@ -84,7 +83,7 @@ public final class OtlpHttpMetricExporter extends OtlpHttpExporter implements Me
         }
 
         public OtlpHttpMetricExporter build() {
-            return new OtlpHttpMetricExporter(newSender());
+            return new OtlpHttpMetricExporter(newSender(), protocol());
         }
     }
 }

@@ -19,15 +19,15 @@
  */
 package io.vidocq.humboldt.exporter.otlp.http;
 
-import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
+import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpSender;
 
 import java.net.URI;
 import java.time.Duration;
 
 /**
- * Settings shared by the builders of the three OTLP/HTTP exporters (spans, metrics, logs): endpoint, headers,
- * timeouts and retry budget. Invalid values (a {@code null} header, a non-positive timeout, a negative retry count)
- * are ignored and the previous value is kept.
+ * Settings shared by the builders of the three OTLP/HTTP exporters (spans, metrics, logs): endpoint, protocol,
+ * headers, timeouts and retry budget. Invalid values (a {@code null} header, a non-positive timeout, a negative retry count)
+ * are ignored and the previous value is kept. The protocol is {@link OtlpProtocol#HTTP_JSON} unless set.
  *
  * <p>Each signal's builder fixes its default endpoint and signal label and builds its exporter from
  * {@link #newSender()}.</p>
@@ -37,7 +37,8 @@ import java.time.Duration;
 public abstract sealed class OtlpHttpExporterBuilder<B extends OtlpHttpExporterBuilder<B>>
         permits OtlpHttpSpanExporter.Builder, OtlpHttpMetricExporter.Builder, OtlpHttpLogExporter.Builder {
 
-    private final OtlpHttpJsonSender.Builder sender = OtlpHttpJsonSender.builder();
+    private final OtlpHttpSender.Builder sender = OtlpHttpSender.builder();
+    private OtlpProtocol protocol = OtlpProtocol.HTTP_JSON;
 
     OtlpHttpExporterBuilder(String defaultEndpoint, String signalLabel) {
         sender.setEndpoint(URI.create(defaultEndpoint)).setSignalLabel(signalLabel);
@@ -49,6 +50,15 @@ public abstract sealed class OtlpHttpExporterBuilder<B extends OtlpHttpExporterB
     /** Sets the collector URL the exporter posts to. */
     public B setEndpoint(String url) {
         sender.setEndpoint(URI.create(url));
+        return self();
+    }
+
+    /**
+     * Sets the encoding of the requests: {@link OtlpProtocol#HTTP_PROTOBUF} or {@link OtlpProtocol#HTTP_JSON}, the
+     * default; {@code null} is ignored.
+     */
+    public B setProtocol(OtlpProtocol protocol) {
+        if (protocol != null) this.protocol = protocol;
         return self();
     }
 
@@ -76,8 +86,13 @@ public abstract sealed class OtlpHttpExporterBuilder<B extends OtlpHttpExporterB
         return self();
     }
 
+    /** The protocol of the exporter this builder builds. */
+    final OtlpProtocol protocol() {
+        return protocol;
+    }
+
     /** Builds the transport configured by this builder. */
-    final OtlpHttpJsonSender newSender() {
-        return sender.build();
+    final OtlpHttpSender newSender() {
+        return sender.setContentType(protocol.contentType()).build();
     }
 }

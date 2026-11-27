@@ -808,8 +808,9 @@ hand.
 *Tracing.* Vidocq implements MicroProfile Telemetry with the OpenTelemetry API. Each REST request gets a server
 span. `@Observed` becomes `@WithSpan` (`io.opentelemetry.instrumentation.annotations`), and `Tracer` is the
 OpenTelemetry one. The SDK is off until `otel.sdk.disabled=false`, which `vidocq extension add telemetry-humboldt`
-writes. The exporter sends OTLP over HTTP, with JSON encoding (port `4318` of a standard collector); there is no gRPC
-exporter.
+writes. The exporter sends OTLP over HTTP (port `4318` of a standard collector), protobuf-encoded with the
+`otel.exporter.otlp.protocol=http/protobuf` the same command writes (`http/json` also works); there is no gRPC
+exporter, and `grpc` stops the start.
 
 *OpenAPI.* springdoc annotations (`io.swagger.v3.oas.annotations`) become MicroProfile OpenAPI annotations
 (`org.eclipse.microprofile.openapi.annotations`): `@Operation` and `@APIResponse` keep their meaning, in another

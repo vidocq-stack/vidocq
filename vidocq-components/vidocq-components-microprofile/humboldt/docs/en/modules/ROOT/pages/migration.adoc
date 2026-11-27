@@ -60,13 +60,19 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
 ----
 
-After — point the endpoint at the HTTP receiver (standard port 4318); `OTEL_EXPORTER_OTLP_PROTOCOL` is **not read** by Humboldt (unset it or leave it, it has no effect — the payload is always OTLP/HTTP JSON):
+After — point the endpoint at the HTTP receiver (standard port 4318) and choose an OTLP/HTTP encoding:
+`http/protobuf`, the OpenTelemetry default, or `http/json`, Humboldt's default when the key is unset. `grpc` fails the
+start with a message that says so: Humboldt does not speak OTLP over gRPC yet.
 
 [source,bash]
 ----
 export OTEL_SDK_DISABLED=false
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318
 ----
+
+NOTE: Up to 0.4.0 Humboldt did not read `OTEL_EXPORTER_OTLP_PROTOCOL` and always sent OTLP/JSON, so a configuration that
+still says `grpc` started. It now stops the start: set `http/protobuf` or `http/json`, or remove the key.
 
 The Collector accepts both transports in parallel (receivers `otlp.protocols.grpc` and `otlp.protocols.http`). The only infra-side requirement: the `http` receiver must be enabled.
 
