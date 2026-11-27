@@ -27,7 +27,8 @@ import java.time.Duration;
 /**
  * Settings shared by the builders of the three OTLP/HTTP exporters (spans, metrics, logs): endpoint, protocol,
  * headers, timeouts and retry budget. Invalid values (a {@code null} header, a non-positive timeout, a negative retry count)
- * are ignored and the previous value is kept. The protocol is {@link OtlpProtocol#HTTP_JSON} unless set.
+ * are ignored and the previous value is kept. The protocol is {@link OtlpProtocol#HTTP_PROTOBUF}, the
+ * OpenTelemetry default, unless set.
  *
  * <p>Each signal's builder fixes its default endpoint and signal label and builds its exporter from
  * {@link #newSender()}.</p>
@@ -38,7 +39,7 @@ public abstract sealed class OtlpHttpExporterBuilder<B extends OtlpHttpExporterB
         permits OtlpHttpSpanExporter.Builder, OtlpHttpMetricExporter.Builder, OtlpHttpLogExporter.Builder {
 
     private final OtlpHttpSender.Builder sender = OtlpHttpSender.builder();
-    private OtlpProtocol protocol = OtlpProtocol.HTTP_JSON;
+    private OtlpProtocol protocol = OtlpProtocol.HTTP_PROTOBUF;
 
     OtlpHttpExporterBuilder(String defaultEndpoint, String signalLabel) {
         sender.setEndpoint(URI.create(defaultEndpoint)).setSignalLabel(signalLabel);
@@ -54,8 +55,8 @@ public abstract sealed class OtlpHttpExporterBuilder<B extends OtlpHttpExporterB
     }
 
     /**
-     * Sets the encoding of the requests: {@link OtlpProtocol#HTTP_PROTOBUF} or {@link OtlpProtocol#HTTP_JSON}, the
-     * default; {@code null} is ignored.
+     * Sets the encoding of the requests: {@link OtlpProtocol#HTTP_PROTOBUF}, the default, or
+     * {@link OtlpProtocol#HTTP_JSON}; {@code null} is ignored.
      */
     public B setProtocol(OtlpProtocol protocol) {
         if (protocol != null) this.protocol = protocol;

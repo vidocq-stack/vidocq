@@ -137,9 +137,25 @@ class OtlpHttpProtocolTest {
     }
 
     @Test
-    void http_json_stays_the_default_and_posts_application_json() {
+    void http_protobuf_is_the_default_and_posts_application_x_protobuf() {
         assertDelivered(OtlpHttpSpanExporter.builder().setEndpoint(url("/v1/traces")).build()
                 .export(List.of(span())));
+        assertDelivered(OtlpHttpMetricExporter.builder().setEndpoint(url("/v1/metrics")).build()
+                .export(List.of(metric())));
+        assertDelivered(OtlpHttpLogExporter.builder().setEndpoint(url("/v1/logs")).build()
+                .export(List.of(log())));
+
+        assertEquals("application/x-protobuf", contentTypes.get("/v1/traces"));
+        assertEquals("application/x-protobuf", contentTypes.get("/v1/metrics"));
+        assertEquals("application/x-protobuf", contentTypes.get("/v1/logs"));
+        assertTrue(OtlpProtoSchema.decode(TRACES_REQUEST, bodies.get("/v1/traces")).toString()
+                .contains("name=GET /wire"));
+    }
+
+    @Test
+    void http_json_posts_application_json() {
+        assertDelivered(OtlpHttpSpanExporter.builder().setEndpoint(url("/v1/traces"))
+                .setProtocol(OtlpProtocol.HTTP_JSON).build().export(List.of(span())));
         assertDelivered(OtlpHttpMetricExporter.builder().setEndpoint(url("/v1/metrics"))
                 .setProtocol(OtlpProtocol.HTTP_JSON).build().export(List.of(metric())));
 
@@ -152,9 +168,9 @@ class OtlpHttpProtocolTest {
     @Test
     void a_null_protocol_keeps_the_previous_one() {
         assertDelivered(OtlpHttpLogExporter.builder().setEndpoint(url("/v1/logs"))
-                .setProtocol(OtlpProtocol.HTTP_PROTOBUF).setProtocol(null).build().export(List.of(log())));
+                .setProtocol(OtlpProtocol.HTTP_JSON).setProtocol(null).build().export(List.of(log())));
 
-        assertEquals("application/x-protobuf", contentTypes.get("/v1/logs"));
+        assertEquals("application/json", contentTypes.get("/v1/logs"));
     }
 
     @Test

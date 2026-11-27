@@ -241,7 +241,7 @@ export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://traces.example/v1/traces
 export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer abcdef123,x-tenant=acme"
 ----
 
-The `humboldt-exporter-otlp-http` exporter uses `java.net.http.HttpClient` with a virtual-thread executor, bounded exponential retry (`100ms × 2^attempt`, capped at 5 s) on 5xx and network errors, up to 3 retries by default (`setMaxRetries`). The payload is always OTLP/HTTP **JSON** — there is no protobuf encoding.
+The `humboldt-exporter-otlp-http` exporter uses `java.net.http.HttpClient` with a virtual-thread executor, bounded exponential retry (`100ms × 2^attempt`, capped at 5 s) on 5xx and network errors, up to 3 retries by default (`setMaxRetries`). The payload is OTLP/HTTP **protobuf** by default (`application/x-protobuf`), or OTLP/JSON with `otel.exporter.otlp.protocol=http/json`; see xref:reference.adoc#otlp-protocol[OTLP protocol].
 
 == Batching and flush
 

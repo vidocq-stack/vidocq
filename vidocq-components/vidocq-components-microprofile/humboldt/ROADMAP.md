@@ -89,7 +89,7 @@ Detailed plan: [`PLAN.md`](PLAN.md) (§13 milestones). This page is the short ve
 - [x] Auto pipeline : `in-memory` exporter → Simple processor + PeriodicMetricReader 60min ; `otlp` exporter → Batch processor + PeriodicMetricReader 60s ; `none` → no processor registered
 - [x] Propagators W3C composite (TraceContext + Baggage) installed by default
 - [x] Tests: 15 (8 EnvConfigTest + 7 HumboldtAutoConfigureTest) — service.name default+override, RESOURCE_ATTRIBUTES parsing 3 pairs, trace+metric+log E2E pipeline via a single `configure()`, always_off sampler, traceidratio ratio description, exporter=none disables, exposed W3C propagators traceparent+baggage
-- [x] `OTEL_EXPORTER_OTLP_PROTOCOL` and its per-signal forms: `http/protobuf`, `http/json` (default), `grpc` refused at start (Vidocq/vidocq#830)
+- [x] `OTEL_EXPORTER_OTLP_PROTOCOL` and its per-signal forms: `http/protobuf` (default), `http/json`, `grpc` refused at start (Vidocq/vidocq#830)
 - [ ] **Deferred to M7** : `OTEL_EXPORTER_OTLP_TIMEOUT`, `MP_TELEMETRY_SDK_DISABLED`, `MP_TELEMETRY_PROPAGATORS`, Ravel integration for MP Config
 
 ### M6d — MPS extension + Vauban runtime validation _(structure delivered 2026-05-21)_

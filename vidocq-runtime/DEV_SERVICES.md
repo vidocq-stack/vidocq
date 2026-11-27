@@ -95,7 +95,7 @@ It publishes:
 | Key | Value |
 |-----|-------|
 | `otel.exporter.otlp.endpoint` | `http://<host>:<mapped 4318>`, the collector's OTLP/HTTP port |
-| `otel.exporter.otlp.protocol` | `http/protobuf`, which Humboldt exports in (it also speaks `http/json`, not `grpc`) |
+| `otel.exporter.otlp.protocol` | `http/protobuf`, Humboldt's default (it also speaks `http/json`, not `grpc`) |
 | `otel.sdk.disabled` | `false`, only when neither the goal nor the application's files set it: MicroProfile Telemetry leaves the SDK off by default, and the traces would not reach Grafana |
 
 The startup report and the dev console's *Dev services* panel show Grafana's URL (`grafana`),

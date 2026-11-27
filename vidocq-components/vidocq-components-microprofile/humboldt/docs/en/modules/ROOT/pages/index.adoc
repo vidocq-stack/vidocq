@@ -90,7 +90,7 @@ Humboldt exports over the JDK's `java.net.http.HttpClient` (HTTP/1.1 + H2). No N
 * *Almost no runtime reflection* -- CDI wiring is generated at compile time (Vauban processor); the only dynamic proxies are the two injected current-`Span` / current-`Baggage` beans.
 * *No virtual-thread pinning from the context* -- `ScopedValue<Context>` (JEP 506, M8 roadmap).
 * *AOT-ready by design* (GraalVM, Leyden).
-* *OTLP transport v1*: HTTP only, `http/protobuf` or `http/json` (the default); gRPC through the future native `chappe-grpc`, and `grpc` fails the start until then.
+* *OTLP transport v1*: HTTP only, `http/protobuf` (the default) or `http/json`; gRPC through the future native `chappe-grpc`, and `grpc` fails the start until then.
 
 == Chapters
 

@@ -264,7 +264,7 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | Not read by Humboldt — the request timeout is the exporter-builder default (10 s).
 
 | `OTEL_EXPORTER_OTLP_PROTOCOL`
-| `http/json`
+| `http/protobuf`
 | Encoding of the OTLP/HTTP requests: `http/protobuf` (the protobuf binary format, `Content-Type:
 application/x-protobuf`) or `http/json` (OTLP/JSON, `application/json`). `grpc` fails the start: OTLP over gRPC is not
 supported yet. Any other value fails the start too. Read only for a signal whose exporter is `otlp`.
@@ -282,9 +282,12 @@ supported yet. Any other value fails the start too. Read only for a signal whose
 | Logs override.
 |===
 
-NOTE: The OpenTelemetry SDK defaults to `http/protobuf`; Humboldt defaults to `http/json`, the only encoding it had up
-to 0.4.0, so that an application that sets no protocol sends what it sent before. `vidocq extension add
-telemetry-humboldt` and the OpenTelemetry dev service set `http/protobuf`. Both encoders are hand-written in
+[#otlp-protocol]
+NOTE: Humboldt defaults to `http/protobuf`, as the OpenTelemetry SDK does [.tag-new]#NEW#. Up to 0.4 it
+defaulted to `http/json`, the only encoding it had up to 0.4.0: an application that relied on that default and whose
+receiver accepts only OTLP/JSON sets `otel.exporter.otlp.protocol=http/json` (see
+xref:migration.adoc#upgrading-from-0-4[Upgrading from Humboldt 0.4]). `vidocq extension add telemetry-humboldt` and
+the OpenTelemetry dev service set `http/protobuf`. Both encoders are hand-written in
 `humboldt-exporter-otlp-http` against the opentelemetry-proto messages (`ExportTraceServiceRequest`,
 `ExportMetricsServiceRequest`, `ExportLogsServiceRequest`) and add no runtime dependency.
 
@@ -429,7 +432,7 @@ No B3 by default. With the optional `humboldt-otel-interop` bridge on the module
 | Exporter | Output
 
 | `otlp`
-| OTLP/HTTP POST, protobuf (`http/protobuf`) or JSON (`http/json`, the default) encoding, chosen by `OTEL_EXPORTER_OTLP_PROTOCOL`; no gRPC.
+| OTLP/HTTP POST, protobuf (`http/protobuf`, the default) or JSON (`http/json`) encoding, chosen by `OTEL_EXPORTER_OTLP_PROTOCOL`; no gRPC.
 
 | `in-memory`
 | `InMemorySpanExporter` / `InMemoryMetricExporter` / `InMemoryLogRecordExporter` buffers — used by tests, accessible via the `AutoConfiguredHumboldt` accessors.

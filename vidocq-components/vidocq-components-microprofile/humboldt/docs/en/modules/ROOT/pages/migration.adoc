@@ -61,7 +61,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
 ----
 
 After — point the endpoint at the HTTP receiver (standard port 4318) and choose an OTLP/HTTP encoding:
-`http/protobuf`, the OpenTelemetry default, or `http/json`, Humboldt's default when the key is unset. `grpc` fails the
+`http/protobuf`, the OpenTelemetry default and Humboldt's when the key is unset, or `http/json`. `grpc` fails the
 start with a message that says so: Humboldt does not speak OTLP over gRPC yet.
 
 [source,bash]
@@ -136,6 +136,23 @@ Changes an application upgrading from Humboldt 0.3.0 may observe:
 * **An empty log body is kept** — `setBody("")` used to export no body; it now exports `"body":{"stringValue":""}`. See xref:usage.adoc#log-record-content[What a log record carries].
 * **A metric batch the OTLP exporter cannot encode fails** — a data point that does not match its metric used to vanish from the export; the whole batch now fails, with one `WARNING`. See xref:reference.adoc#otlp-json-encoding[OTLP/JSON encoding].
 * **MicroProfile Rest Client API module** — `humboldt-rest` now reads `io.vidocq.cyrano.mp.rest.client.api`, brought by Cyrano, instead of the automatic module `microprofile.rest.client.api` of the upstream jar. The 0.3.0 descriptor named a module Vidocq never ships, so on a strict module path or in a jlink image the Rest Client listener could not read the API Cyrano provides; it now does, with no upstream `microprofile-rest-client-api` jar (humboldt#18). See xref:reference.adoc#java-modules[Java modules].
+
+[#upgrading-from-0-4]
+== Upgrading from Humboldt 0.4
+
+* **The default OTLP protocol is `http/protobuf`** — with no `otel.exporter.otlp.protocol` (nor
+`OTEL_EXPORTER_OTLP_PROTOCOL`, nor a per-signal `+OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL+`), the `otlp`
+exporters now post the protobuf encoding (`Content-Type: application/x-protobuf`), the OpenTelemetry default, where
+0.4 posted OTLP/JSON (`application/json`). The OpenTelemetry Collector's `http` receiver accepts both. An application
+that relied on the JSON default and whose receiver accepts only JSON sets the protocol back:
++
+[source,properties]
+----
+otel.exporter.otlp.protocol=http/json
+----
++
+An application created with `vidocq extension add telemetry-humboldt` already says `http/protobuf` and sees no change.
+See xref:reference.adoc#otlp-protocol[OTLP protocol].
 
 == Migration checklist
 

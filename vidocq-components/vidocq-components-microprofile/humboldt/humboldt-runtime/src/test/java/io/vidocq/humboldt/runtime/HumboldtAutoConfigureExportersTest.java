@@ -213,20 +213,20 @@ class HumboldtAutoConfigureExportersTest {
     }
 
     @Test
-    void otlp_exporters_speak_http_json_when_no_protocol_is_set() {
+    void otlp_exporters_speak_http_protobuf_when_no_protocol_is_set() {
         exportOneOfEach(enabled(OTLP, OTLP, OTLP));
 
-        assertEquals(Map.of("/v1/traces", JSON, "/v1/metrics", JSON, "/v1/logs", JSON), contentTypes);
+        assertEquals(Map.of("/v1/traces", PROTOBUF, "/v1/metrics", PROTOBUF, "/v1/logs", PROTOBUF), contentTypes);
     }
 
     @Test
-    void otel_exporter_otlp_protocol_http_protobuf_switches_every_signal_to_protobuf() {
+    void otel_exporter_otlp_protocol_http_json_switches_every_signal_to_json() {
         Map<String, String> env = enabled(OTLP, OTLP, OTLP);
-        env.put(PROTOCOL, "http/protobuf");
+        env.put(PROTOCOL, "http/json");
 
         exportOneOfEach(env);
 
-        assertEquals(Map.of("/v1/traces", PROTOBUF, "/v1/metrics", PROTOBUF, "/v1/logs", PROTOBUF), contentTypes);
+        assertEquals(Map.of("/v1/traces", JSON, "/v1/metrics", JSON, "/v1/logs", JSON), contentTypes);
     }
 
     @Test

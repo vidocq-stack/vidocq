@@ -18,7 +18,7 @@ See [`PLAN.md`](PLAN.md) for the detailed roadmap M0 → M9, and [`tasks/todo.md
 - ✅ Metrics (Counter, Histogram, UpDownCounter, async Gauge, ExponentialHistogram)
 - ✅ Logs (JUL/SLF4J bridge to OTel Log records)
 - ✅ Configuration `OTEL_*` / `MP_TELEMETRY_*` via [Ravel](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/ravel) (MicroProfile Config)
-- ✅ **OTLP/HTTP** exporter, `http/protobuf` or `http/json` (default), via the JDK `HttpClient`; encoders hand-written, no runtime dependency
+- ✅ **OTLP/HTTP** exporter, `http/protobuf` (default) or `http/json`, via the JDK `HttpClient`; encoders hand-written, no runtime dependency
 - ✅ Jakarta REST auto-instrumentation via [Cassini](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini) + CDI via [Vauban](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban)
 - 🚧 **OTLP gRPC** exporter (post-MVP — awaits the `chappe-grpc` module, see PLAN.md §3.5)
 - ❌ No JVM bytecode agent (instrumentation via APT + Class-File API at build time, never hot)

@@ -23,7 +23,7 @@
  * <ul>
  *   <li>two encodings, chosen per exporter with {@link io.vidocq.humboldt.exporter.otlp.http.OtlpProtocol}:
  *       {@code http/protobuf} (the protobuf binary format of the opentelemetry-proto messages,
- *       {@code application/x-protobuf}) and {@code http/json} (OTLP/JSON, {@code application/json}, the default);
+ *       {@code application/x-protobuf}, the default) and {@code http/json} (OTLP/JSON, {@code application/json});
  *       both encoders are hand-written, with no dependency beyond the Humboldt SDK</li>
  *   <li>transport via the JDK {@link java.net.http.HttpClient}, on virtual threads</li>
  *   <li>simple retry on 5xx (bounded exponential backoff)</li>

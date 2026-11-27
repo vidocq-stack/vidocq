@@ -148,7 +148,7 @@ There is **one deliberate exception to the no-dynamic-proxy rule**: `HumboldtTel
 
 == AOT compatibility
 
-No `Class.forName`, `Method.invoke`, `Class.getDeclaredFields()` on the hot path. The only dynamic proxies are the two injected current-`Span` / current-`Baggage` CDI beans described above (a fixed, statically-known pair of interfaces). The remaining introspection goes through the `ServiceLoader` SPI, natively handled by GraalVM native-image and Leyden CDS through the standard JVM reachability metadata. Since the OTLP payload is plain JSON produced by an internal encoder, there is no protobuf runtime and no extra `reflect-config.json` to maintain.
+No `Class.forName`, `Method.invoke`, `Class.getDeclaredFields()` on the hot path. The only dynamic proxies are the two injected current-`Span` / current-`Baggage` CDI beans described above (a fixed, statically-known pair of interfaces). The remaining introspection goes through the `ServiceLoader` SPI, natively handled by GraalVM native-image and Leyden CDS through the standard JVM reachability metadata. Since the OTLP payload (protobuf by default, or JSON) is produced by hand-written internal encoders, there is no protobuf runtime and no extra `reflect-config.json` to maintain.
 
 == Deliberate absence of gRPC
 

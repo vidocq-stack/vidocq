@@ -73,15 +73,14 @@ import static io.opentelemetry.api.common.AttributeKey.stringKey;
  *   <li>{@code OTEL_TRACES_SAMPLER} — {@code always_on} | {@code always_off} | {@code traceidratio} | {@code parentbased_always_on}</li>
  *   <li>{@code OTEL_TRACES_SAMPLER_ARG} — ratio (double) for {@code traceidratio}</li>
  *   <li>{@code OTEL_EXPORTER_OTLP_HEADERS} — comma-separated {@code key=value} pairs</li>
- *   <li>{@code OTEL_EXPORTER_OTLP_PROTOCOL} — {@code http/json} (default) | {@code http/protobuf}; {@code grpc} is
+ *   <li>{@code OTEL_EXPORTER_OTLP_PROTOCOL} — {@code http/protobuf} (default) | {@code http/json}; {@code grpc} is
  *       refused (not supported yet), as is any other value</li>
  *   <li>{@code OTEL_EXPORTER_OTLP_TRACES_PROTOCOL} / {@code _METRICS_PROTOCOL} / {@code _LOGS_PROTOCOL} —
  *       per-signal overrides</li>
  * </ul>
  *
- * <p>The protocol of a signal is read only when its exporter is {@code otlp}. Unlike the OpenTelemetry SDK, whose
- * default is {@code http/protobuf}, Humboldt keeps {@code http/json} when none is set: it is what Humboldt exported
- * before it read the key.</p>
+ * <p>The protocol of a signal is read only when its exporter is {@code otlp}. When none is set, Humboldt
+ * exports {@code http/protobuf}, the OpenTelemetry SDK default.</p>
  *
  * <p>Deferred to M7: {@code OTEL_EXPORTER_OTLP_TIMEOUT},
  * {@code MP_TELEMETRY_SDK_DISABLED}, {@code MP_TELEMETRY_PROPAGATORS}.</p>
@@ -411,7 +410,7 @@ public final class HumboldtAutoConfigure {
 
     /**
      * The signal-specific protocol if set, otherwise {@code OTEL_EXPORTER_OTLP_PROTOCOL}, otherwise
-     * {@code http/json}.
+     * {@code http/protobuf}.
      *
      * @throws IllegalArgumentException naming the key, for {@code grpc} (not supported yet) or an unknown value
      */
@@ -423,7 +422,7 @@ public final class HumboldtAutoConfigure {
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(key + " (" + EnvConfig.envToProp(key) + "): " + e.getMessage(), e);
             }
-        }).orElse(OtlpProtocol.HTTP_JSON);
+        }).orElse(OtlpProtocol.HTTP_PROTOBUF);
     }
 
     private static void applyHeaders(EnvConfig env, java.util.function.BiConsumer<String, String> setter) {
