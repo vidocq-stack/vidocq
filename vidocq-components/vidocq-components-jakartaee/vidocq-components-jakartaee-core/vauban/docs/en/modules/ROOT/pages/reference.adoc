@@ -194,7 +194,8 @@ not the one naming the service — that must declare the directive. They are fol
 through an interface or superclass method as well, when an implementation in the closure forwards to
 `ServiceLoader` (vauban#167). A service type passed as a
 variable rather than a class literal cannot be seen by any bytecode scan: the lookup declares it at
-its call (see _Lookups the descriptor cannot declare_ below).
+its call (see _Lookups the descriptor cannot declare_ below), and `<uses>` declares it in the descriptor
+(see _Declaring `uses` by hand_).
 
 Every `ServiceLoader` factory is covered: `load(Class)`, `load(Class, ClassLoader)`,
 `load(ModuleLayer, Class)` and `loadInstalled(Class)`. The `ClassLoader` argument
@@ -208,7 +209,8 @@ that does not start at all. A scanned service is kept only when its type resolve
 the closure or of the JDK, *and* the declaring module can read the module exporting it (following
 `requires`, and the transitive closure of `requires transitive`). Everything else is dropped,
 listed in `report.txt` and logged as a warning naming the jar, the service and the reason:
-`not in closure`, `<module> cannot read <exporter>`, or `not a class literal`.
+`not in closure`, `<module> cannot read <exporter>`, or `not a class literal`. A type declared with
+`<uses>` is checked the same way, but fails the build instead of being dropped.
 
 [[provides-legality]]`provides` follows the same rule. A service file naming a type that no module
 of the closure or of the JDK defines, typically an optional dependency left out (`reactor-core` lists a
@@ -257,6 +259,43 @@ service the descriptor already declares, `addUses` does nothing. A method refere
 The lookup still needs the service type to be accessible to the library: its package must be
 exported or opened to it. Vaadin requires the route packages to be opened anyway. The build logs one
 line per jar whose lookups were redirected.
+
+[[declared-uses]]
+==== Declaring `uses` by hand
+
+A lookup declared at its call runs, but the module system knows of the service only once the call has
+run. Resolution binds services ahead of that: the boot layer, like `Configuration.resolveAndBind`, adds the
+modules that provide a service some resolved module `uses`, and `jlink --bind-services` links them. A
+provider in a module nothing `requires` is therefore left out, and the lookup finds nothing, unless the
+descriptor declares the service. `<uses>` adds directives to the scanned ones, per `artifactId`, like
+`<moduleNames>` (Vidocq/vidocq#697):
+
+[source,xml]
+----
+<uses>
+    <!-- fully qualified type names, separated by commas or whitespace -->
+    <acme-registry>com.acme.registry.Plugin, com.acme.registry.Codec</acme-registry>
+    <!-- every service type the closure provides that the module may declare -->
+    <liquibase-core>*</liquibase-core>
+</uses>
+----
+
+A nested type takes its binary name: `java.lang.System$LoggerFinder`. A type named here goes through the
+checks of the scanned ones and one more, since a misspelled name in a package of the closure would
+otherwise be a silent no-op: it must be a class of the closure or of the JDK, and the module must read
+the module exporting it. One that fails them fails the build, naming the `artifactId`, the type and the
+reason (`not in closure`, `no such type in <module>`, `<module> cannot read <exporter>`), because the
+build was asked for it. A type the scan also found is declared once.
+
+`*` stands for every service type a jar of the closure provides, in `META-INF/services` or a
+`provides`, keeping only those the module may declare: those it cannot are left out without a warning.
+It suits a library that loads its own extension points through a generic helper, such as Liquibase's
+`StandardServiceLocator`, without listing them. It can be combined with named types.
+
+An `artifactId` the run does not patch, because of a typo, `<includes>`, `<excludes>` or the mode, is
+logged as a warning: `uses declared for <artifactId>, which this run does not patch`. `report.txt` lists
+the declared types under the jar's descriptor, apart from the scanned ones: `uses declared by hand:` and
+`uses declared by hand (*):`.
 
 ==== `derived` or `all-automatic`
 
@@ -316,7 +355,8 @@ split. Remove one side from the dependency graph with a Maven `<exclusion>`.
 ==== `report.txt`
 
 Every run writes `target/vauban-modularized/report.txt` with, per patched jar, the module name, why
-it was selected and the descriptor it received, plus one line per jar left as is. The output
+it was selected and the descriptor it received, the `uses` declared with `<uses>`, plus one line per
+jar left as is. The output
 directory is emptied at the start of each run, so the report always describes the jars next to it.
 
 ==== Licence gate (opt-in)
@@ -361,6 +401,10 @@ the gate is off.
 | `false`
 | Patch a jar even when one of its own `ServiceLoader` lookups cannot be declared legally; the lookup
   then declares its service at the call — see _Why some jars stay automatic_.
+
+| `<uses>`
+| empty
+| `artifactId` → `uses` directives added to the scanned ones, or `*` — see _Declaring `uses` by hand_.
 |===
 
 ==== A development loop needs an earlier binding

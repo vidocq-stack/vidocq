@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -64,10 +65,31 @@ public final class Modularizer {
      * @param forceExplicit patch a jar even when its own {@code ServiceLoader} lookups cannot be
      *                      declared legally (the illegal directives are dropped either way). Off by
      *                      default: such a jar has no working explicit form — see {@link UsesLegality}.
+     * @param declaredUses  artifactId → {@code uses} declared by hand, added to the scanned ones
+     *                      (Vidocq/vidocq#697); {@link #CLOSURE_PROVIDED} stands for every service type the
+     *                      closure provides that the module may declare. A named type that cannot be
+     *                      declared fails the run.
      */
     public record Options(Mode mode, Set<String> includeArtifactIds, Set<String> excludeArtifactIds,
                           Map<String, String> moduleNames, boolean openModules,
-                          boolean forceExplicit) {}
+                          boolean forceExplicit, Map<String, Set<String>> declaredUses) {
+
+        public Options {
+            declaredUses = declaredUses == null ? Map.of() : Map.copyOf(declaredUses);
+        }
+
+        /** The options of a run that declares no {@code uses} by hand. */
+        public Options(Mode mode, Set<String> includeArtifactIds, Set<String> excludeArtifactIds,
+                       Map<String, String> moduleNames, boolean openModules, boolean forceExplicit) {
+            this(mode, includeArtifactIds, excludeArtifactIds, moduleNames, openModules, forceExplicit, Map.of());
+        }
+    }
+
+    /**
+     * In {@link Options#declaredUses}, every service type a jar of the closure provides that the module may legally
+     * declare: a jar that loads its services through a generic helper (Liquibase) without listing them one by one.
+     */
+    public static final String CLOSURE_PROVIDED = "*";
 
     /** What was patched, what was left alone, and a human-readable report. */
     public record Result(List<Path> patched, List<Path> skipped, String report) {}
@@ -180,10 +202,14 @@ public final class Modularizer {
     /** Phase 3: the jars {@code options} wants patched, and everything it leaves alone. */
     private record Selection(List<JarModuleInfo> selected, List<Path> skipped) {}
 
-    /** Phase 5: one generated descriptor, module name and service scan per selected jar. */
+    /**
+     * Phase 5: one generated descriptor, module name and service scan per selected jar, and the {@code uses}
+     * declared by hand: by name, and from {@link #CLOSURE_PROVIDED} once phase 6 has expanded it.
+     */
     private record Generated(Map<Path, JarModuleInfo> infoByJar, Map<Path, String> moduleNames,
                              Map<Path, ModuleDescriptor> descriptors,
-                             Map<Path, Set<String>> scannedServices) {}
+                             Map<Path, Set<String>> scannedServices, Map<Path, String> artifactIds,
+                             Map<Path, Set<String>> declaredUses, Map<Path, Set<String>> providedUses) {}
 
     /** Phase 6: what may still be patched, the surviving {@code uses}, and what was demoted. */
     private record Legality(Set<Path> candidates, UsesLegality.Verdict verdict,
@@ -237,8 +263,15 @@ public final class Modularizer {
         Map<Path, String> moduleNames = new LinkedHashMap<>();
         Map<Path, ModuleDescriptor> descriptors = new LinkedHashMap<>();
         Map<Path, Set<String>> scannedServices = new LinkedHashMap<>();
+        Map<Path, String> artifactIds = new LinkedHashMap<>();
+        Map<Path, Set<String>> declaredUses = new LinkedHashMap<>();
         for (JarModuleInfo info : selected) {
             String artifactId = artifactIdOf(artifactIdByJar, info.jar());
+            artifactIds.put(info.jar(), artifactId);
+            Set<String> declared = options.declaredUses().get(artifactId);
+            if (declared != null) {
+                declaredUses.put(info.jar(), declared);
+            }
             String name = options.moduleNames().getOrDefault(artifactId, info.moduleName());
             // Synthesized without any `uses` yet: which of them may legally be declared depends on
             // the `requires` this very pass derives, so the directives are only known once the whole
@@ -249,7 +282,15 @@ public final class Modularizer {
             moduleNames.put(info.jar(), name);
             scannedServices.put(info.jar(), usesScanner.scan(info.jar()));
         }
-        return new Generated(infoByJar, moduleNames, descriptors, scannedServices);
+        // An entry for a jar this run does not patch would otherwise vanish without a trace: a typo in the
+        // artifactId, or a jar an include/exclude filter or the mode leaves automatic.
+        for (String artifactId : options.declaredUses().keySet()) {
+            if (!artifactIds.containsValue(artifactId)) {
+                log.accept(WARN + "uses declared for " + artifactId + ", which this run does not patch");
+            }
+        }
+        return new Generated(infoByJar, moduleNames, descriptors, scannedServices, artifactIds, declaredUses,
+                new LinkedHashMap<>());
     }
 
     /**
@@ -275,8 +316,9 @@ public final class Modularizer {
         Map<Path, ModuleDescriptor> descriptors = generated.descriptors();
         Map<Path, Set<String>> scannedServices = generated.scannedServices();
         Set<Path> candidates = new LinkedHashSet<>(descriptors.keySet());
-        UsesLegality.Verdict verdict =
-                UsesLegality.of(closure, candidates, descriptors).check(scannedServices);
+        UsesLegality graph = UsesLegality.of(closure, candidates, descriptors);
+        addDeclaredUses(graph, closure, generated);
+        UsesLegality.Verdict verdict = graph.check(scannedServices);
         // Kept for the demotion messages: the second pass no longer analyses the demoted jars.
         UsesLegality.Verdict firstPass = verdict;
         List<Path> demoted = new ArrayList<>();
@@ -299,6 +341,71 @@ public final class Modularizer {
             verdict = UsesLegality.of(closure, candidates, descriptors).check(scannedServices);
         }
         return new Legality(candidates, verdict, firstPass, demoted);
+    }
+
+    /**
+     * Phase 6, first: adds the {@code uses} declared by hand to the scanned ones. A type named by hand that the
+     * module cannot declare fails the run, since dropping it would ignore what the user asked for; the types
+     * {@link #CLOSURE_PROVIDED} stands for are filtered instead, keeping the legal ones. Both are legal in the graph
+     * where every candidate is explicit, so they stay legal once a jar is demoted: a demotion only relaxes it.
+     */
+    private static void addDeclaredUses(UsesLegality graph, List<Path> closure, Generated generated) {
+        Map<Path, Set<String>> named = new LinkedHashMap<>();
+        Set<Path> wildcard = new LinkedHashSet<>();
+        generated.declaredUses().forEach((jar, types) -> {
+            Set<String> names = new LinkedHashSet<>(types);
+            if (names.remove(CLOSURE_PROVIDED)) {
+                wildcard.add(jar);
+            }
+            named.put(jar, names);
+        });
+        List<UsesLegality.Drop> illegal = graph.checkDeclared(named);
+        if (!illegal.isEmpty()) {
+            StringBuilder sb = new StringBuilder("vauban:modularize — <uses> declares types the module cannot declare:");
+            for (UsesLegality.Drop drop : illegal) {
+                sb.append("\n  ").append(generated.artifactIds().get(drop.jar())).append(": uses ")
+                        .append(drop.service()).append(" (").append(drop.reason()).append(')');
+            }
+            throw new IllegalStateException(sb.toString());
+        }
+        if (!wildcard.isEmpty()) {
+            Set<String> provided = providedServices(closure, generated.descriptors());
+            Map<Path, Set<String>> requested = new LinkedHashMap<>();
+            wildcard.forEach(jar -> requested.put(jar, provided));
+            graph.check(requested).legal().forEach((jar, legal) -> {
+                Set<String> extra = new TreeSet<>(legal);
+                extra.removeAll(named.get(jar));
+                generated.providedUses().put(jar, extra);
+            });
+        }
+        named.values().removeIf(Set::isEmpty);
+        Map<Path, Set<String>> scanned = generated.scannedServices();
+        for (Map<Path, Set<String>> added : List.of(named, generated.providedUses())) {
+            added.forEach((jar, types) -> scanned.merge(jar, types, (a, b) -> {
+                Set<String> merged = new LinkedHashSet<>(a);
+                merged.addAll(b);
+                return merged;
+            }));
+        }
+        generated.declaredUses().clear();
+        generated.declaredUses().putAll(named);
+    }
+
+    /** Every service type a jar of the closure provides, as its descriptor will declare it once this run is done. */
+    private static Set<String> providedServices(List<Path> closure, Map<Path, ModuleDescriptor> synthesized) {
+        Set<String> provided = new TreeSet<>();
+        for (Path jar : closure) {
+            ModuleDescriptor descriptor = synthesized.get(jar);
+            if (descriptor == null) {
+                try {
+                    descriptor = JarModuleClassifier.descriptorOf(jar);
+                } catch (IOException | RuntimeException _) {
+                    continue; // no descriptor, no provides: UsesLegality leaves such a jar out of the graph too
+                }
+            }
+            descriptor.provides().forEach(p -> provided.add(p.service()));
+        }
+        return provided;
     }
 
     /** Phase 7: writes one patched jar per surviving candidate and appends its descriptor. */
@@ -327,10 +434,21 @@ public final class Modularizer {
             }
             report.append("\n## ").append(jar.getFileName()).append(" → module ").append(name)
                     .append(" (").append(info.kind()).append(")\n")
-                    .append(render(synthesized.descriptor())).append('\n');
+                    .append(render(synthesized.descriptor()));
+            appendDeclared(report, "uses declared by hand: ", generated.declaredUses().get(jar));
+            appendDeclared(report, "uses declared by hand (" + CLOSURE_PROVIDED + "): ",
+                    generated.providedUses().get(jar));
+            report.append('\n');
             log.accept("modularized " + jar.getFileName() + " as " + name);
         }
         return patched;
+    }
+
+    /** One report line listing {@code types}, sorted; nothing when there is none. */
+    private static void appendDeclared(StringBuilder report, String label, Set<String> types) {
+        if (types != null && !types.isEmpty()) {
+            report.append(label).append(String.join(", ", new TreeSet<>(types))).append('\n');
+        }
     }
 
     /**

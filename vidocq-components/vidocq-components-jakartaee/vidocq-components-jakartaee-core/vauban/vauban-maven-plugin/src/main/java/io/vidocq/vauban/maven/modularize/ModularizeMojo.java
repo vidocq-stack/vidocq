@@ -41,8 +41,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Goal {@code modularize}: patches the non-modular jars of the runtime closure with a generated
@@ -63,6 +66,9 @@ import java.util.Map;
       requiresDependencyResolution = ResolutionScope.RUNTIME,
       threadSafe = true)
 public class ModularizeMojo extends AbstractMojo {
+
+    /** What separates two types of one {@code <uses>} entry. */
+    private static final Pattern SEPARATORS = Pattern.compile("[,\\s]+");
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
@@ -111,6 +117,16 @@ public class ModularizeMojo extends AbstractMojo {
     @Parameter(property = "vauban.modularize.forceExplicit", defaultValue = "false")
     private boolean forceExplicit;
 
+    /**
+     * artifactId to the {@code uses} directives its descriptor declares besides the scanned ones, as
+     * fully qualified type names separated by commas or whitespace (Vidocq/vidocq#697). A bytecode scan
+     * cannot see a service type held in a variable (Liquibase's service locator): name it here. Each
+     * type must be in the closure and readable from the module, or the build fails. {@code *} stands for
+     * every service type the closure provides that the module may declare.
+     */
+    @Parameter
+    private Map<String, String> uses;
+
     /** Optional licence allow-list; empty (the default) leaves the gate off. */
     @Parameter
     private List<String> allowedLicenses;
@@ -156,7 +172,53 @@ public class ModularizeMojo extends AbstractMojo {
                 new HashSet<>(excludes == null ? List.of() : excludes),
                 moduleNames == null ? Map.of() : moduleNames,
                 openModules,
-                forceExplicit);
+                forceExplicit,
+                declaredUsesOf(uses));
+    }
+
+    /**
+     * The {@code <uses>} configuration, one set of type names per artifactId. A value that is not a type
+     * name, or {@link Modularizer#CLOSURE_PROVIDED}, fails the build here, before any jar is read.
+     */
+    static Map<String, Set<String>> declaredUsesOf(Map<String, String> configured) throws MojoFailureException {
+        if (configured == null) {
+            return Map.of();
+        }
+        Map<String, Set<String>> declared = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : configured.entrySet()) {
+            declared.put(entry.getKey(), typesOf(entry.getKey(), entry.getValue()));
+        }
+        return declared;
+    }
+
+    /** The types of one {@code <uses>} entry, in order and without duplicates. */
+    private static Set<String> typesOf(String artifactId, String value) throws MojoFailureException {
+        Set<String> types = new LinkedHashSet<>();
+        for (String type : SEPARATORS.split(value == null ? "" : value.strip())) {
+            if (type.isEmpty()) {
+                continue;
+            }
+            if (!type.equals(Modularizer.CLOSURE_PROVIDED) && !isTypeName(type)) {
+                throw new MojoFailureException("vauban:modularize: <uses> of " + artifactId + ": '" + type
+                        + "' is not a fully qualified type name");
+            }
+            types.add(type);
+        }
+        if (types.isEmpty()) {
+            throw new MojoFailureException("vauban:modularize: <uses> of " + artifactId + " names no type");
+        }
+        return types;
+    }
+
+    /** Dot-separated Java identifiers, {@code $} included, as in a nested type's binary name. */
+    private static boolean isTypeName(String name) {
+        for (String part : name.split("\\.", -1)) {
+            if (part.isEmpty() || !Character.isJavaIdentifierStart(part.charAt(0))
+                    || !part.chars().allMatch(Character::isJavaIdentifierPart)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Fails the build when a patched jar's licence is not in {@code allowedLicenses}. */

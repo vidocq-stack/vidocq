@@ -22,6 +22,7 @@ package io.vidocq.vauban.maven.modularize;
 import java.io.IOException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
+import java.lang.module.ModuleReader;
 import java.lang.module.ModuleReference;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -35,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.jar.JarFile;
+import java.util.zip.ZipFile;
 
 /**
  * Decides which of the scanned {@code uses} directives a generated descriptor may legally declare.
@@ -67,7 +70,9 @@ final class UsesLegality {
         /** The type exists but the declaring module cannot read the module exporting it. */
         UNREADABLE,
         /** The scan resolved a non-literal argument to its static type. */
-        NOT_A_CLASS_LITERAL
+        NOT_A_CLASS_LITERAL,
+        /** A type declared by hand names a package of the graph, but no class of it. */
+        NOT_A_TYPE
     }
 
     /** One dropped directive, with the message shown in the report and the build log. */
@@ -101,12 +106,17 @@ final class UsesLegality {
     private final Map<Path, Mod> byJar;
     private final Map<String, Mod> byName;
     private final Map<String, Mod> exporterOfPackage;
+    /** Where each package's classes are: a jar of the closure, or a system module. */
+    private final Map<String, Path> jarOfPackage;
+    private final Map<String, ModuleReference> systemModuleOfPackage;
 
-    private UsesLegality(Map<Path, Mod> byJar, Map<String, Mod> byName,
-                         Map<String, Mod> exporterOfPackage) {
+    private UsesLegality(Map<Path, Mod> byJar, Map<String, Mod> byName, Map<String, Mod> exporterOfPackage,
+                         Map<String, Path> jarOfPackage, Map<String, ModuleReference> systemModuleOfPackage) {
         this.byJar = byJar;
         this.byName = byName;
         this.exporterOfPackage = exporterOfPackage;
+        this.jarOfPackage = jarOfPackage;
+        this.systemModuleOfPackage = systemModuleOfPackage;
     }
 
     /**
@@ -123,6 +133,8 @@ final class UsesLegality {
         Map<Path, Mod> byJar = new LinkedHashMap<>();
         Map<String, Mod> byName = new HashMap<>();
         Map<String, Mod> exporterOfPackage = new HashMap<>();
+        Map<String, Path> jarOfPackage = new HashMap<>();
+        Map<String, ModuleReference> systemModuleOfPackage = new HashMap<>();
 
         for (Path jar : closure) {
             ModuleDescriptor descriptor = descriptorOf(jar);
@@ -143,9 +155,7 @@ final class UsesLegality {
             }
             byJar.put(jar, mod);
             byName.put(mod.name(), mod);
-            for (String p : packages) {
-                exporterOfPackage.putIfAbsent(p, mod);
-            }
+            registerPackages(packages, mod, jar, exporterOfPackage, jarOfPackage);
         }
 
         // The JDK's own modules are part of the graph a `uses` is resolved against.
@@ -153,11 +163,19 @@ final class UsesLegality {
             ModuleDescriptor descriptor = ref.descriptor();
             Mod mod = explicit(descriptor);
             byName.putIfAbsent(mod.name(), mod);
-            for (String p : descriptor.packages()) {
-                exporterOfPackage.putIfAbsent(p, mod);
+            registerPackages(descriptor.packages(), mod, ref, exporterOfPackage, systemModuleOfPackage);
+        }
+        return new UsesLegality(byJar, byName, exporterOfPackage, jarOfPackage, systemModuleOfPackage);
+    }
+
+    /** Records {@code mod} as the exporter of each of {@code packages} no earlier module holds, and where it is. */
+    private static <T> void registerPackages(Set<String> packages, Mod mod, T location,
+                                             Map<String, Mod> exporterOfPackage, Map<String, T> locationOfPackage) {
+        for (String p : packages) {
+            if (exporterOfPackage.putIfAbsent(p, mod) == null) {
+                locationOfPackage.put(p, location);
             }
         }
-        return new UsesLegality(byJar, byName, exporterOfPackage);
     }
 
     /**
@@ -188,13 +206,65 @@ final class UsesLegality {
         return new Verdict(legal, drops);
     }
 
+    /**
+     * Checks the {@code uses} declared by hand: the same conditions as {@link #check}, and the type itself has
+     * to exist, since a misspelled name in a package of the graph would otherwise pass as a harmless no-op.
+     *
+     * @return every declared type that cannot be declared, empty when all of them can
+     */
+    List<Drop> checkDeclared(Map<Path, Set<String>> declared) {
+        List<Drop> drops = new ArrayList<>(check(declared).drops());
+        declared.forEach((jar, services) -> drops.addAll(missingTypes(jar, services)));
+        return drops;
+    }
+
+    /** The {@code services} of {@code jar} that pass {@link #check} but name no class. */
+    private List<Drop> missingTypes(Path jar, Set<String> services) {
+        Mod caller = byJar.get(jar);
+        if (caller == null) {
+            return List.of();
+        }
+        return services.stream()
+                .filter(service -> verdictFor(jar, caller, service) == null && !exists(service))
+                .map(service -> new Drop(jar, service, Kind.NOT_A_TYPE,
+                        "no such type in " + exporterOfPackage.get(packageOf(service)).name()))
+                .toList();
+    }
+
+    /** Whether the class file of {@code type} is in the jar or the system module holding its package. */
+    private boolean exists(String type) {
+        String pkg = packageOf(type);
+        String entry = type.replace('.', '/') + ".class";
+        Path jar = jarOfPackage.get(pkg);
+        try {
+            if (jar != null) {
+                try (JarFile file = new JarFile(jar.toFile(), false, ZipFile.OPEN_READ, Runtime.version())) {
+                    return file.getJarEntry(entry) != null;
+                }
+            }
+            ModuleReference ref = systemModuleOfPackage.get(pkg);
+            if (ref != null) {
+                try (ModuleReader reader = ref.open()) {
+                    return reader.find(entry).isPresent();
+                }
+            }
+        } catch (IOException _) {
+            return false;
+        }
+        return false;
+    }
+
+    private static String packageOf(String type) {
+        int dot = type.lastIndexOf('.');
+        return dot < 0 ? "" : type.substring(0, dot);
+    }
+
     /** {@code null} when {@code service} may be declared by {@code caller}, the reason otherwise. */
     private Drop verdictFor(Path jar, Mod caller, String service) {
         if (NEVER_A_SERVICE.contains(service)) {
             return new Drop(jar, service, Kind.NOT_A_CLASS_LITERAL, "not a class literal");
         }
-        int dot = service.lastIndexOf('.');
-        String pkg = dot < 0 ? "" : service.substring(0, dot);
+        String pkg = packageOf(service);
         Mod exporter = exporterOfPackage.get(pkg);
         if (exporter == null) {
             return new Drop(jar, service, Kind.NOT_IN_CLOSURE, "not in closure");

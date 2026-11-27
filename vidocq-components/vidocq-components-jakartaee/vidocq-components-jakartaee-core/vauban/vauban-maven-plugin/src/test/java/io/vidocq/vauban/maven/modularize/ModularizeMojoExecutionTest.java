@@ -84,6 +84,7 @@ class ModularizeMojoExecutionTest {
         set(mojo, "includes", List.of("lib-a"));
         set(mojo, "excludes", List.of("lib-b"));
         set(mojo, "moduleNames", Map.of("lib-a", "com.acme.a"));
+        set(mojo, "uses", Map.of("lib-a", "com.acme.a.Service, *"));
         var log = new RecordingLog();
         mojo.setLog(log);
 

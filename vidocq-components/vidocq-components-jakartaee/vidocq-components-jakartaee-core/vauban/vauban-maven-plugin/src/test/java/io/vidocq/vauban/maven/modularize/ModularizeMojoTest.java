@@ -22,6 +22,10 @@ package io.vidocq.vauban.maven.modularize;
 import org.apache.maven.plugin.MojoFailureException;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -51,5 +55,35 @@ class ModularizeMojoTest {
 
         assertEquals("vauban:modularize: unknown mode 'all-automtic'"
                 + " (expected derived | all-automatic)", e.getMessage());
+    }
+
+    /** {@code <uses><artifactId>a.B, c.D</artifactId></uses>}: commas, whitespace and line breaks all separate. */
+    @Test
+    void declaredUsesAreSplitPerArtifact() throws Exception {
+        Map<String, String> configured = new LinkedHashMap<>();
+        configured.put("liquibase-core", " liquibase.change.Change,\n   liquibase.database.Database  liquibase.change.Change ");
+        configured.put("acme", "*");
+
+        assertEquals(Map.of("liquibase-core", Set.of("liquibase.change.Change", "liquibase.database.Database"),
+                        "acme", Set.of("*")),
+                ModularizeMojo.declaredUsesOf(configured));
+        assertEquals(Map.of(), ModularizeMojo.declaredUsesOf(null));
+    }
+
+    @Test
+    void aDeclaredUsesThatIsNoTypeNameFailsTheBuild() {
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> ModularizeMojo.declaredUsesOf(Map.of("acme", "com.acme.Ok, com.acme.Not-A-Type")));
+
+        assertEquals("vauban:modularize: <uses> of acme: 'com.acme.Not-A-Type' is not a fully qualified type name",
+                e.getMessage());
+    }
+
+    @Test
+    void anEmptyDeclaredUsesFailsTheBuild() {
+        MojoFailureException e = assertThrows(MojoFailureException.class,
+                () -> ModularizeMojo.declaredUsesOf(Map.of("acme", "  ")));
+
+        assertEquals("vauban:modularize: <uses> of acme names no type", e.getMessage());
     }
 }
