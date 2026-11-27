@@ -164,7 +164,9 @@ class GrpcClientTlsTest {
     @Test
     void a_host_name_target_is_reached_with_sni_and_checked_against_the_certificate() throws Exception {
         // The certificate names CN=localhost and no DNS subjectAltName: the JDK checks the host name against the CN.
+        // Bound where "localhost" resolves first: 127.0.0.1 or ::1, depending on the machine.
         try (var server = FakeH2Server.tls(
+                        java.net.InetAddress.getByName("localhost"),
                         conn -> {
                             conn.ok(conn.request().streamId(), PONG);
                             conn.drain();

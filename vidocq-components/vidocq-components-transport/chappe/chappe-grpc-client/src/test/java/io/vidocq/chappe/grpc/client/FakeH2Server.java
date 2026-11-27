@@ -80,8 +80,12 @@ final class FakeH2Server implements AutoCloseable {
      * A server over TLS, its certificate from {@code tls}; it offers {@code alpn} by ALPN, none when empty.
      */
     static FakeH2Server tls(Script script, SSLContext tls, String... alpn) throws IOException {
-        var socket = (SSLServerSocket)
-                tls.getServerSocketFactory().createServerSocket(0, 50, InetAddress.getLoopbackAddress());
+        return tls(InetAddress.getLoopbackAddress(), script, tls, alpn);
+    }
+
+    /** A server over TLS on {@code address}, as {@link #tls(Script, SSLContext, String...)}. */
+    static FakeH2Server tls(InetAddress address, Script script, SSLContext tls, String... alpn) throws IOException {
+        var socket = (SSLServerSocket) tls.getServerSocketFactory().createServerSocket(0, 50, address);
         var parameters = socket.getSSLParameters();
         parameters.setApplicationProtocols(alpn);
         socket.setSSLParameters(parameters);
