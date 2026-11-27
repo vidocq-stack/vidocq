@@ -45,6 +45,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.project.ProjectBuilder;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.artifact.DefaultArtifact;
@@ -82,8 +83,6 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.jar.JarFile;
-import java.util.jar.Manifest;
 
 /**
  * Vidocq dev mode — implementation of milestone <b>M1</b> from
@@ -100,6 +99,9 @@ import java.util.jar.Manifest;
  *   <li>We have a relevant change (debounced 250 ms by default), shell out
  *       {@code mvn process-classes}; on success, gracefully stop the child JVM
  *       and respawn it.</li>
+ *   <li>A recompile after which {@code pom.xml} resolves to other dependencies, as after {@code vidocq extension add},
+ *       restarts the whole session on them: the module path, the dev tools, the dev services and the child
+ *       (Vidocq/vidocq#799, see {@link PomChange}).</li>
  * </ol>
  *
  * <p>The Mojo is <b>blocking</b> — it keeps the terminal until the user hits
@@ -319,6 +321,12 @@ public class VidocqDevMojo extends AbstractMojo {
     private RepositorySystem repoSystem;
 
     /**
+     * Reads {@code pom.xml} again when it changed during the session, its dependencies resolved (#799). Set by the
+     * {@code requirements} of the hand-written plugin descriptor.
+     */
+    private ProjectBuilder projectBuilder;
+
+    /**
      * This plugin's own version: the dev console and its SPI are resolved at the application's Vidocq runtime version
      * ({@link DevConsoleJars#runtimeVersion}, #148), this one only when the application has no Chappe extension to
      * read it from, and a warning names both when they differ. Those artifacts are never a
@@ -367,13 +375,64 @@ public class VidocqDevMojo extends AbstractMojo {
     /** The main sources saved while a recompile ran, which the next recompile compiles (BUG-20261117-03). */
     private SavedWhileCompiling savedWhileCompiling;
 
+    /**
+     * When the start of this session began: the start of Maven for the first one, the start of the recompile that
+     * restarted it for a later one (#799). What was saved since then, no watcher saw. {@code null} without a Maven
+     * session, as in a unit test.
+     */
+    private FileTime sessionStarted;
+
+    /** The pom of this session; {@code null} without a pom file, as in a unit test (#799). */
+    private PomChange pomChange;
+
+    /** Set by a recompile after which the session restarts on other dependencies: the project to restart on (#799). */
+    private MavenProject restart;
+
+    /** When the recompile that set {@link #restart} began: what was saved since, the new start compiles. */
+    private FileTime restartSince;
+
+    /** The keys typed in the console, read once for the goal, sent to the running session's tests (#799). */
+    private final Predicate<Consumer<Trigger>> devKeys = ContinuousTesting.devKeys();
+
+    /** Whether the tests of the previous session had started: a restart does not pause them again (#799). */
+    private boolean testsStarted;
+
     @Override
     public void execute() throws MojoExecutionException {
         checkDebugPort();
+        sessionStarted = mavenStarted();
+        boolean first = true;
+        while (true) {
+            MavenProject next = startSession(first);
+            if (next == null) {
+                return;
+            }
+            project = next;
+            sessionStarted = restartSince;
+            first = false;
+        }
+    }
+
+    /**
+     * One session: builds the launch from the project's dependencies, starts the child and reloads it until Ctrl+C or
+     * a change of the dependencies.
+     *
+     * @param first whether this is the first session of the goal: a later one starts from the recompile that ended
+     *              the previous one, and has nothing to build first
+     * @return the project to start the next session on, {@code null} when the goal ends
+     */
+    private MavenProject startSession(boolean first) throws MojoExecutionException {
+        hotSwap = null;
+        pendingStamp = OptionalLong.empty();
+        restart = null;
         LayerSplit.Mode mode = layerSplitMode();
         Path projectDir = baseDir.toPath();
         List<Path> watch = parseDirs(projectDir, watchDirs);
-        ensureCompiled(projectDir, watch);
+        if (first) {
+            ensureCompiled(projectDir, watch);
+        }
+        pomChange = project.getFile() == null ? null
+                : PomChange.of(project, projectBuilder, session.getProjectBuildingRequest());
         mainClass = AnnotatedMainClass.resolve(mainClass, classesDir, getLog()::info);
         ApplicationLaunch.Layered layered = buildLaunch(mode);
         mode = layered.mode();
@@ -436,6 +495,7 @@ public class VidocqDevMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Cannot watch " + opensFile, e);
         }
+        return Thread.currentThread().isInterrupted() ? null : restart;
     }
 
     /** The application's {@code module-info.java}, among the compile source roots; {@code null} when it has none. */
@@ -636,7 +696,7 @@ public class VidocqDevMojo extends AbstractMojo {
                 testServices(devs.session(), devs.tests(), getLog()::info, getLog()::warn), testOutputs(),
                 result -> TestSummaryPrinter.lines(result, false, false).forEach(getLog()::info), getLog()::info,
                 getLog()::warn);
-        if (mode == ContinuousTesting.Mode.PAUSED) {
+        if (mode == ContinuousTesting.Mode.PAUSED && !testsStarted) {
             started.pause();
             forgetEarlierResults(results);
         }
@@ -655,7 +715,7 @@ public class VidocqDevMojo extends AbstractMojo {
             closeDevServices(devs.session());
             throw new MojoExecutionException("Cannot watch the test request file", e);
         }
-        boolean keys = ContinuousTesting.listenToDevKeys(request);
+        boolean keys = devKeys.test(request);
         getLog().info(mode == ContinuousTesting.Mode.PAUSED ? pausedLine(keys)
                 : "Continuous testing: on, watching " + testWatch
                         + " (-D" + CONTINUOUS_TESTING_KEY + "=false to turn it off)");
@@ -703,7 +763,10 @@ public class VidocqDevMojo extends AbstractMojo {
         return new DevTestServices(opener, info, warn);
     }
 
-    /** Starts the child, then reloads it on every source change until the watcher closes or Ctrl+C. */
+    /**
+     * Starts the child, then reloads it on every source change until the watcher closes, Ctrl+C, or a recompile after
+     * which the dependencies changed ({@link #restart}).
+     */
     private void runSession(ChildLaunch launch, List<Path> watch, Testing testing, DevServicesSession devs,
             Path reloadFile, boolean inJvmReload) throws MojoExecutionException {
         // The atomic reference lets the shutdown hook (running on a separate
@@ -717,7 +780,8 @@ public class VidocqDevMojo extends AbstractMojo {
         savedWhileCompiling = new SavedWhileCompiling(
                 projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()), classesDir.toPath(),
                 "recompile", getLog()::info, getLog()::warn);
-        try (SourceWatcher watcher = SourceWatcher.on(watch, testing.watch(), Duration.ofMillis(debounceMillis),
+        List<Path> pom = project.getFile() == null ? List.of() : List.of(project.getFile().toPath());
+        try (SourceWatcher watcher = SourceWatcher.on(watch, testing.watch(), pom, Duration.ofMillis(debounceMillis),
                 Duration.ofMillis(watchPollMillis))) {
             if (!compiledWhatWasSavedWhileStarting(watch, recompile, watcher)) {
                 return; // watcher closed
@@ -729,7 +793,9 @@ public class VidocqDevMojo extends AbstractMojo {
             getLog().info("Child JVM started, pid=" + pid + ". Listening for changes (Ctrl+C to stop).");
             startFirstTestRun(testing.testing(), child, reloadFile, inJvmReload);
 
-            while (!Thread.currentThread().isInterrupted()) {
+            // A restart, once the dependencies changed, ends the loop too: endSession stops everything, execute starts
+            // again.
+            while (!Thread.currentThread().isInterrupted() && restart == null) {
                 SourceWatcher.Change change = watcher.awaitChanges();
                 if (change == null) {
                     break; // watcher closed
@@ -755,7 +821,7 @@ public class VidocqDevMojo extends AbstractMojo {
      */
     private boolean compiledWhatWasSavedWhileStarting(List<Path> watch, RecompileRunner recompile,
             SourceWatcher watcher) throws InterruptedException {
-        FileTime started = mavenStarted();
+        FileTime started = sessionStarted;
         if (started == null) {
             return true; // no Maven run, hence no start to save during: a unit test
         }
@@ -839,6 +905,7 @@ public class VidocqDevMojo extends AbstractMojo {
     /** Ends the session, whether the watcher closed or Ctrl+C: what the shutdown hook may already have done. */
     private void endSession(Testing testing, AtomicReference<ChildJvm> currentChild, DevServicesSession devs,
             Thread hook) {
+        testsStarted = testing.testing() != null && !testing.testing().paused();
         closeTesting(testing.testing(), testing.requests());
         // The shutdown hook will have done it already on Ctrl+C, but if we
         // fell through because the watcher closed normally we still need to
@@ -1014,6 +1081,7 @@ public class VidocqDevMojo extends AbstractMojo {
             throws IOException, InterruptedException {
         settlePreviousRequest(reloadFile, currentChild.get());
         long t0 = System.nanoTime();
+        FileTime recompileStarted = FileTime.fromMillis(System.currentTimeMillis());
         getLog().info("Changes detected — recompiling: " + recompile.describe());
         int rc;
         try {
@@ -1024,6 +1092,15 @@ public class VidocqDevMojo extends AbstractMojo {
         }
         if (rc != 0) {
             getLog().warn("Compile failed (exit " + rc + "); keeping previous JVM up.");
+            return Optional.empty();
+        }
+        // #799: not when the pom changed the dependencies, the session then restarts on them, nor when they do not
+        // resolve, the application then keeps running on the previous ones.
+        Consumer<MavenProject> restartOn = next -> {
+            restart = next;
+            restartSince = recompileStarted;
+        };
+        if (pomChange != null && !pomChange.reloads(restartOn, getLog()::info, getLog()::warn)) {
             return Optional.empty();
         }
         ChildJvm child = currentChild.get();
@@ -1182,18 +1259,7 @@ public class VidocqDevMojo extends AbstractMojo {
      */
     static void addDevTools(List<Path> devTools, boolean layerMode, List<Path> modulePath, List<Path> appPath) {
         for (Path jar : devTools) {
-            (layerMode && ridesInTheApplicationLayer(jar) ? appPath : modulePath).add(jar);
-        }
-    }
-
-    private static boolean ridesInTheApplicationLayer(Path jar) {
-        try (var file = new JarFile(jar.toFile())) {
-            Manifest manifest = file.getManifest();
-            return manifest != null && Boolean.parseBoolean(
-                    manifest.getMainAttributes().getValue(LayerSplit.APPLICATION_LAYER_ATTRIBUTE));
-        } catch (IOException _) {
-            // Unreadable here, unreadable for the child too: it stays where the dev tools always went.
-            return false;
+            (layerMode && DevModules.ridesInTheApplicationLayer(jar) ? appPath : modulePath).add(jar);
         }
     }
 

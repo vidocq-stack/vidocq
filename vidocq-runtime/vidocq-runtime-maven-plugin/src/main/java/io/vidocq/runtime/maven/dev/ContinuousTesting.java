@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Continuous testing (spec §2), shared by {@code vidocq:dev} and {@code vidocq:test}: one worker thread,
@@ -248,6 +249,14 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                 command == TerminalControls.Command.RERUN_FAILED ? Trigger.RERUN_FAILED : Trigger.RUN_ALL));
         Thread.ofPlatform().name("vidocq-dev-keys").daemon(true).start(controls);
         return true;
+    }
+
+    /**
+     * The keys typed in the console for a whole {@code vidocq:dev}: the predicate sends them to the consumer it gets
+     * from then on, says whether they are read, and starts one reader only, whatever the sessions (#799).
+     */
+    static Predicate<Consumer<Trigger>> devKeys() {
+        return new DevKeys(ContinuousTesting::listenToDevKeys)::listen;
     }
 
     /** Starts the worker thread; idempotent. */

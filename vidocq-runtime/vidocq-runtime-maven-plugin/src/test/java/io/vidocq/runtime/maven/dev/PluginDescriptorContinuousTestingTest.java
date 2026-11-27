@@ -73,6 +73,20 @@ class PluginDescriptorContinuousTestingTest {
         assertEquals(String.class, VidocqDevMojo.class.getDeclaredField("continuousTesting").getType());
     }
 
+    /** Vidocq/vidocq#799: the dev goal reads its pom again when it changes, with Maven's project builder. */
+    @Test
+    void devGetsTheProjectBuilder() throws Exception {
+        List<String> roles = new ArrayList<>();
+        for (Element requirement : children(child(MOJOS.get("dev"), "requirements"))) {
+            if ("projectBuilder".equals(text(requirement, "field-name"))) {
+                roles.add(text(requirement, "role"));
+            }
+        }
+        assertEquals(List.of("org.apache.maven.project.ProjectBuilder"), roles);
+        assertEquals(org.apache.maven.project.ProjectBuilder.class,
+                VidocqDevMojo.class.getDeclaredField("projectBuilder").getType());
+    }
+
     /** Vidocq/vidocq#651: how often the file times are read where the JDK's watcher polls; both goals read it. */
     @Test
     void devAndTestReadTheWatchPollInterval() throws Exception {

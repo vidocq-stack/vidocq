@@ -99,6 +99,10 @@
                     <role>org.eclipse.aether.RepositorySystem</role>
                     <field-name>repoSystem</field-name>
                 </requirement>
+                <requirement>
+                    <role>org.apache.maven.project.ProjectBuilder</role>
+                    <field-name>projectBuilder</field-name>
+                </requirement>
             </requirements>
         </mojo>
 

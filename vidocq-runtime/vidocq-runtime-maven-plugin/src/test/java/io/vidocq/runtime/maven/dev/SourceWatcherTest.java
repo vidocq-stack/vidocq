@@ -255,6 +255,61 @@ class SourceWatcherTest {
         }
     }
 
+    /**
+     * Vidocq/vidocq#799: the pom is watched, alone of its directory: a save of it is a main change, and neither another
+     * file nor a directory next to it, such as {@code target/}, is watched.
+     */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void aWatchedFileIsAMainChangeAndNothingElseOfItsDirectoryIs(@TempDir Path tmp) throws Exception {
+        Path main = Files.createDirectories(tmp.resolve("src/main/java"));
+        Path pom = Files.writeString(tmp.resolve("pom.xml"), "<project/>");
+        Files.writeString(tmp.resolve("other.xml"), "<other/>");
+
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(main), List.of(), List.of(pom), Duration.ofMillis(50),
+                Duration.ZERO)) {
+            Files.createDirectories(tmp.resolve("target/classes"));
+            Files.writeString(tmp.resolve("target/classes/generated.xml"), "<generated/>");
+            Files.writeString(tmp.resolve("other.xml"), "<other edited=\"true\"/>");
+            assertNull(changeWithin(watcher, Duration.ofSeconds(2)), "nothing watched changed");
+
+            Files.writeString(pom, "<project><dependencies/></project>");
+            assertEquals(new SourceWatcher.Change(true, false), watcher.awaitChanges());
+        }
+    }
+
+    /** Vidocq/vidocq#799, where the JDK's watcher polls: a watcher that reads the file times reads the pom too. */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void aWatcherReadingTheFileTimesReportsASaveOfAWatchedFile(@TempDir Path tmp) throws Exception {
+        Path main = Files.createDirectories(tmp.resolve("src/main/java"));
+        Path pom = Files.writeString(tmp.resolve("pom.xml"), "<project/>");
+
+        try (SourceWatcher watcher = SourceWatcher.readingFileTimes(List.of(main), List.of(), List.of(pom),
+                Duration.ofMillis(50), Duration.ofMillis(20))) {
+            Files.writeString(pom, "<project><dependencies/></project>");
+            Files.setLastModifiedTime(pom, FileTime.fromMillis(Files.getLastModifiedTime(pom).toMillis() + 2_000));
+
+            assertEquals(new SourceWatcher.Change(true, false), watcher.awaitChanges());
+        }
+    }
+
+    /** The change {@code watcher} reports within {@code wait}; {@code null} when it reports none. */
+    private static SourceWatcher.Change changeWithin(SourceWatcher watcher, Duration wait) throws InterruptedException {
+        AtomicReference<SourceWatcher.Change> change = new AtomicReference<>();
+        Thread t = Thread.ofVirtual().start(() -> {
+            try {
+                change.set(watcher.awaitChanges());
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        t.join(wait);
+        t.interrupt();
+        t.join();
+        return change.get();
+    }
+
     /** Waits until {@code watching} blocks in the watcher, waiting for an event. */
     private static void awaitBlocked(Thread watching) throws InterruptedException {
         assertTrue(Poll.until(Duration.ofSeconds(5), () -> watching.getState() == Thread.State.WAITING

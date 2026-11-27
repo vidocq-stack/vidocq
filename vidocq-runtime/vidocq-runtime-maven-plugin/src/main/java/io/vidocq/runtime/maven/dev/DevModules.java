@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.core.LayerSplit;
 import io.vidocq.runtime.maven.DevOnlyJars;
 import org.apache.maven.artifact.Artifact;
 import org.eclipse.aether.graph.DependencyFilter;
@@ -39,6 +40,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 
@@ -203,5 +205,20 @@ final class DevModules {
             }
         }
         return null;
+    }
+
+    /**
+     * Whether the manifest of {@code jar} says {@value LayerSplit#APPLICATION_LAYER_ATTRIBUTE}{@code : true}: a dev
+     * tool that rides in the application layer ({@link VidocqDevMojo#addDevTools}).
+     */
+    static boolean ridesInTheApplicationLayer(Path jar) {
+        try (var file = new JarFile(jar.toFile())) {
+            Manifest manifest = file.getManifest();
+            return manifest != null && Boolean.parseBoolean(
+                    manifest.getMainAttributes().getValue(LayerSplit.APPLICATION_LAYER_ATTRIBUTE));
+        } catch (IOException _) {
+            // Unreadable here, unreadable for the child too: it stays where the dev tools always went.
+            return false;
+        }
     }
 }

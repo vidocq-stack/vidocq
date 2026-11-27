@@ -200,6 +200,28 @@ Changes detected — recompiling: ./mvnw -ntp -q process-classes -DskipTests -Dv
 That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows apply to every recompile: with
 `-U` there, each one checks the remote repositories and takes seconds more.
 
+[[dev-pom-change]]*A change of the dependencies.* `vidocq:dev` resolves the module path once, when it starts.
+`vidocq extension add` and `vidocq extension remove` change the `pom.xml` and `module-info.java` while it runs, and
+the recompile then builds a module that `requires` a module the running session never resolved. So `vidocq:dev`
+watches the `pom.xml` as well (Vidocq/vidocq#799). After a recompile that succeeded, it reads the `pom.xml` again
+when it changed, and resolves its dependencies. When they differ from the ones the session runs on, it restarts on
+them, and one line says why:
+
+[source]
+----
+pom.xml changed the dependencies (added vidocq-runtime-grimm-openapi-extension): restarting the application on the new ones.
+----
+
+* The restart is a full one, as a new `vidocq dev` would do: the module path, the dev tools, the dev services and the
+  application start again. The recompile that saw the change already built the project, so nothing is built twice.
+  Continuous testing that had started stays started.
+* A change of the `pom.xml` that leaves the dependencies as they were, such as a property, reloads the application as
+  any other change does.
+* When the new dependencies do not resolve, the application keeps running on the previous ones, and a warning says
+  so: `pom.xml changed, but its dependencies do not resolve (...): the application keeps running on the previous
+  ones, without this change. Fix pom.xml, or restart vidocq dev.` The next recompile tries again.
+* Only the `pom.xml` of the project is watched: a change of a parent pom needs a restart of `vidocq dev`.
+
 [[dev-save-seen]]*How soon a save is seen.* The JDK's file watcher of macOS looks at the directories
 every 2 seconds, so a save could wait up to 2 s before the recompile started. Where the JDK's
 watcher polls, `vidocq:dev` and `vidocq:test` read the modification time and size of the watched files themselves,

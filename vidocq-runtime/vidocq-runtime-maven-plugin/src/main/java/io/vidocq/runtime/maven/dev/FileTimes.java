@@ -44,14 +44,22 @@ final class FileTimes {
 
     private final List<Path> roots;
     private final List<Path> testRoots;
+    /** Single files read too, whatever their extension: a change of one is a main change (Vidocq/vidocq#799). */
+    private final List<Path> singleFiles;
     private Map<Path, Stamp> last;
 
     /** Reads the files of the main and test roots: the first pass compares with this one. */
     FileTimes(List<Path> mainRoots, List<Path> testRoots) {
+        this(mainRoots, testRoots, List.of());
+    }
+
+    /** Reads the files of the main and test roots, and {@code files}: the first pass compares with this one. */
+    FileTimes(List<Path> mainRoots, List<Path> testRoots, List<Path> files) {
         List<Path> all = new ArrayList<>(mainRoots);
         all.addAll(testRoots);
         this.roots = all.stream().map(root -> root.toAbsolutePath().normalize()).toList();
         this.testRoots = testRoots.stream().map(root -> root.toAbsolutePath().normalize()).toList();
+        this.singleFiles = files.stream().map(file -> file.toAbsolutePath().normalize()).toList();
         this.last = read();
     }
 
@@ -94,6 +102,14 @@ final class FileTimes {
                 return FileVisitResult.CONTINUE; // gone while the pass ran, or unreadable: the next pass reads it
             }
         };
+        for (Path file : singleFiles) {
+            try {
+                BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
+                files.put(file, new Stamp(attributes.lastModifiedTime(), attributes.size()));
+            } catch (IOException _) {
+                // gone, or unreadable: a file that is not there
+            }
+        }
         for (Path root : roots) {
             if (Files.isDirectory(root)) {
                 try {

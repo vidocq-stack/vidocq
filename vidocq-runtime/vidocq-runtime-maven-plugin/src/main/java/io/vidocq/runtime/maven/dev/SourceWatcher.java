@@ -60,6 +60,10 @@ import java.util.stream.Stream;
  * JDK's watcher polls, {@link #on(List, List, Duration, Duration)} reads the modification times and sizes of the
  * watched files itself at a shorter interval ({@link FileTimes}), and reports the changes as the JDK's watcher would,
  * with the same debounce. Linux's watcher is told of each change by the kernel and stays.</p>
+ *
+ * <p><b>Watched files</b> — besides the directories, single files can be watched, alone of their directory: the
+ * {@code pom.xml} of {@code vidocq:dev} (Vidocq/vidocq#799). A save of one is a main change; nothing else of its
+ * directory is watched, and a directory created there, such as {@code target/}, is not registered.</p>
  */
 final class SourceWatcher implements AutoCloseable {
 
@@ -83,6 +87,8 @@ final class SourceWatcher implements AutoCloseable {
     record Change(boolean main, boolean test) {}
 
     private final List<Path> testRoots;
+    /** The single files watched, absolute and normalized: a save of one is a main change. */
+    private final Set<Path> files;
     /** The watched roots that did not exist yet: looked for every {@value #MISSING_ROOT_POLL_MILLIS} ms (#138). */
     private final List<Path> missing = new ArrayList<>();
 
@@ -90,12 +96,17 @@ final class SourceWatcher implements AutoCloseable {
     static final long MISSING_ROOT_POLL_MILLIS = 1_000;
 
     private SourceWatcher(WatchService service, FileTimes times, long debounceMillis, long pollMillis,
-            List<Path> testRoots) {
+            List<Path> testRoots, List<Path> files) {
         this.service = service;
         this.times = times;
         this.debounceMillis = debounceMillis;
         this.pollMillis = pollMillis;
         this.testRoots = testRoots;
+        this.files = Set.copyOf(normalized(files));
+    }
+
+    private static List<Path> normalized(List<Path> paths) {
+        return paths.stream().map(path -> path.toAbsolutePath().normalize()).toList();
     }
 
     /** A watcher of main directories only, with the JDK's watcher. */
@@ -108,13 +119,19 @@ final class SourceWatcher implements AutoCloseable {
      * does not exist is skipped.
      */
     static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, Duration debounce) throws IOException {
+        return on(mainDirs, testDirs, List.of(), debounce);
+    }
+
+    /** {@link #on(List, List, Duration)}, and {@code files}, each alone of its directory. */
+    private static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, List<Path> files, Duration debounce)
+            throws IOException {
         List<Path> all = new ArrayList<>(mainDirs);
         all.addAll(testDirs);
         WatchService ws = (all.isEmpty() ? FileSystems.getDefault() : all.get(0).getFileSystem()).newWatchService();
-        SourceWatcher watcher = new SourceWatcher(ws, null, debounce.toMillis(), 0,
-                testDirs.stream().map(dir -> dir.toAbsolutePath().normalize()).toList());
+        SourceWatcher watcher = new SourceWatcher(ws, null, debounce.toMillis(), 0, normalized(testDirs), files);
         try {
             watcher.registerAll(all);
+            watcher.registerFiles();
         } catch (IOException | RuntimeException e) {
             watcher.close(); // a half-registered watcher would leak its WatchService
             throw e;
@@ -129,6 +146,12 @@ final class SourceWatcher implements AutoCloseable {
      */
     static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, Duration debounce, Duration poll)
             throws IOException {
+        return on(mainDirs, testDirs, List.of(), debounce, poll);
+    }
+
+    /** {@link #on(List, List, Duration, Duration)}, and {@code files}, each alone of its directory. */
+    static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, List<Path> files, Duration debounce,
+            Duration poll) throws IOException {
         if (poll.isPositive()) {
             List<Path> all = new ArrayList<>(mainDirs);
             all.addAll(testDirs);
@@ -138,16 +161,22 @@ final class SourceWatcher implements AutoCloseable {
                 polls = pollsItself(jdk);
             }
             if (polls) {
-                return readingFileTimes(mainDirs, testDirs, debounce, poll);
+                return readingFileTimes(mainDirs, testDirs, files, debounce, poll);
             }
         }
-        return on(mainDirs, testDirs, debounce);
+        return on(mainDirs, testDirs, files, debounce);
     }
 
     /** A watcher that reads the file times of the directories every {@code poll}, whatever the JDK's watcher. */
     static SourceWatcher readingFileTimes(List<Path> mainDirs, List<Path> testDirs, Duration debounce, Duration poll) {
-        return new SourceWatcher(null, new FileTimes(mainDirs, testDirs), debounce.toMillis(), poll.toMillis(),
-                testDirs.stream().map(dir -> dir.toAbsolutePath().normalize()).toList());
+        return readingFileTimes(mainDirs, testDirs, List.of(), debounce, poll);
+    }
+
+    /** {@link #readingFileTimes(List, List, Duration, Duration)}, and {@code files}. */
+    static SourceWatcher readingFileTimes(List<Path> mainDirs, List<Path> testDirs, List<Path> files,
+            Duration debounce, Duration poll) {
+        return new SourceWatcher(null, new FileTimes(mainDirs, testDirs, files), debounce.toMillis(),
+                poll.toMillis(), normalized(testDirs), files);
     }
 
     /**
@@ -169,6 +198,19 @@ final class SourceWatcher implements AutoCloseable {
                 registerRecursive(dir);
             } else {
                 missing.add(dir.toAbsolutePath().normalize());
+            }
+        }
+    }
+
+    /**
+     * Registers the directory of each watched file, alone: {@link #drainKey} reads nothing else of it, unless it is a
+     * watched directory too. A file whose directory does not exist is not watched.
+     */
+    private void registerFiles() throws IOException {
+        for (Path parent : files.stream().map(Path::getParent).distinct().toList()) {
+            if (Files.isDirectory(parent)) {
+                parent.register(service, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY,
+                        StandardWatchEventKinds.ENTRY_DELETE);
             }
         }
     }
@@ -321,7 +363,11 @@ final class SourceWatcher implements AutoCloseable {
                 touched.main = true;
                 touched.test = !testRoots.isEmpty();
             } else if (event.context() instanceof Path child) {
-                noteEvent(parent, child, event.kind(), touched);
+                if (files.contains(parent.resolve(child).toAbsolutePath().normalize())) {
+                    touched.main = true;
+                } else if (registered.contains(parent)) {
+                    noteEvent(parent, child, event.kind(), touched);
+                }
             }
         }
     }

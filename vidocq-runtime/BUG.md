@@ -5,6 +5,27 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261127-09 — `vidocq dev` stops with a `FindException` after `vidocq extension add`
+
+- **Date**: 2026-11-27
+- **Status**: FIXED in the pull request that adds this entry (Vidocq/vidocq#799)
+- **Module**: `vidocq-runtime-maven-plugin` (`VidocqDevMojo`, `SourceWatcher`, `FileTimes`, new `PomChange`, `PomResolver`, `DevKeys`)
+- **Symptom**: `vidocq extension add grimm-openapi grimm-openapi-ui` while `vidocq dev` runs: the next reload logs
+  `Hot reload signalled ... (layer swap: ...)`, then the child dies with `IllegalStateException: Cannot create the
+  application layer` caused by `FindException: Module io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui not
+  found, required by com.example.library`. The same with `mansart-data`/`flyway-migration` and `humboldt-telemetry`.
+  Ctrl+C and a new `vidocq dev` work.
+- **Repro**: `DependencyChangeDevGoalIT` (`vidocq-runtime-it-continuous-testing`): a real `mvn vidocq:dev` on the
+  fixture, then `jakarta.json-api` added to its `pom.xml` and `requires jakarta.json;` to its `module-info.java`.
+- **Cause**: the goal resolves the module path once, at its start. The recompile is a Maven run of its own, reads
+  the new pom and compiles the new `requires`; the child then builds its application layer from the old path. The
+  `pom.xml` was not watched either.
+- **Fix**: the goal watches the project's `pom.xml`. After a recompile that succeeded, a `pom.xml` that changed is
+  read again with Maven's `ProjectBuilder`, its dependencies resolved; when they differ, the whole session restarts
+  on them (module path, dev tools, dev services, child), with one line, `pom.xml changed the dependencies (added
+  ...): restarting the application on the new ones.` Dependencies that do not resolve keep the previous application
+  running, with a warning naming the failure. Unit tests: `PomChangeTest`, `PomResolverTest`, `DevKeysTest`, `SourceWatcherTest` (watched files).
+
 ## BUG-20261126-01 — The mount lines of the startup log say `Mounted {0}` instead of the mount's name
 
 - **Date**: 2026-11-26
