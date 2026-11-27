@@ -44,6 +44,7 @@ class MetamodelCoexistenceTest {
         EarlyCanonical(boolean plural) { this.plural=plural; }
         @Override public Set<String> getSupportedAnnotationTypes() { return Set.of("jakarta.persistence.Entity"); }
         @Override public SourceVersion getSupportedSourceVersion() { return SourceVersion.latestSupported(); }
+        @SuppressWarnings("DoNotClaimAnnotations") // a greedy producer that claims @Entity: the Noether processor, on *, runs anyway
         @Override public boolean process(Set<? extends TypeElement> annotations,RoundEnvironment round) {
             if (!emitted && !round.processingOver()) {
                 emitted=true;

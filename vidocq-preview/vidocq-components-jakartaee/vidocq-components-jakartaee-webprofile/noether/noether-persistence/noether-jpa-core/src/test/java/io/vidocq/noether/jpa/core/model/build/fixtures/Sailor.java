@@ -26,6 +26,7 @@ import jakarta.persistence.ManyToOne;
 
 /** Persisting a sailor persists its crew; nothing else cascades from it. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Sailor {
     @Id
     private long id;

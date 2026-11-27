@@ -149,8 +149,8 @@ final class MetamodelWriter {
         TypeElement existing=elements.getTypeElement(canonical);
         source.append("        if (metamodel.getManagedTypes().stream().anyMatch(t -> t.getJavaType() == ").append(entity).append(".class)) {\n");
         for (var field:fields.get(entity)) appendAttribute(source,entity,canonical,field,own);
-        if (own || existing!=null && ElementFilter.fieldsIn(existing.getEnclosedElements()).stream()
-                .anyMatch(f -> f.getSimpleName().contentEquals("class_"))) {
+        if (own || (existing!=null && ElementFilter.fieldsIn(existing.getEnclosedElements()).stream()
+                .anyMatch(f -> f.getSimpleName().contentEquals("class_")))) {
             appendManagedType(source,entity,canonical);
         }
         source.append("            initialized.add(").append(entity).append(".class);\n        }\n");

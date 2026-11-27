@@ -29,6 +29,7 @@ import jakarta.persistence.TableGenerator;
 /** An entity whose identifiers a generator table allocates, in blocks of 10. */
 @Entity
 @Table(name = "noether_voucher")
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Voucher {
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "vouchers")

@@ -26,6 +26,7 @@ import jakarta.persistence.ManyToOne;
 
 /** A foreign key of two columns, named and matched to the target's key columns. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Meeting {
     @Id
     private long id;

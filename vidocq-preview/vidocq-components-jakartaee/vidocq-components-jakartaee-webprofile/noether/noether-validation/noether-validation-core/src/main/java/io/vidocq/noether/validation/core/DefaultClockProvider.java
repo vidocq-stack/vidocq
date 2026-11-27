@@ -21,12 +21,13 @@ package io.vidocq.noether.validation.core;
 
 import jakarta.validation.ClockProvider;
 import java.time.Clock;
+import java.time.ZoneId;
 
 /** Default {@link ClockProvider}: the system clock in the default time zone. */
 final class DefaultClockProvider implements ClockProvider {
 
     @Override
     public Clock getClock() {
-        return Clock.systemDefaultZone();
+        return Clock.system(ZoneId.systemDefault());
     }
 }

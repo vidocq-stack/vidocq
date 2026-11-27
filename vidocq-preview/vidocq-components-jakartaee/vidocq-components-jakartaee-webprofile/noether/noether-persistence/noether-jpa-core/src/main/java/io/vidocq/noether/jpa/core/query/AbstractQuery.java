@@ -193,6 +193,7 @@ abstract class AbstractQuery {
     }
 
     /** A legacy temporal bound as the {@code java.sql} type its {@link jakarta.persistence.TemporalType} names. */
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: Query.setParameter(String, Date, TemporalType) of Jakarta Persistence
     static Object temporal(Object value, jakarta.persistence.TemporalType type) {
         if (value == null) {
             return null;

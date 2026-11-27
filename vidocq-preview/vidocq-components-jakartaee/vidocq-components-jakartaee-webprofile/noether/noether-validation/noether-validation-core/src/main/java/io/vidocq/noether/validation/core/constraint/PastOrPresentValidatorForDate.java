@@ -33,6 +33,7 @@ import java.util.Date;
  */
 public final class PastOrPresentValidatorForDate implements ConstraintValidator<PastOrPresent, Date> {
     @Override
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a type Jakarta Validation requires @PastOrPresent to support
     public boolean isValid(Date value, ConstraintValidatorContext context) {
         if (value == null) {
             return true;

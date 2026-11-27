@@ -30,6 +30,7 @@ import jakarta.persistence.PreRemove;
 /** An entity with its own listener and lifecycle methods, one overriding its superclass's. */
 @Entity
 @EntityListeners(StampListener.class)
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Record extends Tracked {
     private String text;
     private String stamp;

@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** Embedded attributes, overrides (dotted for nested embeddables), an implicit embedded attribute. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Shop {
     @Id
     @GeneratedValue

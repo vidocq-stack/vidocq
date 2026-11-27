@@ -24,6 +24,7 @@ import jakarta.persistence.*;
 /** An entity inheriting attributes from a mapped superclass, overriding one column. */
 @Entity
 @AttributeOverride(name = "createdAt", column = @Column(name = "CREATED"))
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Note extends Audited {
     private String text;
 }

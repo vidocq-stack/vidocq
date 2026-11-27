@@ -259,6 +259,7 @@ final class EntityOperations {
     }
 
     /** The relationship {@code attribute} of {@code managed}, cascading MERGE, points to the merged targets of {@code entity}'s. */
+    @SuppressWarnings("ReferenceEquality") // identity: merging the managed instance into itself
     private void mergeRelationship(Object entity, Object managed, MappedEntity type, int attribute,
             AssociationAttribute association, Map<Object, Object> merged) {
         Object value = type.access().get(entity, attribute);
@@ -289,7 +290,7 @@ final class EntityOperations {
      * The entities an element collection of {@code managed} references: the merged targets where the reference cascades
      * MERGE, else their managed instances.
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "ReferenceEquality"}) // identity: merging the managed instance into itself
     private void mergeElementReferences(Object entity, Object managed, MappedEntity type, ElementCollectionMapping elements,
             Map<Object, Object> merged) {
         Object value = type.access().get(managed, elements.attribute());
@@ -406,6 +407,7 @@ final class EntityOperations {
         return key != null && factory.mapping().entity(key.getClass()).isPresent() ? managedReference(key) : key;
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the same managed elements, in the same order
     private static boolean sameElements(Collection<?> collection, Collection<Object> elements) {
         List<?> before = List.copyOf(collection.stream().filter(Objects::nonNull).toList());
         List<Object> after = List.copyOf(elements);
@@ -563,6 +565,7 @@ final class EntityOperations {
      * Replaces the target of the business-key {@code reference} at {@code attribute}, when the context does not hold
      * it, with the managed instance of its identity, whose business-key values must be the ones the target has.
      */
+    @SuppressWarnings("ReferenceEquality") // identity: the target is already the managed instance
     private void manageBusinessKeyTarget(Object entity, MappedEntity type, int attribute,
             io.vidocq.noether.jpa.core.mapping.EntityStatements.Reference reference) {
         Object target = type.access().get(entity, attribute);
@@ -622,6 +625,7 @@ final class EntityOperations {
      * Removes what the orphan-removal relationship at {@code attribute} of {@code entry} held at the last flush and no
      * longer holds. Gives the visited set of the flush: {@code visited}, or the one made for the first orphan.
      */
+    @SuppressWarnings("ReferenceEquality") // identity: the instance the relationship held before
     private Set<Object> removeOrphans(ManagedEntity entry, int attribute, boolean singleValued, Set<Object> visited) {
         Object current = entry.type().access().get(entry.instance(), attribute);
         Set<Object> reached = visited;

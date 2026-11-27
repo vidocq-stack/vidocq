@@ -350,7 +350,7 @@ public final class OrmOverlay implements ClassInfos {
                 && catalog == null) {
             return info;
         }
-        boolean complete = metadataComplete || declaration != null && "true".equals(declaration.element().attribute("metadata-complete"));
+        boolean complete = metadataComplete || (declaration != null && "true".equals(declaration.element().attribute("metadata-complete")));
         List<AnnotationInfo> type = kept(info.annotations(), complete);
         List<List<AnnotationInfo>> fields = new ArrayList<>();
         info.fields().forEach(f -> fields.add(kept(f.annotations(), complete)));
@@ -667,7 +667,7 @@ public final class OrmOverlay implements ClassInfos {
             List<AnnotationInfo> getter) {
         String memberAccess = attribute.attribute(XmlNames.ACCESS);
         String access = memberAccess != null ? memberAccess : classAccess;
-        if (FIELD_ACCESS.equals(access) && field == null || PROPERTY_ACCESS.equals(access) && getter == null) {
+        if ((FIELD_ACCESS.equals(access) && field == null) || (PROPERTY_ACCESS.equals(access) && getter == null)) {
             throw error(context, attribute, THE_CLASS + info.name() + " has no " + (FIELD_ACCESS.equals(access) ? "field " : "property ")
                 + attribute.attribute("name") + " for its " + access + " access");
         }
@@ -896,7 +896,8 @@ public final class OrmOverlay implements ClassInfos {
     private static String camel(String xmlName, boolean capitalized) {
         StringBuilder camel = new StringBuilder();
         boolean upper = capitalized;
-        for (char c : xmlName.toCharArray()) {
+        for (int i = 0; i < xmlName.length(); i++) {
+            char c = xmlName.charAt(i);
             if (c == '-') {
                 upper = true;
             } else {

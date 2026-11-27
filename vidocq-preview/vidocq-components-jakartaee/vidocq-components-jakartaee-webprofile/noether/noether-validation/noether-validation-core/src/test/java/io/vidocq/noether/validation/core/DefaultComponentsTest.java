@@ -30,16 +30,18 @@ import jakarta.validation.ValidationException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.time.Clock;
+import java.time.ZoneId;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 /** Jakarta Validation 3.1, chapter 5: the default {@code ConstraintValidatorFactory}, {@code ClockProvider}, ... */
 class DefaultComponentsTest {
 
     public static class PublicValidator implements ConstraintValidator<Deprecated, Object> {
-        static boolean constructed;
+        static final AtomicBoolean CONSTRUCTED = new AtomicBoolean();
 
         public PublicValidator() {
-            constructed = true;
+            CONSTRUCTED.set(true);
         }
 
         @Override
@@ -81,9 +83,9 @@ class DefaultComponentsTest {
 
     @Test
     void thePublicNoArgConstructorIsCalled() {
-        PublicValidator.constructed = false;
+        PublicValidator.CONSTRUCTED.set(false);
         assertThat(factory.getInstance(PublicValidator.class)).isInstanceOf(PublicValidator.class);
-        assertThat(PublicValidator.constructed).isTrue();
+        assertThat(PublicValidator.CONSTRUCTED).isTrue();
     }
 
     @Test
@@ -113,7 +115,7 @@ class DefaultComponentsTest {
     @Test
     void theDefaultClockIsTheSystemDefaultClock() {
         Clock clock = new DefaultClockProvider().getClock();
-        assertThat(clock.getZone()).isEqualTo(Clock.systemDefaultZone().getZone());
+        assertThat(clock.getZone()).isEqualTo(ZoneId.systemDefault());
     }
 
     void sample(String first, int second) {

@@ -123,7 +123,7 @@ public final class ManagedClasses {
      */
     private static boolean isDirectory(URL location) throws URISyntaxException {
         return "jrt".equals(location.getProtocol())
-            || "file".equals(location.getProtocol()) && Files.isDirectory(Path.of(location.toURI()));
+            || ("file".equals(location.getProtocol()) && Files.isDirectory(Path.of(location.toURI())));
     }
 
     /** A class file of the unnamed version; versioned entries, module and package descriptors are not classes. */

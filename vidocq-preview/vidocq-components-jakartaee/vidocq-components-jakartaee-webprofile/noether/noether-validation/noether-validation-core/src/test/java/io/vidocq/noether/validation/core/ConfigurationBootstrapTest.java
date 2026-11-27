@@ -36,6 +36,7 @@ import jakarta.validation.spi.ConfigurationState;
 import jakarta.validation.spi.ValidationProvider;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -246,7 +247,7 @@ class ConfigurationBootstrapTest {
     @Test
     void aMappingStreamCanBeReadAgainByLaterFactories() throws Exception {
         NoetherConfigurationImpl c = (NoetherConfigurationImpl) configuration();
-        c.addMapping(new ByteArrayInputStream("one".getBytes()) {
+        c.addMapping(new ByteArrayInputStream("one".getBytes(StandardCharsets.UTF_8)) {
             @Override
             public boolean markSupported() {
                 return false; // a non-resettable stream, as in the TCK
@@ -255,7 +256,7 @@ class ConfigurationBootstrapTest {
         for (int i = 0; i < 2; i++) {
             Set<InputStream> streams = c.getMappingStreams();
             assertThat(streams).hasSize(1);
-            assertThat(new String(streams.iterator().next().readAllBytes())).isEqualTo("one");
+            assertThat(new String(streams.iterator().next().readAllBytes(), StandardCharsets.UTF_8)).isEqualTo("one");
         }
     }
 

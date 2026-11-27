@@ -27,7 +27,7 @@ final class CriteriaTuple implements Tuple {
         throw new IllegalArgumentException("Unknown tuple alias " + alias);
     }
     @Override public <X> X get(String alias,Class<X> type) { return checked(get(alias),type); }
-    @SuppressWarnings("unchecked") // TupleElement<X> fixes the requested result type; identity verifies membership first.
+    @SuppressWarnings({"unchecked", "ReferenceEquality"}) // TupleElement<X> fixes the requested result type; identity verifies membership first; identity: Tuple.get takes one of the selected elements themselves
     @Override public <X> X get(TupleElement<X> element) {
         for (int i=0;i<elements.size();i++) if (elements.get(i)==element) return (X) values[i];
         throw new IllegalArgumentException("Unknown tuple element");

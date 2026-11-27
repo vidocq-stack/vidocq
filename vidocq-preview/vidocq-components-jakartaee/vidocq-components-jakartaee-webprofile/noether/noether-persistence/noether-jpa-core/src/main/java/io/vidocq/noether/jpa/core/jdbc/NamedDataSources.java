@@ -102,6 +102,7 @@ public final class NamedDataSources {
         private Jndi() {
         }
 
+        @SuppressWarnings("BanJNDI") // JNDI: the data source a unit names (jta-data-source), as Jakarta Persistence defines
         static Optional<Object> lookup(String name) {
             try {
                 return Optional.ofNullable(InitialContext.doLookup(name));

@@ -21,13 +21,14 @@ package io.vidocq.noether.jpa.core.model.build.fixtures;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+import java.util.Locale;
 
 /** Applied only where @Convert names it. */
 @Converter
 public class UpperCaseConverter implements AttributeConverter<String, String> {
     @Override
     public String convertToDatabaseColumn(String value) {
-        return value == null ? null : value.toUpperCase();
+        return value == null ? null : value.toUpperCase(Locale.ROOT);
     }
 
     @Override

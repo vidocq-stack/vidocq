@@ -25,6 +25,7 @@ import jakarta.persistence.ManyToOne;
 
 /** The element of indexed relationships; its table also holds the indexes its bureau writes (DESK, roster_ORDER). */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Agent {
     @Id
     private long id;

@@ -54,7 +54,7 @@ public record AssociationAttribute(String name, Class<?> javaType, AccessKind ac
      * {@code orphanRemoval} cascades the remove).
      */
     public boolean cascades(CascadeType type) {
-        return cascade.contains(type) || cascade.contains(CascadeType.ALL) || type == CascadeType.REMOVE && orphanRemoval;
+        return cascade.contains(type) || cascade.contains(CascadeType.ALL) || (type == CascadeType.REMOVE && orphanRemoval);
     }
 
     /** Whether it holds one instance ({@code @ManyToOne}, {@code @OneToOne}) rather than a collection or a map. */

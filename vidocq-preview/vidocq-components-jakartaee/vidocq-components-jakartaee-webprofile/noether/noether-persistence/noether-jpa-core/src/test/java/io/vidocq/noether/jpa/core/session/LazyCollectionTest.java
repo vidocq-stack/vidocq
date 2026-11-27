@@ -195,8 +195,8 @@ class LazyCollectionTest {
             assertThat(statements).as(table).filteredOn(s -> s.contains(table)).hasSize(1);
         }
         int loaded = statements.size();
-        owner.tags.size();
-        owner.labels.size();
+        int _ = owner.tags.size();
+        int _ = owner.labels.size();
         owner.sorted.first();
         assertThat(statements).hasSize(loaded);
         assertThat(threads).containsOnly(Thread.currentThread());
@@ -308,7 +308,7 @@ class LazyCollectionTest {
         open(Owner.class, Child.class, Tag.class);
         seed();
         Owner detached = em.find(Owner.class, 1L);
-        detached.nicknames.size();
+        int _ = detached.nicknames.size();
         em.detach(detached);
         reset();
         assertThatThrownBy(() -> detached.children.size()).isInstanceOf(PersistenceException.class)
@@ -324,7 +324,7 @@ class LazyCollectionTest {
         assertThatThrownBy(() -> cleared.children.isEmpty()).isInstanceOf(PersistenceException.class);
 
         Owner closed = em.find(Owner.class, 1L);
-        closed.tags.size();
+        int _ = closed.tags.size();
         em.close();
         assertThatThrownBy(() -> closed.children.size()).isInstanceOf(PersistenceException.class);
         assertThat(closed.tags).hasSize(1);
@@ -355,7 +355,7 @@ class LazyCollectionTest {
         open(Owner.class, Child.class, Tag.class);
         seed();
         Owner owner = em.find(Owner.class, 1L);
-        owner.nicknames.size();
+        int _ = owner.nicknames.size();
         Owner copy = roundTrip(owner);
         assertThat(copy.nicknames).containsExactly("one", "two");
         assertThatThrownBy(() -> copy.children.size()).isInstanceOf(PersistenceException.class);
@@ -379,7 +379,7 @@ class LazyCollectionTest {
         seed();
         Owner detached = em.find(Owner.class, 1L);
         detached.nicknames.add("three");
-        detached.children.size();
+        int _ = detached.children.size();
         em.clear();
         detached.children.add(new Child(14, detached));
         detached.name = "merged";
@@ -560,7 +560,7 @@ class LazyCollectionTest {
         em.clear();
         try (EntityManager loader = factory.createEntityManager()) {
             Owner loaded = loader.find(Owner.class, 1L);
-            loaded.nicknames.size();
+            int _ = loaded.nicknames.size();
             transaction(() -> em.merge(loaded));
         }
         reset();

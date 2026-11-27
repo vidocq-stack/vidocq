@@ -124,7 +124,7 @@ public abstract class ManagedAccess {
         throw ManagedAccess.<RuntimeException>sneaky(failure);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"}) // TypeParameterUnusedInFormals: the sneaky throw: E is inferred as RuntimeException
     private static <E extends Throwable> E sneaky(Throwable failure) throws E {
         throw (E) failure;
     }

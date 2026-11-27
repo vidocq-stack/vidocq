@@ -340,7 +340,7 @@ public final class CriteriaBuilderImpl implements CriteriaBuilder {
         @Override public Expression<R> otherwise(Expression<? extends R> r) { otherwise=r; return this; }
         @Override void parameters(Set<ParameterExpression<?>> p) { node(operand).parameters(p); dependencies.forEach(n -> n.parameters(p)); if (otherwise instanceof Node<?> n) n.parameters(p); }
     }
-    @SuppressWarnings("unchecked") // TREAT narrows the same path's model to a verified entity subtype; casts are localized here.
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"}) // TREAT narrows the same path's model to a verified entity subtype; casts are localized here; TypeParameterUnusedInFormals: the one checked cast behind the typed treat methods
     private <P> P treated(Object path,Class<?> type) {
         var original=(CriteriaExpressions.PathNode<?>) path;
         if (!original.getJavaType().isAssignableFrom(type)) throw new IllegalArgumentException("Not a subtype");

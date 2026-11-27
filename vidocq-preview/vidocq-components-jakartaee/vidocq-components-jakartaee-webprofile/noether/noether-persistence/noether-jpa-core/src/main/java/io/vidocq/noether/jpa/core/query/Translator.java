@@ -84,11 +84,6 @@ final class Translator {
         Variable(MappedEntity type, String alias, int root, Translator owner, ElementCollectionMapping element) {
             this(type, alias, root, owner, element, null, element == null ? null : element.index(), alias);
         }
-
-        Variable(MappedEntity type, String alias, int root, Translator owner, ElementCollectionMapping element,
-                Expression position) {
-            this(type, alias, root, owner, element, position, null, alias);
-        }
     }
 
     /** What an expression denotes. */
@@ -115,6 +110,7 @@ final class Translator {
         }
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     private record EmbeddedReference(int[] path, Entity entity) {
     }
 
@@ -133,7 +129,7 @@ final class Translator {
     private final List<List<Query.Join>> joins = new ArrayList<>();
     private final List<Expression> correlations = new ArrayList<>();
     private final Map<String, String> tableAliases = new HashMap<>();
-    private final Map<Ast.Join, Variable> declaredJoins = new java.util.IdentityHashMap<>();
+    private final java.util.IdentityHashMap<Ast.Join, Variable> declaredJoins = new java.util.IdentityHashMap<>();
     private final List<Compiled.Hydration> hydrations = new ArrayList<>();
     private Compiled.CollectionHydration collectionHydration;
     private final java.util.Set<String> collectionAliases = new java.util.HashSet<>();
@@ -225,7 +221,7 @@ final class Translator {
                 continue;
             }
             if (attribute instanceof ElementCollectionAttribute
-                    || attribute instanceof AssociationAttribute association && !association.singleValued()) {
+                    || (attribute instanceof AssociationAttribute association && !association.singleValued())) {
                 if (collection != null) return null;
                 collection = node.getKey();
                 // D17: an entity collection's subgraph may only request to-one chains of hydratable entities.
@@ -261,7 +257,7 @@ final class Translator {
         for (var node : graph.attributes().entrySet()) {
             var attribute = root.model().attribute(node.getKey()).orElse(null);
             if (attribute instanceof ElementCollectionAttribute
-                    || attribute instanceof AssociationAttribute a && !a.singleValued()) {
+                    || (attribute instanceof AssociationAttribute a && !a.singleValued())) {
                 collections.put(node.getKey(), node.getValue());
             } else branches.attribute(node.getKey()).merge(node.getValue());
         }
@@ -283,9 +279,9 @@ final class Translator {
         collections = pruned;
         // FETCH may overfetch mapped eager collections; never resolve those per owner during staged hydration.
         for (var attribute : root.model().attributes()) {
-            if (attribute instanceof ElementCollectionAttribute e && e.fetch() == jakarta.persistence.FetchType.EAGER
-                    || attribute instanceof AssociationAttribute a && !a.singleValued()
-                        && a.fetch() == jakarta.persistence.FetchType.EAGER) {
+            if ((attribute instanceof ElementCollectionAttribute e && e.fetch() == jakarta.persistence.FetchType.EAGER)
+                    || (attribute instanceof AssociationAttribute a && !a.singleValued()
+                        && a.fetch() == jakarta.persistence.FetchType.EAGER)) {
                 collections.putIfAbsent(attribute.name(), new FetchPlan());
             }
         }
@@ -302,7 +298,7 @@ final class Translator {
                 for (var node : owner.getValue().attributes().entrySet()) {
                     var attribute = owner.getKey().model().attribute(node.getKey()).orElse(null);
                     if (attribute instanceof ElementCollectionAttribute
-                            || attribute instanceof AssociationAttribute a && !a.singleValued()) leaves.put(node.getKey(), node.getValue());
+                            || (attribute instanceof AssociationAttribute a && !a.singleValued())) leaves.put(node.getKey(), node.getValue());
                     else toOnes.attribute(node.getKey()).merge(node.getValue());
                 }
                 List<Compiled> compiled = planner.collectionCollectors(owner.getKey(), leaves, toOnes, next);
@@ -348,7 +344,7 @@ final class Translator {
                 for (var node : owner.getValue().attributes().entrySet()) {
                     var attribute = owner.getKey().model().attribute(node.getKey()).orElse(null);
                     if (attribute instanceof ElementCollectionAttribute
-                            || attribute instanceof AssociationAttribute a && !a.singleValued()) {
+                            || (attribute instanceof AssociationAttribute a && !a.singleValued())) {
                         collections.put(node.getKey(), node.getValue());
                     } else branches.attribute(node.getKey()).merge(node.getValue());
                 }
@@ -371,8 +367,8 @@ final class Translator {
         boolean expand = eagerPath.add(source.model().javaType());
         if (expand) {
             for (var attribute : source.model().attributes()) {
-                if (attribute instanceof ElementCollectionAttribute e && e.fetch() == jakarta.persistence.FetchType.EAGER
-                        || attribute instanceof AssociationAttribute a && a.fetch() == jakarta.persistence.FetchType.EAGER) {
+                if ((attribute instanceof ElementCollectionAttribute e && e.fetch() == jakarta.persistence.FetchType.EAGER)
+                        || (attribute instanceof AssociationAttribute a && a.fetch() == jakarta.persistence.FetchType.EAGER)) {
                     expanded.attribute(attribute.name());
                 }
             }
@@ -381,7 +377,7 @@ final class Translator {
         for (var node : expanded.attributes().entrySet()) {
             var attribute = source.model().attribute(node.getKey()).orElse(null);
             if (attribute instanceof ElementCollectionAttribute
-                    || attribute instanceof AssociationAttribute a && !a.singleValued()) {
+                    || (attribute instanceof AssociationAttribute a && !a.singleValued())) {
                 if (depth == owners.size()) return false;
                 FetchPlan elements = collections.attribute(node.getKey());
                 if (attribute instanceof AssociationAttribute a) {
@@ -415,8 +411,8 @@ final class Translator {
         boolean expand = eagerPath.add(source.model().javaType());
         if (expand) {
             for (var attribute : source.model().attributes()) {
-                if (attribute instanceof ElementCollectionAttribute e && e.fetch() == jakarta.persistence.FetchType.EAGER
-                        || attribute instanceof AssociationAttribute a && a.fetch() == jakarta.persistence.FetchType.EAGER) {
+                if ((attribute instanceof ElementCollectionAttribute e && e.fetch() == jakarta.persistence.FetchType.EAGER)
+                        || (attribute instanceof AssociationAttribute a && a.fetch() == jakarta.persistence.FetchType.EAGER)) {
                     expanded.attribute(attribute.name());
                 }
             }
@@ -425,7 +421,7 @@ final class Translator {
         for (var node : expanded.attributes().entrySet()) {
             var attribute = source.model().attribute(node.getKey()).orElse(null);
             if (attribute instanceof ElementCollectionAttribute
-                    || attribute instanceof AssociationAttribute a && !a.singleValued()) {
+                    || (attribute instanceof AssociationAttribute a && !a.singleValued())) {
                 FetchPlan elements = new FetchPlan();
                 if (attribute instanceof AssociationAttribute a) {
                     if (!nestedCollections(unit.entity(a.targetEntity()).orElse(null), node.getValue(),
@@ -532,6 +528,7 @@ final class Translator {
      * binders are the translated root's own (including composite keys); existing discriminator restrictions remain.
      * No hydration means ordinary find must handle this shape.
      */
+    @SuppressWarnings("ReferenceEquality") // identity: whether the graph rewrite returned the select itself
     static Compiled graphFind(MappedUnit unit, MappedEntity type, Object id, FetchPlan graph, boolean load) {
         Ast.Select select = graphRoot(type);
         Ast.Statement execution = graphSelect(select, unit, graph, load);
@@ -725,8 +722,8 @@ final class Translator {
         for (int i = 0; i < select.items().size(); i++) {
             Ast.Item item = select.items().get(i);
             if (item.expression().equals(expression)
-                    || expression instanceof Ast.Path path && path.segments().size() == 1
-                        && item.alias() != null && item.alias().equalsIgnoreCase(path.segments().getFirst())) {
+                    || (expression instanceof Ast.Path path && path.segments().size() == 1
+                        && item.alias() != null && item.alias().equalsIgnoreCase(path.segments().getFirst()))) {
                 return i + 1;
             }
         }
@@ -740,6 +737,7 @@ final class Translator {
     // ---- bulk statements (§4.10) --------------------------------------------------------------------------
 
     /** Captures qualifying identities and assignment values before changing any table (§4.10). */
+    @SuppressWarnings("ReferenceEquality") // identity: the identification variable itself
     private Compiled joinedBulk(Ast.Statement statement) {
         Ast.Update update = statement instanceof Ast.Update u ? u : null;
         Ast.Delete delete = statement instanceof Ast.Delete d ? d : null;
@@ -812,7 +810,6 @@ final class Translator {
         for (int r = 0; r < roots.size(); r++) {
             from.add(new Query.From(roots.get(r), rootAliases.get(r), joins.get(r)));
         }
-        Query selection = new Query(false, projected, from, where, List.of(), null, List.of(), null, null);
         List<Integer> keyIndexes = java.util.stream.IntStream.range(0, type.statements().keyColumns().size()).boxed().toList();
         List<Compiled.Mutation> mutations = new ArrayList<>();
         if (update != null) {
@@ -903,10 +900,11 @@ final class Translator {
             }
         }
         // Delete cleanup may append NULL values projected for target-table updates.
-        selection = new Query(false, projected, from, where, List.of(), null, List.of(), null, null);
+        Query selection = new Query(false, projected, from, where, List.of(), null, List.of(), null, null);
         return new Compiled(selection, List.copyOf(items), Object[].class, slots(selection.parameters()), List.copyOf(mutations));
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the identification variable itself
     private UpdateQuery update(Ast.Update update) {
         Variable variable = bulkVariable(update.entity(), update.variable());
         List<UpdateQuery.Assignment> assignments = new ArrayList<>();
@@ -956,7 +954,7 @@ final class Translator {
     private static void validateMapsIdAssignment(MappedEntity type, int attribute) {
         if (!type.hasMapsId()) return;
         if (Arrays.stream(type.idAttributes()).anyMatch(i -> i == attribute)
-                || type.model().attributes().get(attribute) instanceof AssociationAttribute a && a.mapsId() != null) {
+                || (type.model().attributes().get(attribute) instanceof AssociationAttribute a && a.mapsId() != null)) {
             throw new jakarta.persistence.PersistenceException("@MapsId identifiers and relationships cannot be assigned by bulk SET");
         }
     }
@@ -1047,7 +1045,7 @@ final class Translator {
         List<Expression> sqlItems = new ArrayList<>();
         for (Ast.Item item : select.items()) {
             selecting = true; // §4.4.4: a selected single-valued path is navigated, with inner join semantics
-            Value value = item.expression() instanceof Ast.Constructor constructor ? null : value(item.expression());
+            Value value = item.expression() instanceof Ast.Constructor ? null : value(item.expression());
             if (value == null) {
                 items.add(constructor((Ast.Constructor) item.expression(), sqlItems));
             } else {
@@ -1090,7 +1088,7 @@ final class Translator {
     private boolean collectionHydration(Ast.Select select, List<Expression> sqlItems) {
         if (select.from().size() != 1 || select.items().size() != 1) return false;
         Ast.Range range = select.from().getFirst();
-        if (range.entity() == null || range.joins().isEmpty() || range.joins().size() > 1 && !graphRows
+        if (range.entity() == null || range.joins().isEmpty() || (range.joins().size() > 1 && !graphRows)
                 || !(select.items().getFirst().expression() instanceof Ast.Path selected)
                 || selected.treatEntity() != null || selected.segments().size() != 1
                 || !selected.segments().getFirst().equalsIgnoreCase(range.variable())) return false;
@@ -1159,7 +1157,7 @@ final class Translator {
         return switch (expression) {
             case null -> false;
             case Ast.Path path -> path.treatEntity() != null
-                || alias != null && path.segments().getFirst().equalsIgnoreCase(alias);
+                || (alias != null && path.segments().getFirst().equalsIgnoreCase(alias));
             case Ast.Literal _, Ast.Parameter _ -> false;
             case Ast.Binary b -> collectionRestriction(b.left(), alias) || collectionRestriction(b.right(), alias);
             case Ast.Not n -> collectionRestriction(n.operand(), alias);
@@ -1494,6 +1492,7 @@ final class Translator {
     private record AttributePath(Variable owner, int attribute) {
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     private record ElementRelationship(AssociationAttribute association, int[] path, int consumed) {
     }
 
@@ -1744,6 +1743,7 @@ final class Translator {
     /** How the members of a collection-valued relationship are reached from their owner. */
     private sealed interface Link {
         /** The members' foreign key {@code columns} (in the target's columns) hold the owner's key. */
+        @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
         record ByForeignKey(int[] columns) implements Link {
         }
 
@@ -1945,9 +1945,9 @@ final class Translator {
                     yield new Entity(entity(association.targetEntity()), columns(variable, owned.get().columns()),
                         binders(statements, owned.get().columns()));
                 }
-                if (!selecting && (association.owning() && variable.type().statements().collection(attribute).isPresent()
-                        || !association.owning() && entity(association.targetEntity()).statements()
-                            .collection(attribute(entity(association.targetEntity()), association.mappedBy())).isPresent())) {
+                if (!selecting && ((association.owning() && variable.type().statements().collection(attribute).isPresent())
+                        || (!association.owning() && entity(association.targetEntity()).statements()
+                            .collection(attribute(entity(association.targetEntity()), association.mappedBy())).isPresent()))) {
                     Link.ByTable link = (Link.ByTable) collection(variable, attribute, association);
                     List<Expression> keys = new ArrayList<>();
                     for (Identifier column : link.memberColumns()) {
@@ -2029,7 +2029,7 @@ final class Translator {
     }
 
     private MappedEntity treatedType(Class<?> declaredType, String typeName) {
-        MappedEntity declared = entity(declaredType);
+        entity(declaredType); // the declared type must be an entity of the unit
         MappedEntity treated = entityNamed(typeName);
         if (!declaredType.isAssignableFrom(treated.model().javaType())) {
             throw new IllegalArgumentException("TREAT target " + typeName + " is not a subtype of " + declaredType.getName() + " (§4.4.9)");
@@ -2176,7 +2176,7 @@ final class Translator {
             }
             path[p] = index;
             model = components.get(index);
-            if (model instanceof AssociationAttribute association) {
+            if (model instanceof AssociationAttribute) {
                 String dotted = embedded.name() + "." + String.join(".", rest.subList(0, p + 1));
                 int relationship = attribute(variable, dotted);
                 if (p + 1 == rest.size()) return attributeValue(variable, relationship);
@@ -2588,8 +2588,8 @@ final class Translator {
             }
             case "SIZE" -> {
                 Translator child = child();
-                Variable member = child.rows(path(arguments.getFirst(), "SIZE"));
-                Query query = child.collectionQuery(new Expression.Aggregate("COUNT", false, null), member, null);
+                child.rows(path(arguments.getFirst(), "SIZE"));
+                Query query = child.collectionQuery(new Expression.Aggregate("COUNT", false, null), null);
                 yield new Scalar(new Expression.Subquery(query), null, Integer.class);
             }
             case "INDEX" -> {
@@ -2703,6 +2703,7 @@ final class Translator {
         };
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the identification variable itself
     private Value mapKeyPath(Ast.MapKeyPath path) {
         Ast.Path expression = new Ast.Path(List.of(path.variable()));
         Value key = mapKey(expression);
@@ -2788,8 +2789,8 @@ final class Translator {
             case Ast.Exists exists -> new Expression.Exists(subquery(exists.select(), new ArrayList<>()), exists.negated());
             case Ast.IsEmpty isEmpty -> {
                 Translator child = child();
-                Variable member = child.rows(path(isEmpty.collection(), "IS EMPTY"));
-                yield new Expression.Exists(child.collectionQuery(new Expression.Literal(1), member, null), !isEmpty.negated());
+                child.rows(path(isEmpty.collection(), "IS EMPTY"));
+                yield new Expression.Exists(child.collectionQuery(new Expression.Literal(1), null), !isEmpty.negated());
             }
             case Ast.MemberOf memberOf -> memberOf(memberOf);
             case Ast.Path _, Ast.Literal _, Ast.Parameter _, Ast.Function _, Ast.Cast _, Ast.Subquery _, Ast.Case _ ->
@@ -2799,7 +2800,7 @@ final class Translator {
     }
 
     /** A query over the rows of a collection {@link #rows} declared in this (child) translator. */
-    private Query collectionQuery(Expression item, Variable member, Expression condition) {
+    private Query collectionQuery(Expression item, Expression condition) {
         Expression where = condition;
         for (Expression correlation : correlations) {
             where = where == null ? correlation : new Binary(correlation, Operator.AND, where);
@@ -2817,7 +2818,7 @@ final class Translator {
         Variable member = child.rows(path(memberOf.collection(), "MEMBER OF"));
         Value element = member.element() != null ? child.elementValue(member, List.of()) : entityValue(member.alias(), member.type());
         Expression equality = child.equality(memberOf.value(), element);
-        return new Expression.Exists(child.collectionQuery(new Expression.Literal(1), member, equality), memberOf.negated());
+        return new Expression.Exists(child.collectionQuery(new Expression.Literal(1), equality), memberOf.negated());
     }
 
     /** {@code left = right}, an entity compared key part by key part. */

@@ -161,10 +161,10 @@ public final class StoredProcedureQueryImpl extends NativeQuery implements Store
         if (position != parameters.size() + 1) {
             throw new IllegalArgumentException("Stored-procedure parameters must be registered once in contiguous order");
         }
-        if (mode == ParameterMode.IN && type == void.class || mode != ParameterMode.IN && type == void.class && mode != ParameterMode.REF_CURSOR) {
+        if ((mode == ParameterMode.IN && type == void.class) || (mode != ParameterMode.IN && type == void.class && mode != ParameterMode.REF_CURSOR)) {
             throw new IllegalArgumentException("Invalid type for stored-procedure parameter " + position);
         }
-        if (name != null && byName.containsKey(name) || name == null && byName.containsKey(position)) {
+        if ((name != null && byName.containsKey(name)) || (name == null && byName.containsKey(position))) {
             throw new IllegalArgumentException("Stored-procedure parameter is already registered: " + (name == null ? position : name));
         }
         ProcedureParameter parameter = new ProcedureParameter(position, name, callParameter, type, mode);
@@ -337,6 +337,7 @@ public final class StoredProcedureQueryImpl extends NativeQuery implements Store
         return type.isEnum() ? Types.VARCHAR : Types.JAVA_OBJECT;
     }
 
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: StoredProcedureQuery.setParameter(..., Date, TemporalType)
     private static void bind(CallableStatement statement, int position, Binding binding, int jdbcType) throws SQLException {
         Object value = binding.jdbcValue();
         if (value == null) {

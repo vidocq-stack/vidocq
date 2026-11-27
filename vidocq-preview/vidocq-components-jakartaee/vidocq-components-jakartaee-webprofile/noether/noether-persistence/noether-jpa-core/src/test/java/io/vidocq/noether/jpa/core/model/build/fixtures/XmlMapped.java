@@ -24,6 +24,7 @@ import java.util.Set;
 
 /** A collection without annotation: only a mapping file (orm.xml) can map it. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class XmlMapped {
     @Id
     private long id;

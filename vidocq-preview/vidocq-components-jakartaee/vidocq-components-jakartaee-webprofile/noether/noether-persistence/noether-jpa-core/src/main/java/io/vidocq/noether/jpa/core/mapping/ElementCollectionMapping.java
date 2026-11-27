@@ -212,6 +212,7 @@ public record ElementCollectionMapping(int attribute, ElementCollectionAttribute
         return element;
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: an unchanged component keeps its owner instance
     private Object mapPath(Object instance, EntityStatements.Column column, int depth,
             BiFunction<AssociationAttribute, Object, Object> action) {
         if (instance == null) return null;

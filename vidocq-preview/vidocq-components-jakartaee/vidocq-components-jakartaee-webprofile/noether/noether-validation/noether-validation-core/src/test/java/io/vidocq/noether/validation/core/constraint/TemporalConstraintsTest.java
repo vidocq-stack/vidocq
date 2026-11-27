@@ -20,6 +20,7 @@
 package io.vidocq.noether.validation.core.constraint;
 
 import static io.vidocq.noether.validation.core.constraint.TestSupport.CLOCK;
+import static io.vidocq.noether.validation.core.constraint.TestSupport.FIXED_NOW;
 import static io.vidocq.noether.validation.core.constraint.TestSupport.annotation;
 import static io.vidocq.noether.validation.core.constraint.TestSupport.pattern;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,8 +56,8 @@ import org.junit.jupiter.api.Test;
  */
 class TemporalConstraintsTest {
 
-    static final long MS = CLOCK.millis();
-    static final Instant NOW = CLOCK.instant();
+    static final long MS = FIXED_NOW.toEpochMilli();
+    static final Instant NOW = FIXED_NOW;
 
     static class F {
         @Past Object past;
@@ -66,6 +67,7 @@ class TemporalConstraintsTest {
     }
 
     /** Mimics java.sql.Date, whose toInstant() throws. */
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a type the temporal constraints must support
     private static Date legacyDate(long millis) {
         return new Date(millis) {
             @Override
@@ -82,6 +84,7 @@ class TemporalConstraintsTest {
     }
 
     @Test
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a type the temporal constraints must support
     void past() {
         var a = annotation(F.class, "past", Past.class);
         assertThat(pattern(new PastValidatorForDate(), a, new Date(MS - 1), new Date(MS), new Date(MS + 1), null)).as("Date").isEqualTo("TFFT");
@@ -103,6 +106,7 @@ class TemporalConstraintsTest {
     }
 
     @Test
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a type the temporal constraints must support
     void pastOrPresent() {
         var a = annotation(F.class, "pastOrPresent", PastOrPresent.class);
         assertThat(pattern(new PastOrPresentValidatorForDate(), a, new Date(MS - 1), new Date(MS), new Date(MS + 1), null)).as("Date").isEqualTo("TTFT");
@@ -124,6 +128,7 @@ class TemporalConstraintsTest {
     }
 
     @Test
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a type the temporal constraints must support
     void future() {
         var a = annotation(F.class, "future", Future.class);
         assertThat(pattern(new FutureValidatorForDate(), a, new Date(MS - 1), new Date(MS), new Date(MS + 1), null)).as("Date").isEqualTo("FFTT");
@@ -145,6 +150,7 @@ class TemporalConstraintsTest {
     }
 
     @Test
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a type the temporal constraints must support
     void futureOrPresent() {
         var a = annotation(F.class, "futureOrPresent", FutureOrPresent.class);
         assertThat(pattern(new FutureOrPresentValidatorForDate(), a, new Date(MS - 1), new Date(MS), new Date(MS + 1), null)).as("Date").isEqualTo("FTTT");

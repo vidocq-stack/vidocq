@@ -29,6 +29,7 @@ import jakarta.persistence.SecondaryTable;
 @Entity
 @SecondaryTable(name = "GADGET_DETAILS", pkJoinColumns = @PrimaryKeyJoinColumn(name = "GADGET_ID"))
 @SecondaryTable(name = "GADGET_NOTES")
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Gadget {
     @Id
     private long id;

@@ -40,6 +40,7 @@ import java.util.Set;
  * embeddables in a collection table named as written, enums by name in the default table and column.
  */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Suspect {
     @Id
     private long id;

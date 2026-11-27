@@ -249,7 +249,7 @@ final class EntityManagerImpl implements EntityManager, io.vidocq.noether.jpa.co
      * owner is detached or the entity manager closed.
      */
     private void loadReference(Object instance) {
-        if (closed && !transaction.isActive() || !factory.isOpen()) {
+        if ((closed && !transaction.isActive()) || !factory.isOpen()) {
             throw failed(new PersistenceException("The lazy to-one reference cannot be loaded: its entity manager is closed"));
         }
         ManagedEntity entry = context.entry(instance).orElseThrow(() -> failed(new PersistenceException(
@@ -267,7 +267,7 @@ final class EntityManagerImpl implements EntityManager, io.vidocq.noether.jpa.co
     private void loadLazy(LazyCollection lazy) {
         String cannotLoad = "The LAZY collection " + lazy.owner().getClass().getSimpleName() + "." + lazy.attributeName()
             + " cannot be loaded: ";
-        if (closed && !transaction.isActive() || !factory.isOpen()) {
+        if ((closed && !transaction.isActive()) || !factory.isOpen()) {
             throw failed(new PersistenceException(cannotLoad + "its entity manager is closed"));
         }
         ManagedEntity entry = context.entry(lazy.owner()).orElseThrow(() -> failed(new PersistenceException(
@@ -300,6 +300,7 @@ final class EntityManagerImpl implements EntityManager, io.vidocq.noether.jpa.co
     }
 
     /** Adds to {@code replaced} the unloaded collections of the {@code snapshot} of {@code entry} its flush unlinks. */
+    @SuppressWarnings("ReferenceEquality") // identity: the very unloaded collection, not an equal one
     private void addReplacedCollections(ManagedEntity entry, Object[] snapshot, List<LazyCollection> replaced) {
         Object[] state = null;
         for (Object slot : snapshot) {
@@ -558,7 +559,7 @@ final class EntityManagerImpl implements EntityManager, io.vidocq.noether.jpa.co
     /** Whether the flush writes the row of {@code entry}, whose identity is known: removed, new, or changed. */
     private static boolean written(ManagedEntity entry, boolean dirty) {
         return entry.key() != null && (entry.status() == ManagedEntity.Status.REMOVED || !entry.inserted()
-            || entry.snapshot() != null && dirty);
+            || (entry.snapshot() != null && dirty));
     }
 
     /**
@@ -1059,6 +1060,7 @@ final class EntityManagerImpl implements EntityManager, io.vidocq.noether.jpa.co
     }
 
     /** Initializes {@code lazy} when {@code instance} owns it and is managed; whether it did. */
+    @SuppressWarnings("ReferenceEquality") // identity: the lazy collection owned by this very instance
     private boolean initializeOwned(Object instance, LazyCollection lazy, Connection connection) {
         Optional<ManagedEntity> entry = lazy.owner() == instance ? context.entry(instance) : Optional.empty();
         if (entry.isEmpty()) return false;
@@ -1228,7 +1230,7 @@ final class EntityManagerImpl implements EntityManager, io.vidocq.noether.jpa.co
     /** What the queries of this entity manager run with: its connection, its persistence context, its flush. */
     private final QueryRuntime queries = new QueryRuntime() {
 
-        /** The cache modes of the query whose entities are being loaded; {@code null} outside one (BUG-20261113-05). */
+        /* The cache modes of the query whose entities are being loaded; {@code null} outside one (BUG-20261113-05). */
         private CacheRetrieveMode queryRetrieveMode;
         private CacheStoreMode queryStoreMode;
 
@@ -1419,20 +1421,20 @@ final class EntityManagerImpl implements EntityManager, io.vidocq.noether.jpa.co
             }
         }
 
-        /** Whether the instance of {@code row} is managed already, or the shared cache restores it (§3.10). */
+        /* Whether the instance of {@code row} is managed already, or the shared cache restores it (§3.10). */
         private boolean managedOrRestored(io.vidocq.noether.jpa.core.flush.EntityLoader.FetchedEntity row) {
             return context.find(row.key()).isPresent()
-                || !cacheInvalidationPending && loadRetrieveMode() == CacheRetrieveMode.USE
+                || (!cacheInvalidationPending && loadRetrieveMode() == CacheRetrieveMode.USE
                     && loadStoreMode() != CacheStoreMode.REFRESH
-                    && factory.cache().restore(row.type(), row.id(), context).isPresent();
+                    && factory.cache().restore(row.type(), row.id(), context).isPresent());
         }
 
-        /** Records a newly loaded instance for the shared cache, as a find by identifier does (§3.10). */
+        /* Records a newly loaded instance for the shared cache, as a find by identifier does (§3.10). */
         private Object stored(MappedEntity type, Object id, Object loaded, long cacheGeneration) {
             return loaded == null || !cached ? loaded : stored(new EntityKey(type.root(), id), loaded, cacheGeneration);
         }
 
-        /**
+        /*
          * {@link #stored(MappedEntity, Object, Object, long)} with the identity already at hand, the key of its root; the
          * cache reads the entity from the instance.
          */

@@ -72,7 +72,7 @@ final class Lexer {
         if (c == '\'') {
             return string(query, start, tokens);
         }
-        if (Character.isDigit(c) || c == '.' && start + 1 < query.length() && Character.isDigit(query.charAt(start + 1))) {
+        if (Character.isDigit(c) || (c == '.' && start + 1 < query.length() && Character.isDigit(query.charAt(start + 1)))) {
             return number(query, start, tokens);
         }
         if (c == ':' && start + 1 < query.length() && Character.isJavaIdentifierStart(query.charAt(start + 1))) {
@@ -180,7 +180,7 @@ final class Lexer {
 
     /** The end of the exponent ({@code e}, an optional sign, digits) that starts at {@code start}, if any. */
     private static int exponentEnd(String query, int start) {
-        if (start >= query.length() || query.charAt(start) != 'e' && query.charAt(start) != 'E') {
+        if (start >= query.length() || (query.charAt(start) != 'e' && query.charAt(start) != 'E')) {
             return start;
         }
         int end = start + 1;

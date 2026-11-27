@@ -28,6 +28,7 @@ import java.util.Collection;
 
 /** A unidirectional one-to-many: the default join table Coach_Player (Coach_id, trainees_id), owned and versioned. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Coach {
     @Id
     private long id;

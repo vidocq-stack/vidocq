@@ -23,6 +23,7 @@ import jakarta.persistence.Entity;
 
 /** Invalid: no identifier. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class NoId {
     private String name;
 }

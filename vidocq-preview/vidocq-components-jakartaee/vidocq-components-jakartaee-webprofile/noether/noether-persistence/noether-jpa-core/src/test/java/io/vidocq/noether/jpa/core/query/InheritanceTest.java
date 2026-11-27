@@ -37,7 +37,8 @@ class InheritanceTest {
         String url = "jdbc:h2:mem:inheritance" + DATABASES.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
                 var statement = connection.createStatement()) {
-            for (String sql : ddl.split(";")) {
+            for (String sql : ddl.split(";", -1)) {
+                if (sql.isBlank()) continue; // the text after the last ';'
                 statement.execute(sql);
             }
         }

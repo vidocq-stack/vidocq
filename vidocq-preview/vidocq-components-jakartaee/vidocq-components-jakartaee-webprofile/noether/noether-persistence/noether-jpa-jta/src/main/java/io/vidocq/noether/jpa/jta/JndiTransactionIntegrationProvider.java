@@ -34,6 +34,7 @@ public final class JndiTransactionIntegrationProvider implements TransactionInte
     static final String NAME = "java:comp/TransactionSynchronizationRegistry";
 
     @Override
+    @SuppressWarnings("BanJNDI") // JNDI: the registry Jakarta EE binds at java:comp/TransactionSynchronizationRegistry
     public Optional<TransactionIntegration> integration() {
         try {
             return Optional.of(new SynchronizationRegistryIntegration(InitialContext.<TransactionSynchronizationRegistry>doLookup(NAME)));

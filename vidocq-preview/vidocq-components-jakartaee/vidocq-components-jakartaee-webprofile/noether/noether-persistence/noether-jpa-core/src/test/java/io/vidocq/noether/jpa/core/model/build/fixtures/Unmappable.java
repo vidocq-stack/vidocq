@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** Invalid: an attribute of a type that is neither basic, embeddable, serializable nor converted. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Unmappable {
     @Id
     private long id;

@@ -111,6 +111,7 @@ public final class AccessPlanner {
     }
 
     /** The entity and its entity or mapped superclasses, the root first (§2.11). */
+    @SuppressWarnings("ReferenceEquality") // identity: the class info read for this very class
     public List<ClassInfo> hierarchy(ClassInfo entity) {
         List<ClassInfo> chain = new ArrayList<>();
         ClassInfo current = entity;

@@ -132,7 +132,7 @@ public final class RuntimeMetamodel implements Metamodel {
         managed.values().forEach(t -> { if (t instanceof EmbeddableType<?> e) result.add(e); });
         return result;
     }
-    @SuppressWarnings("unchecked") // Registry key is the exact Java type represented by this managed type.
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"}) // Registry key is the exact Java type represented by this managed type; TypeParameterUnusedInFormals: the one checked cast behind the typed Metamodel methods
     private <X, M> M checked(Class<X> type, Class<?> kind) {
         Managed<?> result = managed.get(type);
         if (!kind.isInstance(result)) throw new IllegalArgumentException("Not a " + kind.getSimpleName() + ": " + type.getName());
@@ -163,7 +163,7 @@ public final class RuntimeMetamodel implements Metamodel {
                 attributes.put(model.name(), makeAttribute(model));
             }
         }
-        @SuppressWarnings("unchecked") // The declaring model owns the attribute; inherited attributes retain that owner.
+        @SuppressWarnings({"unchecked", "ReferenceEquality"}) // The declaring model owns the attribute; inherited attributes retain that owner; identity: this very managed type of the metamodel
         private Attribute<? super X, ?> makeAttribute(AttributeModel model) {
             Managed<?> owner = managed.get(model.declaringClass());
             if (owner == null) owner = this;
@@ -171,7 +171,7 @@ public final class RuntimeMetamodel implements Metamodel {
                 return (Attribute<? super X, ?>) owner.attributes.get(model.name());
             }
             Attribute<?, ?> result;
-            if (model instanceof ElementCollectionAttribute || model instanceof AssociationAttribute a && !a.singleValued()) {
+            if (model instanceof ElementCollectionAttribute || (model instanceof AssociationAttribute a && !a.singleValued())) {
                 if (Map.class.isAssignableFrom(model.javaType())) result = new MapAttr<>(owner, model);
                 else if (Set.class.isAssignableFrom(model.javaType())) result = new SetAttr<>(owner, model);
                 else if (List.class.isAssignableFrom(model.javaType())) result = new ListAttr<>(owner, model);
@@ -188,6 +188,7 @@ public final class RuntimeMetamodel implements Metamodel {
         }
         @Override public Class<X> getJavaType() { return javaType; }
         @Override public PersistenceType getPersistenceType() { return persistenceType; }
+        @SuppressWarnings("ReferenceEquality") // identity: this very managed type of the metamodel
         private boolean declared(Attribute<?, ?> a) { return a.getDeclaringType() == this; }
         @SuppressWarnings("unchecked") // Declared/inherited filtering establishes the owner bounds of the API's sets.
         private <A> Set<A> attributes(boolean declaredOnly, Predicate<Attribute<?, ?>> filter) {
@@ -196,14 +197,14 @@ public final class RuntimeMetamodel implements Metamodel {
                 .forEach(a -> result.add((A) a));
             return result;
         }
-        @SuppressWarnings("unchecked") // The attribute kind and supplied Class tokens are checked before this cast.
+        @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"}) // The attribute kind and supplied Class tokens are checked before this cast; TypeParameterUnusedInFormals: the one checked cast behind the typed Metamodel methods
         private <A> A attribute(String name, boolean declaredOnly, Class<?> kind, Class<?> value, Class<?> key) {
             Attribute<?, ?> a = attributes.get(name);
-            if (!kind.isInstance(a) || declaredOnly && !declared(a)) throw new IllegalArgumentException("No " + kind.getSimpleName()
+            if (!kind.isInstance(a) || (declaredOnly && !declared(a))) throw new IllegalArgumentException("No " + kind.getSimpleName()
                 + " " + javaType.getName() + "." + name);
             Class<?> actual = a instanceof PluralAttribute<?, ?, ?> p ? p.getBindableJavaType() : a.getJavaType();
-            if (value != null && Types.box(value) != Types.box(actual) || key != null && (!(a instanceof MapAttribute<?, ?, ?> m)
-                    || Types.box(m.getKeyJavaType()) != Types.box(key))) throw new IllegalArgumentException("Wrong type for " + name);
+            if ((value != null && Types.box(value) != Types.box(actual)) || (key != null && (!(a instanceof MapAttribute<?, ?, ?> m)
+                    || Types.box(m.getKeyJavaType()) != Types.box(key)))) throw new IllegalArgumentException("Wrong type for " + name);
             return (A) a;
         }
         @Override public Set<Attribute<? super X, ?>> getAttributes() { return attributes(false, a -> true); }

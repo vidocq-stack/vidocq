@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** A derived identity (§2.4.1.2): the relationship is the identifier. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Dependent {
     @Id
     @OneToOne

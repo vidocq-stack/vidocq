@@ -27,6 +27,7 @@ import java.util.UUID;
 
 /** Field access (the @Id is on a field); every kind of basic attribute. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Customer {
     @Id
     private Long id;

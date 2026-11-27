@@ -86,6 +86,7 @@ public record Query(boolean distinct, List<Expression> select, List<From> from, 
     }
 
     /** The parameters, in the order of the rendered SQL. */
+    @Override
     public List<Expression.Parameter> parameters() {
         List<Expression.Parameter> parameters = new ArrayList<>();
         select.forEach(e -> collect(e, parameters));

@@ -22,6 +22,7 @@ package io.vidocq.noether.jpa.core.model.build.fixtures;
 import java.io.Serializable;
 
 /** The id class of NamedDependent: the relationship attribute is typed as the parent's identifier (§2.4.1.1). */
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class DependentKey implements Serializable {
     private String name;
     private long parent;

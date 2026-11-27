@@ -24,6 +24,7 @@ import jakarta.persistence.*;
 /** A composite id through @IdClass. */
 @Entity
 @IdClass(OrderLineKey.class)
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class OrderLine {
     @Id
     private long orderId;

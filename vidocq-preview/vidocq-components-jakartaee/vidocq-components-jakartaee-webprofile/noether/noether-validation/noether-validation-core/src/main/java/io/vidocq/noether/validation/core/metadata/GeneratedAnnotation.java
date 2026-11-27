@@ -28,6 +28,7 @@ import java.util.Objects;
  * values, everything the {@link Annotation} contract asks for (equality with the JDK's own instances,
  * hash code, string form) lives here.
  */
+@SuppressWarnings("ImmutableAnnotationChecker") // immutable in effect: member arrays are copied on read, the type info is shared metadata
 abstract class GeneratedAnnotation implements Annotation {
 
     private final AnnotationTypeInfo info;

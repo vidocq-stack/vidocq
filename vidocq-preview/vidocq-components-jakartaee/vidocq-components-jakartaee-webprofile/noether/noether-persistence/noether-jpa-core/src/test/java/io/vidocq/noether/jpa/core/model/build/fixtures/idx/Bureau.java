@@ -36,6 +36,7 @@ import java.util.Map;
  * position column that both live in the agents' table and that this side writes.
  */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Bureau {
     @Id
     private long id;

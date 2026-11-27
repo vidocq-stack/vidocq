@@ -159,17 +159,21 @@ class LazyBatchTest {
         }
         assertThat(selects()).isEqualTo(1);
         assertThat(owners.getFirst().getLabels()).containsEntry("nil", null).containsEntry("id", "1");
-        for (Owner owner : owners) owner.getLabels().size();
+        for (Owner owner : owners) {
+            int _ = owner.getLabels().size();
+        }
         assertThat(selects()).isEqualTo(2);
     }
 
     @Test void configuredCollectionBoundAndRemainderNeverInitializeMoreOwners() {
         open(2); var owners = seed();
-        owners.getFirst().getValues().size();
+        int _ = owners.getFirst().getValues().size();
         assertThat(selects()).isEqualTo(1);
         assertThat(factory.getPersistenceUnitUtil().isLoaded(owners.get(1), "values")).isTrue();
         assertThat(factory.getPersistenceUnitUtil().isLoaded(owners.get(2), "values")).isFalse();
-        for (Owner owner : owners) owner.getValues().size();
+        for (Owner owner : owners) {
+            int _ = owner.getValues().size();
+        }
         assertThat(selects()).isEqualTo(3);
     }
 
@@ -197,13 +201,17 @@ class LazyBatchTest {
         assertThat(owners.getFirst().getTargets().getFirst()).isSameAs(owners.getFirst().getTarget());
         assertThat(owners.getFirst().getTarget().getName()).isEqualTo("target-1");
         assertThat(owners.get(1).getTargets()).isEmpty();
-        for (Owner owner : owners) owner.getTargets().size();
+        for (Owner owner : owners) {
+            int _ = owner.getTargets().size();
+        }
         assertThat(selects()).isEqualTo(6);
     }
 
     @Test void disabledBatchUsesIndividualLoads() {
         open(1); var owners = seed();
-        for (Owner owner : owners) owner.getValues().size();
+        for (Owner owner : owners) {
+            int _ = owner.getValues().size();
+        }
         assertThat(selects()).isEqualTo(6);
         sql.clear();
         for (Owner owner : owners) owner.getTarget().getName();
@@ -306,7 +314,7 @@ class LazyBatchTest {
         em.getTransaction().commit(); em.clear(); factory.getCache().evictAll();
         var owners = em.createQuery("select o from BatchCompositeOwner o order by o.id.part", CompositeOwner.class).getResultList();
         sql.clear();
-        owners.getFirst().items.size();
+        int _ = owners.getFirst().items.size();
         assertThat(factory.getPersistenceUnitUtil().isLoaded(owners.get(169), "items")).isTrue();
         assertThat(factory.getPersistenceUnitUtil().isLoaded(owners.get(170), "items")).isFalse();
         assertThat(selects()).isEqualTo(1);
@@ -470,7 +478,7 @@ class LazyBatchTest {
         owners.getFirst().setName("dirty");
         owners.getFirst().getValues().add("added");
         owners.getFirst().getTarget().setName("dirty-target");
-        owners.get(3).getValues().size();
+        int _ = owners.get(3).getValues().size();
         owners.get(3).getTarget().getName();
         assertThat(owners.getFirst().getValues()).containsExactly("z", "a", "z", null, "added");
         assertThat(owners.getFirst().getTarget().getName()).isEqualTo("dirty-target");
@@ -486,7 +494,7 @@ class LazyBatchTest {
         open(2); var owners = seed();
         Target detached = owners.getFirst().getTarget();
         em.detach(detached); em.detach(owners.getFirst());
-        owners.get(1).getValues().size();
+        int _ = owners.get(1).getValues().size();
         owners.get(1).getTarget().getName();
         var detachedValues = owners.getFirst().getValues();
         assertThatThrownBy(detachedValues::size).isInstanceOf(PersistenceException.class);

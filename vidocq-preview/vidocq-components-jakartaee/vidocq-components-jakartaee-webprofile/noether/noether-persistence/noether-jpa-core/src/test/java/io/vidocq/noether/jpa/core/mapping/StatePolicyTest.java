@@ -55,6 +55,7 @@ class StatePolicyTest {
         return state;
     }
 
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: the mutable temporal type under test
     private static Object customer() {
         MappedEntity type = type(Customer.class);
         Object customer = type.access().instantiate();
@@ -84,6 +85,7 @@ class StatePolicyTest {
     }
 
     @Test
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: the mutable temporal type under test
     void mutableValuesChangedInPlaceAreChanges() { // arrays and dates are copied into the snapshot
         MappedEntity type = type(Customer.class);
         Object customer = customer();
@@ -95,6 +97,7 @@ class StatePolicyTest {
     }
 
     @Test
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: the mutable temporal type under test
     void aStateHandedOverBecomesItsOwnSnapshot() { // the same array, its mutable values copied as snapshot() copies them
         MappedEntity type = type(Customer.class);
         Object customer = customer();

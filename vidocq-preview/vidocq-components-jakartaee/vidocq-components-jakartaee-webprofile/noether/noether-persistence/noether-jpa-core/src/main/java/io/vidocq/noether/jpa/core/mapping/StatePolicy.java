@@ -90,6 +90,7 @@ public final class StatePolicy {
         }
 
         @Override
+        @SuppressWarnings("ReferenceEquality") // identity: the object still held since the snapshot is unchanged
         public boolean same(Object snapshot, Object current) {
             return snapshot == current;
         }
@@ -112,7 +113,7 @@ public final class StatePolicy {
             if (before.size() != now.size()) {
                 return false;
             }
-            Map<Object, Integer> counts = new IdentityHashMap<>();
+            IdentityHashMap<Object, Integer> counts = new IdentityHashMap<>();
             before.forEach(element -> counts.merge(element, 1, Integer::sum));
             for (Object element : now) {
                 Integer count = counts.get(element);
@@ -161,6 +162,7 @@ public final class StatePolicy {
 
     private static final Copier MUTABLE_TEMPORAL = new Copier() {
         @Override
+        @SuppressWarnings("JavaUtilDate") // java.util.Date: a mutable temporal type Jakarta Persistence maps (§2.6)
         public Object copy(Object value) {
             return switch (value) {
                 case null -> null;
@@ -299,12 +301,14 @@ public final class StatePolicy {
             }
 
             @Override
+            @SuppressWarnings("ReferenceEquality") // identity: the object still held since the snapshot is unchanged
             public boolean same(Object snapshot, Object current) {
                 if (snapshot == current && LazyCollection.unloaded(current)) return true;
                 return copier.same(snapshotValue(snapshot), current);
             }
 
             @Override
+            @SuppressWarnings("ReferenceEquality") // identity: the object still held since the snapshot is unchanged
             public boolean changed(Object snapshot, Object current) {
                 if (snapshot == current && LazyCollection.unloaded(current)) return false;
                 return copier.changed(snapshotValue(snapshot), current);
@@ -316,7 +320,7 @@ public final class StatePolicy {
             ValueBinders converters) {
         Copier copier = plainCopier(attribute, embeddables, converters);
         return attribute instanceof ElementCollectionAttribute
-            || attribute instanceof AssociationAttribute association && !association.singleValued() ? lazyAware(copier) : copier;
+            || (attribute instanceof AssociationAttribute association && !association.singleValued()) ? lazyAware(copier) : copier;
     }
 
     private static Copier plainCopier(AttributeModel attribute, Function<EmbeddableModel, ManagedAccess> embeddables,
@@ -399,8 +403,8 @@ public final class StatePolicy {
      */
     private static boolean keyed(Class<?> type, CollectionIndex index) {
         return index instanceof CollectionIndex.ByPosition
-            || Map.class.isAssignableFrom(type) && (index instanceof CollectionIndex.ByColumn
-                || index instanceof CollectionIndex.ByEntity || index instanceof CollectionIndex.ByEmbedded);
+            || (Map.class.isAssignableFrom(type) && (index instanceof CollectionIndex.ByColumn
+                || index instanceof CollectionIndex.ByEntity || index instanceof CollectionIndex.ByEmbedded));
     }
 
     private static Copier keyCopier(CollectionIndex index, Function<EmbeddableModel, ManagedAccess> embeddables,
@@ -430,6 +434,7 @@ public final class StatePolicy {
             }
 
             @Override
+            @SuppressWarnings("ReferenceEquality") // identity: the IMMUTABLE sentinel
             public boolean changed(Object snapshot, Object current) {
                 List<Object> before = CollectionMapping.elements(snapshot);
                 List<Object> now = CollectionMapping.elements(current);
@@ -502,7 +507,7 @@ public final class StatePolicy {
             return DECIMAL;
         }
         if (type.isPrimitive() || type.isEnum() || type.isRecord() || IMMUTABLE_TYPES.contains(type)
-                || Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time")) {
+                || (Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time"))) {
             return IMMUTABLE;
         }
         return Serializable.class.isAssignableFrom(type) ? SERIALIZED : REFERENCE;
@@ -540,6 +545,7 @@ public final class StatePolicy {
             }
 
             @Override
+            @SuppressWarnings("ReferenceEquality") // identity: the object still held since the snapshot is unchanged
             public boolean same(Object snapshot, Object current) {
                 if (snapshot == null || current == null) {
                     return snapshot == current;

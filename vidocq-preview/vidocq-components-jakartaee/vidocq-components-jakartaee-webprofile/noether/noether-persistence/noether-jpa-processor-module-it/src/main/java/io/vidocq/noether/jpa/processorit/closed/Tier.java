@@ -22,6 +22,7 @@ package io.vidocq.noether.jpa.processorit.closed;
 import jakarta.persistence.EnumeratedValue;
 
 /** An enum whose database value is a private field (§11.1.18), in a package that is neither exported nor opened. */
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public enum Tier {
     BRONZE(1), GOLD(3);
 

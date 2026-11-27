@@ -189,6 +189,7 @@ public sealed interface CollectionMapping {
      * A new, empty collection for an attribute declared {@code type}: a list for {@code Collection} and {@code List},
      * an insertion-ordered set for {@code Set}, the declared class when it is one of the JDK's.
      */
+    @SuppressWarnings("JdkObsolete") // the collection type the entity attribute declares
     static Collection<Object> newCollection(Class<?> type) {
         if (type.isAssignableFrom(ArrayList.class)) {
             return new ArrayList<>();

@@ -494,8 +494,8 @@ class BusinessKeyToOneTest {
         public record Code(String value) {}
         @Converter
         public static class CodeConverter implements AttributeConverter<Code, String> {
-            public String convertToDatabaseColumn(Code value) { return value == null ? null : "db:" + value.value(); }
-            public Code convertToEntityAttribute(String value) { return value == null ? null : new Code(value.substring(3)); }
+            @Override public String convertToDatabaseColumn(Code value) { return value == null ? null : "db:" + value.value(); }
+            @Override public Code convertToEntityAttribute(String value) { return value == null ? null : new Code(value.substring(3)); }
         }
 
         @Entity(name = "ConvertedCustomer")

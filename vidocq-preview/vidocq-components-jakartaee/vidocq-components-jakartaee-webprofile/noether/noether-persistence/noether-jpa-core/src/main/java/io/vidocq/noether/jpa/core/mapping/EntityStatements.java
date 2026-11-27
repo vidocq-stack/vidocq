@@ -76,6 +76,7 @@ public final class EntityStatements {
      * @param foreignKey for a column of an owned single-valued relationship, the referenced target value it holds;
      *        {@code null} otherwise
      */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     public record Column(Identifier name, ValueBinder binder, int attribute, int[] path, ManagedAccess[] accesses, boolean id,
             boolean version, boolean insertable, boolean updatable, int table, ForeignKey foreignKey) {
     }
@@ -97,6 +98,7 @@ public final class EntityStatements {
      * @param columns the indexes, in {@link #columns()}, of its foreign key columns
      * @param referencedColumns empty for identity references, otherwise the unique target business tuple
      */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     public record Reference(int attribute, Class<?> target, int[] columns, List<Identifier> referencedColumns) {
         public Reference(int attribute, Class<?> target, int[] columns) {
             this(attribute, target, columns, List.of());
@@ -114,6 +116,7 @@ public final class EntityStatements {
      * @param update {@code null} when nothing in the table can change
      * @param selected the indexes, in {@link #columns()}, of the columns the select reads, in its order
      */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     public record TableStatements(Insert insert, List<Parameter> insertParameters, Update update, List<Parameter> updateParameters,
             Delete delete, List<Parameter> deleteParameters, Select select, List<Parameter> selectParameters, int[] selected) {
     }
@@ -570,8 +573,8 @@ public final class EntityStatements {
     private static void requireBusinessKeyTarget(AssociationAttribute association, boolean id, EntityModel target,
             Function<Class<?>, InheritanceMapping> inheritances) {
         if (id || association.mapsId() != null || association.name().contains(".")
-                || inheritances.apply(target.javaType()) != null
-                    && inheritances.apply(target.javaType()).hierarchy().size() != 1) {
+                || (inheritances.apply(target.javaType()) != null
+                    && inheritances.apply(target.javaType()).hierarchy().size() != 1)) {
             throw new PersistenceException("Business-key join " + describe(association)
                 + " requires a non-derived target without inheritance or embedded relationships");
         }
@@ -655,7 +658,7 @@ public final class EntityStatements {
         for (int candidate = 0; candidate < keys.size(); candidate++) {
             Identifier referenced = Identifier.of(join.referencedColumnName(), delimited);
             KeyColumn key = keys.get(candidate);
-            if (key.quoted() || referenced.quoted() || delimited
+            if ((key.quoted() || referenced.quoted() || delimited)
                     ? key.name().equals(referenced.name()) : key.name().equalsIgnoreCase(referenced.name())) {
                 part = candidate;
             }
@@ -700,7 +703,7 @@ public final class EntityStatements {
     }
 
     public static boolean sameColumn(Identifier first, Identifier second) {
-        return first.quoted() || second.quoted() ? first.name().equals(second.name())
+        return (first.quoted() || second.quoted()) ? first.name().equals(second.name())
             : first.name().equalsIgnoreCase(second.name());
     }
 
@@ -1093,8 +1096,8 @@ public final class EntityStatements {
         InheritanceMapping inheritance = target == null ? null : inheritances.apply(target.javaType());
         if (target == null || !(target.id() instanceof IdModel.Single || target.id() instanceof IdModel.Embedded
                 || target.id() instanceof IdModel.ByIdClass)
-                || inheritance != null && (inheritance.joined() || inheritance.tablePerClass()
-                    || inheritance.hierarchy().size() != 1)
+                || (inheritance != null && (inheritance.joined() || inheritance.tablePerClass()
+                    || inheritance.hierarchy().size() != 1))
                 || !eligibleElementTarget(target, lookups.models(), inheritances)) {
             throw new PersistenceException(problem + "requires an eligible primary-key target");
         }
@@ -1108,7 +1111,7 @@ public final class EntityStatements {
                     || join.updatable() != first.updatable()) {
                 throw new PersistenceException(problem + "requires uniform composite join-column nullability and writeability");
             }
-            if (!join.insertable() || !join.updatable() || join.table() != null && !join.table().isBlank()) {
+            if (!join.insertable() || !join.updatable() || (join.table() != null && !join.table().isBlank())) {
                 throw new PersistenceException(problem + "requires writable collection-table join columns");
             }
         }
@@ -1208,9 +1211,9 @@ public final class EntityStatements {
     /** Whether each component of an embedded id is basic, or an embeddable of basic attributes an {@code @MapsId} maps. */
     private static boolean mappedComponents(List<AttributeModel> parts, List<AssociationAttribute> mapsIds) {
         return parts.stream().allMatch(part -> part instanceof BasicAttribute
-            || part instanceof EmbeddedAttribute nested
+            || (part instanceof EmbeddedAttribute nested
                 && nested.embeddable().attributes().stream().allMatch(BasicAttribute.class::isInstance)
-                && mapsIds.stream().anyMatch(mapping -> part.name().equals(mapping.mapsId())));
+                && mapsIds.stream().anyMatch(mapping -> part.name().equals(mapping.mapsId()))));
     }
 
     private static boolean simpleNonPolymorphicParent(AssociationAttribute association,
@@ -1218,8 +1221,8 @@ public final class EntityStatements {
         EntityModel parent = models.apply(association.targetEntity());
         if (parent == null || !(parent.id() instanceof IdModel.Single)) return false;
         InheritanceMapping inheritance = inheritances.apply(parent.javaType());
-        return inheritance == null || !inheritance.joined() && !inheritance.tablePerClass()
-            && inheritance.hierarchy().size() == 1;
+        return inheritance == null || (!inheritance.joined() && !inheritance.tablePerClass()
+            && inheritance.hierarchy().size() == 1);
     }
 
     private static boolean eligibleBasicElementParent(AssociationAttribute association, boolean singleRelationship,
@@ -1238,13 +1241,13 @@ public final class EntityStatements {
                 && parent.attributes().stream().anyMatch(attribute ->
                     attribute instanceof AssociationAttribute derived && derived.mapsId() != null)) return false;
         InheritanceMapping inheritance = inheritances.apply(parent.javaType());
-        return inheritance == null || !inheritance.joined() && !inheritance.tablePerClass()
-            && inheritance.hierarchy().size() == 1;
+        return inheritance == null || (!inheritance.joined() && !inheritance.tablePerClass()
+            && inheritance.hierarchy().size() == 1);
     }
 
     private static boolean hasRelationships(EmbeddableModel model) {
         return model.attributes().stream().anyMatch(a -> a instanceof AssociationAttribute
-            || a instanceof ElementCollectionAttribute || a instanceof EmbeddedAttribute e && hasRelationships(e.embeddable()));
+            || a instanceof ElementCollectionAttribute || (a instanceof EmbeddedAttribute e && hasRelationships(e.embeddable())));
     }
 
     /** The attribute of {@code target} that is the inverse side of {@code association} of {@code owner}, if any. */
@@ -1773,7 +1776,7 @@ public final class EntityStatements {
         int c = 0;
         while (c < columns.size()) {
             Column column = columns.get(c);
-            if (column.foreignKey() != null && !referencesResolved || column.attribute() < 0
+            if ((column.foreignKey() != null && !referencesResolved) || column.attribute() < 0
                     || column.attribute() == deferredIdentifier) {
                 c++; // relationships and deferred record identifiers are populated separately
             } else if (column.path().length == 0) {

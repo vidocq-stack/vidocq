@@ -86,9 +86,9 @@ public final class MappedUnit {
     private final ClassInfos source;
     private final Map<Class<?>, InheritanceMapping> inheritance;
     private final Set<AssociationAttribute> lazyReferences;
-    private final Map<MappedEntity, Set<Integer>> businessKeyAttributes = new IdentityHashMap<>();
+    private final IdentityHashMap<MappedEntity, Set<Integer>> businessKeyAttributes = new IdentityHashMap<>();
     /** The result constructors noether-jpa-processor generated, by class and by class name; filled by {@link #of}. */
-    private final Map<Class<?>, ResultConstructorAccess> resultConstructors = new IdentityHashMap<>();
+    private final IdentityHashMap<Class<?>, ResultConstructorAccess> resultConstructors = new IdentityHashMap<>();
     private final Map<String, Class<?>> resultClasses = new HashMap<>();
 
     private MappedUnit(PersistenceUnitModel model, Map<Class<?>, ManagedAccess> entities,
@@ -262,6 +262,7 @@ public final class MappedUnit {
      * @param providers the accesses generated at build time; a managed class without one, or whose generated access
      *        does not list the attributes of the model (a class changed since it was compiled), gets a hidden class
      */
+    @SuppressWarnings("ReferenceEquality") // identity: the model object of this unit, not an equal copy
     public static MappedUnit of(Collection<String> classNames, ClassLoader loader, ClassInfos source,
             Iterable<ManagedAccessProvider> providers) {
         PersistenceUnitModel model = EntityModelBuilder.build(classNames, source, loader);
@@ -269,28 +270,28 @@ public final class MappedUnit {
             validateInverseElementPaths(entity.attributes(), entity.entityName(), model, source);
         }
         validateMapsIds(model);
-        Map<Class<?>, InheritanceMapping> inheritance = new IdentityHashMap<>();
+        IdentityHashMap<Class<?>, InheritanceMapping> inheritance = new IdentityHashMap<>();
         for (EntityModel entity : model.entities()) {
             inheritance.put(entity.javaType(), new InheritanceMapping(entity, model, source));
         }
         Generated generated = new Generated(providers);
         ValueBinders valueBinders = new ValueBinders(loader, generated::code);
-        Map<Class<?>, ManagedAccess> entities = new IdentityHashMap<>();
-        Map<EmbeddableModel, ManagedAccess> embeddables = new IdentityHashMap<>();
-        Map<BasicAttribute, ValueBinder> binders = new IdentityHashMap<>();
+        IdentityHashMap<Class<?>, ManagedAccess> entities = new IdentityHashMap<>();
+        IdentityHashMap<EmbeddableModel, ManagedAccess> embeddables = new IdentityHashMap<>();
+        IdentityHashMap<BasicAttribute, ValueBinder> binders = new IdentityHashMap<>();
         for (EntityModel entity : model.entities()) {
             List<String> callbacks = entity.callbacks().stream().map(CallbackModel::descriptor).toList();
             entities.put(entity.javaType(), generated.find(entity.javaType(), entity.attributes(), callbacks)
                 .orElseGet(() -> Accesses.of(entity)));
             prepare(entity.attributes(), valueBinders, generated, embeddables, binders);
         }
-        Map<Class<?>, EmbeddedPaths.Plan> plans = new IdentityHashMap<>();
+        IdentityHashMap<Class<?>, EmbeddedPaths.Plan> plans = new IdentityHashMap<>();
         for (EntityModel entity : model.entities()) {
             plans.put(entity.javaType(), EmbeddedPaths.of(entity, entities.get(entity.javaType()), embeddables::get));
         }
         Map<Class<?>, Integer> ranks = ranks(new PersistenceUnitModel(
             model.entities().stream().map(e -> plans.get(e.javaType()).model()).toList(), model.converters()));
-        Map<Class<?>, MappedEntity> mapped = new IdentityHashMap<>();
+        IdentityHashMap<Class<?>, MappedEntity> mapped = new IdentityHashMap<>();
         for (EntityModel entity : model.entities()) {
             EmbeddedPaths.Plan plan = plans.get(entity.javaType());
             ManagedAccess embeddedId = embeddedIdAccess(entity, embeddables);
@@ -340,7 +341,7 @@ public final class MappedUnit {
             return;
         }
         List<AttributeModel> current = target.attributes();
-        for (String segment : association.mappedBy().split("\\.")) {
+        for (String segment : association.mappedBy().split("\\.", -1)) {
             AttributeModel step = current.stream().filter(a -> a.name().equals(segment)).findFirst().orElse(null);
             if (step instanceof ElementCollectionAttribute) {
                 throw new PersistenceException("The relationship " + name + " mappedBy="
@@ -381,7 +382,7 @@ public final class MappedUnit {
         if (name.isEmpty() && association.kind() != AssociationAttribute.Kind.ONE_TO_ONE) {
             throw new PersistenceException(problem + "a shared whole identifier requires OneToOne (§2.4.2.1)");
         }
-        if (!mappedIds.add(name) || mappedIds.contains("") && mappedIds.size() > 1) {
+        if (!mappedIds.add(name) || (mappedIds.contains("") && mappedIds.size() > 1)) {
             throw new PersistenceException(problem + "overlapping identifier mappings");
         }
         EntityModel target = unit.entities().stream().filter(e -> e.javaType() == association.targetEntity())
@@ -407,10 +408,10 @@ public final class MappedUnit {
         if (target.attributes().stream().anyMatch(a -> a instanceof AssociationAttribute r && r.mapsId() != null)) {
             throw new PersistenceException(problem + "chained derived identifiers are not supported");
         }
-        if (target.id() instanceof IdModel.Embedded(var embedded)
-                && embedded.embeddable().attributes().stream().anyMatch(a -> !(a instanceof BasicAttribute))
-                || target.id() instanceof IdModel.ByIdClass byIdClass
-                    && byIdClass.attributes().stream().anyMatch(a -> !(a instanceof BasicAttribute))) {
+        if ((target.id() instanceof IdModel.Embedded(var embedded)
+                && embedded.embeddable().attributes().stream().anyMatch(a -> !(a instanceof BasicAttribute)))
+                || (target.id() instanceof IdModel.ByIdClass byIdClass
+                    && byIdClass.attributes().stream().anyMatch(a -> !(a instanceof BasicAttribute)))) {
             throw new PersistenceException(problem + "nested or relationship-valued target identifiers are not supported");
         }
     }
@@ -606,7 +607,7 @@ public final class MappedUnit {
         for (EntityModel entity : model.entities()) {
             addForeignKeyCollections(entity, entities, references);
         }
-        Map<Class<?>, Integer> ranks = new IdentityHashMap<>();
+        IdentityHashMap<Class<?>, Integer> ranks = new IdentityHashMap<>();
         int rank = 0;
         Set<Class<?>> placed = new LinkedHashSet<>();
         boolean progress = true;
@@ -756,7 +757,7 @@ public final class MappedUnit {
 
     /** The accesses generated at build time, by managed class. */
     private static final class Generated {
-        private final Map<Class<?>, List<ManagedAccess>> byType = new IdentityHashMap<>();
+        private final IdentityHashMap<Class<?>, List<ManagedAccess>> byType = new IdentityHashMap<>();
         private final List<ResultConstructorAccess> resultConstructors = new ArrayList<>();
 
         Generated(Iterable<ManagedAccessProvider> providers) {

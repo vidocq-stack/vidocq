@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** An embeddable with a nested embeddable. */
 @Embeddable
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Addr {
     private String street;
     @Column(name = "TOWN")

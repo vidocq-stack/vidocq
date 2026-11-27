@@ -262,6 +262,7 @@ public final class EntityModelBuilder {
 
     // ---- entities (§2.1) --------------------------------------------------------------------------------
 
+    @SuppressWarnings("ReferenceEquality") // identity: the class info read for this very class
     private EntityModel entity(ClassInfo info) {
         checkEntityClass(info);
         Class<?> type = Types.load(info.name(), loader);
@@ -291,6 +292,7 @@ public final class EntityModelBuilder {
      * The persistent attributes of an entity and of its superclasses, in {@code attributes}, each with the member it is
      * read from, in {@code members}; the attribute and association overrides of the entity apply to inherited attributes.
      */
+    @SuppressWarnings("ReferenceEquality") // identity: the class info read for this very class
     private void collectAttributes(ClassInfo info, List<ClassInfo> hierarchy, AccessKind access, List<AttributeModel> attributes,
             Map<AttributeModel, Member> members) {
         Map<String, AnnotationInfo> overrides = overrides(info);
@@ -327,6 +329,7 @@ public final class EntityModelBuilder {
      * for an embedded attribute, and the one of its name, which must be a relationship inherited from a mapped
      * superclass (§11.1.2). The overrides applied are removed from {@code associationOverrides}.
      */
+    @SuppressWarnings("ReferenceEquality") // identity: the class info read for this very class
     private static AttributeModel associationOverridden(ClassInfo info, ClassInfo declaring, Member member, AttributeModel attribute,
             Map<String, AnnotationInfo> associationOverrides) {
         AttributeModel overridden = attribute;
@@ -439,8 +442,8 @@ public final class EntityModelBuilder {
             throw new PersistenceException("The @AssociationOverride " + base.name() + " cannot specify both joinColumns and joinTable");
         }
         boolean usesJoinTable = base.joinTable() != null || base.kind() == AssociationAttribute.Kind.MANY_TO_MANY
-            || base.kind() == AssociationAttribute.Kind.ONE_TO_MANY && base.joinColumns().isEmpty();
-        if (tableWritten && !usesJoinTable || !tableWritten && usesJoinTable && !columns.isEmpty()) {
+            || (base.kind() == AssociationAttribute.Kind.ONE_TO_MANY && base.joinColumns().isEmpty());
+        if ((tableWritten && !usesJoinTable) || (!tableWritten && usesJoinTable && !columns.isEmpty())) {
             throw new PersistenceException("The @AssociationOverride " + base.name()
                 + " must retain the relationship's foreign-key or join-table mapping (§11.1.2)");
         }

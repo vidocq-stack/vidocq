@@ -23,6 +23,7 @@ import jakarta.persistence.Embeddable;
 
 /** An embeddable. */
 @Embeddable
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Address {
     private String street;
     private String city;

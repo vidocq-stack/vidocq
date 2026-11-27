@@ -112,7 +112,7 @@ public final class InheritanceMapping {
     }
 
     private Map<Class<?>, Object> values() {
-        Map<Class<?>, Object> values = new java.util.IdentityHashMap<>();
+        java.util.IdentityHashMap<Class<?>, Object> values = new java.util.IdentityHashMap<>();
         Set<Object> used = new java.util.HashSet<>();
         for (EntityModel entity : hierarchy) {
             var written = info(entity).annotation(JPA + "DiscriminatorValue");
@@ -189,6 +189,7 @@ public final class InheritanceMapping {
     }
 
     /** Tables in insert order: the root, joined subclasses, then secondary tables. */
+    @SuppressWarnings("ReferenceEquality") // identity: the model object of this unit, not an equal copy
     public List<SecondaryTableModel> tables() {
         List<SecondaryTableModel> tables = new ArrayList<>();
         for (EntityModel entity : chain) {
@@ -251,7 +252,7 @@ public final class InheritanceMapping {
             return false;
         }
         Identifier written = Identifier.of(name, source.delimitedIdentifiers());
-        return written.quoted() || referenced.quoted()
+        return (written.quoted() || referenced.quoted())
             ? written.name().equals(referenced.name()) : written.name().equalsIgnoreCase(referenced.name());
     }
 

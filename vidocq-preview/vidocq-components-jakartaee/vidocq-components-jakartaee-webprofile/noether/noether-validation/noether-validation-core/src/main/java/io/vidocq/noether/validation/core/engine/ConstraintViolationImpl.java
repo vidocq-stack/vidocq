@@ -114,6 +114,7 @@ public final class ConstraintViolationImpl<T> implements ConstraintViolation<T> 
     }
 
     @Override
+    @SuppressWarnings("ReferenceEquality") // identity: beans compare by identity, as hashCode hashes them
     public boolean equals(Object other) {
         return other instanceof ConstraintViolationImpl<?> that && Objects.equals(message, that.message)
             && Objects.equals(messageTemplate, that.messageTemplate) && rootBean == that.rootBean

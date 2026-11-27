@@ -24,6 +24,7 @@ import jakarta.persistence.*;
 /** Property access by default, one attribute in field access (@Access mixing, §2.3.2). */
 @Entity
 @Access(AccessType.PROPERTY)
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Mixed {
     private long id;
     @Access(AccessType.FIELD)

@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** A mapped superclass without @Access whose identifier is a field: the hierarchy defaults to field access. */
 @MappedSuperclass
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public abstract class Staff {
     @Id
     private int id;

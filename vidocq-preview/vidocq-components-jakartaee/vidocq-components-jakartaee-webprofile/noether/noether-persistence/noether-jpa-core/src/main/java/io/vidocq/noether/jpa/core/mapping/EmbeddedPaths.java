@@ -32,6 +32,7 @@ final class EmbeddedPaths {
             return value;
         }
 
+        @SuppressWarnings("ReferenceEquality") // identity: an unchanged embeddable is not written back
         void set(ManagedAccess entity, Object instance, Object value) {
             Object previous = entity.get(instance, root);
             if (previous == null && value == null) return;

@@ -166,6 +166,7 @@ public final class EntityLoader {
      * Entity columns captured by a SQL fetch query, not a second mapping representation: the one form of a row from
      * its result set to the persistence context. {@code key} is its identity in a context, made once with the row.
      */
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString below read the arrays by content
     public record FetchedEntity(MappedEntity type, Object id, Object[] values, boolean[] nulls, EntityKey key) {
         public FetchedEntity(MappedEntity type, Object id, Object[] values, boolean[] nulls) {
             this(type, id, values, nulls, new EntityKey(type.root(), id));
@@ -186,12 +187,14 @@ public final class EntityLoader {
 
         @Override
         public String toString() {
-            return "FetchedEntity[type=" + type + ", id=" + id + ", values=" + Arrays.toString(values) + ", nulls="
+            String entity = type == null ? null : type.model().javaType().getName(); // MappedEntity has no toString
+            return "FetchedEntity[type=" + entity + ", id=" + id + ", values=" + Arrays.toString(values) + ", nulls="
                 + Arrays.toString(nulls) + ", key=" + key + "]";
         }
     }
 
     /** One collection row; an absent LEFT row still records its owner. Entity elements carry their identifier. */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     public record FetchedElement(Object ownerId, Object element, Object[] index, boolean present) {}
 
     /** A complete collection branch captured independently, never multiplied by another collection's rows. */
@@ -278,7 +281,7 @@ public final class EntityLoader {
      */
     private boolean registerRows(List<FetchedEntity> rows, PersistenceContext context, ManagedEntity initializing,
             List<ManagedEntity> pending, List<FetchedEntity> pendingRows) {
-        Map<ManagedEntity, Integer> references = null;
+        IdentityHashMap<ManagedEntity, Integer> references = null;
         boolean relational = false;
         for (int r = 0; r < rows.size(); r++) {
             FetchedEntity fetched = rows.get(r);
@@ -379,6 +382,7 @@ public final class EntityLoader {
     }
 
     /** Completes the unloaded collection in place; the snapshot that still held it takes the baseline. */
+    @SuppressWarnings("ReferenceEquality") // identity: the very unloaded collection, not an equal one
     private static void completeLazy(LazyCollection lazy, ManagedEntity entry, int attribute, Object value, Object baseline) {
         if (entry.snapshot() != null && entry.snapshot()[attribute] == lazy) entry.snapshot()[attribute] = baseline;
         lazy.complete(value, baseline);
@@ -412,6 +416,7 @@ public final class EntityLoader {
     }
 
     /** Makes a new instance of {@code type} managed from its {@code row}, then resolves its relationships. */
+    @SuppressWarnings("ReferenceEquality") // identity: the entity instance itself, as the persistence context keys it (§3.2)
     private Object managed(MappedEntity type, Object id, Row row, Connection connection, PersistenceContext context) {
         Object instance = type.access().instantiate();
         Object[] state = state(type, instance, row);
@@ -592,6 +597,7 @@ public final class EntityLoader {
      * {@code previous}, the state of a refreshed instance, keeps a LAZY collection that was not loaded unloaded, and the
      * collections {@code fetchedCollections} names were set with the row.
      */
+    @SuppressWarnings("ReferenceEquality") // identity: the NOT_MAPPED sentinel
     private void relationships(MappedEntity type, Object id, Object instance, Object[] state, Row row, Connection connection,
             PersistenceContext context, Object[] previous, java.util.Set<Integer> fetchedCollections) {
         List<AttributeModel> attributes = type.model().attributes();
@@ -669,6 +675,7 @@ public final class EntityLoader {
      * The value of the collection {@code i}: on a refresh ({@code previous}), a LAZY collection still not loaded stays;
      * else a new LAZY collection, or the collection read now; {@link #NOT_MAPPED} for a shape not mapped yet.
      */
+    @SuppressWarnings("ReferenceEquality") // identity: the lazy collection owned by this very instance
     private Object collectionValue(MappedEntity type, Object id, Object instance, int i, Object[] previous,
             Connection connection, PersistenceContext context) {
         AttributeModel attribute = type.model().attributes().get(i);
@@ -725,6 +732,7 @@ public final class EntityLoader {
         });
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the very unloaded collection, not an equal one
     private void complete(ManagedEntity entry, LazyCollection lazy, Connection connection, PersistenceContext context) {
         MappedEntity type = entry.type();
         int i = lazy.attribute();
@@ -770,7 +778,7 @@ public final class EntityLoader {
         } else {
             read = relationshipBatch(type.statements().collection(attribute).orElse(null), target);
         }
-        if (read == null || read.index() != null && read.index().keyEntity() != null || read.owners().size() > 512) {
+        if (read == null || (read.index() != null && read.index().keyEntity() != null) || read.owners().size() > 512) {
             return false;
         }
         List<ManagedEntity> group = batchGroup(type, attribute, requested, read.owners().size(), context);
@@ -861,6 +869,7 @@ public final class EntityLoader {
     }
 
     /** Whether {@code candidate}, another managed and loaded instance of {@code type}, holds its own unloaded collection. */
+    @SuppressWarnings("ReferenceEquality") // identity: the lazy collection owned by this very instance
     private static boolean holdsUnloaded(MappedEntity type, int attribute, ManagedEntity requested, ManagedEntity candidate) {
         if (candidate == requested || candidate.type() != type || candidate.key() == null
                 || candidate.status() != ManagedEntity.Status.MANAGED
@@ -1384,7 +1393,7 @@ public final class EntityLoader {
                 index = i;
             }
         }
-        if (index < 0 || dot >= 0 && !(attributes.get(index) instanceof EmbeddedAttribute)) {
+        if (index < 0 || (dot >= 0 && !(attributes.get(index) instanceof EmbeddedAttribute))) {
             throw new PersistenceException("The @OrderBy of " + where + " names " + path + ", which its elements do not have");
         }
         int attribute = index;
@@ -1417,6 +1426,7 @@ public final class EntityLoader {
     }
 
     /** The columns of a row, and which were SQL {@code NULL} (a primitive reads 0 from it). */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     private record Row(Object[] values, boolean[] nulls) {
     }
 
@@ -1450,7 +1460,6 @@ public final class EntityLoader {
         }
     }
 
-    /** Writes the row into {@code instance}; what the row does not hold keeps its current value. */
     /**
      * Reads the row of the table {@code table} at {@code key} into the columns of {@code into} it selects; whether there
      * is one.
@@ -1484,8 +1493,8 @@ public final class EntityLoader {
      * its joined inheritance chain; a missing secondary row reads as {@code NULL} columns.
      */
     private boolean rowRequired(MappedEntity type, int t) {
-        return t == 0 || unit.inheritance(type.model().javaType()).joined()
-            && t < unit.inheritance(type.model().javaType()).chain().size();
+        return t == 0 || (unit.inheritance(type.model().javaType()).joined()
+            && t < unit.inheritance(type.model().javaType()).chain().size());
     }
 
     private static Object[] state(MappedEntity type, Object instance, Row row) {

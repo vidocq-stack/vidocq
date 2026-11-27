@@ -20,7 +20,7 @@
 package io.vidocq.noether.jpa.processor;
 
 import io.vidocq.noether.jpa.core.model.AccessKind;
-import io.vidocq.noether.jpa.core.model.build.AccessPlanner.Callback;
+import io.vidocq.noether.jpa.core.model.build.AccessPlanner;
 import io.vidocq.noether.jpa.core.model.build.AccessPlanner.Member;
 import io.vidocq.noether.jpa.core.model.source.ClassInfo;
 import io.vidocq.noether.jpa.core.model.source.FieldInfo;
@@ -225,7 +225,7 @@ final class AccessWriter {
      * @param handle the expression that looks the handle up, or {@code null}
      * @param depth the superclass depth of the lookup a handle needs, or -1 when it needs none
      */
-    private record CallbackSlot(Callback callback, String call, String handle, int depth) {
+    private record CallbackSlot(AccessPlanner.Callback callback, String call, String handle, int depth) {
     }
 
     /** One persistent member and how the generated code reaches it. */
@@ -239,7 +239,7 @@ final class AccessWriter {
      * @param className the simple name of the generated class
      * @param isRecord whether {@code type} is a record, built through its canonical constructor
      */
-    String write(TypeElement type, String className, List<Member> members, boolean isRecord, List<Callback> callbacks)
+    String write(TypeElement type, String className, List<Member> members, boolean isRecord, List<AccessPlanner.Callback> callbacks)
             throws Unsupported {
         String pkg = packageOf(type);
         String self = qualified(type);
@@ -253,7 +253,7 @@ final class AccessWriter {
         }
         List<String> listeners = new ArrayList<>();
         List<CallbackSlot> callbackSlots = new ArrayList<>();
-        for (Callback callback : callbacks) {
+        for (AccessPlanner.Callback callback : callbacks) {
             callbackSlots.add(callbackSlot(type, callback, pkg, listeners));
         }
         boolean notWritten = isRecord || readOnly;
@@ -278,9 +278,9 @@ final class AccessWriter {
     }
 
     /** The descriptors of the callbacks, as string literals. */
-    private static String callbackDescriptors(List<Callback> callbacks) {
+    private static String callbackDescriptors(List<AccessPlanner.Callback> callbacks) {
         StringBuilder descriptors = new StringBuilder();
-        for (Callback callback : callbacks) {
+        for (AccessPlanner.Callback callback : callbacks) {
             descriptors.append(descriptors.isEmpty() ? "" : ", ").append('"').append(callback.descriptor()).append('"');
         }
         return descriptors.toString();
@@ -396,7 +396,7 @@ final class AccessWriter {
     }
 
     /** How the generated access calls {@code callback}: directly when the language allows it, else through a handle. */
-    private CallbackSlot callbackSlot(TypeElement type, Callback callback, String pkg, List<String> listeners) throws Unsupported {
+    private CallbackSlot callbackSlot(TypeElement type, AccessPlanner.Callback callback, String pkg, List<String> listeners) throws Unsupported {
         ClassInfo owner = infos.read(callback.owner())
             .orElseThrow(() -> new Unsupported("the class " + callback.owner() + " of a callback cannot be read"));
         TypeElement ownerElement = infos.element(callback.owner());
@@ -448,8 +448,8 @@ final class AccessWriter {
                 .anyMatch(f -> f.getSimpleName().contentEquals(name) && variable(f.asType()));
         }
         return ElementFilter.methodsIn(owner.getEnclosedElements()).stream().anyMatch(m ->
-            m.getSimpleName().contentEquals(name) && m.getParameters().isEmpty() && variable(m.getReturnType())
-            || m.getSimpleName().contentEquals(setter) && m.getParameters().size() == 1 && variable(m.getParameters().getFirst().asType()));
+            (m.getSimpleName().contentEquals(name) && m.getParameters().isEmpty() && variable(m.getReturnType()))
+            || (m.getSimpleName().contentEquals(setter) && m.getParameters().size() == 1 && variable(m.getParameters().getFirst().asType())));
     }
 
     private static boolean variable(javax.lang.model.type.TypeMirror type) {
@@ -599,7 +599,7 @@ final class AccessWriter {
     }
 
     private String instantiate(TypeElement type, String self) {
-        if (type.getModifiers().contains(Modifier.ABSTRACT) || !constructorVisible(type) && !privateConstructor(type)) {
+        if (type.getModifiers().contains(Modifier.ABSTRACT) || (!constructorVisible(type) && !privateConstructor(type))) {
             return "";
         }
         // the constructor may declare checked exceptions: they propagate unchanged

@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** A composite id through @EmbeddedId. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Ticket {
     @EmbeddedId
     private TicketKey key;

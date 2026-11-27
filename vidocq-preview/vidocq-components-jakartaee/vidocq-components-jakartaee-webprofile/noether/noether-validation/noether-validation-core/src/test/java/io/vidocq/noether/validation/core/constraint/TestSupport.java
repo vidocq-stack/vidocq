@@ -34,8 +34,10 @@ import java.time.ZoneId;
  */
 final class TestSupport {
 
+    /** The instant of {@link #CLOCK}. */
+    static final Instant FIXED_NOW = Instant.parse("2026-06-15T12:00:00Z");
     /** 2026-06-15T12:00:00Z, expressed in Asia/Tokyo (local 2026-06-15T21:00). */
-    static final Clock CLOCK = Clock.fixed(Instant.parse("2026-06-15T12:00:00Z"), ZoneId.of("Asia/Tokyo"));
+    static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneId.of("Asia/Tokyo"));
 
     static final ConstraintValidatorContext CONTEXT = new StubContext();
 

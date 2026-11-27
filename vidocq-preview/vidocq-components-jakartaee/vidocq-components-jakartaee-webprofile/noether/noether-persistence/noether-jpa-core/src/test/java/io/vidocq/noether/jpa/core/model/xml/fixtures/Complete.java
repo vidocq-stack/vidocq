@@ -29,6 +29,7 @@ import jakarta.persistence.Transient;
 /** Its mapping is metadata-complete (§12.2.3.1): every annotation below is ignored. */
 @Entity(name = "Ignored")
 @Table(name = "WRONG_T")
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Complete {
     @Id
     @Column(name = "WRONG_ID")

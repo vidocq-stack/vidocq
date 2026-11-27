@@ -343,6 +343,7 @@ public final class PersistenceContext {
     }
 
     /** An unloaded collection stays in the snapshot of its owner until it is loaded or the attribute replaced. */
+    @SuppressWarnings("ReferenceEquality") // identity: the lazy collection owned by this very instance
     private static void disconnect(ManagedEntity entry) {
         if (entry.instance() instanceof io.vidocq.noether.jpa.core.spi.LazyReference reference
                 && reference.$noetherState() != null) reference.$noetherState().disconnect();

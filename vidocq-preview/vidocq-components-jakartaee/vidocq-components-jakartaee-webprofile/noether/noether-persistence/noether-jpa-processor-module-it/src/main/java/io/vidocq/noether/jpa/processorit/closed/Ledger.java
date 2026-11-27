@@ -27,6 +27,7 @@ import java.util.Map;
 
 /** An entity with private state in a package Noether is not given access to. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Ledger {
     @Id
     private long id;

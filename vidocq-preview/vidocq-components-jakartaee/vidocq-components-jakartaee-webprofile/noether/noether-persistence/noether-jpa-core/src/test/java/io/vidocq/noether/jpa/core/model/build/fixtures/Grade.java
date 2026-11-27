@@ -22,6 +22,7 @@ package io.vidocq.noether.jpa.core.model.build.fixtures;
 import jakarta.persistence.EnumeratedValue;
 
 /** An enum stored by the value of its @EnumeratedValue field (3.2). */
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public enum Grade {
     A("a"), B("b");
 

@@ -33,6 +33,7 @@ import java.util.Date;
  */
 public final class FutureOrPresentValidatorForDate implements ConstraintValidator<FutureOrPresent, Date> {
     @Override
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a type Jakarta Validation requires @FutureOrPresent to support
     public boolean isValid(Date value, ConstraintValidatorContext context) {
         if (value == null) {
             return true;

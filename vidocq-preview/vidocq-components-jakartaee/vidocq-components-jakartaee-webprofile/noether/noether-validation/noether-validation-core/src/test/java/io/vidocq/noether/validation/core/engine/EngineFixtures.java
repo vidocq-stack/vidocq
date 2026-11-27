@@ -183,6 +183,7 @@ public final class EngineFixtures {
     }
 
     @ConsistentName
+    @SuppressWarnings("UnusedVariable") // fixture state, read by the validator, not by Java code
     public static class Person {
         @NotNull
         public String first;

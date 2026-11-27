@@ -69,7 +69,7 @@ class TableGeneratorIT {
     private static Set<Long> committed() throws IOException, InterruptedException {
         String body = send(HttpRequest.newBuilder(URI.create(BASE + "/vouchers")).GET());
         Set<Long> ids = new HashSet<>();
-        for (String id : body.split(",")) {
+        for (String id : body.split(",", -1)) {
             if (!id.isBlank()) ids.add(Long.parseLong(id.strip()));
         }
         return ids;

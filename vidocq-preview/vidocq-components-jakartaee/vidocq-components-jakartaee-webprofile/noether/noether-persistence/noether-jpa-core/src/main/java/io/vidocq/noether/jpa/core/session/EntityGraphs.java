@@ -75,6 +75,7 @@ final class EntityGraphs {
         return graph;
     }
     EntityGraph<?> copy(String name) { Root<?> graph=named.get(name); return graph==null?null:graph.copy(name,true); }
+    @SuppressWarnings("ReferenceEquality") // identity: the metamodel of this very unit and its own attributes
     <T> void add(String name,EntityGraph<T> graph) {
         if (!(graph instanceof Root<?> root) || root.model!=model) throw new IllegalArgumentException("Graph belongs to another unit");
         named.put(Objects.requireNonNull(name),root.copy(name,false));
@@ -92,8 +93,9 @@ final class EntityGraphs {
         named.forEach((name,g) -> { if (type.isAssignableFrom(g.type)) result.put(name,(EntityGraph<? extends T>) g); });
         return Collections.unmodifiableMap(result);
     }
+    @SuppressWarnings("ReferenceEquality") // identity: the metamodel of this very unit and its own attributes
     static void validateHint(Object value,Class<?> root,Metamodel model) {
-        if (!(value instanceof Root<?> graph) || graph.model!=model || root!=null && !graph.type.isAssignableFrom(root))
+        if (!(value instanceof Root<?> graph) || graph.model!=model || (root!=null && !graph.type.isAssignableFrom(root)))
             throw new IllegalArgumentException("Graph hint must belong to this persistence unit and match the entity type");
     }
     /**
@@ -123,6 +125,7 @@ final class EntityGraphs {
         Base(Metamodel model,Class<T> type,boolean mutable) { this.model=model; this.type=type; this.mutable=mutable; }
         void writable() { if (!mutable) throw new IllegalStateException("Named entity graphs are immutable"); }
         Attribute<? super T,?> attribute(String name) { return model.managedType(type).getAttribute(name); }
+        @SuppressWarnings("ReferenceEquality") // identity: the metamodel of this very unit and its own attributes
         void validate(Attribute<?,?> a) {
             if (!a.getDeclaringType().getJavaType().isAssignableFrom(type) || attribute(a.getName())!=a)
                 throw new IllegalArgumentException("Attribute does not belong to this graph");

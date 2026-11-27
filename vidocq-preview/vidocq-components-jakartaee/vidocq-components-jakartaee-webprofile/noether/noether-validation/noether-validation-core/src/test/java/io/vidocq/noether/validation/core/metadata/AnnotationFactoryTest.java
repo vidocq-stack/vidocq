@@ -91,6 +91,7 @@ class AnnotationFactoryTest {
     }
 
     @Test
+    @SuppressWarnings("GetClassOnAnnotation") // the test checks the class of the instance is not a JDK proxy
     void theInstanceIsNotAJdkProxy() {
         Annotation read = fromClassFile("defaults");
         assertThat(java.lang.reflect.Proxy.isProxyClass(read.getClass())).isFalse();

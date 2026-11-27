@@ -402,6 +402,7 @@ public final class ValueBinders {
     }
 
     /** {@code java.util.Date} and {@code Calendar} (§11.1.53): read back as their own class, not a {@code java.sql} one. */
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a temporal type Jakarta Persistence maps (§2.6, §11.1.53)
     private static ValueBinder legacyTemporal(Class<?> type, TemporalType temporal) {
         Writer writer = switch (temporal) {
             case DATE -> (s, i, v) -> s.setDate(i, new java.sql.Date(millis(v)));
@@ -442,6 +443,7 @@ public final class ValueBinders {
         });
     }
 
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a temporal type Jakarta Persistence maps (§2.6, §11.1.53)
     private static long millis(Object value) {
         return value instanceof Calendar calendar ? calendar.getTimeInMillis() : ((Date) value).getTime();
     }
@@ -452,6 +454,7 @@ public final class ValueBinders {
 
     // ---- enums (§11.1.18, @EnumeratedValue) -------------------------------------------------------------
 
+    @SuppressWarnings("EnumOrdinal") // EnumType.ORDINAL stores the ordinal (§11.1.18)
     private static ValueBinder ordinal(Class<?> type) {
         Object[] constants = type.getEnumConstants();
         return new Simple(Types.INTEGER, (s, i, v) -> s.setInt(i, ((Enum<?>) v).ordinal()), (r, c) -> {

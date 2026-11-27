@@ -55,6 +55,7 @@ class BeanDescriptorTest {
         public String free;
     }
 
+    @SuppressWarnings("UnusedVariable") // fixture state, read by the validator, not by Java code
     public static class Plain {
         public String free;
         private int hidden;

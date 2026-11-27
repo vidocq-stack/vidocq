@@ -35,6 +35,7 @@ import java.util.List;
 @Entity(name = "Purchase")
 @Table(name = "PURCHASES", uniqueConstraints = @UniqueConstraint(columnNames = {"CODE", "LABEL"}))
 @IdClass(PurchaseKey.class)
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Purchase {
 
     @Id

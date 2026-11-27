@@ -549,6 +549,7 @@ class CollectionSubgraphTest {
         }
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the same managed instance, twice
     @Test void nestedCollectionsPreserveBagsMapsSharedOwnersAndRootOnlyPagination() {
         for (String collection : List.of("picks", "keyed")) {
             cold();
@@ -1396,6 +1397,7 @@ class CollectionSubgraphTest {
         assertThat(selects()).isEqualTo(1);
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the same managed instance, twice
     @Test void bagDuplicatesAndMapKeysKeepTheirSubgraphs() {
         for (String hint : List.of(FETCH, LOAD)) {
             cold();

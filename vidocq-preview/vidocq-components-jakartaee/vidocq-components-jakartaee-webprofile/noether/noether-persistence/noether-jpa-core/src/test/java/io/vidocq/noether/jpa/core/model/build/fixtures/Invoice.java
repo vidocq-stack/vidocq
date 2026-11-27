@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** Converters: auto-applied, explicit, and disabled. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Invoice {
     @Id
     private long id;

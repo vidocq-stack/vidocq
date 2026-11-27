@@ -24,6 +24,7 @@ import java.util.List;
 
 /** Relationships and element collections are recorded, mapped by later milestones (P5). */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Author {
     @Id
     private long id;

@@ -91,6 +91,7 @@ public final class UnitDescriptions {
     }
 
     /** Attribute {@code index} of {@code entity}, with the columns its statements give it. */
+    @SuppressWarnings("ReferenceEquality") // identity: the model object of this unit, not an equal copy
     private Attribute attribute(MappedEntity entity, int index) {
         EntityModel model = entity.model();
         AttributeModel attribute = model.attributes().get(index);
@@ -119,6 +120,7 @@ public final class UnitDescriptions {
         };
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the model object of this unit, not an equal copy
     private static Kind basicKind(EntityModel model, BasicAttribute basic) {
         if (model.version().filter(v -> v == basic).isPresent()) return Kind.VERSION;
         return switch (model.id()) {

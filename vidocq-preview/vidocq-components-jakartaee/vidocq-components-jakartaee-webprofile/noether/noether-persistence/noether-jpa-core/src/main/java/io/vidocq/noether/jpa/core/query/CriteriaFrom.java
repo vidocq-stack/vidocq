@@ -75,12 +75,13 @@ final class CriteriaFrom {
         @Override public <A,Y> Join<A,Y> join(String n) { return join(n,JoinType.INNER); }
         @SuppressWarnings("unchecked") // String-based API lets the caller choose owner/target generics; metadata checks the named attribute.
         @Override public <A,Y> Join<A,Y> join(String n, JoinType t) { return (Join<A,Y>) create(attribute(n),t,false); }
+        @SuppressWarnings("TypeParameterUnusedInFormals") // the one checked cast behind the typed join methods
         private <J> J typedJoin(String n, JoinType t, Class<?> kind) {
             Attribute<? super X,?> a = attribute(n);
             if (!kind.isInstance(a)) throw new IllegalArgumentException("Wrong collection kind: " + n);
             return castJoin(create(a,t,false));
         }
-        @SuppressWarnings("unchecked") // typedJoin has checked the specific collection kind and its model.
+        @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"}) // typedJoin has checked the specific collection kind and its model; TypeParameterUnusedInFormals: the one checked cast behind the typed join methods
         private <J> J castJoin(JoinNode<X,?> join) { return (J) join; }
         @Override public <A,Y> CollectionJoin<A,Y> joinCollection(String n) { return joinCollection(n,JoinType.INNER); }
         @Override public <A,Y> CollectionJoin<A,Y> joinCollection(String n,JoinType t) { return typedJoin(n,t,CollectionAttribute.class); }

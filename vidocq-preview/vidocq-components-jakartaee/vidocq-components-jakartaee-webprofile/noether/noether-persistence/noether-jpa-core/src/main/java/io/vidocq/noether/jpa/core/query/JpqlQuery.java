@@ -261,7 +261,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
             Set<jakarta.persistence.criteria.ParameterExpression<?>> declared,
             List<jakarta.persistence.criteria.Selection<?>> tupleElements) {
         this(CRITERIA, null, statement, resultClass, flushMode, runtime);
-        Map<Parameter<?>, Object> identities = new java.util.IdentityHashMap<>();
+        java.util.IdentityHashMap<Parameter<?>, Object> identities = new java.util.IdentityHashMap<>();
         for (var parameter : declared) {
             Ast.Parameter syntax = (Ast.Parameter) CriteriaExpressions.ast(parameter);
             identities.put(parameter, key(syntax));
@@ -619,7 +619,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
     }
 
     /** Runs the query for at most {@code maxResults} results. */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "ReferenceEquality"}) // identity: whether the translation returned the statement itself
     private List<X> run(int maxResults) {
         checkReadable();
         if (maxResults == 0) {
@@ -711,6 +711,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
     }
 
     /** @param plan the shared plan {@code compiled} comes from, which keeps its rendered SQL; {@code null} if it has none */
+    @SuppressWarnings("ReferenceEquality") // identity: the plan rendered for this very SQL tree
     private List<Object> execute(Compiled compiled, QueryPlans.Plan plan, List<List<Compiled>> split, Connection connection) {
         Dialect dialect = runtime.dialect(connection);
         boolean pessimistic = io.vidocq.noether.jpa.core.flush.Locks.pessimistic(lockMode);
@@ -747,7 +748,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
     /** Whether the owners of a hydrated collection are given once each: a graph read, or a distinct fetch join. */
     private boolean uniqueOwners(Compiled compiled) {
         return compiled.collection() != null && (!collectionFetch
-            || statement instanceof Ast.Select select && select.distinct());
+            || (statement instanceof Ast.Select select && select.distinct()));
     }
 
     /** Whether {@code sql} reads a derived table, as a TABLE_PER_CLASS union: its rows cannot be locked by it. */
@@ -964,6 +965,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
     }
 
     /** A constructor result whose arguments are read, built once the entities among them are found. */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     private record Built(Class<?> type, Object[] arguments) {
     }
 
@@ -971,6 +973,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
     private record EntryBuilt(Object key, Object value) {
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     private record EmbeddedBuilt(Compiled.EmbeddedItem item, Object[] components) {
     }
 
@@ -1127,6 +1130,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
     }
 
     /** A date or time as the {@code java.sql} or {@code java.time} type expected, or {@code null} if neither is one. */
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a temporal type Jakarta Persistence maps (§2.6)
     private static Object temporal(Object value, Class<?> type) {
         if (value instanceof Calendar calendar) {
             return type == Calendar.class ? value : temporal(new java.sql.Timestamp(calendar.getTimeInMillis()), type);
@@ -1152,7 +1156,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
             case java.time.OffsetDateTime dateTime when type == java.sql.Timestamp.class -> java.sql.Timestamp.from(dateTime.toInstant());
             // a TIME WITH TIME ZONE (H2's CURRENT_TIME) as the local time it is in this JVM (BUG-20261118-83)
             case java.time.OffsetTime time when type == java.sql.Time.class -> java.sql.Time.valueOf(time.withOffsetSameInstant(
-                java.time.OffsetDateTime.now().getOffset()).toLocalTime());
+                java.time.OffsetDateTime.now(java.time.ZoneId.systemDefault()).getOffset()).toLocalTime());
             default -> null;
         };
     }
@@ -1309,7 +1313,7 @@ public final class JpqlQuery<X> extends AbstractQuery implements TypedQuery<X> {
     private static boolean temporal(Object valueOrType) {
         Class<?> type = valueOrType instanceof Class<?> c ? c : valueOrType.getClass();
         return Date.class.isAssignableFrom(type) || Calendar.class.isAssignableFrom(type)
-            || java.time.temporal.Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time");
+            || (java.time.temporal.Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time"));
     }
 
     private static Calendar calendar(Date date) {

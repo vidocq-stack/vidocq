@@ -23,6 +23,7 @@ import jakarta.persistence.*;
 
 /** The owning side of a relationship. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Book {
     @Id
     private long id;

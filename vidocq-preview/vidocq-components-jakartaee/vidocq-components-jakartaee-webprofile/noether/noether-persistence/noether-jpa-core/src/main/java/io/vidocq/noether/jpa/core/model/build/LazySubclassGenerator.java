@@ -40,9 +40,9 @@ public final class LazySubclassGenerator {
                 || members.stream().anyMatch(m -> m.access() != AccessKind.PROPERTY)) return false;
         var ids = members.stream().filter(m -> m.element().isAnnotated("jakarta.persistence.Id")).toList();
         if (ids.size() != 1 || members.stream().anyMatch(m -> m.element().isAnnotated("jakarta.persistence.EmbeddedId"))
-                || !ids.getFirst().type().isPrimitive() && !List.of("Ljava/lang/String;", "Ljava/lang/Long;",
+                || (!ids.getFirst().type().isPrimitive() && !List.of("Ljava/lang/String;", "Ljava/lang/Long;",
                     "Ljava/lang/Integer;", "Ljava/lang/Short;", "Ljava/lang/Byte;", "Ljava/lang/Character;")
-                    .contains(ids.getFirst().type().descriptorString())) return false;
+                    .contains(ids.getFirst().type().descriptorString()))) return false;
         if (info.fields().stream().anyMatch(f -> (f.flags() & ClassFile.ACC_STATIC) == 0
                 && (f.flags() & ClassFile.ACC_PRIVATE) == 0)) return false;
         if (info.methods().stream().anyMatch(m -> !m.isStatic() && !m.isPrivate()
@@ -74,7 +74,7 @@ public final class LazySubclassGenerator {
                 code -> code.aload(0).aload(1).putfield(self, STATE_NAME, STATE).return_());
             for (MethodInfo method : info.methods()) {
                 if (method.name().startsWith("<") || method.isPrivate() || method.isStatic() || method.isSynthetic()
-                        || method.name().equals(identifier) && method.type().parameterCount() == 0) continue;
+                        || (method.name().equals(identifier) && method.type().parameterCount() == 0)) continue;
                 builder.withMethodBody(method.name(), method.type(), method.flags() & (ClassFile.ACC_PUBLIC | ClassFile.ACC_PROTECTED),
                     code -> {
                         code.aload(0).getfield(self, STATE_NAME, STATE)

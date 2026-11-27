@@ -24,6 +24,7 @@ import jakarta.persistence.Id;
 
 /** An entity of a package opened to Noether. */
 @Entity
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class Book {
     @Id
     private long id;

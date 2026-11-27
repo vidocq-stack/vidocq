@@ -41,6 +41,7 @@ public final class BeanFixtures {
     }
 
     @Required(message = "class level")
+    @SuppressWarnings("UnusedVariable") // fixture state, read by the validator, not by Java code
     public static class Base implements Named {
         @NotNull
         private String id = "id-1";
@@ -56,11 +57,13 @@ public final class BeanFixtures {
         }
 
         @NotNull
+        @SuppressWarnings("NullablePrimitive") // a constraint on a primitive getter, the shape under test
         public boolean isActive() {
             return true;
         }
 
         @NotNull
+        @SuppressWarnings("NullablePrimitive") // a constraint on a primitive getter, the shape under test
         public boolean hasLabel() {
             return true;
         }
@@ -73,6 +76,7 @@ public final class BeanFixtures {
 
         /** Not a getter: void. */
         @NotNull
+        @SuppressWarnings("NullableVoid") // a constraint on a void method, the shape under test
         public void getNothing() {
             // not a getter, since it returns void: the body does not matter
         }
@@ -89,6 +93,7 @@ public final class BeanFixtures {
         }
     }
 
+    @SuppressWarnings("UnusedVariable") // fixture state, read by the validator, not by Java code
     public static class Derived extends Base {
         @Size(min = 2)
         @NotAConstraintEither

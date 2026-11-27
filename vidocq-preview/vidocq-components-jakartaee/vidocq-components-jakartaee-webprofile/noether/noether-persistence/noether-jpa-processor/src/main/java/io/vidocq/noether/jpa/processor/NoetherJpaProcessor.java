@@ -590,7 +590,7 @@ public final class NoetherJpaProcessor extends AbstractProcessor {
     private void resultConstructors(TypeElement type, Element origin) {
         boolean inner = type.getNestingKind() == NestingKind.MEMBER && type.getKind() == ElementKind.CLASS
             && !type.getModifiers().contains(Modifier.STATIC);
-        if (type.getKind() != ElementKind.CLASS && type.getKind() != ElementKind.RECORD || inner
+        if ((type.getKind() != ElementKind.CLASS && type.getKind() != ElementKind.RECORD) || inner
                 || type.getModifiers().contains(Modifier.ABSTRACT) || !handsOver(type)) {
             return;
         }

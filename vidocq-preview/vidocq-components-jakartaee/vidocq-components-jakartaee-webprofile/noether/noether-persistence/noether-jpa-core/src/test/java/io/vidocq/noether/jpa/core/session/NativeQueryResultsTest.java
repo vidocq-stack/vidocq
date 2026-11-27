@@ -75,6 +75,7 @@ class NativeQueryResultsTest {
     }
 
     @Test
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: the setParameter overload under test
     void namedParametersAreRefusedWhateverTheirTemporalType() { // §3.11.17: native queries have positional parameters
         Query query = em.createNativeQuery("SELECT ?1");
         Calendar calendar = Calendar.getInstance();

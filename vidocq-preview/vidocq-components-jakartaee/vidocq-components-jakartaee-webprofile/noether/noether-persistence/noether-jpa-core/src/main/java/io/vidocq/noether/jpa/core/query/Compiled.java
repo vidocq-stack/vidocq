@@ -65,6 +65,7 @@ record Compiled(Statement sql, List<Item> items, Class<?> resultType, List<Slot>
      * @param columns the indexes, in the entity's statement columns, of the columns read, in their order in the row
      * @param key the indexes of its key columns, in the order of its key
      */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     record Hydration(MappedEntity type, int[] columns, int[] key) {
     }
 

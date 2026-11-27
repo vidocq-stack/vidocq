@@ -251,7 +251,7 @@ final class SecondLevelCache implements Cache {
         List<ManagedEntity> managed = context.entries();
         for (ManagedEntity entry : managed) {
             EntityKey key = entry.key();
-            if (key == null || !candidates.contains(key) && !changed.contains(key)) {
+            if (key == null || (!candidates.contains(key) && !changed.contains(key))) {
                 continue;
             }
             if (entry.status() == ManagedEntity.Status.MANAGED
@@ -521,6 +521,7 @@ final class SecondLevelCache implements Cache {
         return mapping.entity(instance.getClass()).orElseThrow(UnsupportedState::new);
     }
 
+    @SuppressWarnings("JavaUtilDate") // java.util.Date: a mutable temporal type Jakarta Persistence maps (§2.6)
     private static Object copyBasic(Object value) {
         if (value == null || immutable(value.getClass())) {
             return value;
@@ -566,7 +567,7 @@ final class SecondLevelCache implements Cache {
         return type.isPrimitive() || type.isEnum() || type == String.class || type == Boolean.class
             || type == Character.class || type == Byte.class || type == Short.class || type == Integer.class
             || type == Long.class || type == Float.class || type == Double.class || type == UUID.class
-            || Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time")
+            || (Temporal.class.isAssignableFrom(type) && type.getPackageName().equals("java.time"))
             || type == Class.class || type == BigDecimal.class || type == BigInteger.class;
     }
 

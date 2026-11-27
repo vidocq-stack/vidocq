@@ -112,6 +112,7 @@ public final class QueryPlans {
         }
 
         /** {@link Dialect#renderQuery} of the translated statement, rendered once per dialect. */
+        @SuppressWarnings("ReferenceEquality") // identity: the rendering made for this very dialect instance
         Dialect.Rendered rendered(Dialect dialect) {
             Rendering known = rendering.get();
             if (known == null || known.dialect() != dialect) {

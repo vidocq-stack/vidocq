@@ -399,10 +399,10 @@ final class SchemaPlan {
         if (!(model.id() instanceof IdModel.Single(var attribute, var idGeneration)) || idGeneration.isEmpty()) return;
         GenerationModel generation = idGeneration.orElseThrow();
         GenerationType strategy = generation.strategy();
-        if (strategy == GenerationType.SEQUENCE || strategy == GenerationType.AUTO && generation.sequence().isPresent()) {
+        if (strategy == GenerationType.SEQUENCE || (strategy == GenerationType.AUTO && generation.sequence().isPresent())) {
             sequenceGenerator(generation);
-        } else if (strategy == GenerationType.TABLE || strategy == GenerationType.AUTO
-                && attribute.javaType() != java.util.UUID.class) {
+        } else if (strategy == GenerationType.TABLE || (strategy == GenerationType.AUTO
+                && attribute.javaType() != java.util.UUID.class)) {
             tableGenerator(generation);
         }
     }
@@ -459,7 +459,7 @@ final class SchemaPlan {
                 } else {
                     quoted = !quoted;
                 }
-            } else if (i == list.length() || !quoted && list.charAt(i) == ',') {
+            } else if (i == list.length() || (!quoted && list.charAt(i) == ',')) {
                 columns.add(indexColumn(list.substring(start, i), list));
                 start = i + 1;
             }
@@ -549,7 +549,7 @@ final class SchemaPlan {
             if (found != null) return found;
             owner = info.superclassName();
         }
-        String[] path = attribute.name().split("\\.");
+        String[] path = attribute.name().split("\\.", -1);
         List<AttributeModel> attributes = unit.model().entity(model.javaType()).orElseThrow().attributes();
         for (int i = 0; i < path.length - 1; i++) {
             String segment = path[i];
@@ -577,7 +577,7 @@ final class SchemaPlan {
     private AttributeModel declaredAttribute(EntityModel model, String name) {
         List<AttributeModel> attributes = unit.model().entity(model.javaType()).orElseThrow().attributes();
         AttributeModel result = null;
-        for (String segment : name.split("\\.")) {
+        for (String segment : name.split("\\.", -1)) {
             result = attributes.stream().filter(a -> a.name().equals(segment)).findFirst().orElse(null);
             if (result instanceof EmbeddedAttribute embedded) attributes = embedded.embeddable().attributes();
         }

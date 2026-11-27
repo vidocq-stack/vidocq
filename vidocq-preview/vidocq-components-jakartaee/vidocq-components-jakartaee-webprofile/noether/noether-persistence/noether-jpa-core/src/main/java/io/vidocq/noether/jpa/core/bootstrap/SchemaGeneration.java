@@ -44,8 +44,8 @@ public final class SchemaGeneration implements SchemaManager, io.vidocq.noether.
         String database = action("database.action");
         String scripts = action("scripts.action");
         if ("none".equals(database) && "none".equals(scripts)) return;
-        if (creates(scripts) && settings.property(PREFIX + "scripts.create-target") == null
-                || drops(scripts) && settings.property(PREFIX + "scripts.drop-target") == null) {
+        if ((creates(scripts) && settings.property(PREFIX + "scripts.create-target") == null)
+                || (drops(scripts) && settings.property(PREFIX + "scripts.drop-target") == null)) {
             throw new PersistenceException("Schema script actions require their scripts.create-target / scripts.drop-target");
         }
         withConnection(!"none".equals(database) || settings.string(DATABASE_PRODUCT_NAME) == null,

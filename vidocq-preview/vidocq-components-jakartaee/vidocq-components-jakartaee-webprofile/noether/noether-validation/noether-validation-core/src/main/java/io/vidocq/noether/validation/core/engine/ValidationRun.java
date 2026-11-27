@@ -65,9 +65,9 @@ final class ValidationRun<T> {
     private final Class<T> rootBeanClass;
     private final Set<ConstraintViolation<T>> violations = new LinkedHashSet<>();
     /** The beans being validated, with their group: the chain from the root to the bean under validation. */
-    private final Map<Object, Set<Class<?>>> inProgress = new IdentityHashMap<>();
+    private final IdentityHashMap<Object, Set<Class<?>>> inProgress = new IdentityHashMap<>();
     /** The answers of the traversable resolver, per bean: asked once per property and path (BUG-20261018-01). */
-    private final Map<Object, Map<Reach, Boolean>> reachable = new IdentityHashMap<>();
+    private final IdentityHashMap<Object, Map<Reach, Boolean>> reachable = new IdentityHashMap<>();
 
     /** A question to the traversable resolver: a property of a bean reached at {@code path}. */
     private record Reach(PropertyMetadata.Kind kind, String member, PathImpl path) {

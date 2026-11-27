@@ -46,6 +46,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,6 +79,7 @@ public final class FlushEngine {
     }
 
     /** The SQL of an entity, its primary table first. */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     record Sql(List<TableSql> tables, String[] generatedKey) {
         String select() {
             return tables.getFirst().select();
@@ -85,6 +87,7 @@ public final class FlushEngine {
     }
 
     /** An instance to write, with the state read from it. */
+    @SuppressWarnings("ArrayRecordComponent") // a positional carrier, never compared nor hashed
     private record Work(ManagedEntity entry, Object[] state) {
         MappedEntity type() {
             return entry.type();
@@ -249,10 +252,10 @@ public final class FlushEngine {
      */
     private static Map<Object, List<CollectionKeyWrite>> collectionInserts(PersistenceContext context, List<Work> inserts,
             Set<Object> pending) {
-        Map<Object, List<CollectionKeyWrite>> collectionInserts = Collections.emptyMap();
         if (inserts.isEmpty()) {
-            return collectionInserts;
+            return Collections.emptyMap();
         }
+        IdentityHashMap<Object, List<CollectionKeyWrite>> collectionInserts = null;
         for (ManagedEntity entry : context.entries()) {
             if (!ownsMemberKeyingCollection(entry)) continue; // its state is not read for nothing
             Work owner = new Work(entry, read(entry.type(), entry.instance()));
@@ -263,7 +266,7 @@ public final class FlushEngine {
                 }
             }
         }
-        return collectionInserts;
+        return collectionInserts == null ? Collections.emptyMap() : collectionInserts;
     }
 
     /** Whether {@code entry} is a loaded, managed instance of an entity with a collection that keys its members' rows. */
@@ -280,19 +283,22 @@ public final class FlushEngine {
      */
     private static boolean keysItsMembers(CollectionMapping mapping) {
         return mapping instanceof CollectionMapping.ForeignKey
-            || mapping instanceof CollectionMapping.MappedBy inverse && inverse.indexUpdate() != null
-                && inverse.index().insertable();
+            || (mapping instanceof CollectionMapping.MappedBy inverse && inverse.indexUpdate() != null
+                && inverse.index().insertable());
     }
 
-    /** {@code collectionInserts} with the keys of the members of one collection of {@code owner} that are in {@code pending}. */
-    private static Map<Object, List<CollectionKeyWrite>> memberKeys(Work owner, CollectionMapping mapping,
-            Set<Object> pending, int inserts, Map<Object, List<CollectionKeyWrite>> collectionInserts) {
+    /**
+     * {@code collectionInserts} with the keys of the members of one collection of {@code owner} that are in
+     * {@code pending}; {@code null} while none is.
+     */
+    private static IdentityHashMap<Object, List<CollectionKeyWrite>> memberKeys(Work owner, CollectionMapping mapping,
+            Set<Object> pending, int inserts, IdentityHashMap<Object, List<CollectionKeyWrite>> collectionInserts) {
         Object current = owner.state()[mapping.attribute()];
         List<Object> members = CollectionMapping.elements(current);
         List<Object> keys = CollectionMapping.keys(current);
         for (int e = 0; e < members.size(); e++) {
             if (pending.contains(members.get(e))) {
-                if (collectionInserts.isEmpty()) collectionInserts = new IdentityHashMap<>(inserts);
+                if (collectionInserts == null) collectionInserts = new IdentityHashMap<>(inserts);
                 collectionInserts.computeIfAbsent(members.get(e), _ -> new ArrayList<>())
                     .add(new CollectionKeyWrite(owner, mapping, keys.get(e)));
             }
@@ -401,6 +407,7 @@ public final class FlushEngine {
         remaining.forEach(w -> pending.add(w.entry().instance()));
         inserts.clear();
         while (!remaining.isEmpty()) {
+            @SuppressWarnings("ReferenceEquality") // identity: a reference to the instance itself is no dependency
             Work next = remaining.stream().filter(w -> w.type().statements().references().stream()
                 .filter(r -> requiredReference(w.type(), r))
                 .noneMatch(r -> w.state()[r.attribute()] != w.entry().instance()
@@ -431,6 +438,7 @@ public final class FlushEngine {
         return !association.optional() || association.joinColumns().stream().anyMatch(j -> !j.nullable());
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the entity instance itself, as the persistence context keys it (§3.2)
     private static void orderRequiredDeletes(List<Work> deletes) {
         if (deletes.isEmpty()) return;
         if (!anyRequiredReference(deletes)) return;
@@ -654,6 +662,7 @@ public final class FlushEngine {
     }
 
     /** The column values of the row of {@code work}, foreign keys to rows not inserted yet left {@code NULL}. */
+    @SuppressWarnings("ReferenceEquality") // identity: a business key referencing the instance itself
     private static Object[] insertValues(Work work, Set<Object> pending, List<ReferenceWrite> later) {
         if (work.type().hasMapsId()) {
             work.type().deriveId(work.entry().instance());
@@ -682,11 +691,12 @@ public final class FlushEngine {
      * or an order the ranks cannot give): written {@code NULL} first, so that the deletes satisfy the constraints. A
      * row deleted before the row it references keeps its key: a {@code NOT NULL} foreign key stays valid (BUG-20261009-19).
      */
+    @SuppressWarnings("ReferenceEquality") // identity: a reference to the instance itself is no dependency
     private static List<ReferenceWrite> referencesBetween(List<Work> deletes) {
         if (deletes.size() < 2) {
             return List.of();
         }
-        Map<Object, Integer> order = new IdentityHashMap<>();
+        IdentityHashMap<Object, Integer> order = new IdentityHashMap<>();
         for (int i = 0; i < deletes.size(); i++) {
             order.put(deletes.get(i).entry().instance(), i);
         }
@@ -783,10 +793,11 @@ public final class FlushEngine {
             table.indexed() ? CollectionMapping.keys(current) : null, statements, connection);
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the object still held since the snapshot is unchanged
     private void writeToOneTable(Work work, Object[] snapshot, CollectionMapping.JoinTable table, Connection connection) {
         Object current = work.state()[table.attribute()];
         Object previous = snapshot == null ? null : snapshot[table.attribute()];
-        if (snapshot != null && previous == current || snapshot == null && current == null) return;
+        if ((snapshot != null && previous == current) || (snapshot == null && current == null)) return;
         EntityStatements statements = work.type().statements();
         Object[] owner = statements.keyValues(work.type().id(work.entry().instance()));
         Object[] target = current == null ? null : statements.targetKey(current, table.association().targetEntity());
@@ -858,6 +869,7 @@ public final class FlushEngine {
         }
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity: the object still held since the snapshot is unchanged
     private void clearChangedToOneTables(Work work, Connection connection) {
         for (CollectionMapping mapping : work.type().statements().collections()) {
             if (!(mapping instanceof CollectionMapping.JoinTable table) || !table.association().singleValued()
@@ -1173,7 +1185,7 @@ public final class FlushEngine {
 
     /** The elements of {@code from} that {@code removed} does not hold, compared by identity, as many times as left. */
     private static List<Object> minus(List<Object> from, List<Object> removed) {
-        Map<Object, Integer> counts = new IdentityHashMap<>();
+        IdentityHashMap<Object, Integer> counts = new IdentityHashMap<>();
         removed.forEach(element -> counts.merge(element, 1, Integer::sum));
         List<Object> rest = new ArrayList<>();
         for (Object element : from) {
@@ -1400,7 +1412,7 @@ public final class FlushEngine {
             return now;
         }
         if (versionType == LocalDateTime.class) {
-            return LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+            return LocalDateTime.now(ZoneId.systemDefault()).truncatedTo(ChronoUnit.MILLIS);
         }
         throw new PersistenceException("The version attribute of " + type.model().entityName() + " has type "
             + versionType.getName() + ", which is not a version type (§2.2: int, short, long, their wrappers, Timestamp)");

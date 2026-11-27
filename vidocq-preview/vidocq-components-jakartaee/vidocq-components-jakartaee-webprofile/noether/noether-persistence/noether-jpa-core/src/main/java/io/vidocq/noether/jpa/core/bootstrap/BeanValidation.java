@@ -64,8 +64,8 @@ public final class BeanValidation {
             return NOOP;
         }
         try {
-            if (!isAvailable(loader) || settings.property("jakarta.persistence.validation.factory") == null
-                    && !hasProvider(loader)) {
+            if (!isAvailable(loader) || (settings.property("jakarta.persistence.validation.factory") == null
+                    && !hasProvider(loader))) {
                 if (mode == ValidationMode.CALLBACK) {
                     throw unavailable(settings);
                 }

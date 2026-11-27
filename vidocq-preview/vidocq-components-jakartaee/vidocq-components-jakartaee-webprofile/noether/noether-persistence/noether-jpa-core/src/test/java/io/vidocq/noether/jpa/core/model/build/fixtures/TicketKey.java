@@ -24,6 +24,7 @@ import java.io.Serializable;
 
 /** An embeddable id. */
 @Embeddable
+@SuppressWarnings("UnusedVariable") // persistent state, read through the entity access, not by Java code
 public class TicketKey implements Serializable {
     private String office;
     private int number;

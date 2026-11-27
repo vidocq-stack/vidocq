@@ -233,6 +233,7 @@ class ToManyTest {
     }
 
     @Test
+    @SuppressWarnings("JdkObsolete") // a Vector-typed attribute, as the TCK sets one
     void aCollectionSetOnAManagedInstanceIsWrittenAtCommit() throws SQLException { // the shape of the TCK's uni1XMTest1
         Player coco = new Player(11, "Coco");
         Coach coach = new Coach(1, "Chief");

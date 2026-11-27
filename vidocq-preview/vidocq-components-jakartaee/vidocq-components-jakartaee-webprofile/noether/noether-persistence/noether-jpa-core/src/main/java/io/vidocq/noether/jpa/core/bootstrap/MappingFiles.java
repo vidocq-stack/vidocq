@@ -84,7 +84,7 @@ public final class MappingFiles {
     private static URL in(URL root, String path) {
         try {
             if ("jrt".equals(root.getProtocol())
-                || "file".equals(root.getProtocol()) && Files.isDirectory(Path.of(root.toURI()))) {
+                || ("file".equals(root.getProtocol()) && Files.isDirectory(Path.of(root.toURI())))) {
                 Path file = Path.of(root.toURI()).resolve(path);
                 return Files.isRegularFile(file) ? file.toUri().toURL() : null;
             }

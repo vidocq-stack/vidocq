@@ -216,6 +216,7 @@ final class ResourceLocalTransaction implements SessionTransaction {
     }
 
     /** Runs {@code work} on the connection of the active transaction, which no closing factory can release meanwhile. */
+    @Override
     public <T> T onConnection(Function<Connection, T> work) {
         lock.lock();
         try {
@@ -226,6 +227,7 @@ final class ResourceLocalTransaction implements SessionTransaction {
     }
 
     /** The connection of the active transaction; the entity manager runs its statements on it. */
+    @Override
     public Connection connection() {
         return activeConnection();
     }
