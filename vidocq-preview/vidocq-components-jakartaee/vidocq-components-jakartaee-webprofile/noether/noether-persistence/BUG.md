@@ -9,7 +9,8 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
 ## BUG-20261123-58 — The TCK nightly runs no Noether TCK
 
 - **Date**: 2026-11-23 (same bug in Peano, Ibarra and Bodoni, fixed there)
-- **Status**: OPEN, needs the maintainer's decision
+- **Status**: FIXED in report mode (option A, maintainer's decision of 2026-11-27): branch
+  `ci/noether-tck-nightly-report`; not yet seen running in a nightly
 - **Symptom**: Noether's root POM names no `ci.tck.modules` / `ci.tck.command`, so the `TCK nightly` workflow of
   the monorepo has no job `tck / NOETHER`, and a release runs no Noether TCK.
 - **Why it is not wired as is**: `run-official-tck-persistence-3.2.sh` needs Docker (a PostgreSQL container) or an
@@ -19,6 +20,15 @@ Reproducible implementation defects. Status: OPEN → INVESTIGATING → FIXED �
   `testFailureIgnore` (308/981 at V2, a stopgap). Both would give a green job on a red suite.
 - **What a fix needs**: a runner label with Docker (or a PostgreSQL service) and a non-zero exit on a failure or an
   error of the TCK. Documented in `docs/en/.../tck.adoc`.
+- **Fix (report mode)**: the `TCK nightly` runs the Persistence runner in a job of its own, `tck-report / NOETHER`
+  (`REPORT_MODE` of `.forgejo/workflows/tck-nightly.yml`), with PostgreSQL 17 as a service container started by the
+  runner, so the Docker gap of some runners' job images does not matter, and `--external` (psql installed in the job).
+  `.forgejo/scripts/tck-report.py` reads `target/tck-report-persistence.txt`: the report goes to the job summary;
+  failures or errors, no test run, no report, a non-zero exit or a timeout become `::warning::` annotations. The job
+  never fails, so the run stays green and `release-gate.py`, which needs a successful `TCK nightly` on the released
+  commit, is unchanged; the release itself runs no TCK. Not a gate: a red suite is a warning to read, until the
+  maintainer turns it into a `ci.tck.command` (a change to Noether's root POM, a parent pom, so a `x.y.0` change)
+  and the runner exits non-zero on a failure. The Validation runner still does not run in CI.
 
 ## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
 

@@ -92,11 +92,15 @@ moves it), above `~/.m2/repository`, which they only read: the install of a bran
 Noether snapshot the other builds of the machine resolve. The TCK artefacts `install-tck.sh` installs in
 `~/.m2/repository` are still found there.
 
-Neither runner runs in CI. A pull request runs no TCK, and Noether's root POM declares no `ci.tck.*` property, so
-the `TCK nightly` workflow of the monorepo skips Noether: the Persistence runner needs Docker or an external
-PostgreSQL, which not every CI runner has, and both runners exit 0 whatever the score (the Persistence script once
-its report is written, the Validation run through `testFailureIgnore`), so a nightly job would stay green on a red
-suite. Run them by hand, and record the result here.
+A pull request runs no TCK. The `TCK nightly` workflow of the monorepo runs the Persistence runner in *report mode*,
+in its job `tck-report / NOETHER`: once a day on `main`, and when the workflow is dispatched with `NOETHER` or with
+no component. The job gets PostgreSQL 17 as a service container and runs the script with `--external`. Its result is
+in the job summary (the script's report, verbatim), and a failure, an error, a run that did not happen or a report
+on the wrong spec-tests jar is a warning of the job, never a failed run: the Persistence TCK is not a release gate
+yet, and a release requires a green `TCK nightly`. A green job therefore proves nothing on its own: read its summary.
+The job is wired in the workflow (`REPORT_MODE` of `.forgejo/workflows/tck-nightly.yml`), not through a `ci.tck.*`
+property of Noether's root POM, which would run it as a gate. The Validation runner does not run in CI. Record a
+score here only from a run whose report you have read.
 
 [#gaps]
 == What the TCK does not cover

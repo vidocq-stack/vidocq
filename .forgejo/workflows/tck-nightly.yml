@@ -12,6 +12,12 @@
 # on Maven Central) and vidocq-runtime-tck-coreprofile (red on JDK 25 in the TCK's own code, GestionProjet#9). Left
 # out of the install too: vidocq-runtime-tck-foy-servlet, whose Servlet 6.1 TCK jars are not public
 # (BUG-20261123-65).
+#
+# A TCK in report mode (job tck-report, REPORT_MODE below) runs here too, but never turns the run red: its failures
+# are a `::warning::` and a job summary (tck-report.py). It is not a release gate yet, and the release requires a
+# green TCK nightly (release-gate.py). Noether's Persistence TCK is the one (BUG-20261123-58): it needs PostgreSQL,
+# which the job gets as a service container (the runner starts it, so a job image without Docker for the tests does
+# not matter), and it is wired here rather than in Noether's root pom, a parent pom a patch release cannot change.
 name: TCK nightly
 
 on:
@@ -37,6 +43,8 @@ jobs:
     runs-on: vidocq-runner
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      report-matrix: ${{ steps.plan.outputs.report-matrix }}
+      has-report: ${{ steps.plan.outputs.has-report }}
     steps:
       - uses: actions/checkout@v4
       - id: plan
@@ -56,6 +64,11 @@ jobs:
           # fails the whole install of its component (the runtime's, every night since the monorepo).
           LEFT_OUT = {"vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-tck-annotations",
                       "vidocq-runtime/vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet"}
+          # Report mode (header): tag -> the command, run in the component's folder, and the report it writes there.
+          # The command gets JDBC_URL, JDBC_USER and JDBC_PASSWORD of the job's PostgreSQL service.
+          REPORT_MODE = {"NOETHER": {
+              "command": "noether-persistence/noether-jpa-tck/run-official-tck-persistence-3.2.sh --external",
+              "report": "noether-persistence/noether-jpa-tck/target/tck-report-persistence.txt"}}
           def reactor(path):
               """The module at path and every module below it: <modules>, and those of its tck profile and of its
               repackaged-api profile, which holds modules of every Maven build that the IntelliJ import leaves out."""
@@ -73,9 +86,13 @@ jobs:
                           found += reactor(sub)
               return found
           include = []
+          report = []
           for c in json.load(open("components.json"))["components"]:
               if wanted and c["tag"] not in wanted:
                   continue
+              if c["tag"] in REPORT_MODE:
+                  report.append(dict(REPORT_MODE[c["tag"]], tag=c["tag"], path=c["path"],
+                                     modules=",".join(dict.fromkeys(reactor(c["path"])))))
               pom =ET.parse(os.path.join(c["path"], "pom.xml")).getroot()
               ns = pom.tag[1:].split("}", 1)[0]
               props = pom.find("{%s}properties" % ns)
@@ -92,6 +109,8 @@ jobs:
                   include.append({"tag": c["tag"], "path": c["path"], "commands": " && ".join(commands),
                                   "modules": ",".join(dict.fromkeys(reactor(c["path"])))})
           print("matrix=" + json.dumps({"include": include}))
+          print("report-matrix=" + json.dumps({"include": report}))
+          print("has-report=" + ("true" if report else "false"))
           PY
 
   tck:
@@ -116,6 +135,68 @@ jobs:
         run: bash -c "$TCK_COMMANDS"
         env:
           TCK_COMMANDS: ${{ matrix.commands }}
+
+  # Report mode (header): every step reports, none fails, so this job never turns the run red. A step that cannot
+  # go on leaves a reason; tck-report.py turns it, or the report the runner wrote, into a warning and the summary.
+  tck-report:
+    needs: plan
+    if: needs.plan.outputs.has-report == 'true'
+    name: tck-report / ${{ matrix.tag }}
+    runs-on: vidocq-runner
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.report-matrix) }}
+    services:
+      # The database of the Persistence TCK: the names the TCK's DDL and the runner's defaults use.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: jpatck
+          POSTGRES_USER: cts1
+          POSTGRES_PASSWORD: cts1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
+        continue-on-error: true
+      - name: TCK ${{ matrix.tag }}, report mode
+        env:
+          TAG: ${{ matrix.tag }}
+          COMPONENT: ${{ matrix.path }}
+          MODULES: ${{ matrix.modules }}
+          TCK_COMMAND: ${{ matrix.command }}
+          REPORT: ${{ matrix.report }}
+          JDBC_URL: jdbc:postgresql://postgres:5432/jpatck
+          JDBC_USER: cts1
+          JDBC_PASSWORD: cts1
+        run: |
+          set +e -u
+          reason=""
+          status=0
+          rm -f "$COMPONENT/$REPORT"
+          command -v mvn > /dev/null || reason="Java and Maven could not be set up"
+          # --external applies the TCK's DDL with psql; the job image has none.
+          if [ -z "$reason" ] && ! command -v psql > /dev/null; then
+            { apt-get update -qq && apt-get install -y -qq postgresql-client; } > /dev/null 2>&1 \
+              || reason="psql could not be installed (apt-get install postgresql-client)"
+          fi
+          if [ -z "$reason" ]; then
+            mvn -B -ntp -U install -DskipTests -Dgib.disable=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist -Ptck -am -pl "$MODULES" \
+              || reason="the build of the component and its upstream failed"
+          fi
+          if [ -z "$reason" ]; then
+            for _ in $(seq 1 60); do
+              PGPASSWORD="$JDBC_PASSWORD" psql -At "postgresql://$JDBC_USER@postgres:5432/jpatck" -c "select 1" > /dev/null 2>&1 && break
+              sleep 2
+            done
+            PGPASSWORD="$JDBC_PASSWORD" psql -At "postgresql://$JDBC_USER@postgres:5432/jpatck" -c "select 1" > /dev/null 2>&1 \
+              || reason="the PostgreSQL service did not answer on postgres:5432"
+          fi
+          if [ -z "$reason" ]; then
+            (cd "$COMPONENT" && timeout 150m bash -c "$TCK_COMMAND") || status=$?
+          fi
+          python3 -I .forgejo/scripts/tck-report.py --name "$TAG" --report "$COMPONENT/$REPORT" \
+            --status "$status" --reason "$reason"
+          exit 0
 
   notify:
     needs: tck
