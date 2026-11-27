@@ -674,6 +674,9 @@ Vidocq Runtime implements {spec-mp-config}. Source hierarchy, highest to lowest 
 
 == Health
 
+From the application directory, run `vidocq extension add health-knock`, restart the application and request `/health`.
+To report the state of a dependency, add a check like this one.
+
 [source,java]
 ----
 @Liveness

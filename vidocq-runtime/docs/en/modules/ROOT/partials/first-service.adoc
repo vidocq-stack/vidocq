@@ -1,0 +1,63 @@
+// tag::install[]
+ifeval::["{page-component-version}" == "dev"]
+Install the development CLI from the Vidocq snapshot repository.
+
+[source,bash]
+----
+curl -fsSL https://vidocq.dev/install.sh | VIDOCQ_VERSION=snapshot sh
+----
+
+On Windows (PowerShell):
+
+[source,powershell]
+----
+$env:VIDOCQ_VERSION = "snapshot"; irm https://vidocq.dev/install.ps1 | iex
+----
+endif::[]
+ifeval::["{page-component-version}" != "dev"]
+Install the CLI for this guide from Maven Central.
+
+[source,bash,subs=attributes+]
+----
+curl -fsSL https://vidocq.dev/install.sh | VIDOCQ_VERSION={project-version} sh
+----
+
+On Windows (PowerShell):
+
+[source,powershell,subs=attributes+]
+----
+$env:VIDOCQ_VERSION = "{project-version}"; irm https://vidocq.dev/install.ps1 | iex
+----
+endif::[]
+
+Run `vidocq version` in your terminal. It should report `{project-version}`.
+If your shell cannot find the launcher, add the directory printed by the installer to your `PATH`.
+// end::install[]
+
+// tag::create[]
+[source,bash]
+----
+vidocq create --name todo --group-id com.acme --extension rest-cassini
+cd todo
+----
+// end::create[]
+
+// tag::run[]
+Build with the Maven wrapper included in the project, then start the packaged application.
+
+[source,bash]
+----
+./mvnw package
+sh target/todo-1.0.0-SNAPSHOT/bin/todo.sh
+----
+
+On Windows, use `.\mvnw.cmd package` and `.\target\todo-1.0.0-SNAPSHOT\bin\todo.cmd`.
+
+In a second terminal, request the endpoint (use `curl.exe` in Windows PowerShell):
+
+[source,console]
+----
+$ curl http://localhost:8080/hello
+Hello from Vidocq!
+----
+// end::run[]
