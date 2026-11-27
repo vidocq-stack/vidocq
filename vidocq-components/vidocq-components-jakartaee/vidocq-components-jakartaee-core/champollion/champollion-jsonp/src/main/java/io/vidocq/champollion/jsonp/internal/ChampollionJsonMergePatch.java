@@ -72,7 +72,7 @@ public final class ChampollionJsonMergePatch implements JsonMergePatch {
         for (var e : patchObj.entrySet()) {
             String name = e.getKey();
             JsonValue v = e.getValue();
-            if (v == JsonValue.NULL) {
+            if (v.getValueType() == JsonValue.ValueType.NULL) { // a NULL of any implementation (BUG-20261127-90)
                 base.remove(name);
             } else {
                 JsonValue currentChild = base.getOrDefault(name, JsonValue.NULL);

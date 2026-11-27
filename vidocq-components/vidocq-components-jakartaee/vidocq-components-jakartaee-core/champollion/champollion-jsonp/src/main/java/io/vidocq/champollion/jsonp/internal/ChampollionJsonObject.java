@@ -87,9 +87,12 @@ public final class ChampollionJsonObject extends AbstractMap<String, JsonValue> 
     @Override public boolean getBoolean(String name) {
         JsonValue v = members.get(name);
         if (v == null) throw new NullPointerException("No mapping for member: " + name);
-        if (v == JsonValue.TRUE) return true;
-        if (v == JsonValue.FALSE) return false;
-        throw new ClassCastException("Member " + name + " is not a boolean");
+        // By value type: a TRUE or FALSE of another implementation is a boolean too (BUG-20261127-90).
+        return switch (v.getValueType()) {
+            case TRUE -> true;
+            case FALSE -> false;
+            default -> throw new ClassCastException("Member " + name + " is not a boolean");
+        };
     }
 
     @Override public boolean getBoolean(String name, boolean defaultValue) {
@@ -99,7 +102,7 @@ public final class ChampollionJsonObject extends AbstractMap<String, JsonValue> 
     @Override public boolean isNull(String name) {
         JsonValue v = members.get(name);
         if (v == null) throw new NullPointerException("No mapping for member: " + name);
-        return v == JsonValue.NULL;
+        return v.getValueType() == JsonValue.ValueType.NULL;
     }
 
     /**

@@ -70,10 +70,12 @@ public final class ChampollionJsonArray extends AbstractList<JsonValue> implemen
     }
 
     @Override public boolean getBoolean(int index) {
-        JsonValue v = values.get(index);
-        if (v == JsonValue.TRUE) return true;
-        if (v == JsonValue.FALSE) return false;
-        throw new ClassCastException("Element at index " + index + " is not a boolean");
+        // By value type: a TRUE or FALSE of another implementation is a boolean too (BUG-20261127-90).
+        return switch (values.get(index).getValueType()) {
+            case TRUE -> true;
+            case FALSE -> false;
+            default -> throw new ClassCastException("Element at index " + index + " is not a boolean");
+        };
     }
 
     @Override public boolean getBoolean(int index, boolean defaultValue) {
@@ -81,7 +83,7 @@ public final class ChampollionJsonArray extends AbstractList<JsonValue> implemen
     }
 
     @Override public boolean isNull(int index) {
-        return values.get(index) == JsonValue.NULL;
+        return values.get(index).getValueType() == JsonValue.ValueType.NULL;
     }
 
     @Override
