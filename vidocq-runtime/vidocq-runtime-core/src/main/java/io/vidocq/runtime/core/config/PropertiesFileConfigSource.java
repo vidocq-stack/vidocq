@@ -31,13 +31,18 @@ import java.util.Set;
 /**
  * Source reading {@code vidocq.properties} and {@code application.properties} from the classpath.
  * Ordinal 100.
+ *
+ * <p>A key set in both files takes its {@code vidocq.properties} value, as under Ravel, where
+ * {@code VidocqPropertiesConfigSource} (105) is above {@code ApplicationPropertiesConfigSource} (100)
+ * (Vidocq/vidocq#829).</p>
  */
 public final class PropertiesFileConfigSource implements ConfigSource {
 
     private static final System.Logger LOG =
             System.getLogger(PropertiesFileConfigSource.class.getName());
 
-    private static final String[] FILES = {"vidocq.properties", "application.properties"};
+    /** Lowest precedence first: a file read later overwrites, so {@code vidocq.properties} wins. */
+    private static final String[] FILES = {"application.properties", "vidocq.properties"};
 
     private final Properties properties;
 

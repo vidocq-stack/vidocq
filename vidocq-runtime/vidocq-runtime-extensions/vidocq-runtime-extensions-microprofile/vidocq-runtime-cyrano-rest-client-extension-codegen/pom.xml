@@ -40,6 +40,13 @@
             <artifactId>cyrano-processor</artifactId>
             <version>${cyrano.version}</version>
         </dependency>
+        <!-- The extension requires the Config extension (Vidocq/vidocq#829), so its codegen comes along: an
+             application that declares this extension only gets Ravel's processors too. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

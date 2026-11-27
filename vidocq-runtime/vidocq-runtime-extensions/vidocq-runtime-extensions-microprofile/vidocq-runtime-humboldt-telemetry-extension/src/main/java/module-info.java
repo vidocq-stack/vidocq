@@ -27,6 +27,10 @@
  * <p>Discovery via ServiceLoader (META-INF/services + {@code provides} Java Modules).</p>
  */
 module io.vidocq.runtime.extensions.microprofile.humboldt {
+    // Every MicroProfile extension requires the Config extension (Vidocq/vidocq#829): Ravel is the MicroProfile Config
+    // implementation this extension reads its keys through, and an application gets @Inject @ConfigProperty with it.
+    requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
+
 
     requires io.vidocq.runtime.spi;
     requires io.vidocq.humboldt.runtime;
@@ -40,9 +44,9 @@ module io.vidocq.runtime.extensions.microprofile.humboldt {
     requires io.opentelemetry.context;
     requires jakarta.cdi;
     requires java.logging;
-    // MicroProfile Config is read directly when the runtime assembles it; without it, the otel.* system
-    // properties and environment variables remain the sources.
-    requires static org.eclipse.microprofile.config;
+    // MicroProfile Config, which the Config extension brings (ravel-mp-config-api), is where the otel.* keys of
+    // vidocq.properties are read; the otel.* system properties and environment variables remain sources too.
+    requires org.eclipse.microprofile.config;
 
     // The interop module only `requires static` the OTel SDK automatic modules
     // (the consumer supplies them). This extension IS that consumer: require them

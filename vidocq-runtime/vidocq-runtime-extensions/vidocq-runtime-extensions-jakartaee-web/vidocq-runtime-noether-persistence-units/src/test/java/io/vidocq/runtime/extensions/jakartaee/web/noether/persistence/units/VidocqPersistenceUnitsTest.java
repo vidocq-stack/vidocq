@@ -86,7 +86,8 @@ class VidocqPersistenceUnitsTest {
     }
 
     /**
-     * At build, the units are read from the files of the deployment, the second winning as the runtime reads them,
+     * At build, the units are read from the files of the deployment, {@code vidocq.properties} winning over
+     * {@code application.properties} as the runtime reads them (Vidocq/vidocq#829),
      * and the application module is the first one of the deployment: its classes, ahead of its dependencies.
      */
     @Test
@@ -96,8 +97,10 @@ class VidocqPersistenceUnitsTest {
                 vidocq.persistence.ledger.transaction-type=JTA
                 vidocq.persistence.audit.datasource=audit
                 """);
-        Files.writeString(classes.resolve("application.properties"),
-                "vidocq.persistence.ledger.transaction-type=RESOURCE_LOCAL\n");
+        Files.writeString(classes.resolve("application.properties"), """
+                vidocq.persistence.ledger.transaction-type=RESOURCE_LOCAL
+                vidocq.persistence.ledger.datasource=ledger
+                """);
         Path ledger = moduleJar("acme.ledger");
 
         try (URLClassLoader deployment = loader(classes, ledger)) {
@@ -106,7 +109,8 @@ class VidocqPersistenceUnitsTest {
             assertEquals(List.of("audit", "ledger"), names(units));
             assertEquals(classes, Path.of(units.getFirst().defaultRoot().orElseThrow().toURI()));
             assertEquals("jar:" + ledger.toUri().toURL() + "!/", units.get(1).root().orElseThrow().toExternalForm());
-            assertEquals("RESOURCE_LOCAL", units.get(1).transactionType().orElseThrow().name());
+            assertEquals("JTA", units.get(1).transactionType().orElseThrow().name());
+            assertEquals("ledger", units.get(1).dataSource().orElseThrow(), "a key of application.properties alone");
         }
     }
 

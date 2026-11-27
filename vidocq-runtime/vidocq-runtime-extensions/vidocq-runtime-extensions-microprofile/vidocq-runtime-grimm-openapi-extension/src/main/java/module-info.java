@@ -22,6 +22,10 @@
  * {@link io.vidocq.runtime.extensions.microprofile.grimm.openapi.GrimmOpenApiExtension}.
  */
 module io.vidocq.runtime.extensions.microprofile.grimm.openapi {
+    // Every MicroProfile extension requires the Config extension (Vidocq/vidocq#829): Ravel is the MicroProfile Config
+    // implementation this extension reads its keys through, and an application gets @Inject @ConfigProperty with it.
+    requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
+
     requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.essentials.chappe;
     requires io.vidocq.chappe.api;

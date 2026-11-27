@@ -41,6 +41,10 @@
  * when those extensions are also present on the module path.</p>
  */
 module io.vidocq.runtime.extensions.microprofile.heisenberg {
+    // Every MicroProfile extension requires the Config extension (Vidocq/vidocq#829): Ravel is the MicroProfile Config
+    // implementation this extension reads its keys through, and an application gets @Inject @ConfigProperty with it.
+    requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
+
     // Heisenberg modules — transitively re-exposed so consuming apps can use the fault-tolerance
     // annotations without manually declaring requires on Heisenberg.
     requires transitive microprofile.fault.tolerance.api;

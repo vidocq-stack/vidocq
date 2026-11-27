@@ -103,7 +103,7 @@ code changes shape. *None yet* means Vidocq has no equivalent today; the section
 | <<rest>>
 
 | `application.properties`, `%dev.`, `%test.`, `%prod.`
-| `vidocq.properties` (`application.properties` is read too), the same prefixes
+| `vidocq.properties` (`application.properties` is read too, `vidocq.properties` wins), the same prefixes
 | Same
 | <<config>>
 
@@ -471,12 +471,12 @@ Cassini sends each event as it is emitted.
 == Configuration
 
 Vidocq reads its configuration with MicroProfile Config, as Quarkus does, through the `config-ravel` extension for
-`@ConfigProperty` injection.
+`@ConfigProperty` injection. Every MicroProfile extension brings `config-ravel` with it.
 
 === What maps one to one
 
-* *The file.* `src/main/resources/application.properties` is read. Rename it to `vidocq.properties` when you can, and
-  do not set one key in both files.
+* *The file.* `src/main/resources/application.properties` is read. Rename it to `vidocq.properties` when you can. A
+  key in `vidocq.properties` wins over it, with or without `config-ravel`.
 * *Profiles.* `%dev.`, `%test.` and `%prod.` prefixes work as in Quarkus (xref:usage.adoc#profiles[Profiles]).
 * *`@ConfigProperty`*, `Config`, `ConfigProvider.getConfig()`, custom `ConfigSource` and `Converter`: the standard
   API, unchanged. Add `@Inject` where ArC did without it (<<cdi>>).

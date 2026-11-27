@@ -23,6 +23,10 @@
  * cyrano-cdi-vauban's own, which that module declares itself: this module adds none.
  */
 module io.vidocq.runtime.extensions.microprofile.cyrano {
+    // Every MicroProfile extension requires the Config extension (Vidocq/vidocq#829): Ravel is the MicroProfile Config
+    // implementation this extension reads its keys through, and an application gets @Inject @ConfigProperty with it.
+    requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
+
     requires transitive io.vidocq.cyrano.api;
     requires transitive io.vidocq.cyrano.core;
     requires transitive io.vidocq.cyrano.cdi.vauban;

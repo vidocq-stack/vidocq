@@ -114,22 +114,35 @@
             <artifactId>jakarta.ws.rs-api</artifactId>
             <version>4.0.0</version>
         </dependency>
-        <!-- Read directly when the runtime assembles MicroProfile Config (`requires static`); the extension still
-             starts without it. -->
-        <dependency>
-            <groupId>org.eclipse.microprofile.config</groupId>
-            <artifactId>microprofile-config-api</artifactId>
-            <scope>provided</scope>
-        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Every MicroProfile extension requires the Config extension (Vidocq/vidocq#829): without Ravel there is no
+             MicroProfile Config implementation, and this extension's keys would be ignored without a word. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- One codegen bundle per declared extension (checkpom contract). -->
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                            <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>

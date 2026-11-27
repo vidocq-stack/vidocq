@@ -42,6 +42,10 @@
  * text by default, JSON on {@code Accept: application/json}).</p>
  */
 module io.vidocq.runtime.extensions.microprofile.dirac {
+    // Every MicroProfile extension requires the Config extension (Vidocq/vidocq#829): Ravel is the MicroProfile Config
+    // implementation this extension reads its keys through, and an application gets @Inject @ConfigProperty with it.
+    requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
+
     // Dirac modules — transitively re-exposed so consuming apps can use @Counted/@Timed/@Gauge
     // and inject MetricRegistry without manually declaring requires on Dirac.
     requires transitive io.vidocq.dirac.api;

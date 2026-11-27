@@ -49,6 +49,16 @@ class ApplicationFilesTest {
         assertEquals(Optional.of("55432"), dev.apply("vidocq.dev.postgres.port"));
     }
 
+    /** A dev service reads a key set in both files as the application does: vidocq.properties wins (#829). */
+    @Test
+    void aKeyInBothFilesIsTheOneOfVidocqProperties(@TempDir Path classes) throws Exception {
+        Files.writeString(classes.resolve("vidocq.properties"), "vidocq.dev.postgres.port=55432\n");
+        Files.writeString(classes.resolve("application.properties"), "vidocq.dev.postgres.port=60000\n");
+
+        assertEquals(Optional.of("55432"), ApplicationFiles.of(classes).apply("vidocq.dev.postgres.port"));
+        assertEquals(Optional.of("55432"), ApplicationFiles.allOf(classes).apply("vidocq.dev.postgres.port"));
+    }
+
     /** #166: on a tree not built yet, the source resources stand in for the classes directory. */
     @Test
     void withoutFilesInTheClassesTheSourceResourcesAnswer(@TempDir Path dir) throws Exception {

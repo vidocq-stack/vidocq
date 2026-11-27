@@ -43,6 +43,10 @@
  * {@code /health/started}.</p>
  */
 module io.vidocq.runtime.extensions.microprofile.knock {
+    // Every MicroProfile extension requires the Config extension (Vidocq/vidocq#829): Ravel is the MicroProfile Config
+    // implementation this extension reads its keys through, and an application gets @Inject @ConfigProperty with it.
+    requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
+
     // Knock modules — transitively re-exposed to consuming applications
     // so that user @Liveness/@Readiness/@Startup beans can
     // implement HealthCheck without manually declaring requires Knock.

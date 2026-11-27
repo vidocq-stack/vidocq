@@ -128,6 +128,16 @@
 | MicroProfile Fault Tolerance via xref:heisenberg::index.adoc[Heisenberg] — `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` interceptors (pure CDI, no HTTP endpoint; Dirac metrics and Humboldt telemetry stay optional). [[heisenberg-fault-tolerance-codegen]]Companion `-codegen` artefact: it runs Heisenberg's processor on the application, so each bean with Fault Tolerance annotations gets a `$$HeisenbergPolicies` companion holding them, and the interceptor reads them without reflection; a class compiled without it is read by reflection, with one warning per class. `vidocq:checkpom` asks for it.
 |===
 
+[[microprofile-requires-config]]Every MicroProfile extension (Health, Metrics, OpenAPI, JWT, REST Client, Telemetry,
+Fault Tolerance) depends on `vidocq-runtime-ravel-config-extension`, and its codegen bundle on Ravel's: without a
+MicroProfile Config implementation, Heisenberg, Grimm and Cyrano fell back to their annotation values and defaults,
+and a key such as `com.example.Svc/call/Retry/maxRetries=5` was ignored without a word (Vidocq/vidocq#829). Its
+module `requires transitive` the Config extension's, so `@Inject @ConfigProperty` works in the application with any
+of them. Their descriptors name `config-ravel` in `requires-extensions`: `vidocq extension add health-knock` and
+`vidocq create -x health-knock` declare `config-ravel` too, with its codegen bundle, and `vidocq doctor` warns on a
+project that declares a MicroProfile extension without it. The Swagger UI extension serves static files, reads no
+key, and goes with the OpenAPI extension, which brings Ravel.
+
 CDI (xref:vauban::index.adoc[Vauban]) and JSON (xref:champollion::index.adoc[Champollion]) are not standalone extensions: Vauban is the engine built into `vidocq-runtime-core`, and Champollion ships transitively with the REST extension.
 
 [[codegen-bundles]]
@@ -1511,7 +1521,7 @@ vidocq.persistence.journal.properties.jakarta.persistence.schema-generation.data
 
 * *Declaring or overriding.* `module`, `packages`, `classes`, `transaction-type`, `qualifier` and `scope` declare the unit, so a unit of that name in a `persistence.xml` is a duplicate and fails the start. `datasource`, `non-jta-datasource` and `properties.<name>` alone override the unit a `persistence.xml` declares, its properties winning over the file's, and declare it otherwise, on the entities of the application module, as a JTA unit.
 * *The default unit.* Without any `vidocq.persistence.*` key, the application has a unit named `default`, JTA on the default pool, of the entities of the application module: it exists only when no `persistence.xml` declares a unit and the module has an entity, so a `@PersistenceContext` without a unit name reaches it. An application that is not a named Java module has none.
-* *Build and start.* `vidocq:generate` freezes the beans of each unit at build (xref:{page-component-version}@vauban::concepts.adoc#writing-a-frozen-extension[a frozen extension]), so the build reads the keys of the application's `vidocq.properties` and `application.properties`, and the start reads them from the whole configuration, `-D` and the environment included. The data sources and the properties of a unit may differ at start. A unit declared or gone, or a transaction type, a qualifier or a scope that differs from the build's, would need other beans: the start fails with a `DeploymentException` that names each difference and asks for a rebuild.
+* *Build and start.* `vidocq:generate` freezes the beans of each unit at build (xref:{page-component-version}@vauban::concepts.adoc#writing-a-frozen-extension[a frozen extension]), so the build reads the keys of the application's `vidocq.properties` and `application.properties`, the first winning for a key set in both as at start, and the start reads them from the whole configuration, `-D` and the environment included. The data sources and the properties of a unit may differ at start. A unit declared or gone, or a transaction type, a qualifier or a scope that differs from the build's, would need other beans: the start fails with a `DeploymentException` that names each difference and asks for a rebuild.
 * *Environment variables.* The units are found by the names of their keys, which a `vidocq.properties` file or a `-D` gives: an environment variable, such as `VIDOCQ_PERSISTENCE_LEDGER_DATASOURCE`, changes the value of a key one of them names, and does not declare one alone.
 * *Errors.* A key that sets nothing a unit has, a module the application does not have, or a transaction type other than `JTA` and `RESOURCE_LOCAL` fails the start, naming the key.
 

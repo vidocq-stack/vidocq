@@ -31,10 +31,13 @@ import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -150,6 +153,16 @@ class ExtensionCatalogTest {
     /** The project's groupId, its parent's and its artifactId, keyed by their path in the pom. */
     private static Map<String, String> topLevel(Path pom) throws IOException {
         Map<String, String> found = new TreeMap<>();
+        for (Map.Entry<String, String> element : texts(pom,
+                at -> at.equals(GROUP_ID) || at.equals(ARTIFACT_ID) || at.equals(PARENT_GROUP_ID))) {
+            found.put(element.getKey(), element.getValue());
+        }
+        return found;
+    }
+
+    /** The text of each element of {@code pom} whose path, such as {@code project/artifactId}, {@code wanted} accepts. */
+    static List<Map.Entry<String, String>> texts(Path pom, Predicate<String> wanted) throws IOException {
+        List<Map.Entry<String, String>> found = new ArrayList<>();
         try (InputStream in = Files.newInputStream(pom)) {
             XMLStreamReader xml = XMLInputFactory.newFactory().createXMLStreamReader(in);
             Deque<String> path = new ArrayDeque<>();
@@ -158,9 +171,9 @@ class ExtensionCatalogTest {
                 if (event == XMLStreamConstants.START_ELEMENT) {
                     path.addLast(xml.getLocalName());
                     String at = String.join("/", path);
-                    if (at.equals(GROUP_ID) || at.equals(ARTIFACT_ID) || at.equals(PARENT_GROUP_ID)) {
+                    if (wanted.test(at)) {
                         // getElementText consumes the end tag.
-                        found.put(at, xml.getElementText().strip());
+                        found.add(Map.entry(at, xml.getElementText().strip()));
                         path.removeLast();
                     }
                 } else if (event == XMLStreamConstants.END_ELEMENT) {

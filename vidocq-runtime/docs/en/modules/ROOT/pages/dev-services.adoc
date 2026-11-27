@@ -222,7 +222,8 @@ the same way, first match wins:
 
 . the explicit value: a `-Dvidocq.dev.devServices=…`, the goal's `<devServices>` configuration, or
   (under the JUnit host) the system property;
-. then the application's files, `vidocq.properties` or `application.properties`;
+. then the application's files, `vidocq.properties` or `application.properties`, `vidocq.properties` winning for a key
+  set in both;
 . then the host's default: on for `vidocq:dev` and tests, off for `vidocq:run`.
 
 The value is `true` or `false`, trimmed, in any case; anything else fails the goal, or the test

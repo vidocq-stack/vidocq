@@ -42,8 +42,11 @@ import java.util.regex.Pattern;
  */
 final class Deployment implements ModuleRoots {
 
-    /** The files the runtime reads its keys from in the application, in its order: the last one wins. */
-    private static final String[] FILES = {"vidocq.properties", "application.properties"};
+    /**
+     * The files the runtime reads its keys from in the application, in its order: the last one wins, so
+     * {@code vidocq.properties} does, as at start (Vidocq/vidocq#829).
+     */
+    private static final String[] FILES = {"application.properties", "vidocq.properties"};
     private static final String MODULE_INFO = "module-info.class";
     /** What follows the root of a module in the URL of its descriptor, versioned in a multi-release jar. */
     private static final Pattern DESCRIPTOR = Pattern.compile("(META-INF/versions/\\d+/)?module-info\\.class$");

@@ -106,7 +106,7 @@ changes shape. *None yet* means Vidocq has no equivalent today; the section give
 | <<validation>>
 
 | `application.properties`
-| `vidocq.properties` (`application.properties` is read too)
+| `vidocq.properties` (`application.properties` is read too, `vidocq.properties` wins)
 | Same
 | <<config>>
 
@@ -557,14 +557,14 @@ DTO, and throw an exception that an `ExceptionMapper` turns into `400`.
 == Configuration
 
 Vidocq reads its configuration with MicroProfile Config, through the `config-ravel` extension for
-`@ConfigProperty` injection. The sources, highest priority first: system properties, environment variables, an
+`@ConfigProperty` injection; every MicroProfile extension brings `config-ravel` with it. The sources, highest priority first: system properties, environment variables, an
 external `vidocq.properties` (`VIDOCQ_CONFIG_DIR`, or `conf/` of a jlink image), then `vidocq.properties` in the
 application's resources.
 
 === What maps one to one
 
-* *The file.* `src/main/resources/application.properties` is read too. Rename it to `vidocq.properties` when you can,
-  and do not set one key in both files.
+* *The file.* `src/main/resources/application.properties` is read too. Rename it to `vidocq.properties` when you can.
+  A key in `vidocq.properties` wins over it, with or without `config-ravel`.
 * *`@Value`.* `@Value("${greeting.name:World}") String name;` becomes:
 +
 [source,java]

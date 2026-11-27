@@ -667,8 +667,12 @@ Vidocq Runtime implements {spec-mp-config}. Source hierarchy, highest to lowest 
 | 400 | `SystemPropertiesConfigSource` | `-Dkey=value`
 | 300 | `EnvConfigSource` | Environment variables (`KEY_NAME`)
 | 250 | `ExternalFileConfigSource` | `${java.home}/conf/vidocq.properties` (jlink image)
-| 100 | `PropertiesFileConfigSource` | classpath `vidocq.properties`
+| 100 | `PropertiesFileConfigSource` | classpath `vidocq.properties`, then `application.properties`
 |===
+
+A key set in both classpath files takes its `vidocq.properties` value, with or without the Config extension
+(xref:reference.adoc#properties-files-order[the order of the two files]). Every MicroProfile extension brings the
+Config extension (xref:modules/vidocq-runtime-extensions.adoc#microprofile-requires-config[Ravel comes with each one]).
 
 `ExternalFileConfigSource` lets you override a deployed jlink/jpackage binary without rebuilding, simply by editing the `conf/vidocq.properties` file next to the launcher. A boot log line traces the effective load.
 

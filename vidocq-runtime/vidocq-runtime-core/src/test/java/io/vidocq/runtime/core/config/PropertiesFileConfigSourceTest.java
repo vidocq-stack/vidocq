@@ -42,6 +42,16 @@ class PropertiesFileConfigSourceTest {
         assertEquals("from-app", src.getValue("vidocq.test.app.key"));
     }
 
+    /**
+     * A key set in both files resolves to the {@code vidocq.properties} value, as it does with Ravel, where
+     * {@code VidocqPropertiesConfigSource} (105) is above {@code ApplicationPropertiesConfigSource} (100)
+     * (Vidocq/vidocq#829).
+     */
+    @Test
+    void vidocqPropertiesWinsOverApplicationProperties() {
+        assertEquals("from-vidocq", new PropertiesFileConfigSource().getValue("vidocq.test.both.key"));
+    }
+
     @Test
     void returnsNullWhenKeyAbsent() {
         assertNull(new PropertiesFileConfigSource().getValue("totally.absent.key"));

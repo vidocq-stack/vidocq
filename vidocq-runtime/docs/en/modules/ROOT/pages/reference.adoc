@@ -283,8 +283,13 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | 400 | `SystemPropertiesConfigSource` | `-Dkey=value`
 | 300 | `EnvConfigSource` | Environment variables
 | 250 | `ExternalFileConfigSource` | `${java.home}/conf/vidocq.properties` or `$VIDOCQ_CONFIG_DIR/vidocq.properties`
-| 100 | `PropertiesFileConfigSource` | Classpath `vidocq.properties`
+| 100 | `PropertiesFileConfigSource` | Classpath `vidocq.properties`, then `application.properties`
 |===
+
+[[properties-files-order]]A key set in both classpath files takes its `vidocq.properties` value. Ravel orders them
+the same way (`vidocq.properties` at 105, `application.properties` at 100), and so do the build-time readers of the
+two files, such as the persistence units `vidocq:generate` freezes: one key resolves to one value with and without
+`config-ravel` (Vidocq/vidocq#829). Up to 0.4.0, without Ravel, `application.properties` won.
 
 [#configuration-key-descriptions]
 == Configuration key descriptions
