@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
     Vidocq/vidocq#246: a @WebListener shipped in a plain dependency jar runs under vidocq:run with no workaround
-    class, because vidocq:generate ran the Foy codegen bundle's processor over that jar.
+    class, because vidocq:generate ran the Foy codegen bundle's processor over that jar. Vidocq/vidocq#662: a JAX-RS
+    resource of a plain dependency jar gets its Cassini adapter at build, from the REST codegen bundle's closure
+    (src/it/fixture-rest).
 
     The fixture resolves this build's artifacts from target/it-repo, which maven-invoker-plugin:install stages at
     pre-integration-test; anything else comes from the outer local repository through it-settings.xml, which
@@ -29,9 +31,11 @@
         <it.settings>${project.build.directory}/it-settings.xml</it.settings>
         <!-- maven-invoker-plugin reads invoker.skip only; -DskipTests skips the staging too. -->
         <invoker.skip>${skipTests}</invoker.skip>
-        <!-- The Servlet extension below is a staging dependency for the fixture, which declares its codegen
-             bundle itself; this module compiles no servlet code. -->
+        <!-- The Servlet and REST extensions below are staging dependencies for the fixtures, which declare their
+             codegen bundles themselves; this module compiles no servlet nor REST code. -->
         <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+        <!-- The API the REST fixture's library compiles against (provided there). -->
+        <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
     </properties>
 
     <dependencies>
@@ -66,6 +70,23 @@
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>${jakarta.ws.rs.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -116,6 +137,41 @@
                             </resources>
                         </configuration>
                     </execution>
+                    <!-- The REST fixture, filtered the same way. -->
+                    <execution>
+                        <id>fixture-rest</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/fixture-rest</outputDirectory>
+                            <useDefaultDelimiters>false</useDefaultDelimiters>
+                            <delimiters>
+                                <delimiter>@</delimiter>
+                            </delimiters>
+                            <resources>
+                                <resource>
+                                    <directory>src/it/fixture-rest</directory>
+                                    <filtering>true</filtering>
+                                    <includes>
+                                        <include>pom.xml</include>
+                                        <include>*/pom.xml</include>
+                                        <include>.mvn/**</include>
+                                    </includes>
+                                </resource>
+                                <resource>
+                                    <directory>src/it/fixture-rest</directory>
+                                    <filtering>false</filtering>
+                                    <excludes>
+                                        <exclude>pom.xml</exclude>
+                                        <exclude>*/pom.xml</exclude>
+                                        <exclude>.mvn/**</exclude>
+                                    </excludes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>
@@ -153,6 +209,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <it.fixture>${project.build.directory}/fixture</it.fixture>
+                        <it.fixture.rest>${project.build.directory}/fixture-rest</it.fixture.rest>
                         <it.logs>${project.build.directory}/it-logs</it.logs>
                         <!-- vidocq.generate.cacheDir of the fixture's builds: never the user's cache. -->
                         <it.caches>${project.build.directory}/it-caches</it.caches>

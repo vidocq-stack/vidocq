@@ -41,7 +41,7 @@ final class Fixture {
 
     static final Duration TIMEOUT = Duration.ofMinutes(3);
 
-    /** The Foy codegen bundle in the application's compiler configuration. */
+    /** The codegen bundle in the application's compiler configuration. */
     private static final Pattern CODEGEN_BUNDLE =
             Pattern.compile("\\s*<annotationProcessorPaths combine.children=\"append\">.*?</annotationProcessorPaths>",
                     Pattern.DOTALL);
@@ -50,8 +50,13 @@ final class Fixture {
 
     /** A copy of the fixture project under {@code dir}, outside this repository and its mvnw. */
     static Path copy(Path dir) throws IOException {
+        return copy(dir, "it.fixture");
+    }
+
+    /** A copy of the fixture project that the system property {@code property} names, under {@code dir}. */
+    static Path copy(Path dir, String property) throws IOException {
         writeSettings();
-        Path template = Path.of(System.getProperty("it.fixture"));
+        Path template = Path.of(System.getProperty(property));
         Path project = dir.resolve("fixture");
         try (Stream<Path> files = Files.walk(template)) {
             for (Path source : files.toList()) {
@@ -66,7 +71,7 @@ final class Fixture {
         return project;
     }
 
-    /** Deletes the Foy codegen bundle from the application's {@code annotationProcessorPaths}. */
+    /** Deletes the codegen bundle from the application's {@code annotationProcessorPaths}. */
     static void withoutCodegenBundle(Path project) throws IOException {
         Path pom = project.resolve("app/pom.xml");
         String before = Files.readString(pom);

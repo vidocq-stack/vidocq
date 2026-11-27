@@ -617,7 +617,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Status**: FIXED. Part 2 (Cassini's adapter of `McpEndpoint`, Vidocq/vidocq#662) by 3cc57d6f (Vidocq/vidocq#675),
   with the hints that Vidocq/cassini#152 (1ea1d1f2) ships in `cassini-processor`. Part 1 (Vauban's client proxy) is
   FIXED by Vidocq/vauban#348 and #351. `McpLaunchShapesTest` fails on any Vauban or Cassini fallback block. The MCP
-  extension and its codegen bundle move to VCU with Vidocq/vidocq#204.
+  extension and its codegen bundle move to VCU with Vidocq/vidocq#204; in the monorepo,
+  `ResourceFromADependencyGetsItsAdapterAtBuildIT` guards part 2 (Vidocq/vidocq#662).
 - **Module**: `vidocq-runtime-langchain4j-cdi-mcp-extension`, `vidocq-runtime-cassini-rest-extension-codegen`; Vauban
   for the first class.
 - **Symptom**: every application that depends on the MCP extension prints two `RUNTIME CODE GENERATION FALLBACK`
@@ -681,6 +682,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
     catalog while it is left out of the releases (the catalog lists the published extensions), so nothing wires the
     bundle for an application that does not declare it: add the descriptor, with `codegen =`, when vidocq#204 releases
     the extension.
+  - 2026-11-27: the MCP extension and `McpLaunchShapesTest` left the monorepo (9e488e4b, vidocq#204), so nothing in it
+    tested part 2 any more, and #662 was still open. `ResourceFromADependencyGetsItsAdapterAtBuildIT`
+    (`vidocq-runtime-it-dependency-codegen`, fixture `src/it/fixture-rest`) tests it without langchain4j: a plain bean
+    archive with a `@Path` resource compiled without `cassini-processor`, and an application with the REST extension
+    and its codegen bundle. The build logs `dependency-codegen-restlib-1.0.jar — Cassini (2 classes, generated)`;
+    `vidocq:run` answers `GET /hello/world` and prints no `CASSINI — RUNTIME CODE GENERATION FALLBACK`. Without the
+    bundle, the same start prints the block for `acme.restlib.HelloResource`. A jar without `beans.xml` is covered
+    too: the brick's selection makes Vauban scan it (checked on the fixture before it got its `beans.xml`).
 
 ## BUG-20261118-04 — The jar of the MCP extension carries a record of frozen extensions, so its applications run theirs at each start
 
