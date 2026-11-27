@@ -662,7 +662,24 @@
                                 <compilerArgs combine.children="append">
                                     <arg>-XDcompilePolicy=simple</arg>
                                     <arg>--should-stop=ifError=FLOW</arg>
-                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*(generated|generated-sources)/.* -XepDisableWarningsInGeneratedCode</arg>
+                                    <!-- Off: the checks of pure style or Javadoc form, which point at no defect
+                                         (#832, measured on main at 0.5.0-SNAPSHOT: 342 of the 2339 findings).
+                                         Javadoc: MissingSummary (210), InvalidParam (18), InvalidBlockTag (12),
+                                         EscapedEntity (10). Style: StatementSwitchToExpressionSwitch (20),
+                                         RefactorSwitch (17), InlineFormatString (18), UnnecessaryStringBuilder (14),
+                                         UnnecessaryLambda (13), AvoidCommonTypeNames (10). javac splits the
+                                         plugin's arguments on white space: one per line. -->
+                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*(generated|generated-sources)/.* -XepDisableWarningsInGeneratedCode
+                                        -Xep:MissingSummary:OFF
+                                        -Xep:InvalidParam:OFF
+                                        -Xep:InvalidBlockTag:OFF
+                                        -Xep:EscapedEntity:OFF
+                                        -Xep:StatementSwitchToExpressionSwitch:OFF
+                                        -Xep:RefactorSwitch:OFF
+                                        -Xep:InlineFormatString:OFF
+                                        -Xep:UnnecessaryStringBuilder:OFF
+                                        -Xep:UnnecessaryLambda:OFF
+                                        -Xep:AvoidCommonTypeNames:OFF</arg>
                                     <!-- javac stops printing warnings after 100 per module by default: SonarQube
                                          would only import the first 100 findings of a module. -->
                                     <arg>-Xmaxwarns</arg>
