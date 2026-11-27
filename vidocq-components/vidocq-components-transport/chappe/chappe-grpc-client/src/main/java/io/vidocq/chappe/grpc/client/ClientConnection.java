@@ -84,6 +84,10 @@ final class ClientConnection implements Closeable {
     private static final String USER_AGENT = "chappe-grpc-client";
     private static final String HTTPS = "https";
 
+    /** The outcome of a call the connection closed under before anything of it was sent: safe to run elsewhere. */
+    private static final GrpcResponse NOT_SENT =
+            GrpcResponses.failure(GrpcStatus.UNAVAILABLE, "The connection closed before the call started", null);
+
     private final Socket socket;
     private final String scheme;
     private final String authority;
@@ -252,9 +256,10 @@ final class ClientConnection implements Closeable {
         }
         Thread.ofVirtual().name("chappe-grpc-client-send").start(() -> send(stream));
         try {
-            return deadline.set()
+            GrpcResponse outcome = deadline.set()
                     ? stream.result.get(deadline.remainingNanos(), TimeUnit.NANOSECONDS)
                     : stream.result.get();
+            return outcome == NOT_SENT ? null : outcome;
         } catch (TimeoutException _) {
             cancel(stream, deadlineExceeded());
             return stream.result.join();
@@ -312,10 +317,18 @@ final class ClientConnection implements Closeable {
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             finish(stream, GrpcResponses.failure(GrpcStatus.CANCELLED, "The sending thread was interrupted", null));
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
+            // A failed write leaves the connection unusable (its HPACK context included): end it now, so the next
+            // call opens another instead of waiting for the reader to notice.
             finish(
                     stream,
                     GrpcResponses.failure(GrpcStatus.UNAVAILABLE, "Sending the request failed: " + e.getMessage(), e));
+            terminate(GrpcResponses.failure(
+                    GrpcStatus.UNAVAILABLE, "The connection to the gRPC server was lost: " + e.getMessage(), e));
+        } catch (RuntimeException e) {
+            finish(
+                    stream,
+                    GrpcResponses.failure(GrpcStatus.INTERNAL, "Sending the request failed: " + e.getMessage(), e));
         }
     }
 
@@ -331,8 +344,7 @@ final class ClientConnection implements Closeable {
                     return false;
                 }
                 if (closed || nextStreamId < 0) {
-                    stream.result.complete(GrpcResponses.failure(
-                            GrpcStatus.UNAVAILABLE, "The connection closed before the call started", null));
+                    stream.result.complete(NOT_SENT);
                     release(stream);
                     return false;
                 }

@@ -44,11 +44,14 @@ import io.vidocq.chappe.http.h2.Http2Frame;
 import io.vidocq.chappe.http.h2.Http2Settings;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 /**
  * The client against a scripted HTTP/2 server: what it writes on the wire, and how it reads the answers a real
  * gRPC server gives only in failure cases.
  */
+// A hung call fails its test instead of the build: every call here should end within seconds.
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class GrpcClientProtocolTest {
 
     private static final byte[] PING = "ping".getBytes(StandardCharsets.UTF_8);
@@ -254,6 +257,7 @@ class GrpcClientProtocolTest {
                     conn.drain();
                 });
                 var client = GrpcClient.builder(server.uri())
+                        .deadline(Duration.ofSeconds(10))
                         .maxResponseMessageSize(1_000)
                         .build()) {
             GrpcResponse response = client.unary("s.S", "M", PING);
@@ -349,6 +353,7 @@ class GrpcClientProtocolTest {
                 }
             });
             try (var client = GrpcClient.builder(URI.create("http://127.0.0.1:" + http1.getLocalPort()))
+                    .deadline(Duration.ofSeconds(10))
                     .build()) {
                 GrpcResponse response = client.unary("s.S", "M", PING);
 
@@ -364,8 +369,9 @@ class GrpcClientProtocolTest {
         try (var probe = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
             port = probe.getLocalPort();
         }
-        try (var client =
-                GrpcClient.builder(URI.create("http://127.0.0.1:" + port)).build()) {
+        try (var client = GrpcClient.builder(URI.create("http://127.0.0.1:" + port))
+                .deadline(Duration.ofSeconds(10))
+                .build()) {
             GrpcResponse response = client.unary("s.S", "M", PING);
 
             assertEquals(GrpcStatus.UNAVAILABLE, response.status());

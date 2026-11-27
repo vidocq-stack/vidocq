@@ -46,6 +46,7 @@ import io.vidocq.chappe.grpc.client.GrpcResponse;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -55,6 +56,8 @@ import org.junit.jupiter.params.provider.ValueSource;
  * import {@code grpc}; {@code -Dchappe.grpc.python.path=<dir>} adds a directory holding it, for instance one filled
  * by {@code pip install --target <dir> grpcio}. Nothing of it is a dependency of the build.
  */
+// A hung call fails its test instead of the build: every call here should end within seconds.
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class GrpcPythonInteropTest {
 
     private static final String SERVICE = "interop.Echo";

@@ -48,12 +48,15 @@ import io.vidocq.chappe.grpc.client.GrpcResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 /**
  * Chappe's gRPC client (chappe-grpc-client, Vidocq/vidocq#837) against Chappe's own gRPC server, in cleartext
  * HTTP/2 with prior knowledge and over TLS with ALPN {@code h2}. The server's wire format is checked against
  * {@code grpcurl} by {@link GrpcurlConformanceTest}.
  */
+// A hung call fails its test instead of the build: every call here should end within seconds.
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class GrpcClientTest {
 
     private static final String SERVICE = "echo.EchoService";
@@ -118,7 +121,8 @@ class GrpcClientTest {
             call.addTrailer("x-cost", "3");
             call.complete(GrpcStatus.OK, "");
         });
-        try (var client = GrpcClient.builder(target).build()) {
+        try (var client =
+                GrpcClient.builder(target).deadline(Duration.ofSeconds(10)).build()) {
             GrpcResponse response = client.unary(GrpcRequest.builder(SERVICE, "Echo")
                     .message(HELLO)
                     .metadata("x-tenant", "acme")
@@ -137,7 +141,8 @@ class GrpcClientTest {
             call.send(call.receive());
             call.complete(GrpcStatus.FAILED_PRECONDITION, "café not open: 100%");
         });
-        try (var client = GrpcClient.builder(target).build()) {
+        try (var client =
+                GrpcClient.builder(target).deadline(Duration.ofSeconds(10)).build()) {
             GrpcResponse response = client.unary(SERVICE, "Echo", HELLO);
 
             assertEquals(GrpcStatus.FAILED_PRECONDITION, response.status());
@@ -152,7 +157,8 @@ class GrpcClientTest {
             call.receive();
             call.complete(GrpcStatus.PERMISSION_DENIED, "no");
         });
-        try (var client = GrpcClient.builder(target).build()) {
+        try (var client =
+                GrpcClient.builder(target).deadline(Duration.ofSeconds(10)).build()) {
             GrpcResponse response = client.unary(SERVICE, "Echo", HELLO);
 
             assertEquals(GrpcStatus.PERMISSION_DENIED, response.status());
@@ -182,7 +188,8 @@ class GrpcClientTest {
             call.send(message);
             call.complete(GrpcStatus.OK, "");
         });
-        try (var client = GrpcClient.builder(target).build()) {
+        try (var client =
+                GrpcClient.builder(target).deadline(Duration.ofSeconds(10)).build()) {
             long start = System.nanoTime();
             GrpcResponse response = client.unary(GrpcRequest.builder(SERVICE, "Echo")
                     .message(HELLO)
@@ -205,7 +212,8 @@ class GrpcClientTest {
     @Test
     void an_unknown_method_is_unimplemented() throws Exception {
         URI target = start("Echo", GrpcClientTest::echo);
-        try (var client = GrpcClient.builder(target).build()) {
+        try (var client =
+                GrpcClient.builder(target).deadline(Duration.ofSeconds(10)).build()) {
             GrpcResponse response = client.unary(SERVICE, "Missing", HELLO);
 
             assertEquals(GrpcStatus.UNIMPLEMENTED, response.status(), response.toString());
@@ -218,7 +226,8 @@ class GrpcClientTest {
             call.useResponseEncoding("gzip");
             echo(call);
         });
-        try (var client = GrpcClient.builder(target).build()) {
+        try (var client =
+                GrpcClient.builder(target).deadline(Duration.ofSeconds(10)).build()) {
             GrpcResponse response = client.unary(SERVICE, "Echo", HELLO);
 
             assertEquals(GrpcStatus.INTERNAL, response.status());
@@ -293,7 +302,8 @@ class GrpcClientTest {
                             .build())
                     .build();
             server.start();
-            assertTrue(client.unary(SERVICE, "Echo", HELLO).isOk());
+            GrpcResponse again = client.unary(SERVICE, "Echo", HELLO);
+            assertTrue(again.isOk(), again.toString());
         }
     }
 
@@ -334,6 +344,7 @@ class GrpcClientTest {
                 TlsFixtures.context(null, TlsFixtures.trustStore(TlsFixtures.certificate(otherKeys, "other")));
         try (var client = GrpcClient.builder(URI.create("https://127.0.0.1:" + server.port()))
                 .sslContext(trustsOther)
+                .deadline(Duration.ofSeconds(10))
                 .build()) {
             GrpcResponse response = client.unary(SERVICE, "Echo", HELLO);
 
