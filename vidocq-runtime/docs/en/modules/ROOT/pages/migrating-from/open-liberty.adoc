@@ -1,0 +1,182 @@
+= Migrating from Open Liberty
+:description: The features of server.xml, its data sources, variables and users, and the Liberty Maven plugin, mapped to a Vidocq application.
+
+[.lead]
+An Open Liberty application is written against Jakarta EE and MicroProfile, so its code mostly moves as is. What
+changes is `server.xml`, the files around it, and the build. Read
+xref:migrating-from/jakarta-ee-server.adoc[Migrating from a Jakarta EE application server] first: it covers the
+packaging, the data sources, Enterprise Beans, security and tests. This page covers what is specific to Liberty.
+
+[#features]
+== The features of `server.xml`
+
+Each feature of `<featureManager>` is an extension, or nothing to add, or a gap. A convenience feature such as
+`webProfile` or `microProfile` enables many features: list the ones the application uses.
+
+[cols="2,2,3",options="header"]
+|===
+| Liberty feature | Vidocq extension id | Note
+
+| `restfulWS`, `jsonb`, `jsonp` | `rest-cassini` | JSON-P and JSON-B come with the REST extension.
+| `restfulWSClient` | none | Declare `io.vidocq.cassini:cassini-client`, which `vidocq-runtime-bom` versions: the standard Jakarta REST client.
+| `cdi` | none | Vauban is built in. CDI Lite only (xref:migrating-from/jakarta-ee-server.adoc#cdi-full[CDI Full]).
+| `servlet` | `servlet-foy` |
+| `pages` | `pages-ibarra` | Brings `el-peano`. Pages are compiled at build time.
+| `expressionLanguage` | `el-peano` |
+| JSTL, bundled with `pages` | `jstl-bodoni` |
+| `websocket` | `websocket-foy` | Programmatic API only.
+| `jdbc` | `pool-mansart` | Plus the JDBC driver as a dependency.
+| `persistence`, `persistenceContainer` | `persistence-noether` | Preview, H2 and PostgreSQL.
+| `data` | `data-mansart` |
+| `appSecurity` | `security-kerckhoffs` | Preview.
+| `mpConfig` | `config-ravel` |
+| `mpHealth` | `health-knock` |
+| `mpMetrics` | `metrics-dirac` |
+| `mpFaultTolerance` | `fault-tolerance-heisenberg` |
+| `mpOpenAPI` | `openapi-grimm`, `openapi-ui-grimm` |
+| `mpRestClient` | `rest-client-cyrano` |
+| `mpJwt` | `jwt-cervantes` |
+| `mpTelemetry` | `telemetry-humboldt` |
+| `beanValidation`, `concurrent`, `enterpriseBeansLite`, `faces` | none yet | Planned for 1.1.0 to 1.3.0 (xref:migrating-from/jakarta-ee-server.adoc#no-equivalent-yet[What has no equivalent yet]).
+| `batch`, `mail`, `messaging`, `enterpriseBeans`, `connectors` | none | Not in the release plan.
+|===
+
+[source,xml]
+----
+<!-- Before: server.xml -->
+<featureManager>
+    <feature>restfulWS-4.0</feature>
+    <feature>cdi-4.1</feature>
+    <feature>mpConfig-3.1</feature>
+    <feature>mpHealth-4.0</feature>
+</featureManager>
+----
+
+[source,bash]
+----
+# After: the extensions in the pom and module-info.java
+vidocq extension add rest-cassini,config-ravel,health-knock
+----
+
+[#server-xml]
+== The rest of `server.xml`
+
+[cols="2,3",options="header"]
+|===
+| `server.xml` | Vidocq
+
+| `<httpEndpoint httpPort="9080" host="*">`
+| `vidocq.http.port=9080`, `vidocq.http.host=0.0.0.0`. The Vidocq default port is `8080`.
+
+| `httpsPort`, `<ssl>`, `<keyStore>`
+| No TLS yet: terminate it in front of the application.
+
+| `<webApplication location="shop.war" contextRoot="/shop">`
+| No deployment. `vidocq.servlet.context-path=/shop`, and `vidocq.rest.context-path` for the REST resources
+(xref:migrating-from/jakarta-ee-server.adoc#context-root[The context root]).
+
+| `<dataSource>`, `<jdbcDriver>`, `<library>`
+| `vidocq.pool.*` keys, and the driver as a Maven dependency (<<data-source>>).
+
+| `<variable name="..." value="..."/>`, `bootstrap.properties`
+| Keys of `vidocq.properties`, read with `@ConfigProperty` or as `+${key}+`.
+
+| `server.env`
+| Environment variables of the process. MicroProfile Config reads them.
+
+| `jvm.options`
+| `vidocq.jvmArgs` in the pom, or `JAVA_OPTS` at start (xref:usage.adoc#jvm-options[JVM options]).
+
+| `<logging traceSpecification="...">`
+| `java.util.logging` levels, or a logging framework of your own
+(xref:modules/vidocq-runtime-core.adoc#console-logging[Console logging]).
+
+| `<basicRegistry>`, `<quickStartSecurity>`
+| An `IdentityStore` bean of the application; `vidocq.servlet.users.<name>.*` for development only
+(xref:migrating-from/jakarta-ee-server.adoc#security[Security]).
+
+| `<application-bnd>` with `<security-role>` and `<group>`
+| No mapping file: the identity store answers the role names.
+|===
+
+[#data-source]
+== A data source
+
+[source,xml]
+----
+<!-- Before: server.xml -->
+<library id="pg">
+    <fileset dir="${shared.resource.dir}/jdbc" includes="postgresql-*.jar"/>
+</library>
+<dataSource id="DefaultDataSource" jndiName="jdbc/shop">
+    <jdbcDriver libraryRef="pg"/>
+    <properties.postgresql serverName="db" portNumber="5432" databaseName="shop"
+                           user="shop" password="${env.SHOP_DB_PASSWORD}"/>
+    <connectionManager maxPoolSize="20" minPoolSize="2" connectionTimeout="5s"/>
+</dataSource>
+----
+
+[source,properties]
+----
+# After: vidocq.properties
+vidocq.pool.url=jdbc:postgresql://db:5432/shop
+vidocq.pool.username=shop
+vidocq.pool.password=${SHOP_DB_PASSWORD}
+vidocq.pool.maxSize=20
+vidocq.pool.minIdle=2
+vidocq.pool.acquireTimeout=PT5S
+----
+
+[source,xml]
+----
+<!-- After: pom.xml, the driver Liberty loaded from its library -->
+<dependency>
+    <groupId>org.postgresql</groupId>
+    <artifactId>postgresql</artifactId>
+    <version>42.7.10</version>
+    <scope>runtime</scope>
+</dependency>
+----
+
+The data source `DefaultDataSource` of Liberty answers `java:comp/DefaultDataSource`. Under Vidocq the default pool
+does, with the naming extension. Code that looks up `jdbc/shop` changes the name to `java:comp/DefaultDataSource`,
+or injects the pool (xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI names]). A data source of another id is a named pool: `vidocq.pool.<name>.url`, with
+`vidocq-runtime-mansart-pool-datasources-codegen` on the processor path
+(xref:migrating-from/jakarta-ee-server.adoc#data-sources[Data sources and JNDI names]).
+
+[#build]
+== The Liberty Maven plugin
+
+[cols="1,2",options="header"]
+|===
+| `liberty-maven-plugin` | Vidocq
+
+| `mvn liberty:dev`
+| `vidocq dev`, or `mvn vidocq:dev`.
+
+| `mvn liberty:run`
+| `vidocq run`, or `mvn vidocq:run`.
+
+| `mvn liberty:package`, a server package
+| `vidocq build`: a distribution, a jlink image or a container image (xref:shipping.adoc[Choosing how to ship]).
+
+| `src/main/liberty/config/server.xml`
+| `src/main/resources/vidocq.properties`.
+|===
+
+[#tests]
+== Tests
+
+Arquillian against a managed or remote Liberty, and the Liberty test containers, start a server and deploy the
+WAR. `@VidocqTest` starts the application itself (xref:migrating-from/jakarta-ee-server.adoc#tests[Tests]).
+
+[#reverse]
+== What the bricks learned on Liberty
+
+Every Vidocq brick is tested in a WAR on Open Liberty by its `<brick>-it-openliberty` module, and its reference page
+says which Liberty feature to keep off. The same pairs, read backwards, are the migration: `mpConfig` to Ravel,
+`mpHealth` to Knock, `mpMetrics` to Dirac, `mpFaultTolerance` to Heisenberg, `mpOpenAPI` to Grimm, `mpRestClient`
+to Cyrano, `mpJwt` to Cervantes, `mpTelemetry` to Humboldt, `jsonb` to Champollion, `data` to
+Mansart, `persistence` to Noether. See for example
+xref:{page-component-version}@knock::reference.adoc[Knock's reference page] and
+xref:{page-component-version}@noether::reference.adoc#server-deployment[Noether's].

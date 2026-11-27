@@ -1,0 +1,690 @@
+= Migrating from a Jakarta EE application server
+:description: What moves as is, what changes and what has no equivalent yet when a WAR or an EAR of Open Liberty, GlassFish or WildFly becomes a Vidocq application.
+
+[.lead]
+An application written for a Jakarta EE server uses the Jakarta EE and MicroProfile APIs. Vidocq implements the same
+APIs, so most of the code moves as is. The work is elsewhere: the packaging, the server configuration, the resources
+the server looked up by name, and the parts of the platform Vidocq does not run yet. This page covers what the three
+servers share. Each server has a short page for its own files:
+xref:migrating-from/open-liberty.adoc[Open Liberty], xref:migrating-from/glassfish.adoc[GlassFish] and
+xref:migrating-from/wildfly.adoc[WildFly].
+
+NOTE: This page is a guide. The analysis command and the automatic rewrites the tickets describe
+(Vidocq/vidocq#793, #794, #795) are planned for 1.0.0.
+
+[#before-you-start]
+== Before you start: what Vidocq runs today
+
+Check this table first. A server runs the whole platform; Vidocq runs the Core Profile, MicroProfile 7.2 and part of
+the Web Profile. An application that needs a missing part either waits for its release or replaces that part, as
+<<no-equivalent-yet>> describes.
+
+[cols="2,2,1,3",options="header"]
+|===
+| Specification | Vidocq brick | Extension id | Status
+
+| CDI 4.1 Lite, Inject, Interceptors, Annotations
+| xref:{page-component-version}@vauban::index.adoc[Vauban]
+| built in
+| Delivered. CDI Lite only: CDI Full comes in 1.2.0 (<<cdi-full>>).
+
+| Jakarta REST 4.0, JSON-P 2.1, JSON-B 3.0
+| xref:{page-component-version}@cassini::index.adoc[Cassini], xref:{page-component-version}@champollion::index.adoc[Champollion]
+| `rest-cassini`
+| Delivered. JSON-P and JSON-B come with the REST extension.
+
+| Servlet 6.1
+| xref:{page-component-version}@foy::index.adoc[Foy]
+| `servlet-foy`
+| Delivered.
+
+| Pages 4.0, Expression Language 6.0
+| xref:{page-component-version}@ibarra::index.adoc[Ibarra], xref:{page-component-version}@peano::index.adoc[Peano]
+| `pages-ibarra`, `el-peano`
+| Delivered. Pages are compiled at build time.
+
+| Standard Tag Library 3.0
+| xref:{page-component-version}@bodoni::index.adoc[Bodoni]
+| `jstl-bodoni`
+| Delivered.
+
+| Data 1.0
+| xref:{page-component-version}@mansart::index.adoc[Mansart]
+| `data-mansart`
+| Delivered. H2 and PostgreSQL.
+
+| Transactions 2.0
+| Mansart
+| `transactions-mansart`
+| Delivered as a minimal implementation. The full TCK and XA are planned for 1.1.0.
+
+| Persistence 3.2
+| xref:{page-component-version}@noether::index.adoc[Noether]
+| `persistence-noether`
+| Preview, H2 and PostgreSQL only. Certified in 1.0.0.
+
+| Security 4.0
+| xref:{page-component-version}@kerckhoffs::index.adoc[Kerckhoffs]
+| `security-kerckhoffs`
+| Preview. Complete in 1.1.0.
+
+| WebSocket 2.2
+| Foy
+| `websocket-foy`
+| The programmatic server API only. Annotated endpoints and the client come in 1.1.0.
+
+| Validation 3.1
+| —
+| —
+| Not available. Planned for 1.1.0.
+
+| Concurrency 3.1
+| —
+| —
+| Not available. Planned for 1.1.0.
+
+| CDI 4.1 Full, Enterprise Beans Lite 4.0
+| —
+| —
+| Not available. Planned for 1.2.0.
+
+| Faces 4.1
+| —
+| —
+| Not available. Planned for 1.3.0.
+
+| Messaging, Batch, Mail, Connectors, the full Enterprise Beans
+| —
+| —
+| Not available, and not in the release plan. They are not part of the Web Profile.
+
+| MicroProfile Config, Health, Metrics, Fault Tolerance, OpenAPI, REST Client, JWT, Telemetry
+| Ravel, Knock, Dirac, Heisenberg, Grimm, Cyrano, Cervantes, Humboldt
+| <<features,table below>>
+| Delivered. Each one passes its TCK on the assembled runtime (xref:tck.adoc[TCK status]).
+|===
+
+The release plan is in the runtime's `ROADMAP.md`, and the gap analysis of the Web Profile, specification by
+specification, in
+link:{repo-vidocq}/src/branch/main/vidocq-runtime/WEB-PROFILE.md[`WEB-PROFILE.md`].
+
+[#shape]
+== From a WAR to a Java module
+
+A server deploys an archive. Vidocq starts an application: a named Java module, with its dependencies on the module
+path. There is no WAR to deploy and no server to install. The runtime's own main boots the module, and the
+extensions on the module path bring the specifications (xref:modules/vidocq-runtime-extensions.adoc#activation-by-dependency[Activation by dependency]).
+
+[cols="1,2",options="header"]
+|===
+| In the WAR | In the Vidocq application
+
+| `<packaging>war</packaging>`
+| A jar project with `vidocq-runtime-maven-plugin` as a build extension. `vidocq create` writes it.
+
+| `jakarta.jakartaee-api` or `jakarta.jakartaee-web-api`, `provided`
+| Remove it. Each extension brings the API it implements. An API the umbrella jar brings and no extension implements
+compiles, then fails when the application runs.
+
+| `WEB-INF/classes`
+| The classes of the application module, under `src/main/java`, with a `module-info.java`.
+
+| `WEB-INF/lib/*.jar`
+| Maven dependencies, on the module path.
+
+| `WEB-INF/web.xml`
+| `src/main/resources/WEB-INF/web.xml`, or `src/main/resources/META-INF/web.xml`.
+
+| `META-INF/web-fragment.xml` of a library
+| Unchanged: Foy reads the fragments of the jars it sees.
+
+| Static files at the root of the WAR (`src/main/webapp`)
+| `src/main/resources/META-INF/resources/`.
+
+| JSP pages, and the pages under `WEB-INF/`
+| `src/main/resources/META-INF/resources/` and `src/main/resources/WEB-INF/`
+(xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages]).
+
+| The context root of the deployment
+| `vidocq.servlet.context-path` for the servlets, `vidocq.rest.context-path` for the REST resources (<<context-root>>).
+|===
+
+An EAR becomes a Maven reactor. Its libraries and its EJB modules become library modules that the application
+module requires (xref:usage.adoc#multi-module-applications-scanned-dependencies[Multi-module applications]). Several
+WARs of one EAR become several applications, one process each
+(xref:usage.adoc#several-applications[Several applications in one reactor]).
+
+The pom, before and after:
+
+[source,xml]
+----
+<!-- Before: a WAR for the server -->
+<packaging>war</packaging>
+<dependencies>
+    <dependency>
+        <groupId>jakarta.platform</groupId>
+        <artifactId>jakarta.jakartaee-web-api</artifactId>
+        <version>11.0.0</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+----
+
+[source,xml,subs=attributes+]
+----
+<!-- After: a Vidocq application (vidocq create writes the whole pom) -->
+<properties>
+    <vidocq.version>{release-version}</vidocq.version>
+    <vidocq.mainModule>com.acme.shop</vidocq.mainModule>
+</properties>
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-core</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+        <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+    </dependency>
+</dependencies>
+<build>
+    <plugins>
+        <plugin>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            <version>${vidocq.version}</version>
+            <extensions>true</extensions>
+        </plugin>
+    </plugins>
+</build>
+----
+
+The simplest path is to scaffold a new project and move the sources into it:
+
+[source,bash]
+----
+vidocq create --name shop --group-id com.acme -x rest-cassini,servlet-foy,persistence-noether
+----
+
+The full pom, and the `dependencyManagement` that imports `vidocq-runtime-bom`, are in
+xref:getting-started.adoc#without-the-cli[Getting started, without the CLI].
+
+*The module descriptor.* A WAR runs on the class path. A Vidocq application is a named module: its
+`module-info.java` says what it reads, and opens the packages that libraries reach by reflection.
+`vidocq extension add` writes the lines each extension needs. To avoid `opens` lines altogether, make it an
+`open module` (xref:java-modules.adoc#open-module[Or: an open module]). A library the server provided and the
+application used directly, such as the server's logging API or the provider classes of Hibernate or RESTEasy, is now
+a dependency to declare, or code to replace.
+
+[#features]
+== Server features to Vidocq extensions
+
+A server turns a specification on in its configuration. Vidocq turns it on with a dependency.
+`vidocq extension add` takes one id or several, writes the dependency, and the `requires` of `module-info.java`
+(xref:modules/vidocq-runtime-cli.adoc#extension[`vidocq extension`]):
+
+[source,bash]
+----
+vidocq extension add rest-cassini,health-knock,config-ravel
+----
+
+[cols="2,1,2",options="header"]
+|===
+| Capability | Extension id | Artifact
+
+| Jakarta REST, JSON-P, JSON-B | `rest-cassini` | `vidocq-runtime-cassini-rest-extension`
+| Servlet | `servlet-foy` | `vidocq-runtime-foy-servlet-extension`
+| WebSocket | `websocket-foy` | `vidocq-runtime-foy-websocket-extension`
+| Pages | `pages-ibarra` | `vidocq-runtime-ibarra-pages-extension`
+| Expression Language | `el-peano` | `vidocq-runtime-peano-el-extension`
+| Standard Tag Library | `jstl-bodoni` | `vidocq-runtime-bodoni-jstl-extension`
+| JDBC data sources | `pool-mansart` | `vidocq-runtime-mansart-pool-extension`
+| Transactions | `transactions-mansart` | `vidocq-runtime-mansart-transactions-extension`
+| Data | `data-mansart` | `vidocq-runtime-mansart-data-extension`
+| Persistence | `persistence-noether` | `vidocq-runtime-noether-persistence-extension`
+| Security | `security-kerckhoffs` | `vidocq-runtime-kerckhoffs-security-extension`
+| JNDI `java:` names | `naming` | `vidocq-runtime-naming-extension`
+| MicroProfile Config | `config-ravel` | `vidocq-runtime-ravel-config-extension`
+| MicroProfile Health | `health-knock` | `vidocq-runtime-knock-health-extension`
+| MicroProfile Metrics | `metrics-dirac` | `vidocq-runtime-dirac-metrics-extension`
+| MicroProfile Fault Tolerance | `fault-tolerance-heisenberg` | `vidocq-runtime-heisenberg-fault-tolerance-extension`
+| MicroProfile OpenAPI | `openapi-grimm` (`openapi-ui-grimm` for Swagger UI) | `vidocq-runtime-grimm-openapi-extension`
+| MicroProfile REST Client | `rest-client-cyrano` | `vidocq-runtime-cyrano-rest-client-extension`
+| MicroProfile JWT | `jwt-cervantes` | `vidocq-runtime-cervantes-jwt-extension`
+| MicroProfile Telemetry | `telemetry-humboldt` | `vidocq-runtime-humboldt-telemetry-extension`
+|===
+
+The ids up to 0.4.0 put the codename first (`cassini-rest`, `knock-health`) and still work
+(xref:modules/vidocq-runtime-cli.adoc#extension-ids[Extension ids]). CDI needs no extension: Vauban is built into
+`vidocq-runtime-core`. The extensions that need a `-codegen` bundle on the compiler's processor path get it from
+the plugin.
+
+[#configuration]
+== Server configuration to `vidocq.properties`
+
+There is no server configuration file. The application reads `src/main/resources/vidocq.properties`, through
+MicroProfile Config. System properties and environment variables override it, and a `vidocq.properties` file in
+`$VIDOCQ_CONFIG_DIR` overrides it for one deployment
+(xref:reference.adoc#microprofile-config-keys[MicroProfile Config keys]).
+
+[cols="2,3",options="header"]
+|===
+| On the server | Under Vidocq
+
+| HTTP port and host
+| `vidocq.http.port` (default `8080`) and `vidocq.http.host` (default `0.0.0.0`).
+
+| HTTPS, key stores, TLS settings
+| Not implemented yet: the `vidocq.https.*` and `vidocq.tls.*` keys are planned and do nothing today. Terminate TLS
+in front of the application, at a reverse proxy or the ingress.
+
+| Context root
+| `vidocq.servlet.context-path` and `vidocq.rest.context-path` (<<context-root>>).
+
+| Server variables, server properties
+| Keys of `vidocq.properties`, read with `@ConfigProperty` or in other values as `+${key}+`, with a default as
+`+${key:default}+` (xref:usage.adoc#property-expressions[Property expressions]).
+
+| Per-environment configuration
+| A profile: `%prod.vidocq.http.port=80`, active with `vidocq.profile=prod` or `VIDOCQ_PROFILE=prod`
+(xref:usage.adoc#profiles[Profiles]).
+
+| `META-INF/microprofile-config.properties` of the application
+| Read as is, with `config-ravel`. A key in `vidocq.properties` wins over it.
+
+| JVM options
+| `vidocq.jvmArgs` in the pom for every start, `JAVA_OPTS` (or `JDK_JAVA_OPTIONS` for an image) for one start
+(xref:usage.adoc#jvm-options[JVM options of each binary]).
+
+| Logging configuration
+| Vidocq logs through `System.Logger` and `java.util.logging`, one line per record on standard output. A
+`java.util.logging.config.file`, or an SLF4J or Log4j `System.Logger` provider, takes over
+(xref:modules/vidocq-runtime-core.adoc#console-logging[Console logging]).
+|===
+
+[#context-root]
+=== The context root
+
+A server serves the WAR under its context root, `/shop`, and the REST resources under the context root followed by
+the `@ApplicationPath`. Vidocq mounts the servlets on `vidocq.servlet.context-path` (else the
+`<default-context-path>` of `web.xml`, else `/`), and the REST resources on the `@ApplicationPath` alone. A value of
+`vidocq.rest.context-path` replaces the `@ApplicationPath`, so it carries both parts. To keep the URLs of the server:
+
+[source,properties]
+----
+# @ApplicationPath("api") under the context root /shop
+vidocq.servlet.context-path=/shop
+vidocq.rest.context-path=/shop/api
+----
+
+With `cassini-servlet` next to the Servlet extension, the REST resources run inside Foy as a servlet, under the
+servlet context path, as on the server (xref:modules/vidocq-runtime-extensions.adoc#rest-as-servlet[REST inside
+Foy]).
+
+[#data-sources]
+== Data sources and JNDI names
+
+The server's connection pools become Mansart pools, one set of keys per pool. The default pool has no name; each
+other pool has a name, a single segment without a dot.
+
+[source,properties]
+----
+# The default pool: java:comp/DefaultDataSource, @Inject DataSource
+vidocq.pool.url=jdbc:postgresql://db:5432/shop
+vidocq.pool.username=shop
+vidocq.pool.password=${SHOP_DB_PASSWORD}
+vidocq.pool.maxSize=20
+
+# A named pool: java:comp/env/orders, @Inject @Named("orders") DataSource
+vidocq.pool.orders.url=jdbc:postgresql://db:5432/orders
+vidocq.pool.orders.username=orders
+----
+
+[cols="2,3",options="header"]
+|===
+| Pool setting on the server | Mansart key (after `vidocq.pool.` or `vidocq.pool.<name>.`)
+
+| URL, or server name, port and database
+| `url`, a JDBC URL.
+
+| User and password
+| `username`, `password`.
+
+| Maximum and minimum pool size
+| `maxSize` (default `10`), `minIdle` (default `0`).
+
+| Connection or wait timeout
+| `acquireTimeout`, an ISO-8601 duration (default `PT5S`).
+
+| Idle timeout, maximum age
+| `idleTimeout` (default `PT10M`), `maxLifetime` (default `PT30M`).
+
+| Validation query, validation on borrow
+| `validationQuery`, `validation` (`NEVER`, `ON_BORROW` or `PERIODIC`).
+
+| XA data source class
+| `xa=true`, and `xaDataSourceClass` for a driver other than H2 and PostgreSQL.
+
+| JDBC driver library
+| A Maven dependency of the application, at `runtime` scope.
+|===
+
+*Named pools need a processor.* The `@Named("orders") DataSource` bean of a named pool is generated at compile time.
+Add `vidocq-runtime-mansart-pool-datasources-codegen` (group `io.vidocq.runtime.extensions.jakartaee.web`) to the
+compiler's `annotationProcessorPaths`, and declare the pool's `url` in `vidocq.properties`, where the build sees it.
+The startup report flags a named pool without its bean
+(xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-002[MANSART-POOL-002]).
+
+*JNDI names.* Add the `naming` extension when the code looks names up, or uses `@Repository(dataStore = "java:...")`
+(xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI `java:` names]). It answers:
+
+* `java:comp/DefaultDataSource`: the default pool;
+* `java:comp/env/<name>`: the pool `<name>`, `java:comp/env/orders` for `vidocq.pool.orders.url`;
+* `java:comp/UserTransaction` and `java:comp/TransactionSynchronizationRegistry`, with the transactions extension;
+* every name `vidocq.properties` declares, as a bean or as a link to another name.
+
+With the transactions extension, the connections a pool name answers join the current transaction, as the data
+sources of a server do.
+
+A server name such as `jdbc/orders` is not a pool name, and a link may only name a name that `vidocq.properties`
+declares, not a pool name. Two ways out:
+
+* change the lookup to the pool name, `java:comp/env/orders`, which joins the transactions;
+* or declare the server name as the pool bean. That binds the pool itself, whose connections never join a
+  transaction: fine for code that reads outside transactions, wrong for JDBC code inside a `@Transactional` method.
+
+[source,java]
+----
+// Before
+DataSource orders = (DataSource) new InitialContext().lookup("java:comp/env/jdbc/orders");
+
+// After: the pool vidocq.pool.orders.url, enlisted in the transaction
+DataSource orders = (DataSource) new InitialContext().lookup("java:comp/env/orders");
+----
+
+[source,properties]
+----
+# Or keep the name, bound to the pool itself, outside transactions
+vidocq.naming.comp/env/jdbc/orders=javax.sql.DataSource @Named("orders")
+----
+
+The four namespaces stay apart, as on the server: `java:comp/env/jdbc/orders` does not answer
+`java:app/env/jdbc/orders`. Not covered yet: `@Resource` injection, `resource-ref` and `env-entry` in `web.xml`, and
+`@DataSourceDefinition`. Inject the pool instead, or look its name up:
+
+[source,java]
+----
+// Before
+@Resource(lookup = "jdbc/orders")
+DataSource orders;
+
+// After
+@Inject
+@Named("orders")
+DataSource orders;
+----
+
+The injected bean is the pool itself too. A Jakarta Data repository or a persistence unit on that pool joins the
+transaction on its own; plain JDBC code that must join it takes its connections from the name
+`java:comp/env/orders`.
+
+*Development and tests.* With `pool-mansart`, `vidocq dev`, `vidocq test` and `mvn test` start a PostgreSQL
+container and point the default pool at it (xref:dev-services.adoc[Dev services]). The server's development data
+source is not needed.
+
+[#persistence]
+== Persistence
+
+The persistence units of `META-INF/persistence.xml` run on Noether, a preview. Before you move, read
+xref:{page-component-version}@noether::migration.adoc[Noether's migration page]: Noether supports H2 and PostgreSQL,
+implements the standard API only, and maps `AUTO` identifiers its own way.
+
+* `@PersistenceContext`, `@PersistenceUnit` and `@Inject EntityManager` work as on the server; `@Transactional`
+  comes with `transactions-mansart`, which `vidocq extension add persistence-noether` adds.
+* A `<provider>` element naming Hibernate or EclipseLink hands the unit to that provider, if the application ships
+  it; remove it to run on Noether.
+* `<jta-data-source>` names a Mansart pool, not a JNDI name. Change it, or set the pool by key:
+
+[source,xml]
+----
+<!-- Before -->
+<jta-data-source>jdbc/orders</jta-data-source>
+<!-- After: the pool vidocq.pool.orders.url -->
+<jta-data-source>orders</jta-data-source>
+----
+
+[source,properties]
+----
+# Or keep persistence.xml as it is, and point the unit "shop" at the pool
+vidocq.persistence.shop.datasource=orders
+----
+
+The keys of a unit are in xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-keys[Units declared with
+keys]. A `@PersistenceContext(name = ...)` declared on a class is bound under `java:comp/env` with the naming
+extension (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-references[References declared on a
+class]).
+
+[#enterprise-beans]
+== Enterprise Beans to CDI beans
+
+Vidocq runs no Enterprise Beans before 1.2.0. Most session beans become CDI beans with a few annotations.
+
+[cols="2,3",options="header"]
+|===
+| Enterprise Beans | CDI under Vidocq
+
+| `@Stateless`
+| `@ApplicationScoped`, when the bean keeps no state between calls; else `@RequestScoped` or `@Dependent`.
+
+| `@Stateful`
+| `@SessionScoped` in a web application (Servlet extension), else `@Dependent`.
+
+| `@Singleton`
+| `@ApplicationScoped`. There is no container-managed lock (`@Lock`): make the bean thread-safe.
+
+| `@Startup`
+| An observer method: `void start(@Observes Startup event)`. `Shutdown` is fired at stop.
+
+| `@EJB`
+| `@Inject`.
+
+| Container-managed transactions (every business method is `REQUIRED` by default)
+| `@Transactional` on the class or the method. A CDI bean has no transaction without it.
+
+| `@TransactionAttribute(REQUIRES_NEW)` and the other attributes
+| `@Transactional(TxType.REQUIRES_NEW)`: the six types are supported.
+
+| `@ApplicationException(rollback = true)`
+| `@Transactional(rollbackOn = ...)` and `dontRollbackOn`.
+
+| `@Asynchronous`
+| MicroProfile Fault Tolerance's `@Asynchronous` (`fault-tolerance-heisenberg`): the method runs on a virtual thread
+and returns a `CompletionStage` or a `Future`.
+
+| `@Schedule`, `TimerService`
+| No equivalent (<<no-equivalent-yet>>).
+
+| `@Remote` interfaces, message-driven beans
+| No equivalent. Expose a REST resource instead of a remote interface.
+|===
+
+[source,java]
+----
+// Before
+@Stateless
+public class OrderService {
+    @PersistenceContext
+    EntityManager em;
+
+    public void place(Order order) {   // REQUIRED by default
+        em.persist(order);
+    }
+}
+
+// After
+@ApplicationScoped
+@Transactional
+public class OrderService {
+    @PersistenceContext
+    EntityManager em;
+
+    public void place(Order order) {
+        em.persist(order);
+    }
+}
+----
+
+[#cdi-full]
+=== CDI Lite, not CDI Full
+
+A server runs CDI Full. Vauban runs CDI Lite until 1.2.0. These features of CDI Full have no equivalent yet:
+decorators, `@Specializes`, `@ConversationScoped`, portable extensions (`jakarta.enterprise.inject.spi.Extension`),
+and the passivation checks. A portable extension becomes a build compatible extension; a decorator becomes an
+interceptor or plain composition. See
+xref:{page-component-version}@vauban::concepts.adoc#differences-from-cdi-full[Differences from CDI Full] and
+xref:{page-component-version}@vauban::migration.adoc[Vauban's migration page].
+
+[#security]
+== Security
+
+The server's security, its realms and its users, do not move: Vidocq has no server configuration to hold them. The
+application declares them.
+
+* *`web.xml` constraints*, `@ServletSecurity`, BASIC and FORM logins: Foy enforces them. Users come from an
+  `IdentityStore` bean of the application, or, for development only, from `vidocq.servlet.users.<name>.password`
+  and `.roles` (xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy), Security]).
+* *Jakarta Security* (`HttpAuthenticationMechanism`, identity stores, `SecurityContext`): `security-kerckhoffs`, a
+  preview. Read xref:{page-component-version}@kerckhoffs::migration.adoc#before-you-move[what it does not provide
+  yet] and xref:{page-component-version}@kerckhoffs::migration.adoc#from-an-application-server[the move from a
+  server].
+* *Groups and roles.* There is no group-to-role mapping file: a group the identity store answers is the role of the
+  same name. Move the server's mapping into the identity store.
+* *REST resources* are protected by Jakarta Security only when they run inside Foy, with `cassini-servlet`
+  (<<context-root>>).
+* *Bearer tokens*: MicroProfile JWT (`jwt-cervantes`) checks the token and `@RolesAllowed` on REST resources.
+
+[#no-equivalent-yet]
+== What has no equivalent yet
+
+[cols="2,1,3",options="header"]
+|===
+| API | Planned | Until then
+
+| Enterprise Beans
+| 1.2.0
+| CDI beans (<<enterprise-beans>>).
+
+| Timers (`@Schedule`, `TimerService`)
+| 1.2.0, with Enterprise Beans
+| A `ScheduledExecutorService` the application starts in an observer of `Startup` and stops in an observer of
+`Shutdown`. On several replicas, every replica runs it.
+
+| Concurrency (`ManagedExecutorService`, `@Asynchronous` of Concurrency)
+| 1.1.0
+| A plain executor, `Executors.newVirtualThreadPerTaskExecutor()`, produced as a bean. Nothing carries the request
+or security context into its tasks.
+
+| Validation (`@NotNull`, `@Valid`)
+| 1.1.0
+| Nothing checks the constraints: check the input in the code.
+
+| Faces
+| 1.3.0
+| Pages with the Standard Tag Library, or a REST API behind a front end.
+
+| WebSocket annotated endpoints (`@ServerEndpoint`), WebSocket client
+| 1.1.0
+| The programmatic API: `ServerContainer.addEndpoint(ServerEndpointConfig)` from a `ServletContextListener`
+(xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket]).
+
+| CDI Full
+| 1.2.0
+| <<cdi-full>>.
+
+| Messaging (JMS)
+| Not planned
+| The implementation, Tassis, lives outside the runtime and has no Vidocq extension. Keep the messaging part on
+the server, or use the broker's own client library.
+
+| Batch
+| Not planned
+| Plain code started by a scheduler or a job of the platform.
+
+| Mail
+| Not planned
+| A Jakarta Mail implementation declared as a library; the application creates its `Session` itself, with no
+`mail/` JNDI resource.
+
+| Connectors (JCA), XML Web Services, the full Enterprise Beans
+| Not planned
+| No equivalent.
+|===
+
+[#tests]
+== Tests
+
+Arquillian tests deploy an archive to a server. `@VidocqTest` starts the whole application, in a JVM of its own, once
+per test class, and sends it HTTP requests (xref:testing.adoc[Testing an application]):
+
+[source,java]
+----
+// Before: Arquillian
+@ExtendWith(ArquillianExtension.class)
+class OrdersIT {
+    @Deployment(testable = false)
+    static WebArchive deployment() {
+        return ShrinkWrap.create(WebArchive.class).addPackage(Orders.class.getPackage());
+    }
+
+    @ArquillianResource
+    URL base;
+    // ...
+}
+
+// After: @VidocqTest
+@VidocqTest
+class OrdersTest {
+    @Test
+    void listsOrders(VidocqApplication application) {
+        VidocqResponse response = application.get("/orders");
+        assertEquals(200, response.status(), application.log());
+    }
+}
+----
+
+There is no micro-deployment: the test runs the application as it ships. Its dependencies are
+`vidocq-runtime-junit` and `junit-jupiter`, at `test` scope.
+
+[#build-and-run]
+== Build, run and ship
+
+[cols="1,2",options="header"]
+|===
+| With the server | With Vidocq
+
+| The server's dev mode
+| `vidocq dev`: recompiles and reloads at each change, with the dev console.
+
+| Deploy the WAR to a running server
+| `vidocq run` builds the application and starts it. Up to 0.4.0 the command was `vidocq start`, which still works.
+
+| A server image with the WAR in it
+| `vidocq build`: a distribution (`bin/`, `lib/`), a jlink image, a native installer or a container image
+(xref:shipping.adoc[Choosing how to ship]).
+|===
+
+[#reverse]
+== The bricks on a server: the other direction
+
+Each Vidocq brick can also run in a WAR on a server. Its reference page has a "Deploying on an application server"
+block, tested on Open Liberty by its `<brick>-it-openliberty` module. Read it backwards: the server feature the block
+keeps off is the one the brick's Vidocq extension replaces. For example, Knock's block keeps `mpHealth` off, and
+`health-knock` replaces `mpHealth`. A migration can also go in steps: the brick first, in the WAR, on the server; the
+runtime after.
+
+== Next steps
+
+* xref:migrating-from/open-liberty.adoc[Open Liberty]: `server.xml`, features and the Liberty Maven plugin.
+* xref:migrating-from/glassfish.adoc[GlassFish]: `asadmin`, `domain.xml` and `glassfish-web.xml`.
+* xref:migrating-from/wildfly.adoc[WildFly]: `standalone.xml` subsystems, `jboss-cli`, Hibernate and RESTEasy.
+* xref:getting-started.adoc[Getting started].

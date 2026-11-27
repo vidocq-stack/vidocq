@@ -1,0 +1,235 @@
+= Migrating from WildFly
+:description: The subsystems of standalone.xml, jboss-cli scripts, jboss-deployment-structure.xml, and the Hibernate and RESTEasy specifics, mapped to a Vidocq application.
+
+[.lead]
+A WildFly application uses Jakarta EE and MicroProfile, often with features of Hibernate and RESTEasy, on a server
+configured through its subsystems. The standard code moves; the configuration and the provider features are the
+work. Read xref:migrating-from/jakarta-ee-server.adoc[Migrating from a Jakarta EE application server] first: it
+covers the packaging, the data sources, Enterprise Beans, security and tests. This page covers what is specific to
+WildFly.
+
+[#subsystems]
+== The subsystems of `standalone.xml`
+
+A subsystem, or a Galleon layer, enables a specification on the server. Under Vidocq, an extension does.
+
+[cols="2,2,3",options="header"]
+|===
+| Subsystem | Vidocq | Note
+
+| `undertow`
+| `servlet-foy`, on the Chappe HTTP server
+| Its HTTP listener is `vidocq.http.port`. No HTTPS listener yet: terminate TLS in front.
+
+| `jaxrs` (RESTEasy)
+| `rest-cassini`
+| <<resteasy>>.
+
+| `weld`
+| built in
+| Vauban, CDI Lite (xref:migrating-from/jakarta-ee-server.adoc#cdi-full[CDI Full]).
+
+| `datasources`
+| `pool-mansart`, `vidocq.pool.*` keys
+| <<datasources>>.
+
+| `transactions`
+| `transactions-mansart`
+| A minimal Jakarta Transactions; the full TCK and XA are planned for 1.1.0.
+
+| `jpa` (Hibernate)
+| `persistence-noether`
+| Preview, H2 and PostgreSQL. <<hibernate>>.
+
+| `elytron`, `security`
+| `security-kerckhoffs` or `jwt-cervantes`
+| <<elytron>>.
+
+| `logging`
+| `java.util.logging`
+| One line per record on standard output, or a framework of your own
+(xref:modules/vidocq-runtime-core.adoc#console-logging[Console logging]).
+
+| `microprofile-config-smallrye`, `-health-`, `-fault-tolerance-`, `-jwt-`, `-openapi-`, `microprofile-telemetry`
+| `config-ravel`, `health-knock`, `fault-tolerance-heisenberg`, `jwt-cervantes`, `openapi-grimm`, `telemetry-humboldt`
+| MicroProfile REST Client is `rest-client-cyrano`, Metrics `metrics-dirac`.
+
+| `ejb3`, `jsf`, `bean-validation`, the concurrency of the `ee` subsystem
+| none yet
+| Planned for 1.1.0 to 1.3.0 (xref:migrating-from/jakarta-ee-server.adoc#no-equivalent-yet[What has no
+equivalent yet]).
+
+| `messaging-activemq`, `batch-jberet`, `mail`, `resource-adapters`, `iiop-openjdk`
+| none
+| Not in the release plan.
+|===
+
+[#datasources]
+== Data sources and `jboss-cli`
+
+[source,xml]
+----
+<!-- Before: standalone.xml, subsystem datasources -->
+<datasource jndi-name="java:jboss/datasources/OrdersDS" pool-name="OrdersDS">
+    <connection-url>jdbc:postgresql://db:5432/orders</connection-url>
+    <driver>postgresql</driver>
+    <pool>
+        <min-pool-size>2</min-pool-size>
+        <max-pool-size>20</max-pool-size>
+    </pool>
+    <security user-name="orders" password="${env.ORDERS_DB_PASSWORD}"/>
+    <validation>
+        <check-valid-connection-sql>select 1</check-valid-connection-sql>
+    </validation>
+</datasource>
+----
+
+[source,bash]
+----
+# Before: the same with jboss-cli
+data-source add --name=OrdersDS --jndi-name=java:jboss/datasources/OrdersDS --driver-name=postgresql \
+    --connection-url=jdbc:postgresql://db:5432/orders --user-name=orders --password=secret \
+    --min-pool-size=2 --max-pool-size=20
+----
+
+[source,properties]
+----
+# After: vidocq.properties, a pool named orders
+vidocq.pool.orders.url=jdbc:postgresql://db:5432/orders
+vidocq.pool.orders.username=orders
+vidocq.pool.orders.password=${ORDERS_DB_PASSWORD}
+vidocq.pool.orders.minIdle=2
+vidocq.pool.orders.maxSize=20
+vidocq.pool.orders.validationQuery=select 1
+----
+
+* A `jboss-cli` script that configures the server becomes keys of `vidocq.properties`: `vidocq config set <key>
+  <value>` writes one key, and a script can call it.
+* `java:jboss/...` is a namespace of WildFly. The naming extension answers `java:comp`, `java:module`, `java:app`
+  and `java:global` only. Change the lookup of `java:jboss/datasources/OrdersDS` to `java:comp/env/orders`, the name
+  of the pool, or inject `@Named("orders") DataSource`
+  (xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI names]).
+* The default data source of WildFly, `java:jboss/datasources/ExampleDS` on H2, answers `java:comp/DefaultDataSource`.
+  Under Vidocq the default pool does (`vidocq.pool.url`).
+* The `postgresql` driver module of WildFly is a Maven dependency of the application, at `runtime` scope. A named
+  pool needs `vidocq-runtime-mansart-pool-datasources-codegen` on the processor path
+  (xref:migrating-from/jakarta-ee-server.adoc#data-sources[Data sources and JNDI names]).
+
+[#deployment-descriptors]
+== Deployment descriptors
+
+[cols="2,3",options="header"]
+|===
+| WildFly file | Vidocq
+
+| `jboss-deployment-structure.xml`, the `Dependencies` of `MANIFEST.MF`
+| A Maven dependency for each module of the server the application used, and a `requires` in `module-info.java`.
+Exclusions have no equivalent: the module path holds what the pom declares, and nothing else.
+
+| `jboss-web.xml` `<context-root>`
+| `vidocq.servlet.context-path` and `vidocq.rest.context-path`
+(xref:migrating-from/jakarta-ee-server.adoc#context-root[The context root]).
+
+| `jboss-web.xml` `<security-domain>`
+| No domain: the identity store of the application (<<elytron>>).
+
+| `*-ds.xml` deployed with the application
+| `vidocq.pool.*` keys.
+|===
+
+[#hibernate]
+== Hibernate to Noether
+
+Noether runs the standard Jakarta Persistence API, and only that. The APIs of Hibernate have no equivalent: `Session`,
+`@Type`, `@Formula`, `@Where`, `@NaturalId`, the Criteria extensions. Rewrite them with the standard API;
+`EntityManager.unwrap(Connection.class)` gives the JDBC connection for what the API does not cover.
+
+[cols="2,3",options="header"]
+|===
+| Hibernate property | Noether
+
+| `hibernate.hbm2ddl.auto`
+| `jakarta.persistence.schema-generation.database.action` (`create`, `drop-and-create`, `none`; no `update`).
+
+| `hibernate.dialect`
+| Detected from the database.
+
+| `hibernate.jdbc.batch_size`
+| `io.vidocq.noether.jpa.jdbc.batch-size`.
+
+| `hibernate.show_sql`
+| No equivalent.
+
+| Any other `hibernate.*` property
+| Ignored.
+|===
+
+Check the `AUTO` identifiers before the first run: Hibernate 6 uses a sequence per entity, Noether a table
+generator. The full list, with the lazy loading differences, is in
+xref:{page-component-version}@noether::migration.adoc#from-hibernate-orm[Noether's migration page, From Hibernate
+ORM]. A property of a unit goes in `persistence.xml`, or in a key:
+`vidocq.persistence.<unit>.properties.<name>` (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-keys[Units
+declared with keys]).
+
+[#resteasy]
+== RESTEasy to Cassini
+
+Standard Jakarta REST code moves as is. The APIs of RESTEasy do not.
+
+[cols="2,3",options="header"]
+|===
+| RESTEasy | Cassini
+
+| `@MultipartForm`, `MultipartFormDataInput`
+| The standard `EntityPart` of Jakarta REST 4.0.
+
+| `ResteasyClient`, `ResteasyWebTarget`
+| The standard client, `ClientBuilder.newClient()`, from `io.vidocq.cassini:cassini-client`; or a MicroProfile REST
+Client interface with `rest-client-cyrano`.
+
+| `org.jboss.resteasy.annotations.*` (`@Form`, `@Query`, `@GZIP`, ...)
+| The standard parameter annotations, `@BeanParam`, and a filter or an interceptor of your own.
+
+| Jackson annotations on DTOs (`resteasy-jackson2-provider`)
+| JSON-B annotations: `@JsonbProperty`, `@JsonbTransient`, `@JsonbDateFormat`. Champollion does not read Jackson's.
+
+| `resteasy.*` context parameters of `web.xml`
+| No equivalent: Cassini reads none of them. Remove them.
+|===
+
+See xref:{page-component-version}@cassini::migration.adoc#from-resteasy[Cassini's migration page, From RESTEasy].
+
+[#elytron]
+== Elytron to an identity store
+
+Elytron binds a security domain to realms in the server's configuration. Under Vidocq there is no server
+configuration: the Security extension is the switch, and the users come from the application.
+
+* *Web constraints and form or basic login*: an identity store of the application, Jakarta Security's with
+  `security-kerckhoffs` (a preview), or Foy's for the constraints of `web.xml`.
+* *Bearer tokens* from an identity provider: `jwt-cervantes`, configured with `mp.jwt.verify.issuer` and
+  `mp.jwt.verify.publickey.location`.
+* *Role mapping* of a realm: no mapping file. A group the identity store answers is the role of the same name.
+
+See xref:{page-component-version}@kerckhoffs::migration.adoc#from-an-application-server[Kerckhoffs, From WildFly
+(Elytron) or Open Liberty].
+
+[#build]
+== The WildFly Maven plugin and the tests
+
+[cols="1,2",options="header"]
+|===
+| WildFly | Vidocq
+
+| `mvn wildfly:dev`
+| `vidocq dev`.
+
+| `mvn wildfly:deploy`, `mvn wildfly:run`
+| `vidocq run`.
+
+| A Galleon-provisioned server, or a bootable jar
+| `vidocq build`: a distribution, a jlink image or a container image (xref:shipping.adoc[Choosing how to ship]).
+
+| Arquillian against a managed WildFly
+| `@VidocqTest` (xref:migrating-from/jakarta-ee-server.adoc#tests[Tests]).
+|===

@@ -1,0 +1,170 @@
+= Migrating from GlassFish
+:description: asadmin, domain.xml, glassfish-resources.xml and glassfish-web.xml mapped to a Vidocq application, and the parts of the full platform that do not run yet.
+
+[.lead]
+GlassFish runs the full Jakarta EE platform, so its applications often use more of it than Vidocq runs today. Check
+what the application uses before you start. Read
+xref:migrating-from/jakarta-ee-server.adoc[Migrating from a Jakarta EE application server] first: it covers the
+packaging, the data sources, Enterprise Beans, security and tests. This page covers what is specific to GlassFish.
+
+[#check-first]
+== Check first: the full platform
+
+The APIs of the Core Profile, MicroProfile, Servlet, Pages, Data and Persistence move. These do not run yet, and an
+application that uses them cannot move that part now:
+
+[cols="2,1,3",options="header"]
+|===
+| API | Planned | Until then
+
+| Enterprise Beans (`@Stateless`, `@Singleton`, `@Schedule`)
+| 1.2.0
+| CDI beans (xref:migrating-from/jakarta-ee-server.adoc#enterprise-beans[Enterprise Beans to CDI beans]).
+
+| CDI Full (decorators, `@ConversationScoped`, portable extensions)
+| 1.2.0
+| xref:migrating-from/jakarta-ee-server.adoc#cdi-full[CDI Lite, not CDI Full].
+
+| Faces
+| 1.3.0
+| Pages with the Standard Tag Library, or a REST API behind a front end.
+
+| Validation, Concurrency
+| 1.1.0
+| Checks in the code; a plain executor of virtual threads.
+
+| Messaging, Batch, Mail, Connectors
+| Not planned
+| Keep that part on the server, or replace it with a library.
+|===
+
+The full list, with each workaround: xref:migrating-from/jakarta-ee-server.adoc#no-equivalent-yet[What has no
+equivalent yet].
+
+[#deployment]
+== From `asadmin deploy` to `vidocq run`
+
+[cols="1,2",options="header"]
+|===
+| GlassFish | Vidocq
+
+| `asadmin deploy shop.war`, or a copy into `autodeploy/`
+| `vidocq run` builds and starts the application. To ship it: `vidocq build` (xref:shipping.adoc[Choosing how to ship]).
+
+| An EAR with EJB modules and WARs
+| A Maven reactor: the EJB modules become library modules, and each WAR an application of its own
+(xref:migrating-from/jakarta-ee-server.adoc#shape[From a WAR to a Java module]).
+
+| `asadmin start-domain`, the domain
+| Nothing to start: the application is the process.
+
+| `asadmin set` and `asadmin create-system-properties`
+| Keys of `vidocq.properties`, system properties, or environment variables.
+
+| `asadmin create-jvm-options`
+| `vidocq.jvmArgs` in the pom, or `JAVA_OPTS` at start (xref:usage.adoc#jvm-options[JVM options]).
+
+| The HTTP listener of `domain.xml` (port `8080`)
+| `vidocq.http.port`, `8080` by default too. No HTTPS listener yet: terminate TLS in front.
+|===
+
+[#resources]
+== JDBC pools and resources
+
+GlassFish declares a pool and a resource that names it, in `domain.xml` through `asadmin`, or in
+`glassfish-resources.xml`. Vidocq has one set of keys per pool.
+
+[source,xml]
+----
+<!-- Before: WEB-INF/glassfish-resources.xml -->
+<resources>
+    <jdbc-connection-pool name="OrdersPool"
+                          datasource-classname="org.postgresql.ds.PGSimpleDataSource"
+                          res-type="javax.sql.DataSource"
+                          max-pool-size="20" steady-pool-size="2">
+        <property name="URL" value="jdbc:postgresql://db:5432/orders"/>
+        <property name="User" value="orders"/>
+        <property name="Password" value="secret"/>
+    </jdbc-connection-pool>
+    <jdbc-resource jndi-name="jdbc/orders" pool-name="OrdersPool"/>
+</resources>
+----
+
+[source,properties]
+----
+# After: vidocq.properties, a pool named orders
+vidocq.pool.orders.url=jdbc:postgresql://db:5432/orders
+vidocq.pool.orders.username=orders
+vidocq.pool.orders.password=${ORDERS_DB_PASSWORD}
+vidocq.pool.orders.maxSize=20
+vidocq.pool.orders.minIdle=2
+----
+
+The code looked up `jdbc/orders`. With the naming extension, the pool answers `java:comp/env/orders`: change the
+name, or inject `@Named("orders") DataSource` (xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI
+names]).
+
+The same with `asadmin`:
+
+[source,bash]
+----
+# Before
+asadmin create-jdbc-connection-pool --datasourceclassname org.postgresql.ds.PGSimpleDataSource \
+    --restype javax.sql.DataSource --property URL=jdbc\\:postgresql\\://db\\:5432/orders:User=orders OrdersPool
+asadmin create-jdbc-resource --connectionpoolid OrdersPool jdbc/orders
+----
+
+[source,bash]
+----
+# After
+vidocq config set vidocq.pool.orders.url jdbc:postgresql://db:5432/orders
+vidocq config set vidocq.pool.orders.username orders
+----
+
+* The JDBC driver GlassFish loaded from `domain1/lib` is a Maven dependency of the application, at `runtime`
+  scope.
+* A named pool needs `vidocq-runtime-mansart-pool-datasources-codegen` on the processor path
+  (xref:migrating-from/jakarta-ee-server.adoc#data-sources[Data sources and JNDI names]).
+* The default data source of GlassFish, `jdbc/__default` on Derby, answers `java:comp/DefaultDataSource`. Under
+  Vidocq the default pool does (`vidocq.pool.url`). Derby is not a database Mansart Data or Noether supports: move
+  to H2 or PostgreSQL. In development, the PostgreSQL dev service gives the default pool a database
+  (xref:dev-services.adoc[Dev services]).
+
+[#glassfish-web-xml]
+== `glassfish-web.xml`
+
+[cols="2,3",options="header"]
+|===
+| `glassfish-web.xml` | Vidocq
+
+| `<context-root>/shop</context-root>`
+| `vidocq.servlet.context-path=/shop`, and `vidocq.rest.context-path` for the REST resources
+(xref:migrating-from/jakarta-ee-server.adoc#context-root[The context root]).
+
+| `<security-role-mapping>` of a role to a group or a principal
+| No mapping file: a group the identity store answers is the role of the same name. Move the mapping into the
+identity store.
+
+| `<class-loader delegate="false">`
+| No equivalent: the application is a Java module, and each package comes from one module.
+
+| `<resource-ref>` with a `<jndi-name>`
+| Not covered yet. Inject the data source, or declare its name with a `vidocq.naming.*` key.
+|===
+
+[#security]
+== Realms and Soteria
+
+* *Realms.* The file realm, the JDBC realm and the LDAP realm of GlassFish have no equivalent. The users come from
+  an identity store of the application: Jakarta Security's `IdentityStore` with `security-kerckhoffs`, or Foy's
+  `IdentityStore` for the constraints of `web.xml` (xref:migrating-from/jakarta-ee-server.adoc#security[Security]).
+  Kerckhoffs has no database or LDAP identity store yet: write the store.
+* *Soteria.* GlassFish runs Jakarta Security with Soteria, its reference implementation. Kerckhoffs, a preview,
+  differs from it on the qualifiers of a BASIC mechanism: see
+  xref:{page-component-version}@kerckhoffs::migration.adoc#from-soteria[From Soteria].
+
+[#tests]
+== Tests
+
+Arquillian against an embedded or a managed GlassFish deploys an archive. `@VidocqTest` starts the application
+itself (xref:migrating-from/jakarta-ee-server.adoc#tests[Tests]).

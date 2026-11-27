@@ -149,14 +149,14 @@ Spring Boot does not naturally align with the MicroProfile model, and migration 
 | APT-generated repositories
 |===
 
-== From Open Liberty / WildFly
+== From Open Liberty, GlassFish or WildFly
 
-* `server.xml` → MicroProfile Config + Vidocq Runtime extensions.
-* EAR → standalone JAR + Maven plugin.
-* JNDI → CDI injection (`@Inject`), or the `java:` names of xref:modules/vidocq-runtime-extensions.adoc#naming[the naming extension].
-* Jakarta annotations — directly compatible, the programming model stays identical.
-
-// TODO@user: document the `feature` → extension mapping on the Open Liberty side (mpHealth-4.0 → vidocq-runtime-knock-health-extension, etc.).
+xref:migrating-from/jakarta-ee-server.adoc[Migrating from a Jakarta EE application server] covers what the three
+servers share: the WAR becomes a Java module, the server features become extensions, the server configuration
+becomes `vidocq.properties`, the data sources become Mansart pools, the session beans become CDI beans, and the
+parts of the platform that do not run yet are listed with a workaround. Each server has a page of its own:
+xref:migrating-from/open-liberty.adoc[Open Liberty], xref:migrating-from/glassfish.adoc[GlassFish] and
+xref:migrating-from/wildfly.adoc[WildFly].
 
 == From Payara Micro
 
