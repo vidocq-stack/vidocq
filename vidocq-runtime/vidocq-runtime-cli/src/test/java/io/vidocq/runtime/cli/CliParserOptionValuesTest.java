@@ -90,7 +90,8 @@ class CliParserOptionValuesTest {
         assertEquals("demo", create.spec().name());
         assertEquals("org.acme", create.spec().groupId());
         assertEquals("org.acme.demo", create.spec().pkg());
-        assertEquals(Set.of("rest-cassini", "health-knock"), Set.copyOf(create.spec().extensions()));
+        // with the Config extension Health requires (#829)
+        assertEquals(Set.of("rest-cassini", "health-knock", "config-ravel"), Set.copyOf(create.spec().extensions()));
     }
 
     @Test

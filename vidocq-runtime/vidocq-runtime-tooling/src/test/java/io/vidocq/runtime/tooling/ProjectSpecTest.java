@@ -95,8 +95,8 @@ class ProjectSpecTest {
     /** BUG-20261024-01: the extensions are written in the order given, the same on every run. */
     @Test
     void theExtensionsKeepTheOrderGiven() {
-        // data-mansart comes after the pool it requires, which -x does not name
-        List<String> ids = List.of("pool-mansart", "data-mansart", "rest-cassini", "health-knock", "config-ravel",
+        // data-mansart comes after the pool it requires, health-knock after the Config extension it requires (#829)
+        List<String> ids = List.of("pool-mansart", "data-mansart", "rest-cassini", "config-ravel", "health-knock",
                 "servlet-foy");
 
         ProjectSpec spec = ProjectSpec.of("demo", null, null, ids, null, false, "-");
@@ -105,13 +105,16 @@ class ProjectSpecTest {
         assertEquals(ids, List.copyOf(new ProjectSpec("demo", "g", "g.demo", spec.extensions(), null, false).extensions()));
     }
 
-    /** {@code vidocq create -x telemetry-humboldt -x pool-mansart} gets the JDBC spans glue too (BUG-20261030-25). */
+    /**
+     * {@code vidocq create -x telemetry-humboldt -x pool-mansart} gets the JDBC spans glue too (BUG-20261030-25), and
+     * the Config extension Telemetry requires (#829).
+     */
     @Test
     void aProjectWithTelemetryAndThePoolGetsTheirCompanion() {
         ProjectSpec spec = ProjectSpec.of("library", null, null, List.of("telemetry-humboldt", "pool-mansart"), null,
                 false, "--package");
 
-        assertEquals(List.of("telemetry-humboldt", "pool-mansart", "jdbc-telemetry"),
+        assertEquals(List.of("config-ravel", "telemetry-humboldt", "pool-mansart", "jdbc-telemetry"),
                 List.copyOf(spec.extensions()));
     }
 

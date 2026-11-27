@@ -77,7 +77,8 @@ class CreatePromptsTest {
         assertEquals("todo", spec.name());
         assertEquals("com.acme", spec.groupId());
         assertEquals("com.acme.todo", spec.pkg());
-        assertEquals(Set.of("rest-cassini", "health-knock"), spec.extensions());
+        // with the Config extension Health requires (#829)
+        assertEquals(Set.of("rest-cassini", "health-knock", "config-ravel"), spec.extensions());
         assertEquals(List.of("Project name", "Group id [io.example]", "Extensions, comma-separated [rest-cassini]"),
                 prompter.questions);
     }
@@ -132,7 +133,7 @@ class CreatePromptsTest {
 
         assertEquals(List.of("Project name"), prompter.questions);
         assertEquals("com.acme", spec.groupId());
-        assertEquals(Set.of("health-knock"), spec.extensions());
+        assertEquals(Set.of("config-ravel", "health-knock"), spec.extensions());
         assertEquals("0.4.0", spec.parentVersion());
         assertTrue(spec.main());
     }

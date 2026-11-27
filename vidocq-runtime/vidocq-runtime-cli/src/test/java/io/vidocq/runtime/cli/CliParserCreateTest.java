@@ -177,7 +177,8 @@ class CliParserCreateTest {
         Command.Create create = assertInstanceOf(Command.Create.class, CliParser.parse(new String[]{
                 "create", "--name", "demo", "-x", "rest-cassini,health-knock", "--extension", "metrics-dirac"}));
 
-        assertEquals(java.util.List.of("rest-cassini", "health-knock", "metrics-dirac"),
+        // config-ravel comes before Health, which requires it (#829)
+        assertEquals(java.util.List.of("rest-cassini", "config-ravel", "health-knock", "metrics-dirac"),
                 java.util.List.copyOf(create.spec().extensions()));
     }
 }

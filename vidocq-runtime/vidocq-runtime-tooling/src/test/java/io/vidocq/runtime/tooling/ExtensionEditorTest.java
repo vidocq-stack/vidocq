@@ -330,12 +330,15 @@ class ExtensionEditorTest {
                 "success: annotationProcessorPaths now appends to the parent's")), reporter.lines.toString());
     }
 
-    /** BUG-20261023-02: an extension without a codegen bundle leaves a replacing block as is, and says so. */
+    /**
+     * BUG-20261023-02: an extension without a codegen bundle leaves a replacing block as is, and says so. Not Health,
+     * which now brings the Config extension and its bundle (#829).
+     */
     @Test
     void anExtensionWithoutCodegenWarnsAboutReplacingPaths() throws IOException {
         writeUnwiredPom(REPLACING_PATHS);
 
-        edit(List.of("health-knock"), true);
+        edit(List.of("crac"), true);
 
         assertFalse(pom().contains("combine.children"), pom());
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning:") && l.contains("drops the Vauban indexer")),

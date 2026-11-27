@@ -160,13 +160,16 @@ class CommandRunnerExtensionTest {
         assertTrue(run.out().contains("now appends to the parent's"), run.out());
     }
 
-    /** BUG-20261023-02: an extension without a codegen bundle leaves the block as is, and says so. */
+    /**
+     * BUG-20261023-02: an extension without a codegen bundle leaves the block as is, and says so. Not Health, which
+     * now brings the Config extension and its bundle (#829).
+     */
     @Test
     void addingAnExtensionWithoutCodegenWarnsAboutReplacingPaths() throws IOException {
         writePom(REPLACING_PATHS);
         beforeParent040();
 
-        Run run = run(List.of("health-knock"), true);
+        Run run = run(List.of("crac"), true);
 
         assertEquals(0, run.exit());
         assertFalse(pom().contains("combine.children"), pom());
