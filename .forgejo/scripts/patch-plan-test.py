@@ -104,6 +104,19 @@ class PatchPlanTest(unittest.TestCase):
         with self.assertRaises(patch_plan.PlanError):
             patch_plan.plan(self.root, "v1.0.0", ["brick/pom.xml", "ext/pom.xml"], accepted=["brick/pom.xml"])
 
+    def test_the_build_root_of_always_is_published_and_its_pom_still_stops_the_plan(self):
+        (self.root / ".forgejo/release-patch.json").write_text(json.dumps({
+            "always": [".", "runtime/runtime-bom"], "companions": ["-codegen", "-dev"]}))
+
+        self.assertEqual([".", "brick/brick-core", "runtime/runtime-bom"],
+                         self.plan("brick/brick-core/src/main/java/io/x/Core.java", "README.md"))
+        with self.assertRaises(patch_plan.PlanError) as e:
+            self.plan("pom.xml")
+        self.assertIn("full release", str(e.exception))
+        folders, report = patch_plan.plan(self.root, "v1.0.0", ["pom.xml"], accepted=["pom.xml"])
+        self.assertEqual([".", "runtime/runtime-bom"], folders)
+        self.assertIn("pom.xml (a parent, accepted as a change of the build only)", "\n".join(report))
+
     def test_the_command_line_takes_accepted_poms_before_the_tag(self):
         self.assertEqual(2, patch_plan.main(["patch-plan.py", "--accept"]))
 

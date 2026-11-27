@@ -37,6 +37,25 @@ def sbom(*components):
         for g, a, v in components]}).encode()
 
 
+def ref(group, artifact, version):
+    return "pkg:maven/%s/%s@%s?type=jar" % (group, artifact, version)
+
+
+def graph(components, dependencies, root=None):
+    """A CycloneDX SBOM with bom-refs and a dependency graph; dependencies: {(g, a, v): [(g, a, v), ...]}."""
+    document = {"bomFormat": "CycloneDX", "specVersion": "1.6", "components": [
+        {"type": "library", "bom-ref": ref(*c), "group": c[0], "name": c[1], "version": c[2]} for c in components],
+        "dependencies": [{"ref": ref(*c), "dependsOn": [ref(*d) for d in on]} for c, on in dependencies.items()]}
+    if root:
+        document["metadata"] = {"component": {"type": "library", "bom-ref": ref(*root), "group": root[0],
+                                              "name": root[1], "version": root[2]}}
+    return json.dumps(document).encode()
+
+
+def listed(path):
+    return sorted((c["group"], c["name"], c["version"]) for c in json.loads(path.read_text())["components"])
+
+
 def url(group, artifact, version, suffix):
     return "%s/%s/%s/%s/%s-%s%s" % (CENTRAL, group.replace(".", "/"), artifact, version, artifact, version, suffix)
 
@@ -117,7 +136,29 @@ class SbomSourcesTest(unittest.TestCase):
         central = FakeCentral({aggregate: sbom()})
         kind, sources = scan.sbom_sources("0.5.0", central, extras=[("io.vidocq.runtime", "vidocq-runtime-cli")])
         self.assertEqual("aggregate", kind)
-        self.assertEqual([("io.vidocq:vidocq-build", aggregate)], sources)
+        self.assertEqual([("io.vidocq:vidocq-build", aggregate, None)], sources)
+
+    def test_a_full_release_with_an_aggregate_needs_nothing_else(self):
+        aggregate = url("io.vidocq", "vidocq-build", "0.5.0", "-cyclonedx.json")
+        central = FakeCentral({aggregate: sbom(), url("io.vidocq.runtime", "vidocq-runtime-bom", "0.5.0", ".pom"):
+                               bom_pom("0.5.0", [("io.vidocq.vauban", "vauban-core", "0.5.0")])})
+        self.assertEqual(("aggregate", [("io.vidocq:vidocq-build", aggregate, None)]),
+                         scan.sbom_sources("0.5.0", central, extras=[]))
+
+    def test_a_patch_release_adds_what_it_did_not_publish_from_the_release_that_did(self):
+        aggregate = url("io.vidocq", "vidocq-build", "0.4.1", "-cyclonedx.json")
+        central = FakeCentral({aggregate: sbom(), url("io.vidocq.runtime", "vidocq-runtime-bom", "0.4.1", ".pom"):
+                               bom_pom("0.4.1", [("io.vidocq.vauban", "vauban-core", "0.4.0"),
+                                                 ("io.vidocq.foy", "foy-api", "0.4.0"),
+                                                 ("io.vidocq.runtime", "vidocq-runtime-core", "0.4.1")])})
+        kind, sources = scan.sbom_sources("0.4.1", central, extras=[("io.vidocq", "vidocq-build")])
+        self.assertEqual("aggregate, and 2 modules of 0.4.0", kind)
+        self.assertEqual(("io.vidocq:vidocq-build", aggregate, None), sources[0])
+        self.assertEqual([("io.vidocq.foy:foy-api:0.4.0", url("io.vidocq.foy", "foy-api", "0.4.0", "-cyclonedx.json")),
+                          ("io.vidocq.vauban:vauban-core:0.4.0",
+                           url("io.vidocq.vauban", "vauban-core", "0.4.0", "-cyclonedx.json"))],
+                         [s[:2] for s in sources[1:]])
+        self.assertTrue(all(s[2] is not None for s in sources[1:]), "an earlier SBOM is cut to what is still shipped")
 
     def test_one_sbom_per_published_module_otherwise(self):
         bom = url("io.vidocq.runtime", "vidocq-runtime-bom", "0.4.0", ".pom")
@@ -126,14 +167,16 @@ class SbomSourcesTest(unittest.TestCase):
                                                       ("org.example", "third-party", "1.0"),
                                                       ("io.vidocq.foy", "foy-old", "0.3.0")])})
         kind, sources = scan.sbom_sources("0.4.0", central, extras=[("io.vidocq.runtime", "vidocq-runtime-core"),
-                                                                     ("io.vidocq.runtime", "vidocq-runtime-cli")])
-        self.assertEqual("per module", kind)
+                                                                     ("io.vidocq.runtime", "vidocq-runtime-cli"),
+                                                                     ("io.vidocq", "vidocq-build")])
+        self.assertEqual("per module, and 1 module of 0.3.0", kind, "a module the BOM keeps at an earlier version")
         self.assertEqual([
             ("io.vidocq.runtime:vidocq-runtime-bom", url("io.vidocq.runtime", "vidocq-runtime-bom", "0.4.0", "-cyclonedx.json")),
             ("io.vidocq.runtime:vidocq-runtime-cli", url("io.vidocq.runtime", "vidocq-runtime-cli", "0.4.0", "-cyclonedx.json")),
             ("io.vidocq.runtime:vidocq-runtime-core", url("io.vidocq.runtime", "vidocq-runtime-core", "0.4.0", "-cyclonedx.json")),
             ("io.vidocq.vauban:vauban-core", url("io.vidocq.vauban", "vauban-core", "0.4.0", "-cyclonedx.json")),
-        ], sources)
+            ("io.vidocq.foy:foy-old:0.3.0", url("io.vidocq.foy", "foy-old", "0.3.0", "-cyclonedx.json")),
+        ], [s[:2] for s in sources])
 
     def test_a_release_with_neither_an_aggregate_nor_a_bom_is_an_error(self):
         with self.assertRaises(scan.ScanError):
@@ -202,6 +245,49 @@ class ScanTest(unittest.TestCase):
                                bom_pom("0.4.0", [("io.vidocq.foy", "foy-api", "0.4.0")])})
         with self.assertRaises(scan.ScanError):
             scan.scan(["0.4.0"], central, FakeOsv(), self.work, extras=[])
+
+
+class PatchScanTest(unittest.TestCase):
+    """0.4.2 publishes a; b and c stay at 0.4.1 (an earlier patch, with an aggregate), d at 0.4.0 (per module)."""
+
+    A2, A1, B1, C1, D0 = (("io.vidocq.x", "a", "0.4.2"), ("io.vidocq.x", "a", "0.4.1"), ("io.vidocq.x", "b", "0.4.1"),
+                          ("io.vidocq.x", "c", "0.4.1"), ("io.vidocq.x", "d", "0.4.0"))
+    LIB_OLD, LIB_B, LIB_D = ("org.lib", "old", "1.0"), ("org.lib", "b", "1.0"), ("org.lib", "d", "1.0")
+    ROOT1 = ("io.vidocq", "vidocq-build", "0.4.1")
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.work = pathlib.Path(self.tmp.name)
+        A2, A1, B1, C1, D0 = self.A2, self.A1, self.B1, self.C1, self.D0
+        self.central = FakeCentral({
+            url("io.vidocq", "vidocq-build", "0.4.2", "-cyclonedx.json"): graph([A2], {A2: []}),
+            url("io.vidocq.runtime", "vidocq-runtime-bom", "0.4.2", ".pom"): bom_pom("0.4.2", [A2, B1, C1, D0]),
+            # 0.4.1 published a (with a library 0.4.2 dropped), b and c; its root aggregates them.
+            url("io.vidocq", "vidocq-build", "0.4.1", "-cyclonedx.json"): graph(
+                [A1, B1, C1, self.LIB_OLD, self.LIB_B],
+                {self.ROOT1: [A1, B1, C1], A1: [self.LIB_OLD], B1: [self.LIB_B], C1: [A1], self.LIB_OLD: [],
+                 self.LIB_B: []}, root=self.ROOT1),
+            # 0.4.0 had one SBOM per module; d depended on a, which 0.4.2 replaces.
+            url("io.vidocq.x", "d", "0.4.0", "-cyclonedx.json"): graph(
+                [("io.vidocq.x", "a", "0.4.0"), self.LIB_D],
+                {D0: [("io.vidocq.x", "a", "0.4.0"), self.LIB_D], ("io.vidocq.x", "a", "0.4.0"): [self.LIB_OLD]},
+                root=D0),
+        })
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_each_earlier_sbom_keeps_what_the_patch_still_ships_and_nothing_it_replaced(self):
+        osv = FakeOsv()
+        code, report = scan.scan(["0.4.2"], self.central, osv, self.work, extras=[])
+
+        self.assertEqual(0, code)
+        files = {pathlib.Path(f).name: pathlib.Path(f) for f in osv.files[0]}
+        self.assertEqual(["io.vidocq.x_d_0.4.0.cdx.json", "io.vidocq_vidocq-build.cdx.json",
+                          "io.vidocq_vidocq-build_0.4.1.cdx.json"], sorted(files))
+        self.assertEqual([self.B1, self.C1, self.LIB_B], listed(files["io.vidocq_vidocq-build_0.4.1.cdx.json"]))
+        self.assertEqual([self.LIB_D], listed(files["io.vidocq.x_d_0.4.0.cdx.json"]))
+        self.assertIn("3 SBOMs (aggregate, and 2 modules of 0.4.1, 1 module of 0.4.0)", report)
 
 
 class ExtrasTest(unittest.TestCase):

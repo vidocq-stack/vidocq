@@ -76,14 +76,18 @@ before.
 [#sbom]
 == Software bill of materials (CycloneDX)
 
-Every artifact a release publishes on Maven Central carries its CycloneDX SBOM (Vidocq/vidocq#270):
+Each release publishes one CycloneDX SBOM for everything it ships (Vidocq/vidocq#270, #796):
 
-* In the `release` profile of `io.vidocq:vidocq-parent`, `org.cyclonedx:cyclonedx-maven-plugin` (`makeBom`, bound to
-  `package`) writes `<artifactId>-<version>-cyclonedx.json` and attaches it with the classifier `cyclonedx` and the
-  type `json`. `maven-gpg-plugin` signs it at `verify` like the jars, so Central holds
-  `-cyclonedx.json` and `-cyclonedx.json.asc` next to them. The SBOM lists what the artifact ships: the compile and
-  runtime dependencies, not the test, provided or system ones. Every repository whose parent is `vidocq-parent` inherits it
-  with its next release, with no change of its own.
+* In the `release` profile of the build root `io.vidocq:vidocq-build`, `org.cyclonedx:cyclonedx-maven-plugin`
+  (`makeAggregateBom`, bound to `package`) writes `vidocq-build-<version>-cyclonedx.json` and attaches it to that pom
+  with the classifier `cyclonedx` and the type `json`, signed like the jars: Central holds it at
+  `io/vidocq/vidocq-build/<version>/`. It lists every module the release publishes and what each ships: the compile
+  and runtime dependencies, not the test, provided or system ones. Up to 0.4.0, each artifact carried an SBOM of its
+  own instead (`<artifactId>-<version>-cyclonedx.json`).
+* A patch release (`x.y.Z`, `Z > 0`) publishes only the modules that changed, and `vidocq-build` at `x.y.Z` with them:
+  its SBOM lists what the patch publishes and what those modules depend on. A module the BOM of `x.y.Z` keeps at an
+  earlier version is described by the SBOM of the release that published it; the daily scan of the released SBOMs
+  (`.forgejo/scripts/scan-released-sboms.py`) reads both.
 * `vidocq:package` writes `<name>-<version>-cyclonedx.json` at the root of the distribution (so inside the `-dist.zip`),
   and `vidocq:jlink` writes it at the root of the image (`target/dist/`). It lists the jars the distribution ships, as they
   ship (an enriched or modularized copy is hashed, not the jar on Central), with their SHA-256 and their Maven

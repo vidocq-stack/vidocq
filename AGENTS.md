@@ -40,10 +40,10 @@ and tested, never released), `vidocq-runtime/` (the runtime, its extensions, Mav
 - `BUG.md` and `BENCH.md` stay per component, in its folder. A bug id is unique across the monorepo.
 - **Releases**: `x.y.0` is a full release of the reactor from `main`; `x.y.Z` (`Z > 0`) is a patch release from
   `maintenance/x.y`, which publishes only the modules changed since the previous release of the line, with the
-  modules of `.forgejo/release-patch.json` (header of `.forgejo/workflows/release.yml`). A fix for a patch release
-  merges into `main` first, then a pull request cherry-picks it into `maintenance/x.y`. A patch cannot carry a change
-  to a parent or grouping pom, nor a change that breaks the binary or source compatibility of a published module:
-  those wait for the next `x.y.0`.
+  modules of `.forgejo/release-patch.json` (header of `.forgejo/workflows/release.yml`), among them the build root,
+  for the aggregate SBOM it carries. A fix for a patch release merges into `main` first, then a pull request
+  cherry-picks it into `maintenance/x.y`. A patch cannot carry a change to a parent or grouping pom, nor a change that
+  breaks the binary or source compatibility of a published module: those wait for the next `x.y.0`.
 
 ## Pull request titles
 

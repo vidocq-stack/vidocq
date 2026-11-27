@@ -10,7 +10,12 @@ versions given. Which SBOMs, read from repo1.maven.org (no Maven resolution, no 
   - the aggregate SBOM of the release, io.vidocq:vidocq-build:<version>:json:cyclonedx, when it has one (#796);
   - otherwise one SBOM per published module (0.4.0): every io.vidocq artifact that the released vidocq-runtime-bom
     manages at that version, the BOM itself, and the folders .forgejo/release-patch.json always publishes (the
-    plugin, the CLI, the parents). A module without an SBOM on Central is listed in the report, and skipped.
+    plugin, the CLI, the parents). A module without an SBOM on Central is listed in the report, and skipped;
+  - and, for a patch release (x.y.Z), the modules its BOM manages at an earlier version: a patch publishes only what
+    changed, and its aggregate SBOM lists what it published and what those depend on. Each of those modules comes
+    from the release that published it, its aggregate SBOM or its own, cut to what that module brings: the
+    dependency graph from it, without entering a module the scanned BOM manages at another version (what the patch
+    replaced, and what it dropped with it, is not reported against the patch).
 OSV-Scanner is the release Vidocq/ci pins in sonar-analysis/security-scans.sh, downloaded from GitHub and checked
 against its SHA-256 unless --osv names a binary. It queries osv.dev for the packages the SBOMs list.
 
@@ -92,29 +97,98 @@ def _text(element, ns, name):
     return found.text.strip() if found is not None and found.text else None
 
 
-def managed_modules(bom_pom, version):
-    """(groupId, artifactId) of every io.vidocq artifact the BOM manages at version."""
+def _vidocq(group):
+    return group == "io.vidocq" or group.startswith("io.vidocq.")
+
+
+def managed_versions(bom_pom):
+    """(groupId, artifactId) -> version of every io.vidocq artifact the BOM manages."""
     root = ET.fromstring(bom_pom)
     ns = _ns(root)
-    result = set()
+    result = {}
     for dependency in root.iter(_q(ns, "dependency")):
         group, artifact = _text(dependency, ns, "groupId"), _text(dependency, ns, "artifactId")
-        if group and artifact and _text(dependency, ns, "version") == version and \
-                (group == "io.vidocq" or group.startswith("io.vidocq.")):
-            result.add((group, artifact))
+        version = _text(dependency, ns, "version")
+        if group and artifact and version and _vidocq(group):
+            result[(group, artifact)] = version
     return result
 
 
+def managed_modules(bom_pom, version):
+    """(groupId, artifactId) of every io.vidocq artifact the BOM manages at version."""
+    return {module for module, managed in managed_versions(bom_pom).items() if managed == version}
+
+
+def _version_key(version):
+    return tuple(int(part) if part.isdigit() else 0 for part in re.split(r"[.-]", version))
+
+
 def sbom_sources(version, get, extras):
-    """("aggregate" | "per module", [(groupId:artifactId, SBOM URL)]) of a release; get(url) -> bytes | None (404)."""
+    """(kind, [(label, SBOM URL, cut)]) of a release; get(url) -> bytes | None (404).
+
+    cut is None for an SBOM of the release itself, or (roots, shipped) for one of an earlier release: roots, the
+    (groupId, artifactId) the release takes from it; shipped, groupId:artifactId -> version of the release's BOM.
+    """
     aggregate = sbom_url(*AGGREGATE, version)
-    if get(aggregate) is not None:
-        return "aggregate", [("%s:%s" % AGGREGATE, aggregate)]
     bom = get(artifact_url(*BOM, version, ".pom"))
-    if bom is None:
+    if get(aggregate) is not None:
+        kind, sources = "aggregate", [("%s:%s" % AGGREGATE, aggregate, None)]
+    elif bom is None:
         raise ScanError("%s: neither %s:%s nor %s:%s on Maven Central" % (version, *AGGREGATE, *BOM))
-    modules = managed_modules(bom, version) | {BOM} | set(extras)
-    return "per module", [("%s:%s" % m, sbom_url(*m, version)) for m in sorted(modules, key=lambda m: "%s:%s" % m)]
+    else:
+        modules = (managed_modules(bom, version) | {BOM} | set(extras)) - {AGGREGATE}
+        kind = "per module"
+        sources = [("%s:%s" % m, sbom_url(*m, version), None) for m in sorted(modules, key=lambda m: "%s:%s" % m)]
+    if bom is None:
+        return kind, sources
+    shipped = managed_versions(bom)
+    earlier = {}
+    for module, managed in shipped.items():
+        if managed != version:
+            earlier.setdefault(managed, set()).add(module)
+    parts = []
+    for previous in sorted(earlier, key=_version_key, reverse=True):
+        modules = sorted(earlier[previous])
+        parts.append("%s of %s" % (plural(len(modules), "module", "modules"), previous))
+        previous_aggregate = sbom_url(*AGGREGATE, previous)
+        if get(previous_aggregate) is not None:
+            sources.append(("%s:%s:%s" % (*AGGREGATE, previous), previous_aggregate, (frozenset(modules), shipped)))
+        else:
+            sources.extend(("%s:%s:%s" % (*m, previous), sbom_url(*m, previous), (frozenset([m]), shipped))
+                           for m in modules)
+    if parts:
+        kind += ", and " + ", ".join(parts)
+    return kind, sources
+
+
+def cut(document, roots, shipped):
+    """The part of an earlier SBOM that a release still ships: its components reachable from roots (the metadata
+    component of a per-module SBOM, or the roots listed among the components of an aggregate one) through the
+    dependency graph, without entering an io.vidocq module that shipped (the release's BOM) manages at another
+    version."""
+    sbom = json.loads(document)
+    by_ref = {c.get("bom-ref"): c for c in sbom.get("components") or [] if c.get("bom-ref")}
+    top = (sbom.get("metadata") or {}).get("component") or {}
+    if top.get("bom-ref"):
+        by_ref.setdefault(top["bom-ref"], top)
+    edges = {d["ref"]: d.get("dependsOn") or [] for d in sbom.get("dependencies") or [] if d.get("ref")}
+
+    def replaced(component):
+        managed = shipped.get((component.get("group"), component.get("name")))
+        return managed is not None and managed != component.get("version")
+
+    pending = [r for r, c in by_ref.items() if (c.get("group"), c.get("name")) in roots and not replaced(c)]
+    reached = set()
+    while pending:
+        current = pending.pop()
+        if current in reached or (current in by_ref and replaced(by_ref[current])):
+            continue
+        reached.add(current)
+        pending.extend(edges.get(current, []))
+    sbom["components"] = [c for c in sbom.get("components") or [] if c.get("bom-ref") in reached]
+    sbom["dependencies"] = [{"ref": d["ref"], "dependsOn": [r for r in d.get("dependsOn") or [] if r in reached]}
+                            for d in sbom.get("dependencies") or [] if d.get("ref") in reached]
+    return json.dumps(sbom).encode()
 
 
 def always_published(root):
@@ -224,11 +298,13 @@ def scan_release(version, get, osv, work, extras):
     folder = work / version
     folder.mkdir(parents=True, exist_ok=True)
     files, modules, names, missing = [], {}, {}, []
-    for module, address in sources:
+    for module, address, part in sources:
         document = get(address)
         if document is None:
             missing.append(module)
             continue
+        if part is not None:
+            document = cut(document, *part)
         # OSV-Scanner recognises a CycloneDX SBOM by its file name (*.cdx.json), and silently scans nothing of
         # <artifactId>-<version>-cyclonedx.json.
         file = folder / (module.replace(":", "_") + ".cdx.json")

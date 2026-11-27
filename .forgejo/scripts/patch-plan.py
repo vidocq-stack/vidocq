@@ -8,7 +8,8 @@ A patch release publishes only what changed since the previous release of its li
     docs or its README publishes nothing);
   - the -codegen and -dev companions of each of them, and the module of a companion: the plugin resolves a
     companion at the version of its extension (.forgejo/release-patch.json, "companions");
-  - the folders of "always" in .forgejo/release-patch.json, every time.
+  - the folders of "always" in .forgejo/release-patch.json, every time. The build root (".") is one of them: it
+    carries the aggregate SBOM of the release (#796), and a change to its pom.xml is still that of a parent.
 A module is published when vidocq-runtime-bom manages it (ApplicationBomAndParentTest keeps that list whole) or it is
 in "always". A change to the pom.xml of a parent or of a grouping pom stops the plan: every module below it would
 change, and a patch release cannot carry it. Make it a full release (x.y.0). --accept names such a pom.xml whose change
@@ -122,13 +123,15 @@ def plan(root, since, files=None, accepted=()):
             left_out.append("%s (no module)" % path)
             continue
         inside = path[len(folder) + 1:] if folder != "." else path
-        if folder in published:
+        # A pom.xml with published modules below it is a parent or a grouping pom, even when it is published itself
+        # (the build root, for the aggregate SBOM it carries).
+        above = any(p != folder and (folder == "." or p.startswith(folder + "/")) for p in published)
+        if folder in published and not (inside == "pom.xml" and above):
             if inside == "pom.xml" or inside.startswith("src/main/"):
                 chosen.setdefault(folder, "changed: %s" % path)
             else:
                 left_out.append("%s (not shipped by %s)" % (path, modules[folder][1]))
-        elif inside == "pom.xml" and any(p == folder or folder == "." or p.startswith(folder + "/")
-                                         for p in published):
+        elif inside == "pom.xml" and above:
             if path in accepted:
                 left_out.append("%s (a parent, accepted as a change of the build only)" % path)
                 continue

@@ -22,9 +22,13 @@
 # companions and the modules of .forgejo/release-patch.json), .forgejo/scripts/patch-compat.py checks with japicmp that
 # each stays binary and source compatible with the jar it replaces, and release.sh moves them alone to x.y.Z (its
 # patch-modules input). The others keep the version of their last release and come from Maven Central: every module
-# with code is published with a flattened pom (vidocq-parent, profile flatten-published). The tag is pushed and the
-# maintenance branch moves to the release commit; main is not touched and next_dev_version is not used. The gate
-# applies as for a full release: run the Nightly build and the TCK nightly on the maintenance branch first.
+# with code is published with a flattened pom (vidocq-parent, profile flatten-published). The build root vidocq-build
+# is always in the patch ("." in release-patch.json) for the aggregate SBOM it carries: it moves to x.y.Z alone, the
+# grouping poms name it at x.y.Z and keep their own version. That SBOM lists what the patch publishes and what it
+# depends on; scan-released-sboms.py takes the modules the BOM keeps at an earlier version from the release that
+# published them. The tag is pushed and the maintenance branch moves to the release commit; main is not touched
+# and next_dev_version is not used. The gate applies as for a full release: run the Nightly build and the TCK
+# nightly on the maintenance branch first.
 #
 # The whole build runs on Azul Zulu CRaC 25: vidocq-runtime-crac-extension requires jdk.crac and is published with the
 # rest (as the runtime's own releases did, on the crac runner). With auto_publish 'manual' (the default) the deployment
@@ -158,7 +162,8 @@ jobs:
           ./mvnw -B -ntp -DskipTests -pl "$(printf '%s\n' "${folders[@]}" | paste -sd, -)" package
           python3 -I -B .forgejo/scripts/patch-compat.py "${folders[@]}"
 
-      - uses: https://codefloe.com/Vidocq/ci/release-maven@8b1beb7f7762315896a876be592b8c043a14d738
+      # Vidocq/ci#129 merged (fast-forward): the build root in a patch release.
+      - uses: https://codefloe.com/Vidocq/ci/release-maven@001684f55a2af02dbb8b9ee13049b71e9deaa666
         with:
           java-setup: 'false'
           maven-version: '3.10.0'
