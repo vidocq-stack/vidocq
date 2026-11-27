@@ -41,8 +41,10 @@ public sealed interface Command {
     /**
      * {@code portExplicit} records whether {@code --port} was actually typed. Only then may the
      * runner override the port the application configured for itself — publishing the default on
-     * every run would make {@code vidocq start} silently outrank the project's own
+     * every run would make {@code vidocq run} silently outrank the project's own
      * {@code vidocq.properties}.
+     * <p>The record of {@code vidocq run} ({@code mvn vidocq:run}), and of {@code vidocq start}, its deprecated
+     * name: it keeps the name of 0.4.0 (Vidocq/vidocq#779).
      * <p>{@code mavenProfiles} are the ids of {@code --maven-profile}, which Maven gets as {@code -P<ids>}; here and on
      * every command that runs the project's build.
      */

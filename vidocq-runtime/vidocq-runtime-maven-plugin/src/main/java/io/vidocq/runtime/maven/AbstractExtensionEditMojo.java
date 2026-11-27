@@ -20,12 +20,12 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.tooling.ExtensionEditor;
+import io.vidocq.runtime.tooling.KnownExtensions;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -58,8 +58,7 @@ abstract class AbstractExtensionEditMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoFailureException {
-        List<String> ids = extensions == null ? List.of() : Arrays.stream(extensions.split(","))
-                .map(String::strip).filter(id -> !id.isEmpty()).toList();
+        List<String> ids = KnownExtensions.splitIds(extensions);
         if (ids.isEmpty()) {
             throw new MojoFailureException("Name the extensions: mvn vidocq:" + goal()
                     + " -Dextensions=rest-cassini,health-knock");

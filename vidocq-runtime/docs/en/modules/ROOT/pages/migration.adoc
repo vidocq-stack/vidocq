@@ -207,6 +207,14 @@ Payara Micro and Vidocq Runtime share the MicroProfile target. The main differen
 
 Seven extensions run the TCKs of their MicroProfile 7.2 specifications and the Metrics 5.1 extension runs its own TCK (Metrics is not part of the 7.2 platform); all eight pass on the assembled runtime, through the runners embedded in `vidocq-runtime-integration-tests` (Maven profile `tck`) — 1888 TCK tests green on 2026-10-04. The OpenAPI 4.2 and Telemetry 2.2 runs use release-candidate TCKs, byte-identical to the finals; the 7.2 platform release is still under ballot. See xref:tck.adoc[TCK status].
 
+[#vidocq-run]
+== `vidocq start` is now `vidocq run`
+
+From 0.4.1 the CLI command that runs the application has the name of the goal it runs, `vidocq:run` (Vidocq/vidocq#779).
+Nothing to change: `vidocq start` still runs it, with the same options, after a one-line notice that it is deprecated.
+Scripts and tutorials may move to `vidocq run` at their pace. The table of the commands and of the goals is in
+xref:modules/vidocq-runtime-cli.adoc#cli-and-plugin[the CLI reference].
+
 [#extension-ids]
 == Extension ids name the function first
 

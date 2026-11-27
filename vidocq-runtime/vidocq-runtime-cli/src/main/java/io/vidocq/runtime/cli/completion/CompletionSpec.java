@@ -60,7 +60,8 @@ public final class CompletionSpec {
      */
     public static final String ADDABLE_EXTENSIONS = "@addable-extensions";
 
-    static final Map<String, String> COMMAND_ALIASES = Map.of("ext", "extension");
+    /** {@code start} is the deprecated name of {@code run} (Vidocq/vidocq#779): not offered, still completed. */
+    static final Map<String, String> COMMAND_ALIASES = Map.of("ext", "extension", "start", "run");
     static final Map<String, String> SUBCOMMAND_ALIASES = Map.of("ls", "list", "rm", "remove");
 
     /** Commands whose first argument is a sub-command, with the sub-commands offered. */
@@ -86,7 +87,7 @@ public final class CompletionSpec {
 
     /** Offered anywhere after the context. */
     static final Map<String, List<String>> ARGUMENTS = ordered(
-            "start", List.of(PORT, "--config", "--debug", MAVEN_PROFILE),
+            "run", List.of(PORT, "--config", "--debug", MAVEN_PROFILE),
             "dev", List.of(PORT, "--profile", "--debug", MAVEN_PROFILE),
             "test", List.of("--once", MAVEN_PROFILE),
             "doctor", List.of("--fix", "--verbose"),
@@ -109,7 +110,7 @@ public final class CompletionSpec {
             "create --extension", extensionIds(),
             "pom convert --to", List.of("parentless", "parent"),
             "idea --kind", List.of("maven", "application"),
-            "start --config", List.of(FILES)));
+            "run --config", List.of(FILES)));
 
     /** Options followed by a value — nothing is offered for a free-form one. */
     static final Set<String> VALUE_OPTIONS = withShortAliases(Set.of(

@@ -73,7 +73,7 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
 
     /**
      * Published aliases for the listener named {@code default}. They are the discoverable names —
-     * the CLI ({@code vidocq start --port}), every scaffolded {@code vidocq.properties} and the
+     * the CLI ({@code vidocq run --port}), every scaffolded {@code vidocq.properties} and the
      * reference documentation all use them — so the runtime honours them rather than ignoring
      * them silently. Between an alias and the explicit {@code vidocq.chappe.listener.default.*} key,
      * the source of higher ordinal wins, and within one source the explicit key; the aliases back no

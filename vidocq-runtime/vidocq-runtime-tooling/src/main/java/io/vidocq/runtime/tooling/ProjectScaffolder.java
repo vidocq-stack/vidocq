@@ -509,7 +509,7 @@ public final class ProjectScaffolder {
 
                 /**
                  * Entry point. {@code main} is a trampoline: {@code Vidocq.run} resolves the application
-                 * into the Vauban layer and boots it there, from the IDE or {@code vidocq start}; a jlink
+                 * into the Vauban layer and boots it there, from the IDE or {@code vidocq run}; a jlink
                  * image has one layer and boots it in place. Put no code before it: it would run before the
                  * runtime, and outside the layer when there is one.
                  *

@@ -34,13 +34,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Options that consume the next argument as their value, and the {@code --} passthrough. */
 class CliParserOptionValuesTest {
 
-    private static final String START = "start";
+    private static final String RUN = "run";
     private static final String PORT = "--port";
 
     @Test
     void startReadsPortConfigAndDebug() {
         Command.Start start = assertInstanceOf(Command.Start.class,
-                CliParser.parse(new String[]{START, "-p", "9091", "-c", "app.properties", "--debug"}));
+                CliParser.parse(new String[]{RUN, "-p", "9091", "-c", "app.properties", "--debug"}));
         assertEquals(9091, start.port());
         assertTrue(start.portExplicit());
         assertEquals(Path.of("app.properties"), start.configFile());
@@ -49,14 +49,14 @@ class CliParserOptionValuesTest {
 
     @Test
     void startLongConfigOption() {
-        Command.Start start = (Command.Start) CliParser.parse(new String[]{START, "--config", "x.properties"});
+        Command.Start start = (Command.Start) CliParser.parse(new String[]{RUN, "--config", "x.properties"});
         assertEquals(Path.of("x.properties"), start.configFile());
         assertFalse(start.portExplicit());
     }
 
     @Test
     void portWithoutValueIsRejected() {
-        String[] args = {START, PORT};
+        String[] args = {RUN, PORT};
         CliException ex = assertThrows(CliException.class, () -> CliParser.parse(args));
         assertEquals("Option --port requires a value.", ex.getMessage());
     }
@@ -76,10 +76,10 @@ class CliParserOptionValuesTest {
     }
 
     @Test
-    void unknownStartOptionIsRejected() {
-        String[] args = {START, "--nope"};
+    void unknownRunOptionIsRejected() {
+        String[] args = {RUN, "--nope"};
         CliException ex = assertThrows(CliException.class, () -> CliParser.parse(args));
-        assertEquals("Unknown option '--nope' for 'start'. Run 'vidocq help start'.", ex.getMessage());
+        assertEquals("Unknown option '--nope' for 'run'. Run 'vidocq help run'.", ex.getMessage());
     }
 
     @Test

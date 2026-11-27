@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-cli</artifactId>
     <name>Vidocq :: CLI</name>
-    <description>Vidocq command-line interface — create, start, dev, and manage extensions</description>
+    <description>Vidocq command-line interface — create, run, dev, and manage extensions</description>
 
     <dependencies>
         <dependency>

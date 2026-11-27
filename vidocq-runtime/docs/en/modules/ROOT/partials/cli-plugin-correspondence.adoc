@@ -1,39 +1,73 @@
-// The table of the CLI commands and of the Maven plugin goals, included by the reference page of each (Vidocq/vidocq#314).
-Every command that edits or checks the project has a goal, and both run the same code from
-`vidocq-runtime-tooling`: the same project, the same edit, the same diagnosis. The commands that build or run the
-application run their goal through Maven (`./mvnw` when the project has one).
+// The table of the CLI commands and of the Maven plugin goals, included by the reference page of each (Vidocq/vidocq#314,
+// #779). CliGoalAlignmentTest of vidocq-runtime-cli checks each row against the parser and the plugin's descriptor:
+// a row starts with | `vidocq <command>`, and names the goal, each option and each -D property.
+A command has the name of its goal: `vidocq run` runs `vidocq:run`. The extension commands are the exception, on
+purpose: `vidocq extension add` is a sub-command of `vidocq extension`, where Maven has the flat goal
+`vidocq:add-extension`. The commands that edit or check the project (`create`, `extension`, `doctor`) run in the CLI's
+own process the same code of `vidocq-runtime-tooling` as their goal: the same project, the same edit, the same
+diagnosis. The commands that build or run the application run their goal through Maven (`./mvnw` when the project has
+one), and hand it each option as the property of the third column.
 
-[cols="2,2,3"]
+[cols="2,2,4"]
 |===
-| CLI | Maven plugin | How they agree
+| CLI | Maven plugin | Options: CLI ↔ goal
 
-| `vidocq create`
-| `vidocq:create`, without a project
-| The same scaffolder writes the project.
+| `vidocq run` (`vidocq start` until 0.4.0, still accepted, with a deprecation notice)
+| `vidocq:run`
+| `--port` ↔ `-Dvidocq.run.systemProperties=vidocq.chappe.listener.default.port=<n>`, `--config` ↔
+`-Dvidocq.run.systemProperties=vidocq.config.file=<file>`, `--debug` ↔ `-Dvidocq.run.debug`
 
-| `vidocq extension add` / `remove`
-| `vidocq:add-extension` / `vidocq:remove-extension` (`-Dextensions=…`)
-| The same editor writes the dependency, the codegen path and the `module-info.java` directives.
+| `vidocq dev`
+| `vidocq:dev`, after `process-classes`
+| `--port` ↔ `-Dvidocq.dev.systemProperties=vidocq.chappe.listener.default.port=<n>`, `--profile` ↔
+`-Dvidocq.profile` (default `dev`), `--debug` ↔ `-Dvidocq.dev.debug`
 
-| `vidocq extension list`
-| `vidocq:list-extensions` (`-Dvidocq.extensions.available` for the catalog)
-| The same test tells an extension jar; the same catalog names it.
+| `vidocq test`
+| `vidocq:test`, after `process-classes`
+| `--once` ↔ `-Dvidocq.test.once`
+
+| `vidocq idea`
+| `vidocq:idea`
+| `--check` ↔ `-Dvidocq.idea.check=true`, `--strict` ↔ `-Dvidocq.idea.check=strict`, `--kind` ↔ `-Dvidocq.idea.kind`
+
+| `vidocq vscode`
+| `vidocq:vscode`
+| `--check` ↔ `-Dvidocq.vscode.check`
+
+| `vidocq eclipse`
+| `vidocq:eclipse`
+| `--check` ↔ `-Dvidocq.eclipse.check`
 
 | `vidocq doctor`
 | `vidocq:doctor`
-| The same facts, the same checks.
+| `--verbose` ↔ `-Dvidocq.doctor.verbose`, `--fix` ↔ `-Dvidocq.doctor.fix`. The same checks, lines and summary; each
+names its own way to fix.
 
-| `vidocq dev` / `vidocq start`
-| `vidocq:dev` / `vidocq:run`
-| The command runs the goal.
+| `vidocq create`
+| `vidocq:create`, without a project
+| `--name` ↔ `-Dname`, `--group-id` ↔ `-DgroupId`, `--package` ↔ `-Dpackage`, `--extension` (repeatable or
+comma-separated) ↔ `-Dextensions` (comma-separated), `--vidocq-version` ↔ `-DvidocqVersion`, `--parent-version` ↔
+`-DparentVersion` (the names up to 0.4.0), `--with-parent` ↔ `-DwithParent`, `--main` ↔ `-Dmain`, `--open-module` ↔
+`-DopenModule`. Without `--name`, on a console, the CLI asks for the name, the group id and the extensions; the goal
+needs `-Dname`.
 
-| `vidocq test` / `vidocq idea` / `vidocq vscode` / `vidocq eclipse`
-| `vidocq:test` / `vidocq:idea` / `vidocq:vscode` / `vidocq:eclipse`
-| The command runs the goal.
+| `vidocq extension add <id>...`
+| `vidocq:add-extension`
+| The ids, as arguments or comma-separated ↔ `-Dextensions` (comma-separated)
+
+| `vidocq extension remove <id>...`
+| `vidocq:remove-extension`
+| The ids, as arguments or comma-separated ↔ `-Dextensions` (comma-separated)
+
+| `vidocq extension list`
+| `vidocq:list-extensions`
+| `--all` ↔ `-Dvidocq.extensions.available`. The installed extensions are the default of both. The CLI only:
+`--available` lists the catalog alone, without running Maven, and `--refresh` skips the CLI's cache of the resolved
+dependencies; the goal reads the dependencies Maven resolved for it.
 
 | `vidocq build [type]` / `vidocq clean`
 | `package`, `vidocq:jlink`, `vidocq:jpackage`, `vidocq:docker` / `mvn clean`
-| The command runs the build.
+| The command runs the build. `--offline` ↔ `-o`, `--skip-tests` ↔ `-DskipTests`, `--` passes the rest to Maven.
 
 | `vidocq config get\|set\|list`
 | none
@@ -41,7 +75,8 @@ application run their goal through Maven (`./mvnw` when the project has one).
 
 | `vidocq info`
 | none
-| A summary read from the project's files: `vidocq:list-extensions` gives the extensions in detail; versions are the build's.
+| A summary read from the project's files: `vidocq:list-extensions` gives the extensions in detail; versions are the
+build's.
 
 | `vidocq pom convert` / `vidocq pom upgrade`
 | none
@@ -59,3 +94,7 @@ application run their goal through Maven (`./mvnw` when the project has one).
 | `vidocq:analyze-deps`, `vidocq:complete-module-info`
 | Build-level reports and fixes, run with Maven.
 |===
+
+Every command that runs Maven takes `--maven-profile <ids>`, Maven's own `-P<ids>`, which no goal reads as a
+property. The CLI prints in colours and the goals log through Maven, and each says what to run next with its own
+commands: `vidocq doctor --fix` and `mvn vidocq:doctor -Dvidocq.doctor.fix`.

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.tooling.KnownExtensions;
 import io.vidocq.runtime.tooling.ProjectScaffolder;
 import io.vidocq.runtime.tooling.ProjectSpec;
 import org.apache.maven.plugin.AbstractMojo;
@@ -28,7 +29,6 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -64,7 +64,14 @@ public class VidocqCreateMojo extends AbstractMojo {
     @Parameter(property = "extensions")
     private String extensions;
 
-    /** The vidocq-runtime-parent version; this plugin's own by default. */
+    /**
+     * The Vidocq version the project builds on, the parent's with {@link #withParent}; this plugin's own by default.
+     * {@code vidocq create --vidocq-version} (Vidocq/vidocq#779).
+     */
+    @Parameter(property = "vidocqVersion")
+    private String vidocqVersion;
+
+    /** {@link #vidocqVersion} under its name up to 0.4.0, which {@code vidocqVersion} outranks when both are set. */
     @Parameter(property = "parentVersion")
     private String parentVersion;
 
@@ -92,11 +99,11 @@ public class VidocqCreateMojo extends AbstractMojo {
             throw new MojoFailureException("Name the project: mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:"
                     + runtimeVersion + ":create -Dname=<name>");
         }
-        List<String> ids = extensions == null ? List.of() : Arrays.stream(extensions.split(","))
-                .map(String::strip).filter(id -> !id.isEmpty()).toList();
+        List<String> ids = KnownExtensions.splitIds(extensions);
+        String version = vidocqVersion != null ? vidocqVersion : parentVersion;
         ProjectSpec spec;
         try {
-            spec = ProjectSpec.of(name.strip(), groupId, pkg, ids, parentVersion, main, openModule, withParent,
+            spec = ProjectSpec.of(name.strip(), groupId, pkg, ids, version, main, openModule, withParent,
                     "-Dpackage=<pkg>");
         } catch (IllegalArgumentException e) {
             throw new MojoFailureException(e.getMessage());

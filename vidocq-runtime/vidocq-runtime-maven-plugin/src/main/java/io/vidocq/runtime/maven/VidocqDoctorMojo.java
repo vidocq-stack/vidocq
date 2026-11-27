@@ -23,6 +23,7 @@ import io.vidocq.runtime.tooling.Diagnostic;
 import io.vidocq.runtime.tooling.Diagnostics;
 import io.vidocq.runtime.tooling.DoctorContext;
 import io.vidocq.runtime.tooling.DoctorFacts;
+import io.vidocq.runtime.tooling.DoctorReport;
 import io.vidocq.runtime.tooling.KeyDoctor;
 import io.vidocq.runtime.tooling.ProjectDoctor;
 import org.apache.maven.artifact.Artifact;
@@ -37,7 +38,6 @@ import org.apache.maven.project.MavenProject;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -101,31 +101,32 @@ public class VidocqDoctorMojo extends AbstractMojo {
         Path basedir = project.getBasedir().toPath();
         if (fix) {
             try {
-                if (!ProjectDoctor.fix(basedir, runtimeVersion, new LogReporter(getLog()))) {
-                    getLog().info("vidocq:doctor: nothing to fix.");
-                }
+                DoctorReport.fix(basedir, runtimeVersion, new LogReporter(getLog()));
             } catch (IOException e) {
                 throw new MojoFailureException("vidocq:doctor could not fix the project: " + e.getMessage(), e);
             }
         }
-        List<Diagnostic> diagnostics = new ArrayList<>(Diagnostics.run(context()));
-        diagnostics.addAll(ProjectDoctor.check(ProjectDoctor.read(basedir, DoctorFacts::portFree)));
-        diagnostics.addAll(KeyDoctor.check(KeyDoctor.read(basedir, classPath())));
-        for (Diagnostic d : diagnostics) {
+        // The diagnosis of vidocq doctor too (#779); only the log levels and the way to fix are the goal's.
+        DoctorReport report = DoctorReport.of(basedir, context(),
+                DoctorFacts.Extensions.found(ProjectExtensionArtifacts.of(project).size(), classPath()));
+        for (Diagnostic d : report.diagnostics()) {
             Consumer<CharSequence> log = level(getLog(), d.status());
-            log.accept(String.format("%s %-17s %s", symbol(d.status()), d.name(), d.detail()));
-            if (d.hint() != null && (verbose || d.status() != Diagnostic.Status.OK)) {
+            log.accept(DoctorReport.line(d));
+            if (DoctorReport.showsHint(d, verbose)) {
                 log.accept("    ↳ " + d.hint());
             }
-            if (d.fixable() && d.status() != Diagnostic.Status.OK) {
+            if (DoctorReport.showsFix(d)) {
                 log.accept("    ↳ Fix: mvn vidocq:doctor -Dvidocq.doctor.fix");
             }
         }
-        Diagnostics.Summary summary = Diagnostics.summarize(diagnostics);
-        getLog().info("  " + summary.total() + " checks — " + summary.ok() + " ok, " + summary.warn()
-                + " warning(s), " + summary.fail() + " failed");
-        if (Diagnostics.exitCode(diagnostics) != 0) {
-            throw new MojoFailureException("vidocq:doctor: one or more checks failed — see the hints above.");
+        Consumer<CharSequence> verdict = report.exitCode() == 0 ? getLog()::info : getLog()::error;
+        verdict.accept("  " + report.verdict());
+        getLog().info("  " + report.summaryLine());
+        if (verbose) {
+            getLog().info("  Minimum Java: " + Diagnostics.MINIMUM_JAVA_VERSION);
+        }
+        if (report.exitCode() != 0) {
+            throw new MojoFailureException("vidocq:doctor: " + report.verdict());
         }
     }
 
@@ -134,14 +135,6 @@ public class VidocqDoctorMojo extends AbstractMojo {
             case OK -> log::info;
             case WARN -> log::warn;
             case FAIL -> log::error;
-        };
-    }
-
-    private static String symbol(Diagnostic.Status status) {
-        return switch (status) {
-            case OK -> "✔";
-            case WARN -> "⚠";
-            case FAIL -> "✘";
         };
     }
 }

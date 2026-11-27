@@ -45,6 +45,7 @@ public final class VidocqCli {
             System.exit(0);
         }
         try {
+            CliParser.deprecation(args).ifPresent(CliOutput::warning);
             Command cmd = CliParser.parse(args);
             UpdateNotice notice = CommandRunner.updateNotice(cmd);
             int exit = CommandRunner.run(cmd);

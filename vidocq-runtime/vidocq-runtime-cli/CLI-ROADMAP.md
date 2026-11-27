@@ -1,11 +1,11 @@
 # Vidocq CLI — Roadmap
 
-The Vidocq CLI is the command-line front of the Vidocq Maven plugin: `create`, `dev`, `start`, `test`, `build`,
+The Vidocq CLI is the command-line front of the Vidocq Maven plugin: `create`, `dev`, `run`, `test`, `build`,
 `extension add|remove|list`, `doctor`, `config`, `idea`, `completion`, `update`, inspired by the vocabulary of the
 [Quarkus CLI](https://quarkus.io/guides/cli-tooling).
 
 This file no longer describes the commands one by one: its milestones described a CLI that booted the runtime in
-its own JVM and scanned its own class path, which `vidocq dev`, `vidocq start` and `vidocq extension list` stopped
+its own JVM and scanned its own class path, which `vidocq dev`, `vidocq run` (`vidocq start` until 0.4.0) and `vidocq extension list` stopped
 doing with Vidocq/vidocq#47 and #314, and the description drifted from the code (BUG-20261024-12). There is one
 description to keep up to date, the reference page.
 
@@ -15,17 +15,19 @@ description to keep up to date, the reference page.
   command, its options, and what it runs.
 - **The CLI and the Maven plugin, side by side**:
   [`cli-plugin-correspondence.adoc`](../docs/en/modules/ROOT/partials/cli-plugin-correspondence.adoc) — the goal of
-  each command.
+  each command, its options and the property of the goal each sets; `CliGoalAlignmentTest` fails when a command and
+  its goal drift apart (Vidocq/vidocq#779).
 - **What changed**: [`whats-new.adoc`](../docs/en/modules/ROOT/pages/whats-new.adoc).
 
 ## How it is built
 
-- **The project's own Maven runs the project.** `dev`, `start`, `test`, `idea` and `build` run the matching
+- **The project's own Maven runs the project.** `dev`, `run`, `test`, `idea` and `build` run the matching
   `vidocq:` goal through the project's `./mvnw`, else the `mvn` of the `PATH`; the CLI never boots the application
   in its own JVM.
 - **One implementation for both tools.** The commands that edit or check a project (`create`, `extension`,
   `doctor`, `config`) and their goals run the same `vidocq-runtime-tooling` code, so the CLI and the plugin cannot
-  disagree.
+  disagree: `DoctorReport` is the diagnosis of both, `ProjectScaffolder` the project of both, `ExtensionEditor` the
+  edit of both, `KnownExtensions.splitIds` how both read a list of ids.
 - **The extensions describe themselves.** The catalog comes from each extension's
   `META-INF/vidocq/extension.properties`, its family included, by which `extension list --available` groups it; a
   reactor test fails when the two drift. The CLI reads no remote registry: one belongs with Vidocq/vidocq#17.

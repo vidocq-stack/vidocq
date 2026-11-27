@@ -86,4 +86,14 @@ class CliParserExtensionTest {
     void unknownSubCommandFails() {
         assertThrows(CliException.class, () -> CliParser.parse(new String[]{"extension", "frobnicate"}));
     }
+
+    /** As {@code mvn vidocq:add-extension -Dextensions=a,b} reads them (Vidocq/vidocq#779). */
+    @Test
+    void addAndRemoveReadCommaSeparatedIdsToo() {
+        assertEquals(new Command.Extension.Add(List.of("rest-cassini", "health-knock", "metrics-dirac")),
+                CliParser.parse(new String[]{"extension", "add", "rest-cassini,health-knock", "metrics-dirac"}));
+        assertEquals(new Command.Extension.Remove(List.of("rest-cassini", "health-knock")),
+                CliParser.parse(new String[]{"extension", "remove", "rest-cassini, health-knock"}));
+        assertThrows(CliException.class, () -> CliParser.parse(new String[]{"extension", "add", ","}));
+    }
 }

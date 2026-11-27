@@ -23,8 +23,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
@@ -97,6 +97,18 @@ public final class KnownExtensions {
             }
         }
         return out;
+    }
+
+    /**
+     * The ids of a comma-separated list, stripped, blanks dropped: how {@code -Dextensions=a,b},
+     * {@code vidocq create --extension a,b} and {@code vidocq extension add a,b} read one (Vidocq/vidocq#779).
+     * Empty for {@code null}.
+     */
+    public static List<String> splitIds(String commaSeparated) {
+        if (commaSeparated == null) {
+            return List.of();
+        }
+        return Arrays.stream(commaSeparated.split(",")).map(String::strip).filter(id -> !id.isEmpty()).toList();
     }
 
     /** The immutable built-in catalog, sorted by id. */

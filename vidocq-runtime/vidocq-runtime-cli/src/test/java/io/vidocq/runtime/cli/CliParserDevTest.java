@@ -76,7 +76,7 @@ class CliParserDevTest {
         assertTrue(((Command.Dev) CliParser.parse(new String[]{"dev", "-p", "8080"})).portExplicit(),
                 "an explicit --port that happens to equal the default is still explicit");
 
-        assertFalse(((Command.Start) CliParser.parse(new String[]{"start"})).portExplicit());
-        assertTrue(((Command.Start) CliParser.parse(new String[]{"start", "--port", "9099"})).portExplicit());
+        assertFalse(((Command.Start) CliParser.parse(new String[]{"run"})).portExplicit());
+        assertTrue(((Command.Start) CliParser.parse(new String[]{"run", "--port", "9099"})).portExplicit());
     }
 }

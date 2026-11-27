@@ -36,7 +36,7 @@ public final class ShortOptions {
 
     /** Context, then short alias to long form, in the order completion offers them. */
     private static final Map<String, Map<String, String>> BY_CONTEXT = byContext(
-            "start", List.of("-p", PORT, "-c", "--config"),
+            "run", List.of("-p", PORT, "-c", "--config"),
             "dev", List.of("-p", PORT, "-P", "--profile"),
             "doctor", List.of("-v", "--verbose"),
             "create", List.of("-n", "--name", "-g", "--group-id", "-x", "--extension"),

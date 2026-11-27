@@ -84,7 +84,7 @@ class ChappeServerBootstrapTest {
     }
 
     // --- vidocq.http.* aliases (Vidocq/chappe#7) ------------------------------------------------
-    // The published documentation, the CLI (`vidocq start --port`) and every scaffolded
+    // The published documentation, the CLI (`vidocq run --port`) and every scaffolded
     // vidocq.properties use vidocq.http.port. It used to be read by nobody, so the application
     // silently stayed on 8080 — invisible whenever the configured value happened to be the default.
 

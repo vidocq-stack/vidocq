@@ -108,7 +108,7 @@ hello-world/
 ----
 
 There is no application main class: the runtime's own main boots the application
-from `vidocq.mainModule`, under `vidocq dev`, `vidocq start` and the `bin/` launchers of
+from `vidocq.mainModule`, under `vidocq dev`, `vidocq run` and the `bin/` launchers of
 `mvn package` alike. With `-x rest-cassini`, the package also gets a `HelloResource`
 (`GET /hello`), and `module-info.java` opens it to JAX-RS and JSON-B. An extension that
 reflects on the package without the scaffold writing a class into it (`data-mansart` alone)
@@ -122,7 +122,7 @@ main class they launch the runtime's own main, which boots `vidocq.mainModule` i
 xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[jlink without a main class]).
 The trampoline re-resolves the application into the Vauban layer, which reads
 the build-time generated code through `META-INF/services` without a `provides` in your
-`module-info.java`, the same way in the IDE, with `vidocq start` and in a jlink image:
+`module-info.java`, the same way in the IDE, with `vidocq run` and in a jlink image:
 
 [source,java]
 ----
@@ -133,7 +133,7 @@ import io.vidocq.runtime.spi.VidocqMain;
 
 /**
  * Entry point. {@code main} is a trampoline: {@code Vidocq.run} resolves the application
- * into the Vauban layer and boots it there, from the IDE or {@code vidocq start}; a jlink
+ * into the Vauban layer and boots it there, from the IDE or {@code vidocq run}; a jlink
  * image has one layer and boots it in place. Put no code before it: it would run before the
  * runtime, and outside the layer when there is one.
  *
@@ -157,7 +157,7 @@ With `--main`, the project name is converted to a `PascalCase` class name with a
 turned into dots (`com.example.hello.world`). That package is also the module name, so every
 dot-separated part must be a Java identifier that is not a keyword: `create` refuses a name such
 as `ft-030` (`io.example.ft.030`) and asks for `--package`. Override the package with `--package`
-and add extensions at creation time with `-x` (repeatable).
+and add extensions at creation time with `-x` (repeatable, or comma-separated).
 ====
 
 === 3. Move in and build
@@ -176,7 +176,7 @@ without executing it.
 
 [source,bash]
 ----
-vidocq start
+vidocq run
 ----
 
 The runtime boots in the foreground and awaits shutdown (Ctrl-C). To iterate with live
@@ -227,8 +227,8 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq dev [--port] [--profile] [--debug] [--maven-profile]`
 | Run the project in dev mode with live reload, `mvn vidocq:dev` (see <<dev>>).
 
-| `vidocq start [--port] [--config] [--debug] [--maven-profile]`
-| Build and run the project's application, `mvn vidocq:run` (see <<start>>).
+| `vidocq run [--port] [--config] [--debug] [--maven-profile]`
+| Build and run the project's application, `mvn vidocq:run` (see <<run>>). `vidocq start`, its name up to 0.4.0, still works and prints a deprecation notice.
 
 | `vidocq test [--once] [--maven-profile]`
 | Run the tests on every change, without the application, `mvn vidocq:test`; `--once` runs them once and exits (see <<test>>).
@@ -316,7 +316,7 @@ From 0.4.0 the project is finished (Vidocq/vidocq#339):
 | `--name, -n <name>` | Project / artifact name; asked on a terminal when left out, required otherwise.
 | `--group-id, -g <groupId>` | Maven groupId (default `io.example`).
 | `--package <pkg>` | Root Java package, also the module name (default `<groupId>.<name>`, dashes turned into dots); must be a valid Java package name.
-| `--extension, -x <id>` | Extension to enable; repeatable.
+| `--extension, -x <id>` | Extension to enable; repeatable, or comma-separated as `-Dextensions` of `vidocq:create`.
 | `--vidocq-version <version>` | The Vidocq version the project builds on (default: the runtime version of the CLI): the `vidocq.version` property the BOM import and the plugin read, or the version of `vidocq-runtime-parent` with `--with-parent`. From 0.4.0 the BOM versions the Vidocq dependencies, which carry no `<version>`; under an older parent each one names this version.
 | `--parent-version <version>` | The same option, under the name it had until 0.4.0.
 | `--with-parent` | Inherit `vidocq-runtime-parent` instead of importing the BOM and loading the plugin as a build extension, the default from 0.4.0 (Vidocq/vidocq#380). A version before 0.4.0, or a 0.4.0 release candidate, inherits the parent whatever the option, and `create` says so.
@@ -438,7 +438,7 @@ xref:continuous-testing.adoc#paused[Paused, the default]).
 
 [#maven-profile]
 *Maven profiles.* `--maven-profile <ids>` activates Maven profiles of the project's pom, on every command that runs
-its build: `dev`, `start`, `test`, `build` and `clean`. The ids are comma-separated and the option repeatable, and
+its build: `dev`, `run`, `test`, `build` and `clean`. The ids are comma-separated and the option repeatable, and
 Maven gets them as one `-P<ids>` before the goals, so `!id` deactivates one as Maven's `-P` does. `-P` stays the Vidocq
 config profile of `vidocq dev`: `vidocq dev -P staging --maven-profile h2` runs the `%staging.` keys of
 `vidocq.properties` with the `h2` profile of the pom.
@@ -449,15 +449,18 @@ vidocq dev --maven-profile h2                      # ./mvnw -Ph2 process-classes
 vidocq build jlink --maven-profile jlink -- -X     # ./mvnw -Pjlink package vidocq:jlink -X
 ----
 
-Ctrl+C stops Maven and the application; the CLI returns once both are down. `vidocq dev` and `vidocq start`
+Ctrl+C stops Maven and the application; the CLI returns once both are down. `vidocq dev` and `vidocq run`
 used to boot the runtime inside the CLI's own JVM, which holds neither the project's classes nor its
 extensions: the runtime came up empty, with nothing listening.
 
-[#start]
-=== `vidocq start`
+[#run]
+=== `vidocq run` [.tag-new]#NEW#
 
 Runs `mvn vidocq:run` in the project, through `./mvnw` when there is one: the goal compiles the
 project and starts the application with its dependencies and extensions on the module path.
+
+[[start]]The command has the name of its goal since 0.4.1 (Vidocq/vidocq#779). `vidocq start`, its name up to 0.4.0,
+still runs it, with the same options, after a one-line notice that it is deprecated; completion offers `run` only.
 
 [cols="1,2"]
 |===
@@ -586,7 +589,9 @@ vidocq build -- -Dvidocq.docker.build=true   # extra args after --
 Manages project-level extensions by editing `./pom.xml` in place (text-based, preserving
 formatting; idempotent thanks to a StAX dependency scan). Without the CLI,
 xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-extension` and
-`vidocq:remove-extension`] make the same edits: both run the code of `vidocq-runtime-tooling`.
+`vidocq:remove-extension`] make the same edits: both run the code of `vidocq-runtime-tooling`. The ids are
+arguments, each of which may also be a comma-separated list, as `-Dextensions` reads them:
+`vidocq extension add rest-cassini,health-knock` is `mvn vidocq:add-extension -Dextensions=rest-cassini,health-knock`.
 
 [cols="1,2"]
 |===
@@ -623,7 +628,7 @@ same blocks. `\{app}` below is the project's artifactId.
 | `pool-mansart`
 | Comments only: `vidocq.pool.url=jdbc:postgresql://localhost:5432/\{app}`, `vidocq.pool.username=\{app}` and
   `vidocq.pool.password=\{app}`. The PostgreSQL dev service sets the three keys under `vidocq dev`, `vidocq test`
-  and `mvn test`; uncommented, they are the database of `vidocq start` and of the packaged application. A
+  and `mvn test`; uncommented, they are the database of `vidocq run` and of the packaged application. A
   `jdbc:postgresql:` URL in the file never switches the dev service off (xref:dev-services.adoc#postgres-only-for-postgres[A PostgreSQL container only for a PostgreSQL application]).
 |===
 
@@ -1007,7 +1012,10 @@ A newer Vidocq CLI is available: 0.4.1. Run 'vidocq update' to install it (VIDOC
 * `VIDOCQ_NO_UPDATE_CHECK=1` turns it off.
 
 [#cli-and-plugin]
-=== The CLI and the Maven plugin
+=== The CLI and the Maven plugin [.tag-new]#NEW#
+
+The goals themselves are described in
+xref:modules/vidocq-runtime-maven-plugin.adoc#cli-and-plugin[the Maven plugin reference], which gives the same table.
 
 include::partial$cli-plugin-correspondence.adoc[]
 

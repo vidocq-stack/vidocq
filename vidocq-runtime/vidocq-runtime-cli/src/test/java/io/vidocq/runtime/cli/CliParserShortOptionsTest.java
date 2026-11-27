@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class CliParserShortOptionsTest {
 
     /** The commands that take options; {@code -h} asks for help everywhere and is not an alias. */
-    private static final List<String> COMMANDS = List.of("start", "dev", "test", "doctor", "idea", "vscode",
+    private static final List<String> COMMANDS = List.of("run", "dev", "test", "doctor", "idea", "vscode",
             "eclipse", "create", "build", "clean", "update");
 
     @Test

@@ -68,7 +68,7 @@ wildcard host reads `localhost`, an IPv6 address is bracketed (`http://[::1]:888
 | `vidocq.http.port` | `8080` | alias for `vidocq.chappe.listener.default.port` |
 
 The `vidocq.http.*` aliases address the listener named `default` only — the more discoverable
-names, used by the CLI (`vidocq start --port`), by every scaffolded `vidocq.properties` and by the
+names, used by the CLI (`vidocq run --port`), by every scaffolded `vidocq.properties` and by the
 reference documentation. The explicit `vidocq.chappe.listener.default.*` key always wins, and a
 listener other than `default` must declare its own port.
 

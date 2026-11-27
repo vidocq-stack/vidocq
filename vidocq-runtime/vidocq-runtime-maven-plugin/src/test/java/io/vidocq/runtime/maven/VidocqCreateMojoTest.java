@@ -123,6 +123,31 @@ class VidocqCreateMojoTest {
         assertTrue(e.getMessage().contains("already exists"), e.getMessage());
     }
 
+    /**
+     * {@code -DvidocqVersion}, as {@code vidocq create --vidocq-version}; {@code -DparentVersion}, its name up to
+     * 0.4.0, still works, and the new name wins when both are given (Vidocq/vidocq#779).
+     */
+    @Test
+    void vidocqVersionIsTheVersionTheProjectBuildsOn() throws Exception {
+        VidocqCreateMojo byNewName = create(dir.resolve("a"), "demo", "com.acme", null, null, false);
+        set(byNewName, "vidocqVersion", "9.8.7");
+        Files.createDirectories(dir.resolve("a"));
+        byNewName.execute();
+        VidocqCreateMojo byFormerName = create(dir.resolve("b"), "demo", "com.acme", null, null, false);
+        set(byFormerName, "parentVersion", "9.8.6");
+        Files.createDirectories(dir.resolve("b"));
+        byFormerName.execute();
+        VidocqCreateMojo byBoth = create(dir.resolve("c"), "demo", "com.acme", null, null, false);
+        set(byBoth, "vidocqVersion", "9.8.7");
+        set(byBoth, "parentVersion", "9.8.6");
+        Files.createDirectories(dir.resolve("c"));
+        byBoth.execute();
+
+        assertTrue(Files.readString(dir.resolve("a/demo/pom.xml")).contains("<vidocq.version>9.8.7</vidocq.version>"));
+        assertTrue(Files.readString(dir.resolve("b/demo/pom.xml")).contains("<vidocq.version>9.8.6</vidocq.version>"));
+        assertTrue(Files.readString(dir.resolve("c/demo/pom.xml")).contains("<vidocq.version>9.8.7</vidocq.version>"));
+    }
+
     private VidocqCreateMojo create(Path basedir, String name, String groupId, String pkg, String extensions,
                                     boolean main) throws Exception {
         VidocqCreateMojo mojo = new VidocqCreateMojo();

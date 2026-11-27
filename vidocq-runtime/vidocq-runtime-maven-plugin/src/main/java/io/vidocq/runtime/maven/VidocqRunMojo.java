@@ -63,6 +63,9 @@ import java.util.function.Function;
  * of the dependency jars. An IDE Run that builds with the IDE never runs {@code vidocq:generate} and the
  * server answers 404 (Vidocq/vidocq#83); a Run that is a Maven run of this goal cannot.
  *
+ * <p>{@code vidocq run} runs this goal, under its name ({@code vidocq start} until 0.4.0, still accepted;
+ * Vidocq/vidocq#779).</p>
+ *
  * <p>The child JVM has exactly the shape of the one {@code vidocq:dev} forks — module path, resolved
  * {@code ALL-MODULE-PATH}, application classes handed to the runtime through {@code -Dvidocq.app.path},
  * inherited I/O — without the source watcher, the reload file and {@code -Dvidocq.profile=dev}. The goal

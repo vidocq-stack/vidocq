@@ -26,6 +26,7 @@ import io.vidocq.runtime.cli.completion.ShortOptions;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.UpdatePlan;
+import io.vidocq.runtime.tooling.KnownExtensions;
 import io.vidocq.runtime.tooling.PomConverter;
 import io.vidocq.runtime.tooling.ProjectSpec;
 
@@ -35,6 +36,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -43,6 +45,9 @@ import java.util.Set;
  */
 public final class CliParser {
 
+    /** The command of {@code vidocq:run} (Vidocq/vidocq#779). */
+    private static final String RUN = "run";
+    /** {@link #RUN}'s name up to 0.4.0, still parsed, hidden from the help and from completion. */
     private static final String START = "start";
     private static final String DOCTOR = "doctor";
     private static final String DEBUG = "--debug";
@@ -62,7 +67,7 @@ public final class CliParser {
     private static final String RELEASE_OPTION = "--release";
     private static final String SNAPSHOT_OPTION = "--snapshot";
     /** The built-in commands that show their own help on {@code --help}. */
-    private static final Set<String> HELP_TOPICS = Set.of(START, "dev", DOCTOR, "test", "idea", VSCODE, ECLIPSE, CREATE,
+    private static final Set<String> HELP_TOPICS = Set.of(RUN, "dev", DOCTOR, "test", "idea", VSCODE, ECLIPSE, CREATE,
             BUILD, CLEAN, CONFIG, COMPLETION, UPDATE, EXTENSION, POM);
     private static final String DRY_RUN = "--dry-run";
     private static final String PORT = "--port";
@@ -92,7 +97,7 @@ public final class CliParser {
             case "version", "--version", "-V" -> new Command.Version();
             case "info"                       -> new Command.Info();
             case "help", "--help", "-h"       -> new Command.Help(args.length > 1 ? args[1] : null);
-            case START                      -> parseStart(args, 1);
+            case RUN, START                   -> parseRun(args, 1);
             case "dev"                        -> parseDev(args, 1);
             case DOCTOR                     -> parseDoctor(args, 1);
             case "test"                       -> parseTest(args, 1);
@@ -117,8 +122,27 @@ public final class CliParser {
      * a plugin parses its own.
      */
     private static String helpTopic(String[] args) {
-        String topic = "ext".equals(args[0]) ? EXTENSION : args[0];
+        String topic = topicOf(args[0]);
         return HELP_TOPICS.contains(topic) && asksForHelp(args) ? topic : null;
+    }
+
+    /** The help topic of a command as typed: an alias shows the help of its command. */
+    private static String topicOf(String command) {
+        return switch (command) {
+            case "ext" -> EXTENSION;
+            case START -> RUN;
+            default -> command;
+        };
+    }
+
+    /**
+     * The one line to print before running {@code args}, when its command is a deprecated name: {@code vidocq start}
+     * still runs {@code vidocq run} (Vidocq/vidocq#779), as 0.4.0 users and tutorials type it.
+     */
+    public static Optional<String> deprecation(String[] args) {
+        return args.length > 0 && START.equals(args[0])
+                ? Optional.of("'vidocq start' is deprecated: it is 'vidocq run' now, the same command (mvn vidocq:run).")
+                : Optional.empty();
     }
 
     /** Whether {@code --help} or {@code -h} comes after the command, before {@code --}. */
@@ -135,7 +159,8 @@ public final class CliParser {
     // Sub-parsers
     // -------------------------------------------------------------------------
 
-    private static Command.Start parseStart(String[] args, int from) {
+    /** {@code vidocq run}, or {@code vidocq start}: the record keeps its name of 0.4.0. */
+    private static Command.Start parseRun(String[] args, int from) {
         int port = 8080;
         boolean portExplicit = false;
         Path config = null;
@@ -149,7 +174,7 @@ public final class CliParser {
                 case CONFIG_OPTION, "-c"  -> config = Path.of(next(it, CONFIG_OPTION));
                 case DEBUG        -> debug  = true;
                 case MAVEN_PROFILE    -> mavenProfiles.addAll(mavenProfiles(it));
-                default               -> unknownOpt(arg, START);
+                default               -> unknownOpt(arg, RUN);
             }
         }
         return new Command.Start(port, portExplicit, config, debug, List.copyOf(mavenProfiles));
@@ -279,7 +304,7 @@ public final class CliParser {
                 case NAME_OPTION, "-n"      -> name    = next(it, NAME_OPTION);
                 case GROUP_ID_OPTION, "-g"  -> groupId = next(it, GROUP_ID_OPTION);
                 case "--package"         -> pkg     = next(it, "--package");
-                case EXTENSION_OPTION, "-x" -> extensions.add(next(it, EXTENSION_OPTION));
+                case EXTENSION_OPTION, "-x" -> extensions.addAll(splitIds(next(it, EXTENSION_OPTION)));
                 // The Vidocq version the project builds on; the parent's with --with-parent (#380).
                 case "--vidocq-version", "--parent-version" -> parentVersion = next(it, arg);
                 case "--with-parent"     -> withParent = true;
@@ -511,7 +536,7 @@ public final class CliParser {
         List<String> ids = new ArrayList<>();
         for (int i = from; i < args.length; i++) {
             if (args[i].startsWith("-")) unknownOpt(args[i], add ? "extension add" : "extension remove");
-            ids.add(args[i]);
+            ids.addAll(splitIds(args[i]));
         }
         if (ids.isEmpty()) throw new CliException(
                 (add ? "'extension add'" : "'extension remove'") + " requires at least one extension id.");
@@ -519,12 +544,21 @@ public final class CliParser {
                    : new Command.Extension.Remove(List.copyOf(ids));
     }
 
+    /** The ids of one value, comma-separated as {@code -Dextensions=} reads them; at least one. */
+    private static List<String> splitIds(String value) {
+        List<String> ids = KnownExtensions.splitIds(value);
+        if (ids.isEmpty()) {
+            throw new CliException("Expected an extension id, got: '" + value + "'");
+        }
+        return ids;
+    }
+
     // -------------------------------------------------------------------------
     // Help text
     // -------------------------------------------------------------------------
 
     static void printHelp(String topic) {
-        if (topic != null) { printTopicHelp(topic); return; }
+        if (topic != null) { printTopicHelp(topicOf(topic)); return; }
 
         CliOutput.println(CliOutput.bold("Vidocq CLI " + Version.cliDisplay()));
         CliOutput.println();
@@ -533,7 +567,7 @@ public final class CliParser {
         CliOutput.println(CliOutput.bold("Commands:"));
         cmd("version",          "Print the CLI and runtime version.");
         cmd("info",             "Display runtime, JVM, and extension information.");
-        cmd(START,            "Build and run the project's application (mvn vidocq:run).");
+        cmd(RUN,                "Build and run the project's application (mvn vidocq:run).");
         cmd("dev",              "Run the project in dev mode with live reload (mvn vidocq:dev).");
         cmd("test",             "Run the tests on every change, without the application (mvn vidocq:test).");
         cmd("idea",             "Write the IntelliJ run configurations into .run/ (mvn vidocq:idea).");
@@ -561,12 +595,13 @@ public final class CliParser {
 
     private static void printTopicHelp(String topic) {
         switch (topic) {
-            case START -> {
-                topic(START, "Build and run the application",
+            case RUN -> {
+                topic(RUN, "Build and run the application",
                         "Runs 'mvn vidocq:run' in the project (./mvnw when present): compiles it and",
-                        "starts it with its dependencies and extensions on the module path.");
-                options(ShortOptions.label(START, PORT) + " <n>", "HTTP listening port, over the project's own setting",
-                        ShortOptions.label(START, CONFIG_OPTION) + " <file>",
+                        "starts it with its dependencies and extensions on the module path.",
+                        "'vidocq start', its name up to 0.4.0, still works and says it is deprecated.");
+                options(ShortOptions.label(RUN, PORT) + " <n>", "HTTP listening port, over the project's own setting",
+                        ShortOptions.label(RUN, CONFIG_OPTION) + " <file>",
                         "Path to an external vidocq.properties file",
                         DEBUG,             "Open a debug agent on port 5005",
                         MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
@@ -621,7 +656,8 @@ public final class CliParser {
                         "Checks the machine (Java version, JAVA_HOME, Maven wrapper) and the",
                         "project (codegen bundles, Vauban indexer, module-info.java directives,",
                         "Maven version, HTTP port) and prints a report. Exits non-zero if any",
-                        "check fails.");
+                        "check fails. 'mvn vidocq:doctor' runs the same checks (-Dvidocq.doctor.fix,",
+                        "-Dvidocq.doctor.verbose).");
                 options("--fix",         "First repair what it can: codegen paths, module-info.java, the wrapper",
                         ShortOptions.label(DOCTOR, "--verbose"),
                         "Print extra details (per-status summary, minimum Java version)");
@@ -629,13 +665,17 @@ public final class CliParser {
             case CREATE -> {
                 CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");
                 CliOutput.println();
+                CliOutput.println("Writes the project 'mvn vidocq:create' writes, with the same code. Without --name,");
+                CliOutput.println("on a console, it asks for the name, the group id and the extensions.");
+                CliOutput.println();
                 CliOutput.println(OPTIONS);
                 opt(ShortOptions.label(CREATE, NAME_OPTION) + " <name>",
                         "Project / artifact name (asked on a console when left out)");
                 opt(ShortOptions.label(CREATE, GROUP_ID_OPTION) + " <groupId>",
                         "Maven groupId            (default: io.example)");
                 opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
-                opt(ShortOptions.label(CREATE, EXTENSION_OPTION) + " <id>", "Extension to enable, repeatable");
+                opt(ShortOptions.label(CREATE, EXTENSION_OPTION) + " <id>",
+                        "Extension to enable, repeatable or comma-separated");
                 opt("--vidocq-version <version>", "Vidocq version the project builds on (default: the CLI's runtime");
                 opt("",                           "version); a SNAPSHOT adds the Vidocq snapshot repositories to the pom");
                 opt("--parent-version <version>", "The same option, as it was named until 0.4.0");
@@ -709,8 +749,8 @@ public final class CliParser {
                 CliOutput.println();
                 CliOutput.println("Sub-commands:");
                 cmd("list [--installed|--available|--all] [--refresh]", "List extensions");
-                cmd("add <id...>",                          "Add extensions to the project's pom.xml");
-                cmd("remove <id...>",                       "Remove extensions from the project's pom.xml");
+                cmd("add <id...>",                          "Add extensions to the project's pom.xml (mvn vidocq:add-extension)");
+                cmd("remove <id...>",                       "Remove extensions from the project's pom.xml (mvn vidocq:remove-extension)");
                 CliOutput.println();
                 CliOutput.println("Ids name the function, then the codename (e.g. " + CliOutput.cyan("health-knock")
                         + "); the function alone does when");

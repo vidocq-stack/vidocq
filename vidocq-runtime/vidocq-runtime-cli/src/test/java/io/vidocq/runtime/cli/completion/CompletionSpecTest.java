@@ -94,7 +94,7 @@ class CompletionSpecTest {
 
     @Test
     void startConfigCompletesFilesAndHelpCompletesCommands() {
-        assertEquals(List.of(CompletionSpec.FILES), after("start", "--config"));
+        assertEquals(List.of(CompletionSpec.FILES), after("run", "--config"));
         assertEquals(CommandCatalog.COMMANDS, after("help"));
         assertTrue(after("help", "build").isEmpty());
     }
@@ -135,10 +135,10 @@ class CompletionSpecTest {
 
     @Test
     void startAndDevOfferTheirShortAliases() {
-        assertTrue(CompletionSpec.candidates(List.of("start"), "-").containsAll(List.of("-p", "-c", "--port")));
+        assertTrue(CompletionSpec.candidates(List.of("run"), "-").containsAll(List.of("-p", "-c", "--port")));
         assertTrue(CompletionSpec.candidates(List.of("dev"), "-").containsAll(List.of("-p", "-P", "--profile")));
         assertFalse(CompletionSpec.candidates(List.of("dev"), "-").contains("-c"), "-c is start's, not dev's");
-        assertEquals(List.of(CompletionSpec.FILES), after("start", "-p", "8080", "-c"));
+        assertEquals(List.of(CompletionSpec.FILES), after("run", "-p", "8080", "-c"));
         assertTrue(after("dev", "-P").isEmpty(), "-P takes a free-form value");
     }
 

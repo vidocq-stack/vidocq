@@ -20,6 +20,8 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.tooling.DoctorContext;
+import io.vidocq.runtime.tooling.DoctorFacts;
+import io.vidocq.runtime.tooling.DoctorReport;
 import io.vidocq.runtime.tooling.KnownExtensions;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
@@ -176,6 +178,26 @@ class VidocqProjectReportMojoTest {
         assertTrue(lines.contains("error:     ↳ Fix: mvn vidocq:doctor -Dvidocq.doctor.fix"), lines.toString());
     }
 
+    /** The diagnosis of {@code vidocq doctor}, line for line, without the CLI's colours (Vidocq/vidocq#779). */
+    @Test
+    void doctorPrintsTheLinesOfTheSharedReport() throws Exception {
+        MavenProject project = project();
+        Files.writeString(dir.resolve("pom.xml"), "<project><parent><groupId>io.vidocq.runtime</groupId></parent></project>");
+        VidocqDoctorMojo mojo = mojo(new VidocqDoctorMojo(), project);
+        set(mojo, "verbose", true);
+
+        mojo.execute();
+
+        DoctorReport report = DoctorReport.of(dir, System.getenv("JAVA_HOME"),
+                () -> DoctorFacts.Extensions.found(2, List.of()));
+        List<String> expected = report.diagnostics().stream().map(DoctorReport::line).toList();
+        List<String> printed = lines.stream().map(l -> l.substring(l.indexOf(": ") + 2))
+                .filter(l -> !l.startsWith(" ")).toList();
+        assertEquals(expected, printed.subList(0, expected.size()));
+        assertTrue(lines.contains("info:   " + report.verdict()), lines.toString());
+        assertTrue(lines.contains("info:   Minimum Java: 25"), lines.toString());
+    }
+
     @Test
     void aFailedCheckFailsTheBuild() throws Exception {
         MavenProject project = project();
@@ -189,6 +211,7 @@ class VidocqProjectReportMojoTest {
         MojoFailureException failure = assertThrows(MojoFailureException.class, () -> mojo(mojo, project).execute());
 
         assertTrue(failure.getMessage().contains("vidocq:doctor"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("One or more checks failed"), failure.getMessage());
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("error: ✘ Java version ")), lines.toString());
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("error:     ↳ Install a JDK 25+")), lines.toString());
     }
@@ -248,7 +271,8 @@ class VidocqProjectReportMojoTest {
 
         assertEquals(List.of("info: ✔ Key descriptions  no jar of the project describes its configuration keys",
                         "info: ✔ Config values     no described key in vidocq.properties"),
-                lines.subList(lines.size() - 3, lines.size() - 1), lines.toString());
+                lines.subList(lines.size() - 4, lines.size() - 2), lines.toString());
+        assertEquals("info:   No blocking issues found.", lines.get(lines.size() - 2), lines.toString());
     }
 
     /** The project of {@link #project()}, one of whose jars describes a key, with this {@code vidocq.properties}. */

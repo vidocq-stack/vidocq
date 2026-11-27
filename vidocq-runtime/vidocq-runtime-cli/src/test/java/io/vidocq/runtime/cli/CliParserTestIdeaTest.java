@@ -82,8 +82,8 @@ class CliParserTestIdeaTest {
 
     /** The topic pages factored with the test and idea ones keep their text. */
     @Test
-    void theStartDevAndDoctorPagesKeepTheirOptions() {
-        assertTrue(help("start").contains("--config, -c <file>"), help("start"));
+    void theRunDevAndDoctorPagesKeepTheirOptions() {
+        assertTrue(help("run").contains("--config, -c <file>"), help("run"));
         assertTrue(help("dev").contains("restarts on every source change."), help("dev"));
         assertTrue(help("dev").contains("The tests start paused: r then Enter"), help("dev"));
         assertTrue(help("doctor").contains("--verbose, -v"), help("doctor"));
@@ -92,7 +92,7 @@ class CliParserTestIdeaTest {
     /** {@code -P} of dev is the Vidocq configuration profile; the Maven one is {@code --maven-profile}, everywhere. */
     @Test
     void theHelpTellsTheConfigProfileFromTheMavenOnes() {
-        for (String command : List.of("start", "dev", "test", "build", "clean")) {
+        for (String command : List.of("run", "dev", "test", "build", "clean")) {
             assertTrue(help(command).contains("--maven-profile <ids>"), command + ": " + help(command));
         }
         assertTrue(help("dev").contains("Vidocq config profile to activate (default: dev), not a Maven one"),

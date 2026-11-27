@@ -170,4 +170,14 @@ class CliParserCreateTest {
         }
         return buffer.toString(StandardCharsets.UTF_8);
     }
+
+    /** As {@code mvn vidocq:create -Dextensions=a,b} reads them (Vidocq/vidocq#779). */
+    @Test
+    void theExtensionOptionReadsACommaSeparatedListToo() {
+        Command.Create create = assertInstanceOf(Command.Create.class, CliParser.parse(new String[]{
+                "create", "--name", "demo", "-x", "rest-cassini,health-knock", "--extension", "metrics-dirac"}));
+
+        assertEquals(java.util.List.of("rest-cassini", "health-knock", "metrics-dirac"),
+                java.util.List.copyOf(create.spec().extensions()));
+    }
 }

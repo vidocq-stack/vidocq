@@ -148,7 +148,7 @@
              the bean index of the dependency jars (Vidocq/vidocq#83). -->
         <mojo>
             <goal>run</goal>
-            <description>Run the Vidocq application once in a forked JVM (compiles and indexes first)</description>
+            <description>Run the Vidocq application once in a forked JVM (compiles and indexes first), as vidocq run does</description>
             <requiresDependencyResolution>runtime</requiresDependencyResolution>
             <requiresDirectInvocation>true</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
@@ -1080,7 +1080,8 @@
                 <parameter><name>groupId</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The Maven groupId; io.example by default</description></parameter>
                 <parameter><name>pkg</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The root Java package, also the module name; &lt;groupId&gt;.&lt;name&gt; by default</description></parameter>
                 <parameter><name>extensions</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The extensions to enable, comma-separated catalog ids</description></parameter>
-                <parameter><name>parentVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The vidocq-runtime-parent version; this plugin's own by default</description></parameter>
+                <parameter><name>vidocqVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The Vidocq version the project builds on, the parent's with withParent; this plugin's own by default (vidocq create --vidocq-version)</description></parameter>
+                <parameter><name>parentVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>vidocqVersion under its name up to 0.4.0; vidocqVersion outranks it when both are set</description></parameter>
                 <parameter><name>main</name><type>boolean</type><required>false</required><editable>true</editable><description>Also write an @VidocqMain trampoline</description></parameter>
                 <parameter><name>withParent</name><type>boolean</type><required>false</required><editable>true</editable><description>Inherit vidocq-runtime-parent instead of importing the BOM and loading this plugin as a build extension, the default from 0.4.0 (Vidocq/vidocq#380)</description></parameter>
                 <parameter><name>openModule</name><type>boolean</type><required>false</required><editable>true</editable><description>Declare an open module: every package open to reflection, so no opens line is ever needed</description></parameter>
@@ -1092,6 +1093,7 @@
                 <groupId implementation="java.lang.String">${groupId}</groupId>
                 <pkg implementation="java.lang.String">${package}</pkg>
                 <extensions implementation="java.lang.String">${extensions}</extensions>
+                <vidocqVersion implementation="java.lang.String">${vidocqVersion}</vidocqVersion>
                 <parentVersion implementation="java.lang.String">${parentVersion}</parentVersion>
                 <main implementation="boolean" default-value="false">${main}</main>
                 <withParent implementation="boolean" default-value="false">${withParent}</withParent>

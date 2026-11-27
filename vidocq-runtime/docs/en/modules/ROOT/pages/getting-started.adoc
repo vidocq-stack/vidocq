@@ -159,7 +159,7 @@ In Eclipse, `mvn vidocq:eclipse`(`vidocq eclipse`) writes `.eclipse/`: Maven bui
 imported. The same folder is expected there, and was not run in Eclipse. See
 xref:modules/vidocq-runtime-maven-plugin.adoc#eclipse[the `vidocq:eclipse` goal].
 
-NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goals) run `mvn vidocq:dev` and `mvn vidocq:run` in the project: they see the extensions declared in your pom.
+NOTE: `vidocq dev` and `vidocq run` (the CLI commands, as opposed to the Maven goals) run `mvn vidocq:dev` and `mvn vidocq:run` in the project: they see the extensions declared in your pom.
 
 == Step 6 — Add extensions as you grow
 

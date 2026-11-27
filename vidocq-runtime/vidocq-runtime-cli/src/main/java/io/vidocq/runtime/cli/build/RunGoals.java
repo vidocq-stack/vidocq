@@ -24,7 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The Maven goals {@code vidocq dev} and {@code vidocq start} delegate to. Both run the
+ * The Maven goals {@code vidocq dev} and {@code vidocq run} delegate to. Both run the
  * project the way its build does — compiled sources, its dependencies and extensions on the
  * module path — which only the Vidocq Maven plugin can assemble; the CLI's own JVM holds none
  * of them.
@@ -99,8 +99,18 @@ public final class RunGoals {
         return check ? List.of("vidocq:eclipse", "-Dvidocq.eclipse.check=true") : List.of("vidocq:eclipse");
     }
 
-    /** {@code vidocq:run}, which forks the lifecycle up to {@code process-classes} itself. */
+    /**
+     * {@code vidocq:run}, under the name of {@code vidocq run} up to 0.4.0.
+     *
+     * @deprecated {@link #run(boolean, int, Path, boolean)}, the same goals
+     */
+    @Deprecated(since = "0.4.1", forRemoval = true)
     public static List<String> start(boolean portExplicit, int port, Path configFile, boolean debug) {
+        return run(portExplicit, port, configFile, debug);
+    }
+
+    /** {@code vidocq:run}, which forks the lifecycle up to {@code process-classes} itself: {@code vidocq run}. */
+    public static List<String> run(boolean portExplicit, int port, Path configFile, boolean debug) {
         List<String> args = new ArrayList<>(List.of("vidocq:run"));
         List<String> properties = new ArrayList<>();
         if (portExplicit) {

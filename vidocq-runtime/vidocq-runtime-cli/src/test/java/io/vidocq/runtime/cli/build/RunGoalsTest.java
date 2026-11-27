@@ -45,7 +45,7 @@ class RunGoalsTest {
 
     @Test
     void startRunsTheApplicationGoal() {
-        assertEquals(List.of("vidocq:run"), RunGoals.start(false, 8080, null, false));
+        assertEquals(List.of("vidocq:run"), RunGoals.run(false, 8080, null, false));
     }
 
     @Test
@@ -55,7 +55,7 @@ class RunGoalsTest {
         assertEquals(List.of("vidocq:run",
                         "-Dvidocq.run.systemProperties=vidocq.chappe.listener.default.port=9090,vidocq.config.file=" + config,
                         "-Dvidocq.run.debug=true"),
-                RunGoals.start(true, 9090, config, true));
+                RunGoals.run(true, 9090, config, true));
     }
 
     /**
@@ -80,5 +80,14 @@ class RunGoalsTest {
         assertEquals(List.of("vidocq:idea", "-Dvidocq.idea.check=true"), RunGoals.idea("true", null));
         assertEquals(List.of("vidocq:idea", "-Dvidocq.idea.check=strict", "-Dvidocq.idea.kind=application"),
                 RunGoals.idea("strict", "application"));
+    }
+
+    /** {@code start}, the name of 0.4.0, gives the goals of {@code run} (Vidocq/vidocq#779). */
+    @Test
+    @SuppressWarnings("removal")
+    void theDeprecatedStartIsRun() {
+        Path config = Path.of("/etc/app/vidocq.properties");
+
+        assertEquals(RunGoals.run(true, 9090, config, true), RunGoals.start(true, 9090, config, true));
     }
 }

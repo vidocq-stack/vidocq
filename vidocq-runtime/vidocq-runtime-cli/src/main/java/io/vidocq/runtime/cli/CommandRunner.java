@@ -43,10 +43,9 @@ import io.vidocq.runtime.tooling.ConfigKeys;
 import io.vidocq.runtime.tooling.Diagnostic;
 import io.vidocq.runtime.tooling.Diagnostics;
 import io.vidocq.runtime.tooling.DoctorFacts;
+import io.vidocq.runtime.tooling.DoctorReport;
 import io.vidocq.runtime.tooling.ExtensionEditor;
-import io.vidocq.runtime.tooling.KeyDoctor;
 import io.vidocq.runtime.tooling.KnownExtensions;
-import io.vidocq.runtime.tooling.ProjectDoctor;
 import io.vidocq.runtime.tooling.PropertiesText;
 import io.vidocq.runtime.tooling.ProjectScaffolder;
 import io.vidocq.runtime.tooling.ProjectSummary;
@@ -61,7 +60,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 /**
@@ -85,14 +83,14 @@ public final class CommandRunner {
             case Command.Start s               -> runStart(s);
             case Command.Dev d                 -> runDev(d);
             case Command.Doctor doc            -> runDoctor(doc);
-            case Command.ContinuousTest(boolean once, List<String> mavenProfiles) -> runMaven(RunGoals.test(once),
+            case Command.ContinuousTest(boolean once, List<String> mavenProfiles) -> runMaven(goals(command),
                     MavenInvocation.Options.withProfiles(mavenProfiles), false, testBanner(once));
-            case Command.Idea(String check, String kind) -> runMaven(RunGoals.idea(check, kind),
+            case Command.Idea(String check, _) -> runMaven(goals(command),
                     MavenInvocation.Options.none(), false,
                     progress(check != null, "the IntelliJ run configurations"));
-            case Command.Vscode(boolean check) -> runMaven(RunGoals.vscode(check), MavenInvocation.Options.none(),
+            case Command.Vscode(boolean check) -> runMaven(goals(command), MavenInvocation.Options.none(),
                     false, progress(check, "the VS Code files in .vscode/"));
-            case Command.Eclipse(boolean check) -> runMaven(RunGoals.eclipse(check), MavenInvocation.Options.none(),
+            case Command.Eclipse(boolean check) -> runMaven(goals(command), MavenInvocation.Options.none(),
                     false, progress(check, "the Eclipse configurations in .eclipse/"));
             case Command.Create c              -> runCreate(c);
             case Command.CreateInteractively c -> runCreateInteractively(c);
@@ -115,6 +113,28 @@ public final class CommandRunner {
                 case Command.Extension.Remove r  -> runExtensionRemove(r);
             };
         };
+    }
+
+    /**
+     * The Maven arguments of a command that runs a goal of the Vidocq plugin ({@code vidocq run} runs
+     * {@code vidocq:run}, ...), empty for a command that runs in the CLI's own process: what
+     * {@code CliGoalAlignmentTest} checks against the plugin's descriptor (Vidocq/vidocq#779).
+     */
+    static Optional<List<String>> mavenGoals(Command command) {
+        return Optional.ofNullable(switch (command) {
+            case Command.Start s -> RunGoals.run(s.portExplicit(), s.port(), s.configFile() == null ? null
+                    : s.configFile().toAbsolutePath(), s.debug());
+            case Command.Dev d -> RunGoals.dev(d.profile(), d.portExplicit(), d.port(), d.debug());
+            case Command.ContinuousTest t -> RunGoals.test(t.once());
+            case Command.Idea(String check, String kind) -> RunGoals.idea(check, kind);
+            case Command.Vscode(boolean check) -> RunGoals.vscode(check);
+            case Command.Eclipse(boolean check) -> RunGoals.eclipse(check);
+            default -> null;
+        });
+    }
+
+    private static List<String> goals(Command command) {
+        return mavenGoals(command).orElseThrow();
     }
 
     // -------------------------------------------------------------------------
@@ -215,15 +235,15 @@ public final class CommandRunner {
         return 0;
     }
 
+    /** {@code vidocq run}, or {@code vidocq start}, its deprecated name. */
     private static int runStart(Command.Start start) {
-        Path config = start.configFile() == null ? null : start.configFile().toAbsolutePath();
-        return runMaven(RunGoals.start(start.portExplicit(), start.port(), config, start.debug()),
+        return runMaven(goals(start),
                 MavenInvocation.Options.withProfiles(start.mavenProfiles()), false,
                 "Starting the application" + (start.portExplicit() ? " on port " + start.port() : "") + "…");
     }
 
     private static int runDev(Command.Dev dev) {
-        return runMaven(RunGoals.dev(dev.profile(), dev.portExplicit(), dev.port(), dev.debug()),
+        return runMaven(goals(dev),
                 MavenInvocation.Options.withProfiles(dev.mavenProfiles()), false,
                 "Starting " + CliOutput.bold("dev mode") + " (profile: " + dev.profile() + ")…");
     }
@@ -249,32 +269,18 @@ public final class CommandRunner {
             fixProject(dir);
         }
 
-        // What the supplier answered, when the facts asked it: the checks of the keys read the same class path.
-        AtomicReference<DoctorFacts.Extensions> resolved = new AtomicReference<>();
-        List<Diagnostic> diagnostics = new ArrayList<>(Diagnostics.run(
-                DoctorFacts.gather(dir, System.getenv("JAVA_HOME"), () -> {
-                    resolved.set(extensions.get());
-                    return resolved.get();
-                })));
-        diagnostics.addAll(ProjectDoctor.check(ProjectDoctor.read(dir, DoctorFacts::portFree)));
-        // Not asked: the directory is no Vidocq project, and has no jar to read. Asked and failed: the checks
-        // say that the jars were not read, rather than that none describes a key.
-        DoctorFacts.Extensions asked = resolved.get();
-        diagnostics.addAll(KeyDoctor.check(
-                asked == null ? KeyDoctor.read(dir, List.of()) : KeyDoctor.read(dir, asked)));
-        diagnostics.forEach(d -> printDiagnostic(d, doctor.verbose()));
+        // The diagnosis of vidocq:doctor too (#779); only the styling and the way to fix are the CLI's.
+        DoctorReport report = DoctorReport.of(dir, System.getenv("JAVA_HOME"), extensions);
+        report.diagnostics().forEach(d -> printDiagnostic(d, doctor.verbose()));
 
-        int exit = Diagnostics.exitCode(diagnostics);
-        var summary = Diagnostics.summarize(diagnostics);
+        int exit = report.exitCode();
         CliOutput.println();
         if (exit == 0) {
-            CliOutput.success("No blocking issues found.");
+            CliOutput.success(report.verdict());
         } else {
-            CliOutput.error("One or more checks failed — see the hints above.");
+            CliOutput.error(report.verdict());
         }
-        CliOutput.println(CliOutput.dim("  " + summary.total() + " checks — "
-                + summary.ok() + " ok, " + summary.warn() + " warning(s), "
-                + summary.fail() + " failed"));
+        CliOutput.println(CliOutput.dim("  " + report.summaryLine()));
         if (doctor.verbose()) {
             CliOutput.println(CliOutput.dim("  Minimum Java: " + Diagnostics.MINIMUM_JAVA_VERSION));
         }
@@ -284,9 +290,7 @@ public final class CommandRunner {
     /** {@code vidocq doctor --fix}: the repairs, before the report. */
     private static void fixProject(Path dir) {
         try {
-            if (!ProjectDoctor.fix(dir, Version.runtime(), CLI_REPORTER)) {
-                CliOutput.info("Nothing to fix.");
-            }
+            DoctorReport.fix(dir, Version.runtime(), CLI_REPORTER);
         } catch (IOException e) {
             CliOutput.error("Could not fix the project: " + e.getMessage());
         }
@@ -295,19 +299,20 @@ public final class CommandRunner {
 
     private static void printDiagnostic(Diagnostic d, boolean verbose) {
         CliOutput.println(String.format("  %s %-17s %s", symbol(d.status()), d.name(), d.detail()));
-        if (d.hint() != null && (verbose || d.status() != Diagnostic.Status.OK)) {
+        if (DoctorReport.showsHint(d, verbose)) {
             CliOutput.println("       " + CliOutput.dim("↳ " + d.hint()));
         }
-        if (d.fixable() && d.status() != Diagnostic.Status.OK) {
+        if (DoctorReport.showsFix(d)) {
             CliOutput.println("       " + CliOutput.dim("↳ Fix: vidocq doctor --fix"));
         }
     }
 
     private static String symbol(Diagnostic.Status status) {
+        String symbol = DoctorReport.symbol(status);
         return switch (status) {
-            case OK   -> CliOutput.green("✔");
-            case WARN -> CliOutput.yellow("⚠");
-            case FAIL -> CliOutput.red("✘");
+            case OK   -> CliOutput.green(symbol);
+            case WARN -> CliOutput.yellow(symbol);
+            case FAIL -> CliOutput.red(symbol);
         };
     }
 
@@ -336,16 +341,24 @@ public final class CommandRunner {
         CliOutput.success("Project '" + create.spec().name() + "' created.");
         CliOutput.println();
         CliOutput.println("  Navigate:  " + CliOutput.cyan("cd " + create.spec().name()));
-        CliOutput.println("  Dev mode:  " + CliOutput.cyan("vidocq dev"));
-        CliOutput.println("  Test:      " + CliOutput.cyan("vidocq test"));
-        CliOutput.println("  Build:     " + CliOutput.cyan("vidocq build"));
-        CliOutput.println("  Run:       " + CliOutput.cyan("vidocq start"));
-        if (!create.spec().main()) {
-            CliOutput.println();
-            CliOutput.println("  " + CliOutput.dim("No main class: the runtime boots the app. Add " + CliOutput.cyan("--main")
+        nextSteps(create.spec().main()).forEach(CliOutput::println);
+        return 0;
+    }
+
+    /** What {@code vidocq create} says to run next, the project written; {@code main}: it has a trampoline. */
+    // package-private for the unit test.
+    static List<String> nextSteps(boolean main) {
+        List<String> lines = new ArrayList<>(List.of(
+                "  Dev mode:  " + CliOutput.cyan("vidocq dev"),
+                "  Test:      " + CliOutput.cyan("vidocq test"),
+                "  Build:     " + CliOutput.cyan("vidocq build"),
+                "  Run:       " + CliOutput.cyan("vidocq run")));
+        if (!main) {
+            lines.add("");
+            lines.add("  " + CliOutput.dim("No main class: the runtime boots the app. Add " + CliOutput.cyan("--main")
                     + CliOutput.dim(" for an @VidocqMain trampoline (IDE Run, VidocqApp).")));
         }
-        return 0;
+        return lines;
     }
 
     /**

@@ -28,11 +28,14 @@ import java.util.List;
  */
 public final class CommandCatalog {
 
-    /** Built-in top-level commands offered for completion. */
+    /**
+     * Built-in top-level commands offered for completion. {@code start}, the name of {@code run} up to 0.4.0, is not
+     * offered, and still completes as {@code run} ({@link CompletionSpec}'s aliases).
+     */
     public static final List<String> COMMANDS = List.of(
             "version",
             "info",
-            "start",
+            "run",
             "dev",
             "test",
             "doctor",

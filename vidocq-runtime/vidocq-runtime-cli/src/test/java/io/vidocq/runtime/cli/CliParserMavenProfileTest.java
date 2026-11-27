@@ -49,7 +49,7 @@ class CliParserMavenProfileTest {
 
     @Test
     void theIdsAreCommaSeparatedAndTheOptionRepeatable() {
-        Command.Start start = (Command.Start) parse("start", "--maven-profile", "jlink, native", "--maven-profile",
+        Command.Start start = (Command.Start) parse("run", "--maven-profile", "jlink, native", "--maven-profile",
                 "!tests");
 
         assertEquals(List.of("jlink", "native", "!tests"), start.mavenProfiles());
@@ -57,7 +57,7 @@ class CliParserMavenProfileTest {
 
     @Test
     void everyCommandThatRunsTheBuildTakesIt() {
-        assertEquals(List.of("a"), ((Command.Start) parse("start", "--maven-profile", "a")).mavenProfiles());
+        assertEquals(List.of("a"), ((Command.Start) parse("run", "--maven-profile", "a")).mavenProfiles());
         assertEquals(List.of("a"), ((Command.Dev) parse("dev", "--maven-profile", "a")).mavenProfiles());
         assertEquals(List.of("a"), ((Command.ContinuousTest) parse("test", "--maven-profile", "a")).mavenProfiles());
         assertEquals(List.of("a"), ((Command.Build) parse("build", "jlink", "--maven-profile", "a")).mavenProfiles());

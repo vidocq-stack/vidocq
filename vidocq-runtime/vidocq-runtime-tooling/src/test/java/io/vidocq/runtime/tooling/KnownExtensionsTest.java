@@ -37,6 +37,15 @@ class KnownExtensionsTest {
 
     private static final Path EXTENSIONS = Path.of("..", "vidocq-runtime-extensions");
 
+    /** {@code -Dextensions=a,b}, {@code --extension a,b} and {@code extension add a,b} read a list the same way (#779). */
+    @Test
+    void splitIdsReadsACommaSeparatedListBlanksDropped() {
+        assertEquals(List.of("rest-cassini", "health-knock"), KnownExtensions.splitIds(" rest-cassini, ,health-knock,"));
+        assertEquals(List.of("io.acme:acme-ext"), KnownExtensions.splitIds("io.acme:acme-ext"));
+        assertEquals(List.of(), KnownExtensions.splitIds(null));
+        assertEquals(List.of(), KnownExtensions.splitIds(" "));
+    }
+
     @Test
     void catalogIsNonEmptyAndWellFormed() {
         assertFalse(KnownExtensions.catalog().isEmpty());

@@ -36,7 +36,8 @@ class CliParserHelpTest {
     @CsvSource({
             "build,--help,build",
             "build,-h,build",
-            "start,--help,start",
+            "start,--help,run",
+            "run,--help,run",
             "dev,--help,dev",
             "create,--help,create",
             "extension,--help,extension",
