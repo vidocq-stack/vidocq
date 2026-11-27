@@ -52,8 +52,13 @@ import java.util.function.UnaryOperator;
  * pool, which the transaction manager alone commits or rolls back; outside a transaction they are the pool's own.
  * Without transactions, a name answers the pool itself.
  *
- * <p>A name {@code vidocq.properties} declares ({@code vidocq.naming.*}) is not asked here: declared names come
- * first. Such a key binds a name to the pool itself, which never enlists:
+ * <p>A link of {@code vidocq.properties} to one of these names answers what that name answers (Vidocq/vidocq#831):
+ * with {@code vidocq.naming.comp/env/jdbc/orders = java:comp/env/orders}, a server name, the lookup of
+ * {@code java:comp/env/jdbc/orders} returns the {@code orders} pool through the transactions, as
+ * {@code java:comp/env/orders} does. {@link ConfiguredNames} leaves such a link to this provider.
+ *
+ * <p>Any other name {@code vidocq.properties} declares ({@code vidocq.naming.*}) is not asked here: declared names
+ * come first. A bean declaration binds a name to the pool itself, which never enlists:
  * {@code vidocq.naming.comp/env/jdbc/orders-raw = javax.sql.DataSource @Named("orders")}.
  */
 @Singleton
@@ -92,11 +97,8 @@ public class PoolNames implements JndiNameProvider {
 
     @Override
     public Optional<Object> lookup(JndiName name) throws NamingException {
-        if (name.namespace() != Namespace.COMP) {
-            return Optional.empty();
-        }
         try {
-            return pool(name.path()).map(transactional);
+            return pool(ConfiguredNames.linkedTo(name.toString()).orElse(name)).map(transactional);
         } catch (IllegalStateException ambiguous) {
             NamingException failure = new NamingException(name + ": " + ambiguous.getMessage());
             failure.setRootCause(ambiguous);
@@ -104,8 +106,23 @@ public class PoolNames implements JndiNameProvider {
         }
     }
 
-    /** The pool a path of {@code java:comp} names, if any. */
-    private Optional<DataSource> pool(String path) {
+    /**
+     * Whether a pool answers this name, which a link of {@code vidocq.properties} may then name.
+     *
+     * @param name a name, such as {@code java:comp/env/orders}
+     * @return {@code true} when a pool answers it
+     * @throws IllegalStateException when several {@code DataSource} beans have that name
+     */
+    boolean answers(JndiName name) {
+        return pool(name).isPresent();
+    }
+
+    /** The pool a name of {@code java:comp} names, if any. */
+    private Optional<DataSource> pool(JndiName name) {
+        if (name.namespace() != Namespace.COMP) {
+            return Optional.empty();
+        }
+        String path = name.path();
         if (path.equals(DEFAULT_DATA_SOURCE)) {
             return pools.byDefault();
         }
@@ -113,15 +130,27 @@ public class PoolNames implements JndiNameProvider {
                 : Optional.empty();
     }
 
-    /** {@code java:comp/env} and each prefix of a pool name, such as {@code java:comp/env/jdbc}. */
+    /**
+     * {@code java:comp/env}, each prefix of a pool name, such as {@code java:comp/env/jdbc}, and each prefix of a
+     * declared name, such as {@code java:app/env/jdbc} for a link {@code java:app/env/jdbc/orders} this provider
+     * answers.
+     */
     @Override
     public boolean isContext(JndiName name) {
+        if (ConfiguredNames.names().stream().anyMatch(declared -> isUnder(declared, name))) {
+            return true;
+        }
         if (name.namespace() != Namespace.COMP || !(name.path() + "/").startsWith(ENVIRONMENT + "/")) {
             return false;
         }
         String prefix = name.path().length() == ENVIRONMENT.length() ? ""
                 : name.path().substring(ENVIRONMENT.length() + 1) + "/";
         return pools.names().stream().anyMatch(pool -> pool.startsWith(prefix));
+    }
+
+    /** Whether a declared name is under {@code context}, segment by segment. */
+    private static boolean isUnder(String declared, JndiName context) {
+        return declared.startsWith(context + "/");
     }
 
     /**

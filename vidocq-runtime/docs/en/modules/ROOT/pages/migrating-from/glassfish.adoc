@@ -101,8 +101,10 @@ vidocq.pool.orders.minIdle=2
 ----
 
 The code looked up `jdbc/orders`. With the naming extension, the pool answers `java:comp/env/orders`: change the
-name, or inject `@Named("orders") DataSource` (xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI
-names]).
+name, or inject `@Named("orders") DataSource`. Code that looks up `java:comp/env/jdbc/orders` keeps its name with a
+link, `vidocq.naming.comp/env/jdbc/orders=java:comp/env/orders`, enlisted in the transactions as the pool name is; the
+global name `jdbc/orders`, outside the `java:` namespaces, has no link
+(xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI names]).
 
 The same with `asadmin`:
 
@@ -149,7 +151,8 @@ identity store.
 | No equivalent: the application is a Java module, and each package comes from one module.
 
 | `<resource-ref>` with a `<jndi-name>`
-| Not covered yet. Inject the data source, or declare its name with a `vidocq.naming.*` key.
+| Not covered yet. Inject the data source, or link its name to the pool with a `vidocq.naming.*` key:
+`vidocq.naming.comp/env/jdbc/orders=java:comp/env/orders`.
 |===
 
 [#security]

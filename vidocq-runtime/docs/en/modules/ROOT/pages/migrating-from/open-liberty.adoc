@@ -140,7 +140,9 @@ vidocq.pool.acquireTimeout=PT5S
 
 The data source `DefaultDataSource` of Liberty answers `java:comp/DefaultDataSource`. Under Vidocq the default pool
 does, with the naming extension. Code that looks up `jdbc/shop` changes the name to `java:comp/DefaultDataSource`,
-or injects the pool (xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI names]). A data source of another id is a named pool: `vidocq.pool.<name>.url`, with
+or injects the pool. A lookup of `java:comp/env/jdbc/shop` keeps its name with a link,
+`vidocq.naming.comp/env/jdbc/shop=java:comp/DefaultDataSource`, enlisted in the transactions
+(xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI names]). A data source of another id is a named pool: `vidocq.pool.<name>.url`, with
 `vidocq-runtime-mansart-pool-datasources-codegen` on the processor path
 (xref:migrating-from/jakarta-ee-server.adoc#data-sources[Data sources and JNDI names]).
 

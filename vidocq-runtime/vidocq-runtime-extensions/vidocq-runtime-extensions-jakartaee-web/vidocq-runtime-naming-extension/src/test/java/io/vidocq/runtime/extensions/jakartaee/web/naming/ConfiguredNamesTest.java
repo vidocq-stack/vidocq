@@ -69,9 +69,14 @@ class ConfiguredNamesTest {
     }
 
     private static Map<String, JndiTarget> bound(Map<String, String> declarations) {
+        return bound(declarations, Set.of());
+    }
+
+    /** What is bound when the pools answer {@code poolNames}. */
+    private static Map<String, JndiTarget> bound(Map<String, String> declarations, Set<String> poolNames) {
         ConfiguredNames.declare(declarations);
         var recorder = new Recorder();
-        new ConfiguredNames().bind(recorder);
+        new ConfiguredNames(name -> poolNames.contains(name.toString())).bind(recorder);
         return recorder.bound;
     }
 
@@ -95,6 +100,41 @@ class ConfiguredNamesTest {
 
         assertEquals(new JndiTarget.Link(new JndiName(Namespace.COMP, "env/jdbc/orders")),
                 bound.get("java:app/env/jdbc/reporting"));
+    }
+
+    @Test
+    void aLinkToANameThePoolsAnswerIsLeftToThePools() {
+        var bound = bound(declarations("vidocq.naming.comp/env/jdbc/orders", "java:comp/env/orders",
+                "vidocq.naming.comp/env/jdbc/reporting", "java:comp/env/billing"), Set.of("java:comp/env/orders"));
+
+        assertEquals(Set.of("java:comp/env/jdbc/reporting"), bound.keySet(), "only the link no pool answers is bound");
+    }
+
+    @Test
+    void aLinkToALinkToANameThePoolsAnswerIsLeftToThePools() {
+        var bound = bound(declarations("vidocq.naming.app/env/jdbc/orders", "java:comp/env/jdbc/orders",
+                "vidocq.naming.comp/env/jdbc/orders", "java:comp/env/orders/"), Set.of("java:comp/env/orders"));
+
+        assertEquals(Map.of(), bound);
+        assertEquals(Optional.of("java:comp/env/orders"), ConfiguredNames.linkedTo("java:app/env/jdbc/orders")
+                .map(JndiName::toString));
+    }
+
+    @Test
+    void aLinkToADeclaredNameIsBoundEvenWhenThePoolsAnswerThatName() {
+        var bound = bound(declarations("vidocq.naming.comp/env/jdbc/orders", "java:comp/env/orders",
+                "vidocq.naming.comp/env/orders", "javax.sql.DataSource @Named(\"orders\")"), Set.of("java:comp/env/orders"));
+
+        assertEquals(new JndiTarget.Link(new JndiName(Namespace.COMP, "env/orders")), bound.get("java:comp/env/jdbc/orders"));
+        assertEquals(Optional.empty(), ConfiguredNames.linkedTo("java:comp/env/jdbc/orders"));
+    }
+
+    @Test
+    void aLoopOfLinksIsBoundForTheContainerToReportIt() {
+        var bound = bound(declarations("vidocq.naming.comp/env/a", "java:comp/env/b", "vidocq.naming.comp/env/b",
+                "java:comp/env/a"), Set.of("java:comp/env/a", "java:comp/env/b"));
+
+        assertEquals(Set.of("java:comp/env/a", "java:comp/env/b"), bound.keySet());
     }
 
     @Test

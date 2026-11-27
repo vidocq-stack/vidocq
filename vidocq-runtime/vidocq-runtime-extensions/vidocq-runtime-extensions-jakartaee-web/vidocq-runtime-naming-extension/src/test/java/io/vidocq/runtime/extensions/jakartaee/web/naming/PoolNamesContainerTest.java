@@ -23,11 +23,14 @@ import io.vidocq.mansart.transactions.cdi.MansartTransactionsExtension;
 import io.vidocq.mansart.transactions.jdbc.JtaDataSource;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
+import io.vidocq.vauban.naming.Binder;
 import io.vidocq.vauban.naming.JndiName;
+import io.vidocq.vauban.naming.JndiTarget;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.inject.Named;
 import jakarta.inject.Qualifier;
 import jakarta.inject.Singleton;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
@@ -36,6 +39,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.sql.Connection;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Logger;
 
@@ -133,6 +138,34 @@ class PoolNamesContainerTest {
 
             assertTrue(names.isContext(JndiName.parse("java:comp/env")));
             assertFalse(names.isContext(JndiName.parse("java:comp/env/orders")));
+        }
+    }
+
+    @AfterEach
+    void clear() {
+        ConfiguredNames.declare(Map.of());
+    }
+
+    @Test
+    void aServerNameLinkedToAPoolNameAnswersThePoolThroughTheTransactions() throws Exception {
+        ConfiguredNames.declare(Map.of("java:comp/env/jdbc/orders", "java:comp/env/orders",
+                "java:comp/env/jdbc/billing", "java:comp/env/billing"));
+        try (var container = pools().addBeanClass(ConfiguredNames.class)
+                .addBeanClass(MansartTransactionsExtension.class).build()) {
+            Map<String, JndiTarget> bound = new LinkedHashMap<>();
+            container.select(ConfiguredNames.class).bind(new Binder() {
+                @Override
+                public Binder bind(String name, JndiTarget target) {
+                    bound.put(name, target);
+                    return this;
+                }
+            });
+            DataSource orders = lookedUp(container, "java:comp/env/jdbc/orders");
+
+            assertEquals(Map.of("java:comp/env/jdbc/billing", new JndiTarget.Link(JndiName.parse("java:comp/env/billing"))),
+                    bound, "the link no pool answers is left to the container, which fails the start");
+            assertInstanceOf(JtaDataSource.class, orders);
+            assertInstanceOf(OrdersPool.class, orders.unwrap(Pool.class));
         }
     }
 }

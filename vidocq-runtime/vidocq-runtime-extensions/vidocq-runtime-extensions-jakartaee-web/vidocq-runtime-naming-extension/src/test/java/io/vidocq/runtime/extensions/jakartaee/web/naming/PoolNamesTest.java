@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.naming;
 
 import io.vidocq.vauban.naming.JndiName;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import javax.naming.InvalidNameException;
@@ -94,6 +95,11 @@ class PoolNamesTest {
         }
     }
 
+    @AfterEach
+    void clear() {
+        ConfiguredNames.declare(Map.of());
+    }
+
     @Test
     void theDefaultDataSourceOfThePlatformIsTheDefaultPool() {
         assertSame(DEFAULT, lookup(ALL, "java:comp/DefaultDataSource").orElseThrow());
@@ -153,5 +159,44 @@ class PoolNamesTest {
     @Test
     void withoutANamedPoolTheEnvironmentIsNotAContextOfThePools() {
         assertFalse(new PoolNames(new Pools(DEFAULT, Map.of()), UnaryOperator.identity()).isContext(name("java:comp/env")));
+    }
+
+    @Test
+    void aPoolAnswersTheNamesItsNameIsLinkedTo() {
+        ConfiguredNames.declare(Map.of("java:comp/env/jdbc/orders", "java:comp/env/orders",
+                "java:app/env/jdbc/legacy", "java:comp/env/jdbc/orders",
+                "java:global/jdbc/main", "java:comp/DefaultDataSource"));
+        PoolNames names = new PoolNames(ALL, PoolNamesTest::enlisting);
+
+        assertEquals(new Source("enlisting orders"), lookup(names, "java:comp/env/jdbc/orders").orElseThrow());
+        assertEquals(new Source("enlisting orders"), lookup(names, "java:app/env/jdbc/legacy").orElseThrow());
+        assertEquals(new Source("enlisting default"), lookup(names, "java:global/jdbc/main").orElseThrow());
+    }
+
+    @Test
+    void aLinkToANameNoPoolHasIsNotAnswered() {
+        ConfiguredNames.declare(Map.of("java:comp/env/jdbc/absent", "java:comp/env/absent"));
+
+        assertEquals(Optional.empty(), lookup(ALL, "java:comp/env/jdbc/absent"));
+    }
+
+    @Test
+    void thePoolsSayWhichNamesTheyAnswer() {
+        PoolNames names = new PoolNames(ALL, UnaryOperator.identity());
+
+        assertTrue(names.answers(name("java:comp/env/orders")));
+        assertTrue(names.answers(name("java:comp/DefaultDataSource")));
+        assertFalse(names.answers(name("java:comp/env/absent")));
+        assertFalse(names.answers(name("java:app/env/orders")));
+    }
+
+    @Test
+    void thePrefixesOfALinkedNameAreContexts() {
+        ConfiguredNames.declare(Map.of("java:app/env/jdbc/orders", "java:comp/env/orders"));
+        PoolNames names = new PoolNames(new Pools(DEFAULT, Map.of("orders", ORDERS)), UnaryOperator.identity());
+
+        assertTrue(names.isContext(name("java:app/env/jdbc")));
+        assertFalse(names.isContext(name("java:app/env/jdbc/orders")), "a data source, not a context");
+        assertFalse(names.isContext(name("java:app/env/jd")), "not a whole segment");
     }
 }

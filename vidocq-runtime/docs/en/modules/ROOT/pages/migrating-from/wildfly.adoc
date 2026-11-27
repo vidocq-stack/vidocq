@@ -107,7 +107,9 @@ vidocq.pool.orders.validationQuery=select 1
   <value>` writes one key, and a script can call it.
 * `java:jboss/...` is a namespace of WildFly. The naming extension answers `java:comp`, `java:module`, `java:app`
   and `java:global` only. Change the lookup of `java:jboss/datasources/OrdersDS` to `java:comp/env/orders`, the name
-  of the pool, or inject `@Named("orders") DataSource`
+  of the pool, or inject `@Named("orders") DataSource`. A lookup of a `java:comp/env/...` name, such as
+  `java:comp/env/jdbc/orders`, keeps its name: `vidocq.naming.comp/env/jdbc/orders=java:comp/env/orders` links it to
+  the pool, enlisted in the transactions
   (xref:migrating-from/jakarta-ee-server.adoc#data-sources[JNDI names]).
 * The default data source of WildFly, `java:jboss/datasources/ExampleDS` on H2, answers `java:comp/DefaultDataSource`.
   Under Vidocq the default pool does (`vidocq.pool.url`).

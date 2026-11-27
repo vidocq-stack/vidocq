@@ -48,7 +48,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Jakarta WebSocket 2.2 through Foy, programmatic server API, and the allowed origins of `vidocq.websocket.allowed-origins`. `vidocq extension add websocket-foy` adds it; the Vaadin extension, in https://codefloe.com/VidocqCodeUniverse_VCU/vidocq_vcu_extension_vaadin[its own repository], brings it to a Vaadin application. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
 
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}`
-| JNDI `java:` names answered by the running container through Vauban Naming, each declared by a `vidocq.naming.<name without java:>` key: a bean (`javax.sql.DataSource @Named("orders")`) or a link to another name. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
+| JNDI `java:` names answered by the running container through Vauban Naming, each declared by a `vidocq.naming.<name without java:>` key: a bean (`javax.sql.DataSource @Named("orders")`) or a link to another name, such as a pool name (`java:comp/env/orders`), enlisted in the transactions. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
@@ -178,7 +178,7 @@ none +
 
 | `vidocq.naming.<name without java:>`
 | —
-| Declares a JNDI `java:` name: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` binds a bean, a value starting with `java:` links to another name. A key outside `comp/`, `module/`, `app/` and `global/` fails the start. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
+| Declares a JNDI `java:` name: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` binds a bean, a value starting with `java:` links to another name: a declared name, a pool name (`java:comp/env/orders`, `java:comp/DefaultDataSource`, through the transactions) or a transaction name of the platform. A link to a name nothing answers fails the start. A key outside `comp/`, `module/`, `app/` and `global/` fails the start. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
 | `vidocq.pool.maxSize`
 | `10`
