@@ -168,7 +168,7 @@ jobs:
           -Dgib.logImpactedTo=${{ runner.temp }}/gib-impacted.txt
 
       # The SonarQube analysis of the pull request reads what the build above left in target/: the modules holding a
-      # changed file, and every aggregator above them up to the root (the scanner refuses a reactor without them;
+      # changed file (except a leaf module without sources), and every aggregator above them up to the root (the scanner refuses a reactor without them;
       # MONOREPO.md §4, GIB spike). A pull request analysis reports new code only, which lives in those modules.
       - name: Modules to analyse
         id: sonar-scope
@@ -185,6 +185,13 @@ jobs:
           built = {os.path.relpath(os.path.abspath(l.strip()), root) for l in open(sys.argv[1]) if l.strip()}
           changed = [l.strip() for l in open(sys.argv[2]) if l.strip()]
           chosen = {m for m in built if m != "." and any(f.startswith(m + "/") for f in changed)}
+          # A leaf module without sources (a coverage aggregator such as chappe-coverage) has nothing to analyse,
+          # and its test-scope dependencies (chappe-tests, chappe-conformance) are neither in this reduced reactor
+          # nor published: the analysis would fail to resolve them (#841).
+          def sourceless_leaf(m):
+              pom = open(os.path.join(m, "pom.xml"), encoding="utf-8").read()
+              return not os.path.isdir(os.path.join(m, "src")) and "<modules>" not in pom
+          chosen = {m for m in chosen if not sourceless_leaf(m)}
           for m in list(chosen):
               parent = os.path.dirname(m)
               while parent:
