@@ -1522,7 +1522,10 @@ the sources: for CI and scripts, as `vidocq test --once` does.
 
 | `vidocq.dev.continuousTesting`
 | _(unset)_
-| Run the tests after every reload: the explicit value, then the application's files, then on when `src/test/java` exists.
+| `true` runs the tests after the first boot and every reload, `paused` waits for `r` or the dev console's *Run all
+tests* and then does the same, `false` turns them off: the explicit value, then the application's files, then
+`paused` when `src/test/java` exists, `false` otherwise. See
+xref:continuous-testing.adoc#switch[Turning it on and off].
 
 | `vidocq.dev.testWatchDirs`
 | `src/test/java,src/test/resources`

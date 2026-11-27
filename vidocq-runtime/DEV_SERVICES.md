@@ -644,7 +644,7 @@ applies `V1__products.sql` before the Mansart pool opens.
 
 ## Continuous testing (#122)
 
-`vidocq:dev` (with `vidocq.dev.continuousTesting`, on when `src/test/java` exists) and `vidocq:test` run the
+`vidocq:dev` (with `vidocq.dev.continuousTesting`, paused when `src/test/java` exists until `r` or the dev console starts the tests, #798) and `vidocq:test` run the
 application's tests on every change. The tests never use the application's containers (BUG-20261114-08):
 `vidocq:dev` opens a session for them at their first run (host `vidocq:dev-tests`) and stops it with the goal,
 `vidocq:test` opens its own session (host `vidocq:test`), neither reuses a container or pins a host port, each

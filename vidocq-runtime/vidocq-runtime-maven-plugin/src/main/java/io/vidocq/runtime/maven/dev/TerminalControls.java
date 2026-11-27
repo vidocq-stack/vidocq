@@ -27,11 +27,13 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * The keys of {@code vidocq:test} (spec §4.2), read a line at a time: the first character of a line decides —
  * {@code r} runs every test, {@code f} the failed ones, {@code q} quits — and Enter alone runs every test. Reading
- * stops at {@code q} or at the end of the input.
+ * stops at {@code q} or at the end of the input. Under {@code vidocq:dev} ({@link #forDev}, #798) only {@code r} and
+ * {@code f} count: an Enter that spaces out the application's log must not run the tests, and Ctrl+C stops the goal.
  */
 final class TerminalControls implements Runnable {
 
@@ -39,10 +41,21 @@ final class TerminalControls implements Runnable {
 
     private final InputStream in;
     private final Consumer<Command> commands;
+    private final Function<String, Optional<Command>> keys;
 
     TerminalControls(InputStream in, Consumer<Command> commands) {
+        this(in, commands, TerminalControls::parse);
+    }
+
+    private TerminalControls(InputStream in, Consumer<Command> commands, Function<String, Optional<Command>> keys) {
         this.in = in;
         this.commands = commands;
+        this.keys = keys;
+    }
+
+    /** The keys of {@code vidocq:dev}: {@code r} and {@code f}, read until the end of the input. */
+    static TerminalControls forDev(InputStream in, Consumer<Command> commands) {
+        return new TerminalControls(in, commands, TerminalControls::parseDev);
     }
 
     /**
@@ -68,13 +81,18 @@ final class TerminalControls implements Runnable {
         };
     }
 
+    /** A line under {@code vidocq:dev}: {@code r} or {@code f} first; Enter alone and {@code q} are nothing. */
+    static Optional<Command> parseDev(String line) {
+        return line.isBlank() ? Optional.empty() : parse(line).filter(command -> command != Command.QUIT);
+    }
+
     @Override
     public void run() {
         BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
         try {
             String line;
             while ((line = reader.readLine()) != null) {
-                Optional<Command> command = parse(line);
+                Optional<Command> command = keys.apply(line);
                 if (command.isEmpty()) {
                     continue;
                 }

@@ -169,12 +169,15 @@ public class VidocqDevMojo extends AbstractMojo {
     private String testWatchDirs;
 
     /**
-     * Continuous testing (#122): run the application's tests after every reload, results in the dev console's
-     * {@code tests} panel. Unset by default, so that {@code vidocq.dev.continuousTesting} in the application's files
-     * is read; then on when {@code src/test/java} exists. See {@link #continuousTestingEnabled}.
+     * Continuous testing (#122): {@code true} runs the application's tests at start and after every reload, results
+     * in the dev console's {@code tests} panel; {@code paused} (#798) waits for {@code r} or the panel's
+     * <i>Run all tests</i>, then does the same; {@code false} turns it off. Unset by default, so that {@code
+     * vidocq.dev.continuousTesting} in the application's files is read; then {@code paused} when {@code
+     * src/test/java} exists. A {@code String}: for a {@code Boolean}, Maven would turn {@code paused} into
+     * {@code false}. See {@link #continuousTestingMode}.
      */
     @Parameter(property = "vidocq.dev.continuousTesting")
-    private Boolean continuousTesting;
+    private String continuousTesting;
 
     /** Debounce window in milliseconds — collapses bursts of editor saves. */
     @Parameter(property = "vidocq.dev.debounceMillis", defaultValue = "250")
@@ -622,7 +625,8 @@ public class VidocqDevMojo extends AbstractMojo {
     private Testing startContinuousTesting(Path projectDir, Map<String, String> sysProps,
             Function<String, Optional<String>> applicationFiles, DevServices devs)
             throws MojoExecutionException {
-        if (!continuousTestingEnabled(projectDir, applicationFiles)) {
+        ContinuousTesting.Mode mode = continuousTestingMode(projectDir, applicationFiles);
+        if (!mode.watches()) {
             return new Testing(null, null, List.of());
         }
         List<Path> testWatch = parseDirs(projectDir, testWatchDirs);
@@ -632,23 +636,56 @@ public class VidocqDevMojo extends AbstractMojo {
                 testServices(devs.session(), devs.tests(), getLog()::info, getLog()::warn), testOutputs(),
                 result -> TestSummaryPrinter.lines(result, false, false).forEach(getLog()::info), getLog()::info,
                 getLog()::warn);
+        if (mode == ContinuousTesting.Mode.PAUSED) {
+            started.pause();
+            forgetEarlierResults(results);
+        }
+        Consumer<Trigger> request = trigger -> {
+            String outcome = started.request(trigger);
+            if (!ContinuousTesting.QUEUED.equals(outcome)) {
+                getLog().info(TESTS_PREFIX + outcome);
+            }
+        };
         TestRequestFile requests;
         try {
-            requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), trigger -> {
-                String outcome = started.request(trigger);
-                if (!ContinuousTesting.QUEUED.equals(outcome)) {
-                    getLog().info(TESTS_PREFIX + outcome);
-                }
-            }, getLog()::warn);
+            requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), request,
+                    getLog()::warn);
         } catch (IOException e) {
             started.close();
             closeDevServices(devs.session());
             throw new MojoExecutionException("Cannot watch the test request file", e);
         }
-        getLog().info("Continuous testing: on, watching " + testWatch
-                + " (-D" + CONTINUOUS_TESTING_KEY + "=false to turn it off)");
+        boolean keys = ContinuousTesting.listenToDevKeys(request);
+        getLog().info(mode == ContinuousTesting.Mode.PAUSED ? pausedLine(keys)
+                : "Continuous testing: on, watching " + testWatch
+                        + " (-D" + CONTINUOUS_TESTING_KEY + "=false to turn it off)");
         return new Testing(started, requests, testWatch);
     }
+
+    /**
+     * The one line that says the tests wait (#798), and how to start them: the keys only when a console reads them.
+     */
+    // package-private for the unit test.
+    static String pausedLine(boolean keys) {
+        return "Continuous testing: paused. "
+                + (keys ? "Type r then Enter, or use Run all tests in the dev console's tests panel, to start it"
+                        : "Use Run all tests in the dev console's tests panel to start it")
+                + " (-D" + CONTINUOUS_TESTING_KEY + "=true starts it at once)";
+    }
+
+    /**
+     * Deletes the results an earlier session left (#798): paused, no run writes the file before a request, and the
+     * dev console's panel would show them as this session's.
+     */
+    private void forgetEarlierResults(Path results) {
+        try {
+            Files.deleteIfExists(results);
+        } catch (IOException e) {
+            getLog().warn(TESTS_PREFIX + "cannot delete the results of an earlier session, " + results + ": "
+                    + e.getMessage());
+        }
+    }
+
 
     /**
      * The dev services of the test runs (BUG-20261114-08). A test that empties a table must not empty the
@@ -790,6 +827,9 @@ public class VidocqDevMojo extends AbstractMojo {
             return;
         }
         testing.start();
+        if (testing.paused()) {
+            return; // #798: the first run waits for a request
+        }
         testing.changed(Trigger.RUN_ALL, inJvmReload
                 ? ReloadAck.gate(reloadFile, ReloadAck.stamp(reloadFile), RELOAD_ACK_TIMEOUT,
                         child::isAlive, getLog()::warn)
@@ -1444,15 +1484,16 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /**
      * {@code vidocq.dev.continuousTesting}, first match wins (spec §2.1), as {@link #devServicesEnabled}: the explicit
-     * value, then the application's own files, then on when the project has {@code src/test/java}.
+     * value, then the application's own files, then {@code paused} when the project has {@code src/test/java}
+     * (#798), {@code false} otherwise.
      */
     // package-private for the unit test.
-    boolean continuousTestingEnabled(Path projectDir, Function<String, Optional<String>> files)
+    ContinuousTesting.Mode continuousTestingMode(Path projectDir, Function<String, Optional<String>> files)
             throws MojoExecutionException {
         try {
-            return DevServicesFlag.enabled(CONTINUOUS_TESTING_KEY,
-                    Optional.ofNullable(continuousTesting).map(String::valueOf), files,
-                    Files.isDirectory(projectDir.resolve("src/test/java")));
+            return ContinuousTesting.Mode.resolve(CONTINUOUS_TESTING_KEY, Optional.ofNullable(continuousTesting),
+                    files, Files.isDirectory(projectDir.resolve("src/test/java"))
+                            ? ContinuousTesting.Mode.PAUSED : ContinuousTesting.Mode.OFF);
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
@@ -1500,7 +1541,7 @@ public class VidocqDevMojo extends AbstractMojo {
     void setBuildDir(File buildDir) { this.buildDir = buildDir; }
     void setClassesDir(File classesDir) { this.classesDir = classesDir; }
     void setDevServices(Boolean devServices) { this.devServices = devServices; }
-    void setContinuousTesting(Boolean continuousTesting) { this.continuousTesting = continuousTesting; }
+    void setContinuousTesting(String continuousTesting) { this.continuousTesting = continuousTesting; }
     void setExtraSystemProperties(String s) { this.extraSystemProperties = s; }
     void setProfile(String profile) { this.profile = profile; }
     Map<String, String> debugSystemProperties() { return buildSystemProperties(); }

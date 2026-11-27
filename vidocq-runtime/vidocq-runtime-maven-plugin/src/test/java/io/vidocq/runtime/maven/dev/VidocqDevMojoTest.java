@@ -586,13 +586,14 @@ class VidocqDevMojoTest {
 
     private static final Function<String, Optional<String>> NO_FILES = k -> Optional.empty();
 
+    /** #798: paused when the project has test sources, as Quarkus starts; off without. */
     @Test
-    void continuousTestingIsOnWhenTheProjectHasTestSources(@TempDir Path dir) throws Exception {
+    void continuousTestingIsPausedWhenTheProjectHasTestSources(@TempDir Path dir) throws Exception {
         VidocqDevMojo mojo = new VidocqDevMojo();
 
-        assertFalse(mojo.continuousTestingEnabled(dir, NO_FILES), "no src/test/java");
+        assertEquals(ContinuousTesting.Mode.OFF, mojo.continuousTestingMode(dir, NO_FILES), "no src/test/java");
         Files.createDirectories(dir.resolve("src/test/java"));
-        assertTrue(mojo.continuousTestingEnabled(dir, NO_FILES));
+        assertEquals(ContinuousTesting.Mode.PAUSED, mojo.continuousTestingMode(dir, NO_FILES));
     }
 
     @Test
@@ -600,17 +601,35 @@ class VidocqDevMojoTest {
         Files.createDirectories(dir.resolve("src/test/java"));
         VidocqDevMojo mojo = new VidocqDevMojo();
 
-        assertFalse(mojo.continuousTestingEnabled(dir,
+        assertEquals(ContinuousTesting.Mode.OFF, mojo.continuousTestingMode(dir,
                 files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "false")));
-        mojo.setContinuousTesting(true);
-        assertTrue(mojo.continuousTestingEnabled(dir, files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "false")));
+        assertEquals(ContinuousTesting.Mode.ON, mojo.continuousTestingMode(dir,
+                files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "true")));
+        mojo.setContinuousTesting("true");
+        assertEquals(ContinuousTesting.Mode.ON, mojo.continuousTestingMode(dir,
+                files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "false")));
+        mojo.setContinuousTesting("Paused");
+        assertEquals(ContinuousTesting.Mode.PAUSED, mojo.continuousTestingMode(dir,
+                files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "true")));
+    }
+
+    /** #798: true runs the tests even without src/test/java, as before; paused too waits for them there. */
+    @Test
+    void anExplicitValueHoldsWithoutTestSources(@TempDir Path dir) throws Exception {
+        VidocqDevMojo mojo = new VidocqDevMojo();
+
+        mojo.setContinuousTesting("true");
+        assertEquals(ContinuousTesting.Mode.ON, mojo.continuousTestingMode(dir, NO_FILES));
+        mojo.setContinuousTesting("paused");
+        assertEquals(ContinuousTesting.Mode.PAUSED, mojo.continuousTestingMode(dir, NO_FILES));
     }
 
     @Test
     void anInvalidSwitchFailsTheGoalNamingTheKey(@TempDir Path dir) {
         MojoExecutionException e = assertThrows(MojoExecutionException.class, () -> new VidocqDevMojo()
-                .continuousTestingEnabled(dir, files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "sometimes")));
+                .continuousTestingMode(dir, files(VidocqDevMojo.CONTINUOUS_TESTING_KEY, "sometimes")));
         assertTrue(e.getMessage().contains(VidocqDevMojo.CONTINUOUS_TESTING_KEY), e.getMessage());
+        assertTrue(e.getMessage().contains("paused"), e.getMessage());
     }
 
     /** Records what the loop asks of the tests, and when the reload ran, in one list. */

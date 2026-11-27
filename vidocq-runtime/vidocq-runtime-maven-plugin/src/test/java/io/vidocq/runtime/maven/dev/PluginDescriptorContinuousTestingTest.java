@@ -68,8 +68,9 @@ class PluginDescriptorContinuousTestingTest {
     /** No default, so that the application's files are read when neither -D nor the configuration sets it. */
     @Test
     void devHasAnUnsetContinuousTestingSwitch() throws Exception {
-        assertConfigured("dev", "continuousTesting", "java.lang.Boolean", "${vidocq.dev.continuousTesting}", "");
-        assertEquals(Boolean.class, VidocqDevMojo.class.getDeclaredField("continuousTesting").getType());
+        assertConfigured("dev", "continuousTesting", "java.lang.String", "${vidocq.dev.continuousTesting}", "");
+        // A String, so that paused reaches the goal: Maven turns any word but true into false for a Boolean (#798).
+        assertEquals(String.class, VidocqDevMojo.class.getDeclaredField("continuousTesting").getType());
     }
 
     /** Vidocq/vidocq#651: how often the file times are read where the JDK's watcher polls; both goals read it. */

@@ -422,7 +422,9 @@ Runs `mvn process-classes vidocq:dev` in the project, through `./mvnw` when ther
 application starts with its dependencies and extensions on the module path, the dev console and
 a debug agent on port `5005`, and restarts on every source change — exactly as
 `mvn vidocq:dev` does, see xref:modules/vidocq-runtime-maven-plugin.adoc[the Maven plugin] for
-its settings (continuous testing, dev services, …).
+its settings (continuous testing, dev services, …). The tests start paused: `r` then Enter, or *Run all tests* in
+the dev console, starts them, and `vidocq config set vidocq.dev.continuousTesting true` runs them from the start (see
+xref:continuous-testing.adoc#paused[Paused, the default]).
 
 [cols="1,2"]
 |===

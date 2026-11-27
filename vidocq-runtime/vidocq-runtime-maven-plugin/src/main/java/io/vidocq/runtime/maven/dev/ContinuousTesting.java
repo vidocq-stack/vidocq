@@ -27,6 +27,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -42,11 +44,61 @@ import java.util.function.Function;
  *   <li>A {@linkplain #request request} ({@code run-all}, {@code rerun-failed}) never cancels: it waits for the run
  *       in flight, the last one wins, and it never replaces a change waiting to start, whose run covers it.</li>
  *   <li>{@code rerun-failed} runs the failures of the last complete result, which this class computes itself.</li>
+ *   <li>{@linkplain #pause Paused} (#798), a change runs nothing, and nothing is prepared; the first request that
+ *       runs ends the pause for good.</li>
  * </ul>
  * Each run writes {@code running}, then its outcome, to the results file, and hands the outcome to
  * {@code onResult}. Nothing a run does escapes the worker as an exception: it becomes a warning.
  */
 final class ContinuousTesting implements TestControl, AutoCloseable {
+
+    /**
+     * {@code vidocq.dev.continuousTesting} (#122, #798), resolved as the {@code vidocq.dev.*} switches of dev services
+     * are: the explicit value, then the key in the application's files, then the default. A value is {@code true},
+     * {@code false} or {@code paused}, trimmed and in any case.
+     */
+    enum Mode {
+
+        /** The tests run at start, then after each reload and each test change. */
+        ON,
+        /**
+         * Nothing runs, and the tests' own dev services do not start, until a request ({@code r}, or the dev console's
+         * {@code tests} panel); then as {@link #ON} for the rest of the session.
+         */
+        PAUSED,
+        /** No test runs, and nothing is watched for them. */
+        OFF;
+
+        /** Whether the session watches the test directories and reads the requests: all but {@link #OFF}. */
+        boolean watches() {
+            return this != OFF;
+        }
+
+        /**
+         * The mode that wins: {@code explicit}, then {@code key} in {@code files}, then {@code defaultMode}; a blank value
+         * is no value.
+         *
+         * @throws IllegalArgumentException when the value that wins is none of the three
+         */
+        static Mode resolve(String key, Optional<String> explicit,
+                Function<String, Optional<String>> files, Mode defaultMode) {
+            return explicit.filter(v -> !v.isBlank())
+                    .or(() -> files.apply(key).filter(v -> !v.isBlank()))
+                    .map(v -> parse(key, v))
+                    .orElse(defaultMode);
+        }
+
+        /** @throws IllegalArgumentException naming {@code key} and the value when it is none of the three */
+        static Mode parse(String key, String value) {
+            return switch (value.trim().toLowerCase(Locale.ROOT)) {
+                case "true" -> ON;
+                case "false" -> OFF;
+                case "paused" -> PAUSED;
+                default -> throw new IllegalArgumentException(
+                        key + " must be true, false or paused, not '" + value + "'");
+            };
+        }
+    }
 
     /** Starts one run of the tests: all of them, or the listed {@code Class#method}s. */
     interface Launcher {
@@ -92,6 +144,8 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
 
     /** What a request answers when it will run. */
     static final String QUEUED = "queued";
+    /** What a request answers when it ends the {@linkplain #pause pause}: it runs, and so does every later change. */
+    static final String STARTED = "continuous testing started: the tests run now, then after each change";
     /** What {@code rerun-failed} answers when the last result has no failure. */
     static final String NOTHING_TO_RERUN = "no failed test to rerun";
     /** How long {@link #close} waits for the worker. */
@@ -114,6 +168,8 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     private Pending pending;
     private Launched current;
     private boolean closed;
+    /** Set by {@link #pause} until the first request that runs: a change runs nothing meanwhile. */
+    private boolean paused;
     /** Set by {@link #interrupt} while the application recompiles: requests wait, changes clear it. */
     private boolean held;
     /** The change the worker took and whose gate it is waiting on, or {@code null}. */
@@ -177,12 +233,46 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                 : absolute.toString();
     }
 
+    /**
+     * Reads {@code r} and {@code f} from the terminal for {@code vidocq:dev} (#798), when a console is attached, on
+     * the daemon thread {@code vidocq-dev-keys}: a platform thread, as {@code vidocq:test}'s, since it blocks on
+     * standard input for the whole session and must never keep the JVM alive.
+     *
+     * @return whether a console is attached, hence whether keys are read
+     */
+    static boolean listenToDevKeys(Consumer<Trigger> request) {
+        if (!TerminalControls.attached()) {
+            return false;
+        }
+        TerminalControls controls = TerminalControls.forDev(System.in, command -> request.accept(
+                command == TerminalControls.Command.RERUN_FAILED ? Trigger.RERUN_FAILED : Trigger.RUN_ALL));
+        Thread.ofPlatform().name("vidocq-dev-keys").daemon(true).start(controls);
+        return true;
+    }
+
     /** Starts the worker thread; idempotent. */
     void start() {
         synchronized (lock) {
             if (worker == null && !closed) {
                 worker = Thread.ofPlatform().name("vidocq-tests").daemon(true).start(this::work);
             }
+        }
+    }
+
+    /**
+     * Pauses continuous testing (#798): until a request runs, a change runs nothing, so that no Maven starts and the
+     * launcher prepares nothing, such as the tests' own dev services. Called before the first change.
+     */
+    void pause() {
+        synchronized (lock) {
+            paused = true;
+        }
+    }
+
+    /** Whether continuous testing waits for its first request. */
+    boolean paused() {
+        synchronized (lock) {
+            return paused;
         }
     }
 
@@ -195,6 +285,11 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
             }
             generation++;
             held = false;
+            if (paused) {
+                // nothing runs while paused; the change still ends the hold of its recompile
+                lock.notifyAll();
+                return;
+            }
             // A test change while a change (or the first run) waits for its reload keeps waiting for it: that run
             // covers every test, and a test run's Maven must not compile while the application boots (spec §2.2).
             Pending reloading = pending != null && pending.change() ? pending : waiting;
@@ -235,8 +330,9 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     /**
      * A request from the dev console or the terminal (spec §3.2, §4.2).
      *
-     * @return {@value #QUEUED}, or {@value #NOTHING_TO_RERUN} for {@code rerun-failed} after a result without
-     *         failure, in which case nothing runs
+     * @return {@value #QUEUED}, {@value #STARTED} when the request ends the {@linkplain #pause pause}, or
+     *         {@value #NOTHING_TO_RERUN} for {@code rerun-failed} after a result without failure, in which case
+     *         nothing runs
      */
     String request(Trigger trigger) {
         synchronized (lock) {
@@ -250,6 +346,10 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                 pending = new Pending(trigger, ReadyGate.NOW, false);
             }
             lock.notifyAll();
+            if (paused) {
+                paused = false;
+                return STARTED;
+            }
             return QUEUED;
         }
     }

@@ -575,7 +575,9 @@ public final class CliParser {
                 topic("dev", "Development mode",
                         "Runs 'mvn process-classes vidocq:dev' in the project (./mvnw when present):",
                         "the application starts with its dependencies and extensions, the dev console",
-                        "and the debug agent (port 5005), and restarts on every source change.");
+                        "and the debug agent (port 5005), and restarts on every source change.",
+                        "The tests start paused: r then Enter, or Run all tests in the dev console, starts",
+                        "them; vidocq.dev.continuousTesting=true runs them from the start, false never.");
                 options(ShortOptions.label("dev", PORT) + " <n>", "HTTP listening port, over the project's own setting",
                         ShortOptions.label("dev", PROFILE_OPTION) + " <name>",
                         "Vidocq config profile to activate (default: dev), not a Maven one",

@@ -372,7 +372,7 @@ xref:dev-console.adoc#panels[The dev console's panels].
 
 xref:continuous-testing.adoc[Continuous testing] never uses the application's containers. Under
 `vidocq:dev`, the tests get a session of their own, host `vidocq:dev-tests`, opened at their first run and stopped
-with `vidocq:dev`; `vidocq:test` opens one too, host `vidocq:test`. Each writes files of its own, and, as every
+with `vidocq:dev`: while the tests are xref:continuous-testing.adoc#paused[paused], the default, it does not open; `vidocq:test` opens one too, host `vidocq:test`. Each writes files of its own, and, as every
 test run, reuses no container and pins no host port (<<test-run-files>>). Each run gets
 `-Dvidocq.dev.devServices=false`, so the test JVM never starts containers on every run. Until BUG-20261114-08, the
 tests of `vidocq:dev` used the application's containers, and a test's `TRUNCATE` wiped the application's data.

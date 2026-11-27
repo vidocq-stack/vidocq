@@ -31,7 +31,7 @@
                 <parameter><name>mainClass</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Fully-qualified main class. Optional if the module declares ModuleMainClass.</description></parameter>
                 <parameter><name>watchDirs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated directories to watch, relative to the project base dir.</description></parameter>
                 <parameter><name>testWatchDirs</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Comma-separated test directories to watch with continuous testing, relative to the project base dir: a change there runs the tests again without an application reload.</description></parameter>
-                <parameter><name>continuousTesting</name><type>java.lang.Boolean</type><required>false</required><editable>true</editable><description>Run the application's tests after every reload (continuous testing). Unset by default: then vidocq.dev.continuousTesting in the application's files decides, else on when src/test/java exists.</description></parameter>
+                <parameter><name>continuousTesting</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Continuous testing: true runs the application's tests at start and after every reload, paused waits for r in the terminal or Run all tests in the dev console, then does the same, false turns it off. Unset by default: then vidocq.dev.continuousTesting in the application's files decides, else paused when src/test/java exists.</description></parameter>
                 <parameter><name>debounceMillis</name><type>long</type><required>false</required><editable>true</editable><description>Debounce window in milliseconds; collapses bursts of editor saves into a single reload.</description></parameter>
                 <parameter><name>watchPollMillis</name><type>long</type><required>false</required><editable>true</editable><description>Where the JDK's file watcher polls (macOS, every 2 s), how often the source file times are read instead, in milliseconds; 0 keeps the JDK's watcher.</description></parameter>
                 <parameter><name>gracePeriodMillis</name><type>long</type><required>false</required><editable>true</editable><description>Grace period given to the child JVM after SIGTERM before forceful kill.</description></parameter>
@@ -66,7 +66,7 @@
                 <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
                 <watchDirs implementation="java.lang.String" default-value="src/main/java,src/main/resources">${vidocq.dev.watchDirs}</watchDirs>
                 <testWatchDirs implementation="java.lang.String" default-value="src/test/java,src/test/resources">${vidocq.dev.testWatchDirs}</testWatchDirs>
-                <continuousTesting implementation="java.lang.Boolean">${vidocq.dev.continuousTesting}</continuousTesting>
+                <continuousTesting implementation="java.lang.String">${vidocq.dev.continuousTesting}</continuousTesting>
                 <debounceMillis implementation="long" default-value="250">${vidocq.dev.debounceMillis}</debounceMillis>
                 <watchPollMillis implementation="long" default-value="200">${vidocq.dev.watchPollMillis}</watchPollMillis>
                 <gracePeriodMillis implementation="long" default-value="5000">${vidocq.dev.gracePeriodMillis}</gracePeriodMillis>

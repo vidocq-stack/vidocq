@@ -61,7 +61,7 @@ class VidocqDevMojoSessionTest {
     @Test
     @Timeout(60)
     void aSessionPreparesTheLaunchStartsTheChildAndEndsOnInterrupt(@TempDir Path projectDir) throws Exception {
-        SessionLog log = runUntilTheChildStarted(projectDir, false);
+        SessionLog log = runUntilTheChildStarted(projectDir, "false");
 
         assertEquals("0\n", Files.readString(projectDir.resolve("target/.vidocq-dev-reload"), StandardCharsets.UTF_8));
         assertTrue(log.lines.contains("INFO Vidocq dev — main module : no.such.module/no.such.Main"), log.lines::toString);
@@ -83,11 +83,29 @@ class VidocqDevMojoSessionTest {
         assertTrue(mvnw.toFile().setExecutable(true));
         Files.createDirectories(projectDir.resolve("src/test/java"));
 
-        SessionLog log = runUntilTheChildStarted(projectDir, true);
+        SessionLog log = runUntilTheChildStarted(projectDir, "true");
 
         assertTrue(log.lines.contains("INFO Continuous testing: on, watching " + List.of(
                 projectDir.resolve("src/test/java"), projectDir.resolve("src/test/resources"))
                 + " (-Dvidocq.dev.continuousTesting=false to turn it off)"), log.lines::toString);
+    }
+
+    /**
+     * #798: paused, the test directories are watched and the dev console learns where the results go, but no run is
+     * queued: one line says how to start the tests. A result left by an earlier session is deleted, so that the
+     * panel does not show it as this session's.
+     */
+    @Test
+    @Timeout(60)
+    void aPausedSessionSaysHowToStartTheTests(@TempDir Path projectDir) throws Exception {
+        Files.createDirectories(projectDir.resolve("src/test/java"));
+        Path stale = Files.createDirectories(projectDir.resolve("target")).resolve(TestResultsFile.FILE_NAME);
+        Files.writeString(stale, "{\"state\":\"passed\"}");
+
+        SessionLog log = runUntilTheChildStarted(projectDir, "paused");
+
+        assertTrue(log.lines.contains("INFO " + VidocqDevMojo.pausedLine(false)), log.lines::toString);
+        assertFalse(Files.exists(stale), "the result of an earlier session is gone");
     }
 
     /**
@@ -102,7 +120,7 @@ class VidocqDevMojoSessionTest {
         aMavenThatNotesItsRuns(projectDir);
         aSourceSaved(projectDir, mavenStarted.plusSeconds(2));
 
-        SessionLog log = runUntilTheChildStarted(projectDir, false, mavenStarted);
+        SessionLog log = runUntilTheChildStarted(projectDir, "false", mavenStarted);
 
         assertEquals(List.of("run"), Files.readAllLines(projectDir.resolve("runs.txt")));
         int compiled = firstLine(log, "INFO Menu.java was saved while vidocq:dev started: compiling it before the"
@@ -119,7 +137,7 @@ class VidocqDevMojoSessionTest {
         aMavenThatNotesItsRuns(projectDir);
         aSourceSaved(projectDir, mavenStarted.minusSeconds(1));
 
-        SessionLog log = runUntilTheChildStarted(projectDir, false, mavenStarted);
+        SessionLog log = runUntilTheChildStarted(projectDir, "false", mavenStarted);
 
         assertFalse(Files.exists(projectDir.resolve("runs.txt")), log.lines::toString);
         assertTrue(log.lines.stream().noneMatch(l -> l.contains("was saved while vidocq:dev started")),
@@ -140,7 +158,7 @@ class VidocqDevMojoSessionTest {
         aSourceSaved(projectDir, mavenStarted.plusSeconds(2));
 
         SessionLog log = runUntil("WARN What was saved while vidocq:dev started does not compile (exit 1)",
-                projectDir, false, mavenStarted);
+                projectDir, "false", mavenStarted);
 
         assertEquals(List.of("run"), Files.readAllLines(projectDir.resolve("runs.txt")));
         assertEquals(-1, firstLine(log, STARTED), log.lines::toString);
@@ -169,7 +187,7 @@ class VidocqDevMojoSessionTest {
         assertTrue(mvnw.toFile().setExecutable(true));
         aSourceSaved(projectDir, mavenStarted.plusSeconds(2));
 
-        SessionLog log = runUntilTheChildStarted(projectDir, false, mavenStarted);
+        SessionLog log = runUntilTheChildStarted(projectDir, "false", mavenStarted);
 
         assertEquals(List.of("run", "run"), Files.readAllLines(projectDir.resolve("runs.txt")));
         int failed = firstLine(log, "WARN What was saved while vidocq:dev started does not compile (exit 1)");
@@ -190,7 +208,7 @@ class VidocqDevMojoSessionTest {
         theLastCompileRan(projectDir, mavenStarted.minusSeconds(120));
         aSourceSaved(projectDir, mavenStarted.minusSeconds(60));
 
-        SessionLog log = runUntilTheChildStarted(projectDir, false, mavenStarted);
+        SessionLog log = runUntilTheChildStarted(projectDir, "false", mavenStarted);
 
         assertEquals(List.of("run"), Files.readAllLines(projectDir.resolve("runs.txt")));
         int building = firstLine(log, "INFO Since the last build, Menu.java changed: building the project first");
@@ -231,11 +249,11 @@ class VidocqDevMojoSessionTest {
         return -1;
     }
 
-    private static SessionLog runUntilTheChildStarted(Path projectDir, boolean continuousTesting) throws Exception {
+    private static SessionLog runUntilTheChildStarted(Path projectDir, String continuousTesting) throws Exception {
         return runUntilTheChildStarted(projectDir, continuousTesting, null);
     }
 
-    private static SessionLog runUntilTheChildStarted(Path projectDir, boolean continuousTesting, Instant mavenStarted)
+    private static SessionLog runUntilTheChildStarted(Path projectDir, String continuousTesting, Instant mavenStarted)
             throws Exception {
         return runUntil(STARTED, projectDir, continuousTesting, mavenStarted);
     }
@@ -247,7 +265,7 @@ class VidocqDevMojoSessionTest {
      * @param mavenStarted when the Maven of the session started; {@code null} for a mojo without a Maven session
      */
     @SuppressWarnings("deprecation")
-    private static SessionLog runUntil(String awaited, Path projectDir, boolean continuousTesting,
+    private static SessionLog runUntil(String awaited, Path projectDir, String continuousTesting,
             Instant mavenStarted) throws Exception {
         Path classes = Files.createDirectories(projectDir.resolve("target/classes"));
         // A built output holds one class at least (BUG-20261030-12).

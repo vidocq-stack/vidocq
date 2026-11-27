@@ -2,9 +2,10 @@
 :description: Run the application's tests on every change, beside vidocq:dev or on their own with vidocq:test.
 
 [.lead]
-Vidocq runs the application's tests while you code: `vidocq:dev` runs them in the background after
-every reload and shows the result in the xref:dev-console.adoc#tests-panel[dev console], and `vidocq:test` runs them
-on their own, without the application, with a summary in the terminal.
+Vidocq runs the application's tests while you code: `vidocq:dev` starts with them paused, and once you start them,
+with `r` or the xref:dev-console.adoc#tests-panel[dev console], runs them in the background after every reload and
+shows the result in the console; `vidocq:test` runs them on their own, without the application, with a summary in
+the terminal.
 
 [#what-it-does]
 == What it does
@@ -27,7 +28,8 @@ xref:dev-services.adoc#in-tests[dev services host] included. Integration tests r
 | Does not run
 
 | When tests run
-| After the first boot, then after every reload, or alone after a test-only change
+| Once you start them (<<paused>>), then after every reload, or alone after a test-only change; with `true`, after
+the first boot too
 | At start, then after every change
 
 | Where the result shows
@@ -35,7 +37,7 @@ xref:dev-services.adoc#in-tests[dev services host] included. Integration tests r
 | Three lines in the terminal
 
 | Keys
-| None
+| `r`, `f`, when a console is attached
 | `r`, `f`, `q`, Enter, when a console is attached
 
 | Dev services
@@ -45,7 +47,8 @@ xref:dev-services.adoc#in-tests[dev services host] included. Integration tests r
 
 [source,bash]
 ----
-mvn process-classes vidocq:dev                                        # the application, and its tests behind it
+mvn process-classes vidocq:dev                                        # the application; its tests once you start them
+mvn process-classes vidocq:dev -Dvidocq.dev.continuousTesting=true    # the application, and its tests from the start
 mvn process-classes vidocq:dev -Dvidocq.dev.continuousTesting=false   # the application only
 mvn process-classes vidocq:test                                       # the tests only
 ----
@@ -96,8 +99,8 @@ One run at a time:
 
 * A new change *cancels* the run in flight — its Maven and the test JVM it forked are stopped — and the next run
   starts after the recompile or the reload.
-* A request, a button of the dev console or a key of `vidocq:test`, *never cancels*: it waits for the run in flight,
-  and when several arrive meanwhile, the last one wins.
+* A request, a button of the dev console or a key, *never cancels*: it waits for the run in flight, and when several
+  arrive meanwhile, the last one wins.
 
 [#who-builds]
 == Who builds the classes
@@ -135,16 +138,57 @@ class written after the run ended stays: your IDE compiled it from the save.
 [#switch]
 == Turning it on and off
 
-`vidocq.dev.continuousTesting` turns the tests of `vidocq:dev` on or off. It is `true` when the project has a
-`src/test/java` directory and `false` otherwise. The first source that sets it wins:
+`vidocq.dev.continuousTesting` sets the tests of `vidocq:dev`:
+
+[cols="1,3"]
+|===
+| Value | The tests
+
+| `paused`
+| Wait until you start them, then run as with `true` for the rest of the session: see <<paused>>. The default when
+the project has a `src/test/java` directory.
+| `true`
+| Run after the first boot, then after every reload and every test change. The default until 0.4.0.
+| `false`
+| Never run, and nothing is watched for them. The default when the project has no `src/test/java` directory.
+|===
+
+The first source that sets it wins:
 
 . the explicit value: `-Dvidocq.dev.continuousTesting=false`, or the goal's `<configuration>`;
 . the application's own files, `vidocq.properties` or `application.properties`, the way the
   xref:dev-services.adoc#configuration-sources[`vidocq.dev.*` keys of dev services] are read;
 . the default.
 
-The value is `true` or `false`, in any case; anything else stops the goal with a message that names the key.
-`vidocq:test` always runs the tests: the switch does not apply to it.
+The value is `true`, `false` or `paused`, in any case; anything else stops the goal with a message that names the
+key. `vidocq:test` always runs the tests: the switch does not apply to it.
+
+[#paused]
+=== Paused, the default
+
+A new project has a test (`vidocq create` writes `HelloResourceTest`), and running every test after every save, with
+a second set of containers for them, is a cost you may not want while you look at the application itself. So
+`vidocq:dev` starts with its tests paused, as Quarkus does:
+
+* No test runs, and the tests' own <<dev-services,dev services>> do not start: no container starts for them.
+* The test directories are watched and the dev console's `tests` panel is there, showing `no run yet`. A result left
+  by an earlier session in `target/vidocq-dev-tests.json` is deleted at start, so that the panel does not show it as
+  this session's.
+* One line says so, and how to start them:
++
+----
+[INFO] Continuous testing: paused. Type r then Enter, or use Run all tests in the dev console's tests panel, to start it (-Dvidocq.dev.continuousTesting=true starts it at once)
+----
++
+Without a console, the line names the dev console's button alone.
+
+To start the tests, type `r` then Enter in the terminal, or press *Run all tests* in the dev console's `tests`
+panel. Every test runs at once, a line says `Tests: continuous testing started: the tests run now, then after each
+change`, and from then on the session behaves as with `true`: the tests run after every reload and every test change,
+until `vidocq:dev` ends. There is no key to pause them again: stop `vidocq:dev` and start it again.
+
+`f`, or *Rerun failed tests*, has no failed test to rerun before a first run: it answers `no failed test to rerun`
+and the tests stay paused.
 
 [#watch-directories]
 == The watched directories
@@ -254,11 +298,17 @@ With a console attached, `vidocq:test` reads a key per line — type the key, th
 Without a console — a CI job, a pipe, an IDE's run window that is no terminal — no key is read, the hints are not
 printed, and the goal only watches. Ctrl+C always stops it.
 
+`vidocq:dev` reads `r` and `f` the same way, with continuous testing paused or on, when a console is attached: `r`
+runs every test, and starts the tests when they are paused; `f` runs the failed ones. Enter alone and `q` do nothing
+there, so that an Enter that spaces out the log never starts a run; Ctrl+C stops the goal. The application runs in
+the same terminal: keep it from reading its standard input while you type keys.
+
 [#dev-console]
 == In the dev console
 
 Under `vidocq:dev`, the console's own xref:dev-console.adoc#tests-panel[`tests` panel] shows the last run, its
-failures and a chart of the failures over time, with two buttons: *Run all tests* and *Rerun failed tests*.
+failures and a chart of the failures over time, with two buttons: *Run all tests* and *Rerun failed tests*. While
+the tests are <<paused,paused>>, *Run all tests* starts them.
 
 [#dev-services]
 == Dev services
@@ -267,7 +317,7 @@ The tests never use the application's containers. Under `vidocq:dev`, they get a
 of their own, host `vidocq:dev-tests`, apart from the application's:
 
 * It opens at the first test run, which is slower for it: the `tests` panel shows the run `running` while the
-  containers start. With continuous testing off, or without a test run, no container starts for the tests.
+  containers start. With continuous testing off or paused, or without a test run, no container starts for the tests.
 * Every later run reuses it, and it stops when `vidocq:dev` ends, on Ctrl+C or a failure of the goal, after the run in
   flight was cancelled.
 * It reuses no container and pins no host port: `vidocq.dev.reuse` and the `vidocq.dev.<service>.port` keys stay the
@@ -283,7 +333,7 @@ as every test run, no reused container and no pinned port. Every run, under eith
 gets `-Dvidocq.dev.devServices=false`, so the test JVM never starts containers on each run. With dev services off for
 `vidocq:dev`, `-Dvidocq.dev.devServices=false` or in the application's files, the tests get none either.
 
-Running `vidocq:dev` with its tests costs a second set of containers while it runs. Until BUG-20261114-08, the tests
+Running `vidocq:dev` with its tests started costs a second set of containers while it runs. Until BUG-20261114-08, the tests
 used the application's containers, and a test that emptied a table emptied it in your dev database.
 
 WARNING: The runs of one session share their database, which lives as long as the session: a test that empties a
@@ -292,9 +342,10 @@ table empties it for the next run too. Keep such tests on data they create thems
 [#limits]
 == Limits
 
-* Every run starts Maven: a few seconds before the first test, more on a large suite. Turn it off for the dev loop
-  with `-Dvidocq.dev.continuousTesting=false` when that is too slow.
+* Every run starts Maven: a few seconds before the first test, more on a large suite. Leave the tests paused, or turn
+  them off with `-Dvidocq.dev.continuousTesting=false`, when that is too slow.
 * Every test runs, every time: a change is not mapped to the tests it affects.
+* Once started, the tests cannot be paused again within the session.
 * Surefire's tests only: Failsafe's integration tests are not run.
 * A run is offline (`mvn -o`). When it misses a dependency the tests need, a test-scope jar or Surefire's JUnit
   provider that was never downloaded, it runs again once online with the same tests, and the log is the online run's
@@ -307,11 +358,13 @@ table empties it for the next run too. Keep such tests on data they create thems
 [#turning-it-off]
 == Turning it off
 
-For one run, `mvn vidocq:dev -Dvidocq.dev.continuousTesting=false`. For the project, in `vidocq.properties`:
+For one run, `mvn vidocq:dev -Dvidocq.dev.continuousTesting=false`. For the project, in `vidocq.properties`, or with
+`vidocq config set vidocq.dev.continuousTesting false`:
 
 [source,properties]
 ----
 vidocq.dev.continuousTesting=false
 ----
 
-A project without `src/test/java` has it off already.
+A project without `src/test/java` has it off already. To have the tests run from the start, as before 0.4.1, set
+it to `true` the same way.

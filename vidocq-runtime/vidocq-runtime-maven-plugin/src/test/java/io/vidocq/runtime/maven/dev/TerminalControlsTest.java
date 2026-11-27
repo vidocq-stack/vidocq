@@ -63,6 +63,29 @@ class TerminalControlsTest {
         assertEquals(List.of(), seen);
     }
 
+    /**
+     * #798: under vidocq:dev, r and f are the keys; Enter alone and q do nothing, since an Enter that spaces out the
+     * log must not start the tests, and Ctrl+C stops the goal.
+     */
+    @Test
+    void theKeysOfVidocqDev() {
+        assertEquals(Optional.of(Command.RUN_ALL), TerminalControls.parseDev("r"));
+        assertEquals(Optional.of(Command.RERUN_FAILED), TerminalControls.parseDev("f"));
+        assertEquals(Optional.empty(), TerminalControls.parseDev(""), "Enter alone");
+        assertEquals(Optional.empty(), TerminalControls.parseDev("q"));
+        assertEquals(Optional.empty(), TerminalControls.parseDev("x"));
+    }
+
+    @Test
+    void vidocqDevReadsUntilTheEndOfTheInput() {
+        List<Command> seen = new ArrayList<>();
+        byte[] typed = "\nq\nr\nf\n".getBytes(StandardCharsets.UTF_8);
+
+        TerminalControls.forDev(new ByteArrayInputStream(typed), seen::add).run();
+
+        assertEquals(List.of(Command.RUN_ALL, Command.RERUN_FAILED), seen);
+    }
+
     /** Surefire's forked JVM reads a pipe: on JDK 22+ System.console() is not null there, but it is no terminal. */
     @Test
     void aPipedStandardInputIsNoConsole() {

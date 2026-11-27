@@ -553,4 +553,60 @@ class ContinuousTestingTest {
         assertEquals(List.of("com.acme.ATest#x"), again.rerunList());
         assertTrue(warnings.stream().anyMatch(w -> w.contains("matched no test")), warnings.toString());
     }
+
+    /** #798: paused, a change runs nothing, and no run prepares the tests' dev services. */
+    @Test
+    void pausedAChangeRunsNothing() throws Exception {
+        testing.pause();
+
+        testing.changed(Trigger.CHANGE, TestControl.ReadyGate.NOW);
+        testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
+
+        assertTrue(testing.paused());
+        assertNull(launches.poll(300, TimeUnit.MILLISECONDS), "no run while paused");
+        assertFalse(Files.exists(resultsFile), "no result written while paused");
+    }
+
+    /** #798: a request starts continuous testing: it runs now, and every later change runs the tests again. */
+    @Test
+    void aRequestStartsPausedTestingForTheRestOfTheSession() throws Exception {
+        testing.pause();
+
+        assertEquals(ContinuousTesting.STARTED, testing.request(Trigger.RUN_ALL));
+
+        assertFalse(testing.paused());
+        nextLaunch().finish(0);
+        assertEquals(Trigger.RUN_ALL, nextResult().trigger());
+        testing.changed(Trigger.CHANGE, TestControl.ReadyGate.NOW);
+        nextLaunch().finish(0);
+        assertEquals(Trigger.CHANGE, nextResult().trigger());
+        assertEquals(ContinuousTesting.QUEUED, testing.request(Trigger.RUN_ALL), "started once only");
+    }
+
+    /** #798: a rerun of the failures has none before a first run, and leaves the tests paused. */
+    @Test
+    void aRerunOfTheFailuresLeavesPausedTestingPaused() throws Exception {
+        testing.pause();
+
+        assertEquals(ContinuousTesting.NOTHING_TO_RERUN, testing.request(Trigger.RERUN_FAILED));
+
+        assertTrue(testing.paused());
+        assertNull(launches.poll(300, TimeUnit.MILLISECONDS));
+    }
+
+    /**
+     * #798: the recompile of a main change holds the requests, and its change ends the hold even while paused: a
+     * request after it runs.
+     */
+    @Test
+    void aChangeWhilePausedEndsTheHoldOfItsRecompile() throws Exception {
+        testing.pause();
+        testing.interrupt();
+        testing.changed(Trigger.CHANGE, TestControl.ReadyGate.NOW);
+
+        testing.request(Trigger.RUN_ALL);
+
+        nextLaunch().finish(0);
+        assertEquals(Trigger.RUN_ALL, nextResult().trigger());
+    }
 }

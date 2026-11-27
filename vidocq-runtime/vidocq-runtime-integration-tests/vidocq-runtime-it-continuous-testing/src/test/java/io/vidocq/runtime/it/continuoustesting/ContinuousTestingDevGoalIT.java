@@ -40,9 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * A real {@code mvn vidocq:dev} on the fixture (spec §7): the first run fails one test, and the dev console's
- * {@code tests} panel shows it; {@code rerun-failed} runs that test alone; fixing the test turns the run green
- * without an application reload.
+ * A real {@code mvn vidocq:dev} on the fixture (spec §7): continuous testing starts paused (#798), and the dev
+ * console's <i>Run all tests</i> starts it; the first run fails one test, and the {@code tests} panel shows it;
+ * {@code rerun-failed} runs that test alone; fixing the test turns the run green without an application reload.
  */
 @DisabledOnOs(OS.WINDOWS)
 class ContinuousTestingDevGoalIT {
@@ -70,17 +70,25 @@ class ContinuousTestingDevGoalIT {
             // (only "Dev tools: no dev console, ..." when Chappe is absent). The console actually starting is
             // what proves the point, so this asserts its own boot line instead.
             Fixture.awaitLog(mvn, log, "Vidocq dev console: http://");
+            // #798: paused by default, with one line that says how to start the tests, and no run before that.
+            assertTrue(Fixture.read(log).contains("Continuous testing: paused. Use Run all tests in the dev"
+                    + " console's tests panel to start it"), "the paused line, without keys since no console:\n"
+                    + Fixture.read(log));
+            assertFalse(Files.exists(project.resolve("target/vidocq-dev-tests.json")), "no run while paused");
+            String console = Fixture.consoleUrl(log);
+            String token = (String) ((Map<?, ?>) Fixture.json(Fixture.get(console + "/api/snapshot"))
+                    .get("console")).get("actionToken");
+            assertTrue(Fixture.postAction(console, "tests/run-all", token, "{}").contains("queued"));
+            Fixture.awaitLog(mvn, log, "Tests: continuous testing started");
             Map<String, Object> first = Fixture.awaitResults(project, r -> Fixture.is(r, "failed", "run-all"));
             assertEquals(3, Fixture.count(first, "run"));
             assertEquals(1, Fixture.count(first, "failures"));
 
-            String console = Fixture.consoleUrl(log);
             Map<String, Object> snapshot = awaitPanelFailures(console, 1);
             Map<?, ?> panel = Fixture.panel(snapshot, "tests");
             List<?> rows = (List<?>) Fixture.value(panel, "failed-tests").get("rows");
             assertEquals(FAILING, ((List<?>) rows.getFirst()).getFirst(), panel.toString());
 
-            String token = (String) ((Map<?, ?>) snapshot.get("console")).get("actionToken");
             String answer = Fixture.postAction(console, "tests/rerun-failed", token, "{}");
             assertTrue(answer.contains("queued"), answer);
             Map<String, Object> rerun = Fixture.awaitResults(project,

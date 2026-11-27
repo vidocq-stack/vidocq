@@ -85,6 +85,7 @@ class CliParserTestIdeaTest {
     void theStartDevAndDoctorPagesKeepTheirOptions() {
         assertTrue(help("start").contains("--config, -c <file>"), help("start"));
         assertTrue(help("dev").contains("restarts on every source change."), help("dev"));
+        assertTrue(help("dev").contains("The tests start paused: r then Enter"), help("dev"));
         assertTrue(help("doctor").contains("--verbose, -v"), help("doctor"));
     }
 
