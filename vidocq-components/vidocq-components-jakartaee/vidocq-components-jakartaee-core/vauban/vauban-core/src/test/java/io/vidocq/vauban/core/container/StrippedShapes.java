@@ -66,6 +66,7 @@ final class StrippedShapes {
 
     /** An inner member class: its constructor takes the outer instance first. */
     static final class Outer {
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         final class Inner {
             final String text;
 
@@ -87,6 +88,7 @@ final class StrippedShapes {
         /** An instance of each class this method declares: a local one, then an anonymous one. */
         List<Object> declared(String captured, int count) {
             class Local {
+                @SuppressWarnings("UnusedVariable") // fixture: the captured shape is the case under test
                 final String text;
 
                 Local(String prefix) {
@@ -106,8 +108,10 @@ final class StrippedShapes {
     /** A local class of a static method: no outer instance, a captured value. */
     static Class<?> staticLocal(String captured) {
         class Local {
+            @SuppressWarnings("UnusedVariable") // fixture: the captured shape is the case under test
             final String text;
 
+            @SuppressWarnings({"ObjectToString", "UnusedMethod"}) // fixture: the constructor's shape is the case under test
             Local(StrippedShapes first) {
                 this.text = captured + first;
             }

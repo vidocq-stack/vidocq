@@ -121,6 +121,7 @@ final class BeanInjector {
     /** A descriptor as a cache key, by identity: hashing a descriptor record would walk all its injection points. */
     private record DescriptorKey(BeanDescriptor descriptor) {
         @Override
+        @SuppressWarnings("ReferenceEquality") // the key compares descriptors by identity, on purpose (see the record's Javadoc)
         public boolean equals(Object o) {
             return o instanceof DescriptorKey(var other) && other == descriptor;
         }

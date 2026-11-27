@@ -86,6 +86,7 @@ class BceTypeAnnotationsTest {
     }
 
     public static class Outer {
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         public class Inner {
         }
 
@@ -231,6 +232,7 @@ class BceTypeAnnotationsTest {
 
     /** A class whose method declares a type parameter of the class's name. */
     public static class Shadow<@A T extends @B Number> {
+        @SuppressWarnings("TypeParameterShadowing") // fixture: the shadowing type parameter is the case under test
         <@C T extends @D CharSequence> @E T method(T value) {
             return value;
         }

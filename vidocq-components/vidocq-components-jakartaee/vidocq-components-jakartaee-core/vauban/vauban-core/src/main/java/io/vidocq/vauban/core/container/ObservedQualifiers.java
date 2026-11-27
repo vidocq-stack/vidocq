@@ -70,6 +70,7 @@ final class ObservedQualifiers implements Consumer<Annotation> {
         return observed;
     }
 
+    @SuppressWarnings("ReferenceEquality") // entries are keyed by the qualifier instance, by identity
     private static Entry find(Entry[] entries, Annotation qualifier) {
         for (var entry : entries) {
             if (entry.qualifier() == qualifier) {

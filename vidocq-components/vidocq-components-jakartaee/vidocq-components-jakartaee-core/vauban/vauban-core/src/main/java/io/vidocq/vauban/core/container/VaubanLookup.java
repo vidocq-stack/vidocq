@@ -177,6 +177,7 @@ public final class VaubanLookup {
      * Invoke a method on an instance with the given arguments.
      * Handles both instance and static methods, and primitive return types.
      */
+    @SuppressWarnings("ReferenceEquality") // NOT_INVOKED is a sentinel, compared by identity
     public Object invokeMethod(Object instance, Method method, Object... args) {
         // In-module call first: a generated provider that owns this method calls it directly (no
         // reflection, no opens). NOT_INVOKED means "not owned" — fall through to reflection.

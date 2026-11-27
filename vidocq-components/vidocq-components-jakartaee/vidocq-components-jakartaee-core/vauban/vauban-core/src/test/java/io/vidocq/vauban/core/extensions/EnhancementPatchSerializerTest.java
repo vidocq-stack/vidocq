@@ -162,6 +162,7 @@ class EnhancementPatchSerializerTest {
 
     /** A class that declares a field of the name of one it inherits. */
     static class Hiding extends Hidden {
+        @SuppressWarnings("HidingField") // fixture: the hiding field is the case under test
         String dependency;
     }
 
@@ -246,6 +247,7 @@ class EnhancementPatchSerializerTest {
     }
 
     /** A class whose injected field {@link HidingInjected} hides. */
+    @SuppressWarnings("UnnecessaryAssignment") // fixture: an injected field and an initializer of the same name
     static class HiddenInjected {
         @jakarta.inject.Inject
         String dependency;
@@ -259,6 +261,7 @@ class EnhancementPatchSerializerTest {
     /** A class that declares an injected field of the name of one it inherits. */
     static class HidingInjected extends HiddenInjected {
         @jakarta.inject.Inject
+        @SuppressWarnings("HidingField") // fixture: the hiding field is the case under test
         String dependency;
     }
 

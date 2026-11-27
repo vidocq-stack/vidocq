@@ -42,7 +42,7 @@ class SjarEncryptorTest {
     @Test
     void encryptAndDecryptBytes() throws Exception {
         var key = SjarKeyProvider.generateKey();
-        var plaintext = "Hello CDI".getBytes();
+        var plaintext = "Hello CDI".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         var iv = SjarEncryptor.generateIv();
 
         var encrypted = SjarEncryptor.encryptBytes(plaintext, key, iv);
@@ -55,7 +55,7 @@ class SjarEncryptorTest {
         var key = SjarKeyProvider.generateKey();
         var wrongKey = SjarKeyProvider.generateKey();
         var iv = SjarEncryptor.generateIv();
-        var encrypted = SjarEncryptor.encryptBytes("secret".getBytes(), key, iv);
+        var encrypted = SjarEncryptor.encryptBytes("secret".getBytes(java.nio.charset.StandardCharsets.UTF_8), key, iv);
 
         assertThrows(Exception.class, () -> SjarEncryptor.decryptBytes(encrypted, wrongKey));
     }
@@ -190,7 +190,7 @@ class SjarEncryptorTest {
 
             // Resource
             jos.putNextEntry(new JarEntry("META-INF/beans.xml"));
-            jos.write("<beans/>".getBytes());
+            jos.write("<beans/>".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             jos.closeEntry();
         }
         return jarPath;

@@ -27,6 +27,7 @@ import javax.naming.NamingException;
 
 /** Looks a name up while the application starts, as Mansart Data does when it creates a repository. */
 @ApplicationScoped
+@SuppressWarnings("BanJNDI") // tests of Vidocq's own java: naming, which deserializes nothing
 public class EarlyLookup {
 
     static Object found;

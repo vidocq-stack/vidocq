@@ -80,7 +80,7 @@ public final class DependencyGraph {
     private static final int MAX_RECURSION_DEPTH = 500;
 
     private void detectCycles(BeanId current, Set<BeanId> visited,
-            LinkedHashSet<BeanId> inStack, List<BeanId> path, List<List<BeanId>> illegalCycles, int depth) {
+            Set<BeanId> inStack, List<BeanId> path, List<List<BeanId>> illegalCycles, int depth) {
         if (depth > MAX_RECURSION_DEPTH) {
             // Safety break to avoid StackOverflowError in extremely large or complex graphs
             return;

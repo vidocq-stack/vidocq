@@ -164,6 +164,7 @@ public final class VaubanObserverMethod<T> implements ObserverMethod<T> {
         }
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents
     private record ResolvedWildcardType(Type[] upperBounds, Type[] lowerBounds)
             implements java.lang.reflect.WildcardType {
         @Override public Type[] getUpperBounds() { return upperBounds.clone(); }

@@ -62,7 +62,7 @@ class EnumConstructorParametersTest {
         private final String label;
 
         Level(@Marked String label, boolean flag) {
-            this.label = flag ? label : label.toUpperCase();
+            this.label = flag ? label : label.toUpperCase(java.util.Locale.ROOT);
         }
 
         String label() {
@@ -136,7 +136,7 @@ class EnumConstructorParametersTest {
     private static String described(ParameterInfo parameter) {
         var type = switch (parameter.type()) {
             case io.vidocq.vauban.indexer.model.TypeInfo.ClassType(var name) -> simple(name.toString());
-            case io.vidocq.vauban.indexer.model.TypeInfo.PrimitiveType(var kind) -> kind.name().toLowerCase();
+            case io.vidocq.vauban.indexer.model.TypeInfo.PrimitiveType(var kind) -> kind.name().toLowerCase(java.util.Locale.ROOT);
             default -> parameter.type().toString();
         };
         return type + " "

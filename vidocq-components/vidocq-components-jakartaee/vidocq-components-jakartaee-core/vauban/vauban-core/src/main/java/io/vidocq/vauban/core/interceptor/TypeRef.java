@@ -331,7 +331,7 @@ public final class TypeRef {
 
     @Override
     public String toString() {
-        String base = primitive != null ? primitive.name().toLowerCase() : binaryName;
+        String base = primitive != null ? primitive.name().toLowerCase(java.util.Locale.ROOT) : binaryName;
         return base + "[]".repeat(dims);
     }
 }

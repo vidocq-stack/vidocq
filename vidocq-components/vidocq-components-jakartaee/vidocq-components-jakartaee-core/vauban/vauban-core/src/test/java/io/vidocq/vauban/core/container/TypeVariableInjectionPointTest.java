@@ -100,6 +100,7 @@ class TypeVariableInjectionPointTest {
     @Resource
     public static class ResourceSetter<T> {
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         void set(T value) {
             // Only the validation reads it.
         }
@@ -109,6 +110,7 @@ class TypeVariableInjectionPointTest {
     @Dependent
     public static class ScannedSetter<T> {
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         void set(T value) {
             // no behaviour needed
         }

@@ -31,6 +31,7 @@ public final class ProcessorReachingIntoSjar {
         // A fixture: never instantiated.
     }
 
+    @SuppressWarnings("ObjectToString") // fixture: the call is the dependency under test, not its text
     public static String describe(SjarKeyProvider provider) {
         return provider.toString();
     }

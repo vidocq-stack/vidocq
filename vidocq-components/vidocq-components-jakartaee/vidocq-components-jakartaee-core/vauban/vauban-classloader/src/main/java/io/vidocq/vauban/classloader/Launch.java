@@ -200,7 +200,7 @@ public final class Launch {
         var extra = System.getProperty(KEEP_PROPERTY, "").strip();
         var prefixes = new ArrayList<String>();
         if (!extra.isEmpty()) {
-            for (var prefix : extra.split("\\s*,\\s*")) {
+            for (var prefix : extra.split("\\s*,\\s*", -1)) {
                 if (!prefix.isEmpty()) prefixes.add(prefix);
             }
         }

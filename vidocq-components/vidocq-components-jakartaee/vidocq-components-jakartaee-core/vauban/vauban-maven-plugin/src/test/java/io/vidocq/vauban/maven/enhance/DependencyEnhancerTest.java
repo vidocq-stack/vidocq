@@ -199,7 +199,7 @@ class DependencyEnhancerTest {
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8);
         try (var out = new JarOutputStream(Files.newOutputStream(srcJar))) {
             put(out, "META-INF/MANIFEST.MF", manifest);
-            put(out, "META-INF/VENDOR.SF", "Signature-Version: 1.0\r\n".getBytes());
+            put(out, "META-INF/VENDOR.SF", "Signature-Version: 1.0\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             put(out, "META-INF/VENDOR.RSA", new byte[] {1, 2, 3});
             put(out, "module-info.class", moduleInfo);
             put(out, PKG + "Widget.class", widgetBytes);
@@ -310,7 +310,7 @@ class DependencyEnhancerTest {
      */
     private static java.lang.module.ModuleFinder explicitModulesOnTestClassPath() {
         var modular = new ArrayList<Path>();
-        for (var entry : System.getProperty("java.class.path").split(java.io.File.pathSeparator)) {
+        for (var entry : System.getProperty("java.class.path").split(java.io.File.pathSeparator, -1)) {
             var path = Path.of(entry);
             if (Files.isDirectory(path)) {
                 if (Files.isRegularFile(path.resolve("module-info.class"))) {

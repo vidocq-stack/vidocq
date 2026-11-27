@@ -194,7 +194,7 @@ public class ModularizeMojo extends AbstractMojo {
     /** The types of one {@code <uses>} entry, in order and without duplicates. */
     private static Set<String> typesOf(String artifactId, String value) throws MojoFailureException {
         Set<String> types = new LinkedHashSet<>();
-        for (String type : SEPARATORS.split(value == null ? "" : value.strip())) {
+        for (String type : SEPARATORS.split(value == null ? "" : value.strip(), -1)) {
             if (type.isEmpty()) {
                 continue;
             }

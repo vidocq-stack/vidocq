@@ -73,6 +73,7 @@ class InjectionAndLifecycleFailuresTest {
         Clock clock;
 
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         static void initShared(Clock clock) {
             CALLS.add("static initializer");
         }
@@ -98,6 +99,7 @@ class InjectionAndLifecycleFailuresTest {
     @Dependent
     public static class FailingInitializer {
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         void init(Clock clock) {
             throw new IllegalStateException("initializer failure");
         }

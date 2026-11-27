@@ -38,6 +38,7 @@ public final class ApplicationContext implements AlterableContext {
         return ApplicationScoped.class;
     }
 
+    @Override
     @SuppressWarnings("unchecked")
     public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
         var existing = instances.get(contextual);

@@ -105,6 +105,11 @@ class ClassFileDeclarationsTest {
                     public int read() throws IOException {
                         throw new IOException("unreadable");
                     }
+
+                    @Override
+                    public int read(byte[] buffer, int offset, int length) throws IOException {
+                        throw new IOException("unreadable");
+                    }
                 };
                 var otherClass = ClassLoader.getSystemResourceAsStream("java/util/function/Supplier.class")) {
             var loader = new Resources(Map.of("p/Garbage.class", garbage, "p/Failing.class", failing,
@@ -133,13 +138,14 @@ class ClassFileDeclarationsTest {
 
     @Test
     @DisplayName("asked from many virtual threads at once, every asker gets the same description")
+    @SuppressWarnings({"OptionalEquality", "ReferenceEquality"}) // the test asserts one shared instance
     void concurrentAskersGetTheSameDescription() {
         var declarations = IndexLookup.classFiles(ClassLoader.getPlatformClassLoader());
         var answers = new CopyOnWriteArrayList<Optional<ClassInfo>>();
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int i = 0; i < 32; i++) {
-                executor.submit(() -> answers.add(declarations.apply(SUPPLIER)));
+                executor.execute(() -> answers.add(declarations.apply(SUPPLIER)));
             }
         }
 

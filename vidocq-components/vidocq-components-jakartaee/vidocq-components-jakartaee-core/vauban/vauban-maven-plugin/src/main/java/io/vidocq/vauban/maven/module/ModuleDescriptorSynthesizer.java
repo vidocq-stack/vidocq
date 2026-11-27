@@ -120,6 +120,7 @@ public final class ModuleDescriptorSynthesizer {
      * @param descriptor those bytes read back by the JDK — what the module system will see
      * @param notes anything a build log should carry: packages with no owner, dropped providers
      */
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents; a published signature
     public record Result(byte[] moduleInfo, ModuleDescriptor descriptor, List<String> notes) {
 
         public Result {
@@ -554,7 +555,7 @@ public final class ModuleDescriptorSynthesizer {
     /** The providers a service file lists that this jar contains; notes the others. */
     private static List<String> providersIn(String name, String body, Set<String> packages, List<String> notes) {
         var providers = new ArrayList<String>();
-        for (String line : body.split("\n")) {
+        for (String line : body.split("\n", -1)) {
             int comment = line.indexOf('#');
             String provider = (comment < 0 ? line : line.substring(0, comment)).trim();
             if (provider.isEmpty()) {

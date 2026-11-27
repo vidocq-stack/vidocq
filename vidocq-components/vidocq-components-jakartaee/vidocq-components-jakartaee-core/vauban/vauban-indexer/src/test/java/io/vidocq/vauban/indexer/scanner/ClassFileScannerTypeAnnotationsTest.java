@@ -72,6 +72,7 @@ class ClassFileScannerTypeAnnotationsTest {
     }
 
     static class Outer {
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         class Inner {
             Inner(@A String name, @B List<String> names) {
             }
@@ -84,6 +85,7 @@ class ClassFileScannerTypeAnnotationsTest {
     enum Level {
         LOW("low");
 
+        @SuppressWarnings("UnusedVariable") // fixture: the annotated parameter is the case under test
         Level(@A String label) {
         }
     }

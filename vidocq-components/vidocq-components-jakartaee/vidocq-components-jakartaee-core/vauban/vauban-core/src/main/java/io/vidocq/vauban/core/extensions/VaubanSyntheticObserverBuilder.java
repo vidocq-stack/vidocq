@@ -216,6 +216,7 @@ public final class VaubanSyntheticObserverBuilder<T> implements SyntheticObserve
     void setSourceExtension(Class<?> sourceExtension) { this.sourceExtension = sourceExtension; }
     public Class<? extends SyntheticObserver<T>> getObserverClass() { return observerClass; }
 
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents
     private record SimpleParameterizedType(
             Class<?> rawType,
             java.lang.reflect.Type[] typeArguments

@@ -121,7 +121,8 @@ class ReflectionValidatorCharacterizationTest {
         }
     }
 
-    @SuppressWarnings({"rawtypes", "java:S3740"})
+    // fixture: every raw injection point the validator meets
+    @SuppressWarnings({"rawtypes", "java:S3740", "UnnecessaryAssignment", "InjectOnMemberAndConstructor"})
     static class RawInjection {
         @Inject
         Event rawEvent;
@@ -185,6 +186,7 @@ class ReflectionValidatorCharacterizationTest {
         }
 
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         <U> void genericInitializer(U value) {
             // fixture: only the signature matters
         }

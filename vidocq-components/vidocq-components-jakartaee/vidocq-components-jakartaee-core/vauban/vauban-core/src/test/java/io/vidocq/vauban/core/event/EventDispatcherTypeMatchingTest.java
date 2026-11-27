@@ -91,7 +91,7 @@ class EventDispatcherTypeMatchingTest {
     }
 
     /** A class implementing the raw {@link Comparable}: no parameterization of it to compare with. */
-    @SuppressWarnings({"rawtypes", "java:S3740"})
+    @SuppressWarnings({"rawtypes", "java:S3740", "ComparableType"}) // fixture: a raw Comparable
     private static final class RawComparable implements Comparable {
         @Override
         public int compareTo(Object other) {

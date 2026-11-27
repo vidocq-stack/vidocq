@@ -117,6 +117,7 @@ public final class ManagedBean<T> implements Bean<T>, PassivationCapable {
     }
 
     @Override
+    @SuppressWarnings("ReferenceEquality") // whether the bean's context is the caller's own one, by identity
     public T create(CreationalContext<T> callerContext) {
         var creationalContext = interceptorManager == null ? callerContext
                 : io.vidocq.vauban.core.context.CreationalContextImpl.forInterceptedInstanceOf(this);
@@ -162,6 +163,7 @@ public final class ManagedBean<T> implements Bean<T>, PassivationCapable {
     }
 
     @Override
+    @SuppressWarnings("ReferenceEquality") // contexts and the destroyed instance compared by identity
     public void destroy(T instance, CreationalContext<T> callerContext) {
         if (instance == null) return;
         var creationalContext = destructionContext(instance, callerContext);
@@ -450,7 +452,7 @@ public final class ManagedBean<T> implements Bean<T>, PassivationCapable {
     private static boolean hasWildcard(java.lang.reflect.ParameterizedType type) {
         for (var argument : type.getActualTypeArguments()) {
             if (argument instanceof java.lang.reflect.WildcardType
-                    || argument instanceof java.lang.reflect.ParameterizedType nested && hasWildcard(nested)) {
+                    || (argument instanceof java.lang.reflect.ParameterizedType nested && hasWildcard(nested))) {
                 return true;
             }
         }
@@ -661,6 +663,7 @@ public final class ManagedBean<T> implements Bean<T>, PassivationCapable {
         return mapping;
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity tells whether the substitution returned its argument unchanged
     private static Type substituteTypeVariables(Type type, Map<java.lang.reflect.TypeVariable<?>, Type> mapping) {
         return switch (type) {
             case java.lang.reflect.TypeVariable<?> tv -> {
@@ -1023,6 +1026,7 @@ public final class ManagedBean<T> implements Bean<T>, PassivationCapable {
         return mapping;
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity tells whether the substitution returned its argument unchanged
     public static Type resolveType(Type type, Map<java.lang.reflect.TypeVariable<?>, Type> mapping) {
         return switch (type) {
             case java.lang.reflect.TypeVariable<?> tv -> {
@@ -1057,6 +1061,7 @@ public final class ManagedBean<T> implements Bean<T>, PassivationCapable {
         };
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents
     private record ResolvedParameterizedType(Class<?> rawType, Type[] typeArguments, Type ownerType)
             implements java.lang.reflect.ParameterizedType {
         @Override public Type[] getActualTypeArguments() { return typeArguments.clone(); }

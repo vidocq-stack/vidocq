@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Test;
  * The {@code java:} namespace as an application sees it: {@code new InitialContext()} with the factory
  * installed as the JVM default, the names answered by the running container.
  */
+@SuppressWarnings("BanJNDI") // tests of Vidocq's own java: naming, which deserializes nothing
 class JavaNamespaceTest {
 
     private VaubanContainer container;
@@ -211,6 +212,7 @@ class JavaNamespaceTest {
     }
 
     @Test
+    @SuppressWarnings("JdkObsolete") // the JNDI API takes a Hashtable
     void anExplicitFactoryInTheEnvironmentNeverReachesTheNamespace() {
         start(OrdersDataSource.class, OrdersNames.class);
         var environment = new Hashtable<String, Object>();

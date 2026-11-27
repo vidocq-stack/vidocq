@@ -105,6 +105,7 @@ class VaubanObserverMethodObservedTypeTest {
     /** A generic class and its inner class, whose JDK types the observed types are compared with. */
     @SuppressWarnings("java:S2326") // the type parameters are what the tests compare
     static class Outer<O> {
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         class Inner<I> {
         }
     }

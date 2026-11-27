@@ -68,7 +68,7 @@ class InterceptorManagerBindingEdgesTest {
     }
 
     /** A hand-written {@link Level} whose member cannot be read. */
-    @SuppressWarnings("ClassExplicitlyAnnotation")
+    @SuppressWarnings({"ClassExplicitlyAnnotation", "BadAnnotationImplementation"}) // fixture: an annotation whose member cannot be read, never compared
     private static final class UnreadableLevel implements Level {
         @Override
         public String value() {

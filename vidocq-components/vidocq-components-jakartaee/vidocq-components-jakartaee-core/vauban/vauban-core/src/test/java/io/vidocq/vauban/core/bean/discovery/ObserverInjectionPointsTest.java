@@ -115,6 +115,7 @@ class ObserverInjectionPointsTest {
 
     @SuppressWarnings("unused") // the owner of Inner, which carries a type argument
     public static class Outer<O> {
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         public class Inner<I> {
         }
     }

@@ -92,7 +92,7 @@ public final class WeavePlan {
         }
 
         static Line parse(String raw) {
-            var parts = raw.trim().split(" ");
+            var parts = raw.trim().split(" ", -1);
             return switch (parts[0]) {
                 case "bean" -> bean(parts[1], SuperChain.valueOf(parts[2]));
                 case "proxy" -> proxy(parts[1]);

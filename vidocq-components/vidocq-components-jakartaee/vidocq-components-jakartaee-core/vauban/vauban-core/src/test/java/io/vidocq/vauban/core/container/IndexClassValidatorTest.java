@@ -82,6 +82,7 @@ class IndexClassValidatorTest {
     @Dependent
     public static class RawEvent {
         @Inject Event event;
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject void init(Instance instance) { /* no behaviour needed */ }
     }
 
@@ -93,6 +94,7 @@ class IndexClassValidatorTest {
 
     @Dependent
     public static class GenericInitializer {
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject <T> void init(List<T> values) { /* no behaviour needed */ }
     }
 
@@ -121,6 +123,7 @@ class IndexClassValidatorTest {
 
     @Dependent
     public static class NamedWithoutValue {
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject void init(@Named String value) { /* no behaviour needed */ }
     }
 
@@ -156,11 +159,13 @@ class IndexClassValidatorTest {
 
     @Dependent
     public static class TypeVariableInitializerParameter<T> {
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject void set(T value) { /* no behaviour needed */ }
     }
 
     @Dependent
     public static class TypeVariableConstructorParameter<T> {
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject TypeVariableConstructorParameter(T value) { /* no behaviour needed */ }
     }
 
@@ -170,6 +175,7 @@ class IndexClassValidatorTest {
     }
 
     public abstract static class AbstractTypeVariableInitializerParameter<T> {
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject void set(T value) { /* no behaviour needed */ }
     }
 
@@ -178,6 +184,7 @@ class IndexClassValidatorTest {
      * own; a subclass inherits them (BUG-20261117-30, review round 1).
      */
     public static class NoBeanTypeVariableInitializerParameter<T> {
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject void set(T value) { /* no behaviour needed */ }
     }
 

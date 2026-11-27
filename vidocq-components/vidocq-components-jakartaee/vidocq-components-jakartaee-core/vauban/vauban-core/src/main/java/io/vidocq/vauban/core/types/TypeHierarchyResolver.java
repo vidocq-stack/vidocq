@@ -103,6 +103,7 @@ public class TypeHierarchyResolver {
         };
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity tells whether the substitution returned its argument unchanged
     private static Type substituteVariable(TypeVariable<?> variable, Map<TypeVariable<?>, Type> typeMap,
             Set<TypeVariable<?>> seen) {
         Type resolved = typeMap.get(variable);
@@ -114,6 +115,7 @@ public class TypeHierarchyResolver {
         return result;
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity tells whether the substitution returned its argument unchanged
     private static Type substituteParameterized(ParameterizedType type, Map<TypeVariable<?>, Type> typeMap,
             Set<TypeVariable<?>> seen) {
         Type[] args = type.getActualTypeArguments();
@@ -125,6 +127,7 @@ public class TypeHierarchyResolver {
                 : new SubstitutedParameterizedType((Class<?>) type.getRawType(), newArgs, newOwner);
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity tells whether the substitution returned its argument unchanged
     private static Type substituteWildcard(WildcardType wildcard, Map<TypeVariable<?>, Type> typeMap,
             Set<TypeVariable<?>> seen) {
         Type[] upper = wildcard.getUpperBounds();
@@ -134,6 +137,7 @@ public class TypeHierarchyResolver {
         return newUpper == upper && newLower == lower ? wildcard : new SubstitutedWildcardType(newUpper, newLower);
     }
 
+    @SuppressWarnings("ReferenceEquality") // identity tells whether the substitution returned its argument unchanged
     private static Type substituteArray(GenericArrayType array, Map<TypeVariable<?>, Type> typeMap,
             Set<TypeVariable<?>> seen) {
         Type component = array.getGenericComponentType();
@@ -148,6 +152,7 @@ public class TypeHierarchyResolver {
     }
 
     /** {@code types} substituted; {@code types} itself when none changes. */
+    @SuppressWarnings("ReferenceEquality") // identity tells whether the substitution returned its argument unchanged
     private static Type[] substituteAll(Type[] types, Map<TypeVariable<?>, Type> typeMap, Set<TypeVariable<?>> seen) {
         Type[] substituted = types;
         for (int i = 0; i < types.length; i++) {
@@ -162,6 +167,7 @@ public class TypeHierarchyResolver {
         return substituted;
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents
     private record SubstitutedParameterizedType(Class<?> rawType, Type[] typeArguments, Type ownerType)
             implements ParameterizedType {
         @Override public Type[] getActualTypeArguments() { return typeArguments.clone(); }
@@ -193,6 +199,7 @@ public class TypeHierarchyResolver {
     }
 
     /** A wildcard whose bounds a substitution changed, equal to the JDK's wildcard of the same bounds. */
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents
     private record SubstitutedWildcardType(Type[] upperBounds, Type[] lowerBounds) implements WildcardType {
         @Override public Type[] getUpperBounds() { return upperBounds.clone(); }
         @Override public Type[] getLowerBounds() { return lowerBounds.clone(); }

@@ -47,7 +47,7 @@ import java.util.function.Consumer;
  */
 public final class RequestContext implements AlterableContext {
 
-    private record ContextualInstance(Object instance, CreationalContext<?> ctx) {}
+    record ContextualInstance(Object instance, CreationalContext<?> ctx) {}
 
     static final class RequestContextState {
         /**
@@ -63,6 +63,7 @@ public final class RequestContext implements AlterableContext {
     private static final ScopedValue<RequestContextState> STATE = ScopedValue.newInstance();
 
     /** The state of an imperative activation, per thread. Removed on deactivation. */
+    @SuppressWarnings("ThreadLocalUsage") // one per container: each container keeps its own activations
     private final ThreadLocal<RequestContextState> threadState = new ThreadLocal<>();
 
     /** Fires a context event with the given qualifier; set by the container, {@code null} until then. */

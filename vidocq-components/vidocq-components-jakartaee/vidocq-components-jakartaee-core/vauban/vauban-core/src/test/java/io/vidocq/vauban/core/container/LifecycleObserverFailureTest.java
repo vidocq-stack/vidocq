@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LifecycleObserverFailureTest {
 
     static final List<String> CALLS = new CopyOnWriteArrayList<>();
+    @SuppressWarnings("StaticAssignmentOfThrowable") // the test asserts this very instance surfaces
     static final IllegalStateException BOOM = new IllegalStateException("boom");
 
     @ApplicationScoped
@@ -241,6 +242,7 @@ class LifecycleObserverFailureTest {
         assertNull(VaubanContainer.current());
     }
 
+    @SuppressWarnings("StaticAssignmentOfThrowable") // the test asserts this very instance surfaces
     static final DeploymentException REFUSED = new DeploymentException("the configuration lacks a required value");
 
     /** A check of the environment the application starts in, written as an observer of {@code Startup}. */

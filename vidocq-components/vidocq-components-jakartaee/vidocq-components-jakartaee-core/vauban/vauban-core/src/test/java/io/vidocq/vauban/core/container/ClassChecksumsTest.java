@@ -243,7 +243,7 @@ class ClassChecksumsTest {
     }
 
     /** Names {@code ArrayList} and {@code Comparable} raw. */
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "ComparableType"}) // fixture: a raw Comparable
     abstract static class RawFixture extends java.util.ArrayList implements Comparable {
         private static final long serialVersionUID = 1L;
     }
@@ -274,7 +274,7 @@ class ClassChecksumsTest {
     @Test
     @DisplayName("a class whose parameters javac marks itself keeps its checksum once stripped (BUG-20261118-60)")
     void classesWithMarkedParametersKeepTheirChecksumsOnceStripped() throws IOException {
-        int marked = 0;
+        long marked = 0;
         for (Class<?> type : StrippedShapes.all()) {
             byte[] built = binaryClass(type);
             byte[] linked = JlinkStripping.strip(built);

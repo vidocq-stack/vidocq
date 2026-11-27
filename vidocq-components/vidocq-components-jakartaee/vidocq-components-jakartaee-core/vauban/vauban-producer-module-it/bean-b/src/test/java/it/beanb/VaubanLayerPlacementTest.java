@@ -130,7 +130,8 @@ class VaubanLayerPlacementTest {
 
     private static Map<String, String> parse(String report) {
         var map = new LinkedHashMap<String, String>();
-        for (var pair : report.split(";")) {
+        for (var pair : report.split(";", -1)) {
+            if (pair.isEmpty()) continue;
             var eq = pair.indexOf('=');
             map.put(pair.substring(0, eq), pair.substring(eq + 1));
         }

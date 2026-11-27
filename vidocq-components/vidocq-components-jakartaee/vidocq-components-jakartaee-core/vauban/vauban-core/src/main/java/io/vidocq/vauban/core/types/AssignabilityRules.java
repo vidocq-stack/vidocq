@@ -227,7 +227,7 @@ public final class AssignabilityRules {
      */
     private boolean ownersAssignable(TypeInfo beanOwner, TypeInfo requiredOwner) {
         return beanOwner == null || requiredOwner == null
-                || requiredOwner instanceof ParameterizedType required && isAssignableToParameterized(beanOwner, required);
+                || (requiredOwner instanceof ParameterizedType required && isAssignableToParameterized(beanOwner, required));
     }
 
     private boolean typeArgumentsAssignable(List<TypeInfo> beanArguments, List<TypeInfo> requiredArguments) {

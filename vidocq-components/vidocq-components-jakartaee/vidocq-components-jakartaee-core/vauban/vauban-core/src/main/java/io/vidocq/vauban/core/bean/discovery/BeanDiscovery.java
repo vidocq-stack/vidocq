@@ -878,7 +878,7 @@ public final class BeanDiscovery {
     private static boolean hasWildcard(TypeInfo.ParameterizedType type) {
         for (var argument : type.typeArguments()) {
             if (argument instanceof TypeInfo.WildcardType
-                    || argument instanceof TypeInfo.ParameterizedType nested && hasWildcard(nested)) {
+                    || (argument instanceof TypeInfo.ParameterizedType nested && hasWildcard(nested))) {
                 return true;
             }
         }

@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
 class ObservedQualifiersTest {
 
     /** A qualifier that counts the calls a hash-based lookup would make. */
+    @SuppressWarnings("ImmutableAnnotationChecker") // fixture: it counts the calls made on it
     private static final class CountingQualifier implements Annotation {
         final AtomicInteger calls = new AtomicInteger();
 
@@ -79,6 +80,7 @@ class ObservedQualifiersTest {
     }
 
     @Test
+    @SuppressWarnings("ReferenceEquality") // the literals are told apart by identity, as the container does
     void theThreeRequestLiteralsAreTrackedSeparately() {
         var observed = List.of(Initialized.Literal.REQUEST, Destroyed.Literal.REQUEST);
         var fired = new ArrayList<Annotation>();
@@ -93,22 +95,26 @@ class ObservedQualifiersTest {
     }
 
     @Test
-    void concurrentFirstRequestsResolveTheObserversOnce() {
+    void concurrentFirstRequestsResolveTheObserversOnce() throws Exception {
         var qualifier = new CountingQualifier();
         var resolutions = new AtomicInteger();
         var fired = new AtomicInteger();
         var events = new ObservedQualifiers(q -> { resolutions.incrementAndGet(); return true; },
                 q -> fired.incrementAndGet());
         var start = new java.util.concurrent.CountDownLatch(1);
+        var calls = new ArrayList<java.util.concurrent.Future<?>>();
         try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
             for (int i = 0; i < 64; i++) {
-                executor.submit(() -> {
+                calls.add(executor.submit(() -> {
                     start.await();
                     events.accept(qualifier);
                     return null;
-                });
+                }));
             }
             start.countDown();
+        }
+        for (var call : calls) {
+            call.get();
         }
 
         assertEquals(1, resolutions.get());

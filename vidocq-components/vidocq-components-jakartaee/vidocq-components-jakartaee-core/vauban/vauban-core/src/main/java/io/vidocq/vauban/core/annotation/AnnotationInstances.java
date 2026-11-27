@@ -146,6 +146,7 @@ public final class AnnotationInstances {
         }
 
         /** The value of {@code member}, or {@code null} when it has neither a written value nor a default. */
+        @SuppressWarnings("ReferenceEquality") // ABSENT is a sentinel, compared by identity
         private Object memberValue(Method member) {
             var value = values.computeIfAbsent(member.getName(), name -> {
                 var written = annotation.members().get(name);
@@ -167,6 +168,7 @@ public final class AnnotationInstances {
             return declared;
         }
 
+        @SuppressWarnings("ReferenceEquality") // the same proxy, by identity, before comparing members
         private boolean equalsImpl(Object proxy, Object other) {
             if (proxy == other) return true;
             if (!type.isInstance(other)) return false;
@@ -246,7 +248,7 @@ public final class AnnotationInstances {
 
         /** {@code Annotation#equals}: arrays compare element by element, floats and doubles by their bits. */
         private static boolean memberValueEquals(Object mine, Object theirs) {
-            if (mine == null || theirs == null) return mine == theirs;
+            if (mine == null || theirs == null) return mine == null && theirs == null;
             return switch (mine) {
                 case boolean[] array -> theirs instanceof boolean[] other && Arrays.equals(array, other);
                 case byte[] array -> theirs instanceof byte[] other && Arrays.equals(array, other);

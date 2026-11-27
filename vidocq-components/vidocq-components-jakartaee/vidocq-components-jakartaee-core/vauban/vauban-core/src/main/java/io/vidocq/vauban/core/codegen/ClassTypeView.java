@@ -94,6 +94,7 @@ public record ClassTypeView(Class<?> type, Class<?> root) implements TypeView {
     }
 
     @Override
+    @SuppressWarnings("ReferenceEquality") // the same defining class loader, by identity: a runtime package
     public boolean isSamePackage(TypeView other) {
         return other instanceof ClassTypeView view
                 && view.type.getPackageName().equals(type.getPackageName())

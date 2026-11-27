@@ -62,7 +62,7 @@ class NormalScopeFieldInjectionTest {
         private int counter = 0;
 
         public String compute() {
-            return "result-" + (++counter);
+            return "result-" + ++counter;
         }
 
         public int getCounter() {

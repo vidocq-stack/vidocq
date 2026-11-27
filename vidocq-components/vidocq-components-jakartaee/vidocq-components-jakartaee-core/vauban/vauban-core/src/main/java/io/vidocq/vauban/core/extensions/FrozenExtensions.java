@@ -324,7 +324,7 @@ public record FrozenExtensions(String fingerprint, FrozenExtensions.Deployment d
         }
         var contexts = new ArrayList<FrozenContexts.Entry>();
         for (String line : indexed(main, CONTEXT)) {
-            String[] parts = line.split(";");
+            String[] parts = line.split(";", -1);
             if (parts.length != 3) {
                 throw new IOException("malformed context " + line);
             }

@@ -84,6 +84,7 @@ class IndexSignatureEquivalenceTest {
     }
 
     static class Owner {
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         class Inner {
             Inner(List<String> names, int count) { /* no behaviour needed */ }
         }

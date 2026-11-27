@@ -21,6 +21,7 @@ package io.vidocq.vauban.core.extensions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
 import jakarta.enterprise.context.SessionScoped;
@@ -69,6 +70,16 @@ class FrozenContextsTest {
             assertEquals(List.of(new FrozenContexts.Entry("jakarta.enterprise.context.SessionScoped",
                             ActiveSessionContext.class.getName(), true)),
                     FrozenContexts.read(loader));
+        }
+    }
+
+    @Test
+    @DisplayName("a line of four fields is malformed, a trailing empty one included")
+    void aTrailingSeparatorIsAFourthField() throws IOException {
+        writeList("jakarta.enterprise.context.SessionScoped;" + ActiveSessionContext.class.getName() + ";true;\n");
+
+        try (var loader = loader()) {
+            assertThrows(IllegalStateException.class, () -> FrozenContexts.read(loader));
         }
     }
 

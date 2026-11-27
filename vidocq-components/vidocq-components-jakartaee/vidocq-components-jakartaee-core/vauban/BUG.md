@@ -5,6 +5,25 @@ suspected cause, status. Updated on every investigation.
 
 ---
 
+## BUG-20261127-57 — The processor claims every annotation of the round where its pipeline runs
+
+- **Date**: 2026-11-27
+- **Status**: FIXED on `refactor/vauban-errorprone` (Vidocq/vidocq#832, found by Error Prone's `DoNotClaimAnnotations`)
+- **Module**: `vauban-processor` (`VaubanProcessor`)
+- **Symptom**: a processor that javac runs after Vauban's never sees the annotations of the round where Vauban's
+  pipeline runs. A bean a companion processor generates in the first round (Mansart Data's repositories, say)
+  surfaces in the second, where the pipeline runs: its `@ApplicationScoped` never reaches the processors after
+  Vauban.
+- **Minimal repro**: `ClaimsNoAnnotationTest`: a companion processor that writes `app.Generated` in the first
+  round, Vauban, then a processor that records the `@ApplicationScoped` classes it is handed. It recorded
+  `app.Greeter` and the generated client proxies, never `app.Generated`; `process` returned `true` in one round.
+- **Cause**: `getSupportedAnnotationTypes()` is `*`, and its Javadoc says the processor never claims an annotation,
+  but `process` returned what `processDeployment` returned: `true` once the pipeline ran, or once it wrote the
+  proxies of `@ClientProxies` alone. javac then removes every annotation of that round from what it hands to the
+  processors after it.
+- **Fix**: `process` returns `false` in every round; `processDeployment` and `writeDeclaredInterfaceProxiesAlone`
+  return nothing.
+
 ## BUG-20261123-40 — javac reports `-Avauban.mainOutput` as recognised by no processor
 
 - **Date**: 2026-11-23

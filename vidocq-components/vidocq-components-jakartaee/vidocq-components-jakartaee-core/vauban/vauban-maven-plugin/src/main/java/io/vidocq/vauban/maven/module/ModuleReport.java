@@ -46,7 +46,7 @@ public final class ModuleReport {
             if (r.moduleName() != null) {
                 sb.append(" (").append(r.moduleName()).append(")");
             }
-            sb.append(" - ").append(r.type().name().toLowerCase());
+            sb.append(" - ").append(r.type().name().toLowerCase(java.util.Locale.ROOT));
             sb.append(", ").append(r.packages().size()).append(" packages");
             sb.append("\n");
 

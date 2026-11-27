@@ -308,8 +308,8 @@ class ExternalClassGenerationSkipTest {
 
         var cp = System.getProperty("java.class.path");
         if (cp != null && !cp.isBlank()) {
-            for (var entry : cp.split(File.pathSeparator)) {
-                paths.add(entry);
+            for (var entry : cp.split(File.pathSeparator, -1)) {
+                if (!entry.isEmpty()) paths.add(entry);
             }
         }
 

@@ -33,6 +33,7 @@ public @interface OwnedClassMember {
     class Outer<O> {
 
         /** An inner class whose type is written after its enclosing type's. */
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         public class Inner<I> {
         }
     }

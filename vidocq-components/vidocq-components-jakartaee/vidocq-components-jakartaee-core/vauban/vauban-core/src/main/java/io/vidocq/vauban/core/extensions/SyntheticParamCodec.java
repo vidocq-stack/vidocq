@@ -204,7 +204,7 @@ public final class SyntheticParamCodec {
             return out;
         }
         if (!Character.isDigit(text.charAt(0))) {
-            for (var part : text.split(",")) {
+            for (var part : text.split(",", -1)) {
                 var name = part.strip();
                 if (!name.isEmpty()) {
                     out.add(new AnnotationInfo(DotName.of(name), Map.of()));

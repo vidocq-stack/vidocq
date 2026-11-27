@@ -130,7 +130,8 @@ class EclipseCompilerFileObjectTest {
 
         @Override
         public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-            return delegate.process(annotations, roundEnv);
+            delegate.process(annotations, roundEnv);
+            return false;
         }
 
         @Override

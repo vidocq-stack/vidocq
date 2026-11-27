@@ -74,7 +74,7 @@ public record WeavingPlan(Map<String, ProxyLinkWeaver.SuperChain> beans, Set<Str
         var beans = new LinkedHashMap<String, ProxyLinkWeaver.SuperChain>();
         var proxies = new LinkedHashSet<String>();
         for (var line : text.lines().map(String::strip).filter(l -> !l.isEmpty()).toList()) {
-            var parts = line.split(" ");
+            var parts = line.split(" ", -1);
             switch (parts[0]) {
                 case "BEAN" -> {
                     if (parts.length != 3) throw new IllegalArgumentException("Malformed plan line: " + line);

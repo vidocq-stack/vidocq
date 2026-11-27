@@ -278,6 +278,11 @@ class ContainerBuilderExtensionPhasesTest {
                 public int read() throws IOException {
                     throw new IOException("cannot read " + name);
                 }
+
+                @Override
+                public int read(byte[] buffer, int offset, int length) throws IOException {
+                    throw new IOException("cannot read " + name);
+                }
             };
         }
     }

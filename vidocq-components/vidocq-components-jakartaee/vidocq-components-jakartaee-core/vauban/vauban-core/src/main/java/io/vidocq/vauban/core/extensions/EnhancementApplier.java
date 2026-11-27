@@ -374,8 +374,8 @@ final class EnhancementApplier {
                 || target.hasAnnotation(annotation -> declared.name().equals(annotation.name()));
         boolean removed = false;
         for (var config : configs) {
-            removed |= config.isAllAnnotationsRemoved() || onTheClass
-                    && config.getRemovePredicates().stream().anyMatch(predicate -> predicate.test(declared));
+            removed |= config.isAllAnnotationsRemoved() || (onTheClass
+                    && config.getRemovePredicates().stream().anyMatch(predicate -> predicate.test(declared)));
             if (removed) {
                 for (var added : config.getAddedAnnotations()) {
                     var addedScope = BceProcessor.scopeOf(added);
@@ -402,7 +402,7 @@ final class EnhancementApplier {
         boolean onTheClass = target == null || target.hasAnnotation(annotation -> PRIORITY.value().equals(annotation.name()));
         for (var config : configs) {
             if (priority.isPresent() && (config.isAllAnnotationsRemoved()
-                    || onTheClass && removesPriority(config, priority.getAsInt()))) {
+                    || (onTheClass && removesPriority(config, priority.getAsInt())))) {
                 priority = OptionalInt.empty();
             }
             for (var added : config.getAddedAnnotationsIndexed()) {
@@ -644,7 +644,7 @@ final class EnhancementApplier {
         return -1;
     }
 
-    private static LinkedHashSet<QualifierInstance> sourceQualifiers(
+    private static java.util.SequencedSet<QualifierInstance> sourceQualifiers(
             java.util.Collection<AnnotationInfo> annotations) {
         var qualifiers = new LinkedHashSet<QualifierInstance>();
         annotations.stream().filter(EnhancementApplier::isQualifierAnnotationInfo)

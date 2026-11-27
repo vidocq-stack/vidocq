@@ -35,6 +35,7 @@ public class PrivateNestedHolder {
         }
     }
 
+    @SuppressWarnings("ExposedPrivateType") // the fixture: a private type in an inherited signature
     public static class SecretLabeledBase implements ReceiverLabeled<Secret> {
     }
 
@@ -44,6 +45,7 @@ public class PrivateNestedHolder {
      * (BUG-20261004-09, {@code n11b}).
      */
     public static class SecretTaker {
+        @SuppressWarnings("ExposedPrivateType") // the fixture: a private type in an inherited signature
         public String take(Secret secret) {
             return getClass().getSimpleName() + " took " + secret;
         }

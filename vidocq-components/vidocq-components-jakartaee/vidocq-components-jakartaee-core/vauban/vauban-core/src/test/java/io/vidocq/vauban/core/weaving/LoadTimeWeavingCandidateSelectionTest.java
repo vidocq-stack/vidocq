@@ -89,6 +89,11 @@ class LoadTimeWeavingCandidateSelectionTest {
                     public int read() throws IOException {
                         throw new IOException("unreadable");
                     }
+
+                    @Override
+                    public int read(byte[] buffer, int offset, int length) throws IOException {
+                        throw new IOException("unreadable");
+                    }
                 };
             }
             var bytes = classes.get(binaryName);

@@ -484,7 +484,7 @@ public final class IndexClassValidator {
                 }
                 for (var method : methods(superClass)) {
                     if (!has(method.annotations(), INJECT) || method.isStatic()
-                            || !method.isPrivate() && overridden.contains(signature(method))) {
+                            || (!method.isPrivate() && overridden.contains(signature(method)))) {
                         continue;
                     }
                     var parameters = method.parameters();
@@ -828,7 +828,7 @@ public final class IndexClassValidator {
      * when {@code from} is not a class or a supertype it would have to look at is not in the index.
      */
     private boolean assignable(DotName type, DotName from) {
-        if (from == null || index.getClassByName(from).isEmpty() && !from.equals(OBJECT)) {
+        if (from == null || (index.getClassByName(from).isEmpty() && !from.equals(OBJECT))) {
             throw new Undecidable();
         }
         if (type.equals(from) || type.equals(OBJECT)) return true;

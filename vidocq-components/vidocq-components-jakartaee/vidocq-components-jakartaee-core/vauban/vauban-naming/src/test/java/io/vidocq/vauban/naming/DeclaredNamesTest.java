@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
  * Names the application declares: a {@link JndiBindings} bean binds each one to a bean or to another name, in
  * one of the four namespaces, which never fall back on one another.
  */
+@SuppressWarnings("BanJNDI") // tests of Vidocq's own java: naming, which deserializes nothing
 class DeclaredNamesTest {
 
     private VaubanContainer container;

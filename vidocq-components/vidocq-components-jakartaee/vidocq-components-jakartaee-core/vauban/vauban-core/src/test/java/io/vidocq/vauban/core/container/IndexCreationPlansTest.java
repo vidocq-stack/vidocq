@@ -52,7 +52,9 @@ class IndexCreationPlansTest {
     public static class Base {
         @Inject String baseField;
         @Inject void overridden(String s) { /* no behaviour needed */ }
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject void kept(Integer i) { /* no behaviour needed */ }
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject private void privateInit(String s) { /* no behaviour needed */ }
         @PostConstruct void init() { /* no behaviour needed */ }
         @PreDestroy void destroy() { /* no behaviour needed */ }
@@ -68,7 +70,9 @@ class IndexCreationPlansTest {
     @SuppressWarnings("java:S1172")
     public static class Leaf extends Middle {
         @Inject Double leafField;
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject <T extends Number> void generic(List<T> values, T[] array, int n) { /* no behaviour needed */ }
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject private void privateInit(String s) { /* a private method overrides nothing */ }
         @PostConstruct void leafInit() { /* no behaviour needed */ }
     }

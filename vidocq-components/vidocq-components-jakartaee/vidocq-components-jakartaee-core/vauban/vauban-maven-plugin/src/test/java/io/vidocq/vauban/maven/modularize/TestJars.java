@@ -112,7 +112,7 @@ final class TestJars {
             }
             for (var e : extraTextEntries.entrySet()) {
                 jos.putNextEntry(new JarEntry(e.getKey()));
-                jos.write(e.getValue().getBytes());
+                jos.write(e.getValue().getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 jos.closeEntry();
             }
         }

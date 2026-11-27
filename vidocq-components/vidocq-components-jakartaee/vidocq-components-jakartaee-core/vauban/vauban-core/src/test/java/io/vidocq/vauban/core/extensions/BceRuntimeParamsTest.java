@@ -54,6 +54,7 @@ class BceRuntimeParamsTest {
     enum Mode { FAST, SAFE }
 
     /** What the creator read from its params. */
+    @SuppressWarnings("ArrayRecordComponent") // the test reads each component, never the record as a whole
     public record Report(Class<?>[] classes, String[] names, int[] counts, Mode mode, Mode[] modes,
                          Class<?> single, Named named) {
     }

@@ -123,7 +123,7 @@ class ExampleAppEndToEndTest {
                 "Second line should start with 'Encoded: '. Got: " + encodedLine);
 
         var base64Part = encodedLine.substring("Encoded: ".length());
-        var decoded = new String(Base64.getDecoder().decode(base64Part));
+        var decoded = new String(Base64.getDecoder().decode(base64Part), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(decoded.contains("Bonjour, Base64Test"),
                 "Decoded should contain greeting. Got: " + decoded);
     }
@@ -172,10 +172,12 @@ class ExampleAppEndToEndTest {
             unzip(Path.of(zipPath), tempDir);
 
             // Find the run.sh script
-            var runScript = Files.walk(tempDir)
-                    .filter(p -> p.getFileName().toString().equals("run.sh"))
-                    .findFirst()
-                    .orElseThrow(() -> new AssertionError("run.sh not found in distribution"));
+            Path runScript;
+            try (var files = Files.walk(tempDir)) {
+                runScript = files.filter(p -> p.getFileName().toString().equals("run.sh"))
+                        .findFirst()
+                        .orElseThrow(() -> new AssertionError("run.sh not found in distribution"));
+            }
 
             var javaExe = System.getProperty("java.executable",
                     ProcessHandle.current().info().command().orElse("java"));
@@ -186,8 +188,8 @@ class ExampleAppEndToEndTest {
             pb.environment().put("PATH", Path.of(javaExe).getParent() + ":" + System.getenv("PATH"));
             var process = pb.start();
 
-            var stdout = new String(process.getInputStream().readAllBytes());
-            var stderr = new String(process.getErrorStream().readAllBytes());
+            var stdout = new String(process.getInputStream().readAllBytes(), java.nio.charset.Charset.defaultCharset());
+            var stderr = new String(process.getErrorStream().readAllBytes(), java.nio.charset.Charset.defaultCharset());
             process.waitFor(30, TimeUnit.SECONDS);
 
             assertEquals(0, process.exitValue(),
@@ -198,8 +200,10 @@ class ExampleAppEndToEndTest {
                     "Should contain encoded line. Got:\n" + stdout);
         } finally {
             // Cleanup
-            Files.walk(tempDir).sorted(java.util.Comparator.reverseOrder())
-                    .forEach(p -> { try { Files.delete(p); } catch (IOException _) { /* best effort cleanup */ } });
+            try (var files = Files.walk(tempDir)) {
+                files.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(p -> { try { Files.delete(p); } catch (IOException _) { /* best effort cleanup */ } });
+            }
         }
     }
 
@@ -228,8 +232,8 @@ class ExampleAppEndToEndTest {
         pb.environment().put("VAUBAN_SJAR_KEY", DEMO_KEY);
         var process = pb.start();
 
-        var stdout = new String(process.getInputStream().readAllBytes());
-        var stderr = new String(process.getErrorStream().readAllBytes());
+        var stdout = new String(process.getInputStream().readAllBytes(), java.nio.charset.Charset.defaultCharset());
+        var stderr = new String(process.getErrorStream().readAllBytes(), java.nio.charset.Charset.defaultCharset());
         var exited = process.waitFor(30, TimeUnit.SECONDS);
 
         assertTrue(exited, "Process should complete within 30s");

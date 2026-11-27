@@ -379,7 +379,8 @@ public final class LoadTimeWeaving {
                 "io.vidocq.vauban.weaver.AttachBack", pid, agentJar.toString(), planFile.toString()))
                 .redirectErrorStream(true)
                 .start();
-        String output = new String(child.getInputStream().readAllBytes());
+        // Diagnostic text of the helper JVM, decoded as before: with the default charset
+        String output = new String(child.getInputStream().readAllBytes(), java.nio.charset.Charset.defaultCharset());
         if (!exitsInTime(child)) {
             child.destroyForcibly();
             throw new IllegalStateException("attach helper timed out");
@@ -432,7 +433,7 @@ public final class LoadTimeWeaving {
         }
         for (var pathProperty : List.of("jdk.module.path", "java.class.path")) {
             var paths = System.getProperty(pathProperty, "");
-            for (var entry : paths.split(File.pathSeparator)) {
+            for (var entry : paths.split(File.pathSeparator, -1)) {
                 if (entry.isBlank()) continue;
                 var file = Path.of(entry);
                 var fileName = String.valueOf(file.getFileName());

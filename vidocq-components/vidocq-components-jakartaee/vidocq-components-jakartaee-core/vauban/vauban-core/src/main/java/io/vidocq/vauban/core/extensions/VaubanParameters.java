@@ -76,8 +76,8 @@ public final class VaubanParameters implements Parameters {
     }
 
     @SuppressWarnings("unchecked")
-    private static <A extends java.lang.annotation.Annotation> A createAnnotationProxy(Class<?> type, jakarta.enterprise.lang.model.AnnotationInfo annInfo) {
-        return (A) io.vidocq.vauban.core.annotation.AnnotationInstances.create(
+    private static java.lang.annotation.Annotation createAnnotationProxy(Class<?> type, jakarta.enterprise.lang.model.AnnotationInfo annInfo) {
+        return io.vidocq.vauban.core.annotation.AnnotationInstances.create(
                 (Class<? extends java.lang.annotation.Annotation>) type,
                 io.vidocq.vauban.core.langmodel.LangModelAnnotations.toIndex(annInfo),
                 type.getClassLoader());

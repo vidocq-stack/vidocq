@@ -70,7 +70,7 @@ public final class RuntimeClientProxyGenerator {
      * Generate a client proxy for a normal-scoped producer's produced type at an explicit
      * {@code proxyBinaryName} (in the producer's own package), extending {@code producedType}
      * (issue #42, Stage 1.6 — the bytecode counterpart of the APT producer-proxy path). Only call
-     * for a produced type deemed {@link ProducerProxyEligibility#eligible eligible}: a cross-package
+     * for a produced type deemed {@link ProducerProxyEligibility.Reason#eligible eligible}: a cross-package
      * proxy forwards only public methods, so all overridable methods must be public.
      *
      * @param producedType   the fully-public produced class the proxy extends and forwards to
@@ -410,6 +410,7 @@ public final class RuntimeClientProxyGenerator {
         return !(method.getName().equals("clone") && method.getParameterCount() == 0);
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents; a published signature
     public record GeneratedProxy(String className, byte[] bytecode) {
         @Override public boolean equals(Object o) {
             return o instanceof GeneratedProxy(var otherName, var otherBytecode)

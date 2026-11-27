@@ -28,6 +28,7 @@ import java.util.Objects;
  * @param className fully qualified class name (dot-separated)
  * @param bytecode  the class file bytes
  */
+@SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents; a published signature
 public record GeneratedClass(String className, byte[] bytecode) {
 
     /**

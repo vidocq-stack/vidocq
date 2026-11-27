@@ -65,6 +65,7 @@ class DefaultNamingService implements NamingService {
     }
 
     /** The declared names, built at the first call. */
+    @SuppressWarnings("ReferenceEquality") // the building thread, by identity
     NameTable table() {
         NameTable built = table.get();
         if (built == null) {

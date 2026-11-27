@@ -57,6 +57,7 @@ class ExtensionBuildersEdgeCasesTest {
     }
 
     @Test
+    @SuppressWarnings("BadAnnotationImplementation") // fixture: a broken annotation, never compared
     void anAnnotationThatCannotNameItsTypeIsNotAdded() {
         var config = new VaubanMethodConfig(new ReflectionMethodInfo(Object.class.getMethods()[0], null));
         Annotation broken = new Annotation() {

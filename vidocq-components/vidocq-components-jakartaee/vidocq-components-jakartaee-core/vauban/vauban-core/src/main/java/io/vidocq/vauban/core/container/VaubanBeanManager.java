@@ -338,8 +338,7 @@ public final class VaubanBeanManager implements BeanManager, Serializable {
 
         for (var bean : beans) {
             // CDI spec: disabled alternatives (no @Priority) are excluded from resolution
-            if (bean.isAlternative() && bean instanceof ManagedBean<?> mb
-                    && !mb.descriptor().priorityDeclared()) {
+            if (bean.isAlternative() && !bean.descriptor().priorityDeclared()) {
                 continue;
             }
 
@@ -396,8 +395,7 @@ public final class VaubanBeanManager implements BeanManager, Serializable {
         for (var bean : beans) {
             if (Objects.equals(name, bean.getName())) {
                 // CDI spec: disabled alternatives (no @Priority) are excluded from resolution
-                if (bean.isAlternative() && bean instanceof ManagedBean<?> mb
-                        && !mb.descriptor().priorityDeclared()) {
+                if (bean.isAlternative() && !bean.descriptor().priorityDeclared()) {
                     continue;
                 }
                 result.add(bean);
@@ -575,7 +573,7 @@ public final class VaubanBeanManager implements BeanManager, Serializable {
     @Override
     public Bean<?> getPassivationCapableBean(String id) {
         for (var bean : beans) {
-            if (bean instanceof ManagedBean<?> mb && id.equals(mb.descriptor().id().value())) {
+            if (bean != null && id.equals(bean.descriptor().id().value())) {
                 return bean;
             }
         }
@@ -1057,7 +1055,7 @@ public final class VaubanBeanManager implements BeanManager, Serializable {
         @Override
         public boolean test(Type beanType) {
             return beanType.equals(requiredType)
-                    || required != null && container.assignability().beanTypeMatches(converted(beanType), required);
+                    || (required != null && container.assignability().beanTypeMatches(converted(beanType), required));
         }
 
         /** {@code beanType} converted, once for the life of the container. */

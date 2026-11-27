@@ -64,6 +64,7 @@ public record SjarMetadata(Map<String, EntryMetadata> entries, Set<String> clear
      * @param originalSize plaintext size in bytes
      * @param kind         {@code "class"} or {@code "resource"}
      */
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents; a published signature
     public record EntryMetadata(String uuid, byte[] iv, int originalSize, String kind) {
         public String ivBase64() {
             return Base64.getEncoder().encodeToString(iv);

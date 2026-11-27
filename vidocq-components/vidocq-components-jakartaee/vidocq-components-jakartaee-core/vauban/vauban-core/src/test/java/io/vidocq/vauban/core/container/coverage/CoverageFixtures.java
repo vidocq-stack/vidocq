@@ -58,6 +58,7 @@ public final class CoverageFixtures {
         @Inject Dependency dependency;
 
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         void setUp(Dependency dependency) { /* no behaviour needed */ }
 
         @PostConstruct
@@ -69,6 +70,7 @@ public final class CoverageFixtures {
 
     @Dependent
     public static class PrivateFieldBean {
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject private Dependency dependency;
     }
 
@@ -92,6 +94,7 @@ public final class CoverageFixtures {
         @Inject Dependency dependency;
 
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         void setUp(Dependency dependency) { /* no behaviour needed */ }
 
         @AroundInvoke

@@ -143,6 +143,7 @@ class AnnotationTypesTest {
                     List.of(new AnnotationValue.IntVal(1), new AnnotationValue.IntVal(2))));
 
     /** The same annotation as {@link Carrier}'s, written by an application as a literal. */
+    @SuppressWarnings("BadAnnotationImplementation") // fixture: an application's literal, compared through the container
     static final class RichLiteral implements Rich {
         @Override public Class<? extends java.lang.annotation.Annotation> annotationType() { return Rich.class; }
 
@@ -429,6 +430,7 @@ class AnnotationTypesTest {
 
         @Test
         @DisplayName("the instance a bean exposes is the generated literal")
+        @SuppressWarnings("GetClassOnAnnotation") // the test asserts the implementation class itself
         void instancesComeFromTheProvider() {
             var instance = withReflection("forbid",
                     () -> generated().instanceOf(RICH, Map.of("value", string("premium"))));

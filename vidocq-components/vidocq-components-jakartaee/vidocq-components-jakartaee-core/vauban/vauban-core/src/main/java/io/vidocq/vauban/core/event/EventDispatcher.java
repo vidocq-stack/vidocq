@@ -522,7 +522,7 @@ public final class EventDispatcher {
         private final java.lang.reflect.Type[] actualTypeArguments;
         private final java.lang.reflect.Type ownerType;
 
-        public ParameterizedTypeImpl(Class<?> rawType, java.lang.reflect.Type[] actualTypeArguments, java.lang.reflect.Type ownerType) {
+        ParameterizedTypeImpl(Class<?> rawType, java.lang.reflect.Type[] actualTypeArguments, java.lang.reflect.Type ownerType) {
             this.rawType = rawType;
             this.actualTypeArguments = actualTypeArguments;
             this.ownerType = ownerType;

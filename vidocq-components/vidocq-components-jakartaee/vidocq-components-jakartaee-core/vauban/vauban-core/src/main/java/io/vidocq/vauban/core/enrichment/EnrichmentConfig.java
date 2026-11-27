@@ -152,8 +152,8 @@ public record EnrichmentConfig(List<EnrichmentRule> rules) {
 
         // Custom scope: assume normal if name matches known patterns, else normal by default
         boolean isNormal = NORMAL_SCOPE_NAMES.contains(scopeFqcn)
-                || !scopeFqcn.contains("Singleton")
-                && !scopeFqcn.contains("Dependent");
+                || (!scopeFqcn.contains("Singleton")
+                && !scopeFqcn.contains("Dependent"));
         return new ScopeInfo(DotName.of(scopeFqcn), isNormal);
     }
 }

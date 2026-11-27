@@ -81,7 +81,7 @@ class OverloadedInjectConstructorTest {
         }
 
         @Inject
-        @SuppressWarnings("java:S1172") // the signature is the case under test
+        @SuppressWarnings({"java:S1172", "UnusedVariable"}) // the signature is the case under test
         public Holder(Config config, Instance<Part> parts) {
             this.ids = parts.stream().map(Part::id).sorted().toList();
         }

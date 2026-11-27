@@ -118,7 +118,7 @@ class ClientProxyInheritanceCrossCheckTest {
     /** Eligible: a proxy never forwards {@code finalize()} or {@code clone()}, protected or not (E2). */
     public static class FinalizingCloneable implements Cloneable {
         @Override
-        @SuppressWarnings({"deprecation", "removal"})
+        @SuppressWarnings({"deprecation", "removal", "Finalize"}) // fixture: a finalize() override is the case under test
         protected void finalize() {
             // Nothing to release.
         }
@@ -532,7 +532,7 @@ class ClientProxyInheritanceCrossCheckTest {
     private static Set<String> distinctParts(String joined) {
         var set = new LinkedHashSet<String>();
         var signatures = new java.util.HashSet<String>();
-        for (var part : joined.split(";")) {
+        for (var part : joined.split(";", -1)) {
             if (!part.isBlank()) {
                 var signature = part.replaceAll("[#@].*$", "");
                 assertTrue(signatures.add(signature), "the shape lists " + signature + " twice: " + joined);
@@ -777,12 +777,13 @@ class ClientProxyInheritanceCrossCheckTest {
         private static class Secret {
         }
 
+        @SuppressWarnings("ExposedPrivateType") // fixture: a private type in an inherited signature
         public static class SecretLabeledBase
                 implements io.vidocq.vauban.processor.fixture.colocated.HiddenLabeled<Secret> {
         }
 
         public static class SecretTaker {
-            @SuppressWarnings("java:S1172") // the parameter is the signature under test
+            @SuppressWarnings({"java:S1172", "ExposedPrivateType"}) // the parameter, of a private type, is the signature under test
             public String take(Secret secret) { return "took"; }
         }
     }

@@ -109,6 +109,7 @@ class ClassFileScannerTest {
         class Inner<P extends O> {
         }
 
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         class Plain {
         }
     }
@@ -530,6 +531,7 @@ class ClassFileScannerTest {
 
         void plain(String s) { /* no behaviour needed */ }
 
+        @SuppressWarnings("ClassCanBeStatic") // fixture: an inner class is the case under test
         class Inner {
             Inner(java.util.List<String> names) { /* no behaviour needed */ }
         }
@@ -605,10 +607,11 @@ class ClassFileScannerTest {
     interface Pair<K, V> {
     }
 
+    @SuppressWarnings("ComparableType") // fixture: the type arguments are what the scanner reads
     interface Archive extends Pair<String, Long>, Comparable<List<String>> {
     }
 
-    @SuppressWarnings("java:S2326") // the declared type parameters are what the tests read
+    @SuppressWarnings({"java:S2326", "ComparableType"}) // the declared type parameters are what the tests read
     abstract static class Ranked<R extends Number & Comparable<R>> implements Comparable<R> {
     }
 

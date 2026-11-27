@@ -195,6 +195,7 @@ public final class ModuleLookups {
         }
 
         /** {@code type} lives in the same module, class loader and package as {@code managedClass}. */
+        @SuppressWarnings("ReferenceEquality") // the same defining class loader, by identity
         private static boolean sharesPackage(Class<?> type, Class<?> managedClass) {
             return type.getModule() == managedClass.getModule()
                     && type.getClassLoader() == managedClass.getClassLoader()

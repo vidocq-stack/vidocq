@@ -228,8 +228,8 @@ public final class AnnotationArtefacts {
         sb.append("\n    /** The instance of {@code @").append(type.name().simpleName())
                 .append("} the container hands to application code. */\n");
         sb.append("    static final class ").append(name).append(" implements ").append(source).append(" {\n");
+        if (!members.isEmpty()) sb.append("\n");
         for (var member : members) {
-            if (member == members.get(0)) sb.append("\n");
             sb.append("        private final ").append(sourceName(member.returnType())).append(" ")
                     .append(field(member)).append(";\n");
         }
@@ -601,7 +601,8 @@ public final class AnnotationArtefacts {
 
     private String quote(String value) {
         var escaped = new StringBuilder("\"");
-        for (var c : value.toCharArray()) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
             switch (c) {
                 case '"' -> escaped.append("\\\"");
                 case '\\' -> escaped.append("\\\\");

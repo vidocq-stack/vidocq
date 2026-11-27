@@ -213,7 +213,7 @@ class BceDeploymentClassLoaderTest {
                         "no invoker may fail to build: " + InvokerProbeBce.failures);
                 assertEquals(List.of(LibraryBean.class.getName(), ApplicationBean.class.getName()),
                         InvokerProbeBce.built.stream().sorted(
-                                        java.util.Comparator.comparing(n -> n.contains("$Library") ? 0 : 1))
+                                        java.util.Comparator.comparingInt(n -> n.contains("$Library") ? 0 : 1))
                                 .toList(),
                         "both beans must get an invoker");
             }

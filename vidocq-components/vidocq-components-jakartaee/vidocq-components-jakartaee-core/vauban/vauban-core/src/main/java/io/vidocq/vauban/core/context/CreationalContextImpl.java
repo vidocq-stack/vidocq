@@ -37,7 +37,7 @@ public final class CreationalContextImpl<T> implements CreationalContext<T> {
      */
     private final Contextual<T> interceptedBean;
     /** The context of each intercepted instance created with this one, by instance (BUG-20261118-36). */
-    private final Map<Object, CreationalContextImpl<?>> intercepted = new IdentityHashMap<>();
+    private final IdentityHashMap<Object, CreationalContextImpl<?>> intercepted = new IdentityHashMap<>();
 
     public CreationalContextImpl() {
         this(null);
@@ -89,11 +89,12 @@ public final class CreationalContextImpl<T> implements CreationalContext<T> {
         interceptorInstances.put(className, instance);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"}) // a published signature
     public <X> X getInterceptorInstance(String className) {
         return (X) interceptorInstances.get(className);
     }
 
+    @SuppressWarnings("ReferenceEquality") // instances are registered by identity, as CDI requires
     public boolean isRegistered(Object instance) {
         for (var inst : incompleteInstances) {
             if (inst == instance) return true;

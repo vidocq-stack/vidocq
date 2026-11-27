@@ -192,6 +192,7 @@ class InterfaceClientProxyTest {
     public static class NamesProducer {
         @Produces
         @RequestScoped
+        @SuppressWarnings("NonApiType") // fixture: the producer's return type is the case under test
         public java.util.ArrayList<String> names() {
             return new java.util.ArrayList<>(java.util.List.of("ada"));
         }

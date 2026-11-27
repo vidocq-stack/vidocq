@@ -514,8 +514,8 @@ public final class VaubanContainer implements AutoCloseable {
         return context.get(finalBean, creationalCtx);
     }
 
-    @SuppressWarnings("unchecked")
     /** The classes this container generated at run time, or will (vauban#227). */
+    @SuppressWarnings("unchecked")
     RuntimeGeneration runtimeGeneration() {
         return interceptorWrapper.runtimeGeneration();
     }
@@ -997,6 +997,7 @@ public final class VaubanContainer implements AutoCloseable {
                 new java.util.concurrent.atomic.AtomicReference<>();
 
         /** Read-only once built; compared by identity, as only one is ever built per factory. */
+        @SuppressWarnings("ArrayRecordComponent") // compared by identity on purpose, see the Javadoc; equals and hashCode are overridden
         private record CtorPlan(java.lang.reflect.Constructor<?> ctor, Class<?>[] types,
                                 java.lang.reflect.Type[] genericTypes, java.lang.reflect.Parameter[] parameters,
                                 Annotation[][] qualifiers, boolean[] transientReference) {

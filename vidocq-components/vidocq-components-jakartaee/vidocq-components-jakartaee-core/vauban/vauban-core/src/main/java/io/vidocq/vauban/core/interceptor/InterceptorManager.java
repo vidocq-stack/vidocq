@@ -924,21 +924,6 @@ public final class InterceptorManager {
         }
     }
 
-    @SuppressWarnings("java:S3011") // CDI spec requires reflective access
-    private Method findAnnotatedMethod(Class<?> clazz, Class<? extends java.lang.annotation.Annotation> annotation) {
-        var current = clazz;
-        while (current != null && current != Object.class) {
-            for (var method : current.getDeclaredMethods()) {
-                if (method.isAnnotationPresent(annotation)) {
-                    makeAccessibleSafe(method);
-                    return method;
-                }
-            }
-            current = current.getSuperclass();
-        }
-        return null;
-    }
-
     private void makeAccessibleSafe(java.lang.reflect.AccessibleObject member) {
         if (vaubanLookup != null) {
             vaubanLookup.makeAccessible(member);

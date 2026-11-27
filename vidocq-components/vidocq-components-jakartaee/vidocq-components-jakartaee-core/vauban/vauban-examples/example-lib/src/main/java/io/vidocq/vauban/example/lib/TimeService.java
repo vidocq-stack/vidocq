@@ -21,6 +21,7 @@ package io.vidocq.vauban.example.lib;
 
 import jakarta.enterprise.context.Dependent;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
@@ -32,6 +33,6 @@ public class TimeService {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     public String now() {
-        return LocalTime.now().format(FORMATTER);
+        return LocalTime.now(ZoneId.systemDefault()).format(FORMATTER);
     }
 }

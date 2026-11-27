@@ -68,16 +68,19 @@ final class CdiContext implements Context {
     }
 
     @Override
+    @SuppressWarnings("BanJNDI") // Vidocq's own java: naming, which deserializes nothing
     public Object lookup(Name name) throws NamingException {
         return lookup(name.toString());
     }
 
     @Override
+    @SuppressWarnings("BanJNDI") // Vidocq's own java: naming, which deserializes nothing
     public Object lookupLink(String name) throws NamingException {
         return lookup(name);
     }
 
     @Override
+    @SuppressWarnings("BanJNDI") // Vidocq's own java: naming, which deserializes nothing
     public Object lookupLink(Name name) throws NamingException {
         return lookup(name);
     }

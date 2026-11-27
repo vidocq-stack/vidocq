@@ -42,7 +42,7 @@ public final class InvokerClasses {
     /** The classes of the metadata being written: {@link SyntheticParamCodec} reads them while it encodes. */
     static final ScopedValue<InvokerClasses> WRITING = ScopedValue.newInstance();
 
-    private final Map<InvokerInfo, String> names = new IdentityHashMap<>();
+    private final IdentityHashMap<InvokerInfo, String> names = new IdentityHashMap<>();
     private final Map<String, byte[]> classes = new LinkedHashMap<>();
     private final Map<String, InvokerTarget> targets = new LinkedHashMap<>();
 

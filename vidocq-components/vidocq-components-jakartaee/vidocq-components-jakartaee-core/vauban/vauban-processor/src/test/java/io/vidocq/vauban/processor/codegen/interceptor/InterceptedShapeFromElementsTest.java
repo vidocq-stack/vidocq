@@ -94,6 +94,7 @@ class InterceptedShapeFromElementsTest {
         }
 
         @jakarta.inject.Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         public void injectInitializer(Object dep) { /* no behaviour needed */ }
     }
 
@@ -109,7 +110,7 @@ class InterceptedShapeFromElementsTest {
     public static class NonPublicBase extends io.vidocq.vauban.processor.fixture.colocated.ForeignInterceptedBase {
         protected String inheritedProtected() { return "prot"; }
         String inheritedPackagePrivate() { return "pp"; }
-        @SuppressWarnings("java:S1144") // never called: it proves a private method is not intercepted
+        @SuppressWarnings({"java:S1144", "UnusedMethod"}) // never called: it proves a private method is not intercepted
         private String inheritedPrivate() { return "private"; }
         protected String overriddenProtected() { return "base"; }
     }
@@ -337,6 +338,7 @@ class InterceptedShapeFromElementsTest {
         private static class Secret {
         }
 
+        @SuppressWarnings({"ExposedPrivateType", "SameNameButDifferent"}) // fixture: a shadowed private type in an inherited signature
         public static class ShadowedSecretBase extends PrivateObjectLabel implements GenericLabel<Secret> {
         }
     }
@@ -372,6 +374,7 @@ class InterceptedShapeFromElementsTest {
             private String carried() { return "private"; }
         }
 
+        @SuppressWarnings("ExposedPrivateType") // fixture: a private type in an inherited signature
         public static class CarrierMid extends CarrierShadow implements Carrier {
         }
     }
@@ -500,11 +503,13 @@ class InterceptedShapeFromElementsTest {
         private static class Secret {
         }
 
+        @SuppressWarnings({"ExposedPrivateType", "SameNameButDifferent"}) // fixture: a shadowed private type in an inherited signature
         public static class SecretLabeledBase implements GenericLabel<Secret> {
         }
 
         public static class SecretTaker {
-            @SuppressWarnings("java:S1172") // the parameter is the signature under test
+            // the parameter, a shadowed private type, is the signature under test
+            @SuppressWarnings({"java:S1172", "SameNameButDifferent", "ExposedPrivateType"})
             public String take(Secret secret) { return "took"; }
         }
     }

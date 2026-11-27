@@ -86,7 +86,7 @@ class AnnotationInstancesConversionTest {
 
     @Test
     void scalarValuesKeepTheirKind() {
-        assertEquals(Boolean.TRUE, convert(new AnnotationValue.BooleanVal(true), boolean.class));
+        assertEquals(true, convert(new AnnotationValue.BooleanVal(true), boolean.class));
         assertEquals('c', convert(new AnnotationValue.CharVal('c'), char.class));
         assertEquals(String.class, convert(new AnnotationValue.ClassVal(DotName.of("java.lang.String")), Class.class));
     }

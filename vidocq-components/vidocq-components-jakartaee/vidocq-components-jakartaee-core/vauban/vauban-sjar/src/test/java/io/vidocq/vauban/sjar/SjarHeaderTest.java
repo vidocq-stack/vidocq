@@ -44,7 +44,7 @@ class SjarHeaderTest {
         var header = new SjarHeader("vidocq-prod");
         var out = new ByteArrayOutputStream();
         header.writeTo(out);
-        var json = out.toString();
+        var json = out.toString(java.nio.charset.StandardCharsets.UTF_8);
 
         // header must contain only bootstrap fields, never a package/class path
         assertFalse(json.contains("internal"));
@@ -54,7 +54,7 @@ class SjarHeaderTest {
 
     @Test
     void malformedHeaderThrowsIOException() {
-        var garbage = new java.io.ByteArrayInputStream("{ not a header }".getBytes());
+        var garbage = new java.io.ByteArrayInputStream("{ not a header }".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         assertThrows(java.io.IOException.class, () -> SjarHeader.readFrom(garbage));
     }
 }

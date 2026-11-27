@@ -182,7 +182,7 @@ class EnhancedDependencyTest {
      */
     private static java.lang.module.ModuleFinder explicitModulesOnTestClassPath() {
         var modular = new java.util.ArrayList<Path>();
-        for (var entry : System.getProperty("java.class.path").split(java.io.File.pathSeparator)) {
+        for (var entry : System.getProperty("java.class.path").split(java.io.File.pathSeparator, -1)) {
             Path path = Path.of(entry);
             if (Files.isDirectory(path)) {
                 if (Files.isRegularFile(path.resolve("module-info.class"))) {

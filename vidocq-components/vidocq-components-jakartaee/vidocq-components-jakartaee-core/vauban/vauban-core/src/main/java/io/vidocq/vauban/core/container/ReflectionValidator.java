@@ -461,7 +461,7 @@ final class ReflectionValidator {
     private static boolean mayBeABean(Class<?> clazz, Predicate<Class<?>> descriptorBeans) {
         if (Modifier.isAbstract(clazz.getModifiers())
                 || clazz.isAnnotationPresent(jakarta.enterprise.inject.Vetoed.class)
-                || !descriptorBeans.test(clazz) && !hasBeanDefiningAnnotation(clazz)) {
+                || (!descriptorBeans.test(clazz) && !hasBeanDefiningAnnotation(clazz))) {
             return false;
         }
         // A class has a package, the unnamed one included: only an array or a primitive type has none

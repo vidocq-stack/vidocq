@@ -25,6 +25,7 @@ import javax.naming.NamingException;
 
 /** A declaring bean that looks a name up while it binds: the table it asks for is the one being built. */
 @Dependent
+@SuppressWarnings("BanJNDI") // tests of Vidocq's own java: naming, which deserializes nothing
 public class LookingUpNames implements JndiBindings {
 
     @Override

@@ -348,9 +348,14 @@ public class VaubanProcessor extends AbstractProcessor {
         var parameterized = new ParameterizedSupertypes(processingEnv.getElementUtils(), processingEnv.getTypeUtils());
         var declarations = new CompilerDeclarations(processingEnv);
         try (var _ = BceLogBridge.install(processingEnv.getMessager(), BCE_PREFIX)) {
-            return CompiledSupertypes.where(parameterized, () -> IndexLookup.whereUnindexedDescribedBy(
-                    declarations::unindexed, declarations::declaration, () -> processDeployment(scanner)));
+            CompiledSupertypes.where(parameterized, () -> IndexLookup.whereUnindexedDescribedBy(
+                    declarations::unindexed, declarations::declaration, () -> {
+                        processDeployment(scanner);
+                        return null;
+                    }));
         }
+        // It supports every annotation: claiming them would hide them from the processors after it (BUG-20261127-57)
+        return false;
     }
 
     /**
@@ -633,16 +638,18 @@ public class VaubanProcessor extends AbstractProcessor {
      * {@link IndexLookup#describe} and {@link IndexLookup#declaration} read a class the index does not hold through
      * {@link CompilerDeclarations}.
      *
-     * @return what {@link #process} returns
      */
-    private boolean processDeployment(ElementScanner scanner) {
+    private void processDeployment(ElementScanner scanner) {
         var indexBuilder = accumulatedIndex;
         // The annotation types the indexed classes name — a qualifier, a stereotype or an interceptor
         // binding this compilation declares is on no class path yet, so discovery cannot fall back on
         // Class.forName for it, and would ignore it on both sides (BUG-20260914-13).
         indexAnnotationTypes(indexBuilder, scanner);
         var index = indexBuilder.build();
-        if (index.size() == 0) return writeDeclaredInterfaceProxiesAlone();
+        if (index.size() == 0) {
+            writeDeclaredInterfaceProxiesAlone();
+            return;
+        }
 
         // --- BCE: Use extensions discovered in init() ---
         var aptClassLoader = VaubanProcessor.class.getClassLoader();
@@ -653,7 +660,7 @@ public class VaubanProcessor extends AbstractProcessor {
             discoveryResult = runDiscoveryPhase(bceClasses, index, indexBuilder, aptClassLoader);
             boolean definitionFailed = reported(discoveryResult.definitionErrors());
             if (reported(discoveryResult.deploymentErrors()) || definitionFailed) {
-                return true;
+                return;
             }
             index = indexBuilder.build();
         }
@@ -668,13 +675,16 @@ public class VaubanProcessor extends AbstractProcessor {
 
         var beans = new ArrayList<>(discovery.discoverBeans());
 
-        if (beans.isEmpty() && bceClasses.isEmpty()) return writeDeclaredInterfaceProxiesAlone();
+        if (beans.isEmpty() && bceClasses.isEmpty()) {
+            writeDeclaredInterfaceProxiesAlone();
+            return;
+        }
 
         // --- BCE: remaining phases (@Enhancement → @Validation) ---
         boolean bceProcessed = !bceClasses.isEmpty();
         if (bceProcessed && !runRemainingBcePhases(bceClasses, beans, discovery,
                 Objects.requireNonNull(discoveryResult), index, aptClassLoader)) {
-            return true;
+            return;
         }
 
         // Injection points may target beans that live in a dependency. Such a type is absent from
@@ -691,7 +701,7 @@ public class VaubanProcessor extends AbstractProcessor {
 
         var validationErrors = validateDeployment(beans, observerPoints, index, discoveryResult);
         if (reportValidationErrors(validationErrors, dependencyTypes)) {
-            return true;
+            return;
         }
         reportDefinitionErrors(beans, index, scanner);
 
@@ -716,7 +726,6 @@ public class VaubanProcessor extends AbstractProcessor {
 
         mergeMainRoundIndexes();
 
-        return true;
     }
 
     /**
@@ -1093,17 +1102,14 @@ public class VaubanProcessor extends AbstractProcessor {
     /**
      * A module without a bean of its own may still list interfaces in {@code @ClientProxies}, an extension's module
      * for one: their proxies, and the providers that create them.
-     *
-     * @return what {@link #process} returns
      */
-    private boolean writeDeclaredInterfaceProxiesAlone() {
+    private void writeDeclaredInterfaceProxiesAlone() {
         if (declaredInterfaceProxies.isEmpty()) {
-            return false;
+            return;
         }
         var generation = new Generation();
         generateDeclaredInterfaceProxies(generation);
         componentProviders.writeAll(generation, Map.of());
-        return true;
     }
 
     /**
@@ -1645,7 +1651,7 @@ public class VaubanProcessor extends AbstractProcessor {
         var elements = processingEnv.getElementUtils();
         // Per package, the annotation types its provider carries — keyed by name so a type used many
         // times in one package is rendered once.
-        var byPackage = new java.util.LinkedHashMap<String, java.util.LinkedHashMap<DotName, ClassInfo>>();
+        var byPackage = new java.util.LinkedHashMap<String, Map<DotName, ClassInfo>>();
         var fromDependencies = new java.util.LinkedHashMap<DotName, ClassInfo>();
 
         for (var classInfo : index.getKnownClasses()) {
@@ -1676,7 +1682,7 @@ public class VaubanProcessor extends AbstractProcessor {
     /** Adds to the package of each class compiled here the dependency annotation types it uses. */
     private static void addUsedDependencyAnnotationTypes(io.vidocq.vauban.indexer.VaubanIndex index,
             Elements elements, Map<DotName, ClassInfo> fromDependencies,
-            Map<String, java.util.LinkedHashMap<DotName, ClassInfo>> byPackage) {
+            Map<String, Map<DotName, ClassInfo>> byPackage) {
         for (var classInfo : index.getKnownClasses()) {
             if (!classInfo.isAnnotation() && compiledHere(elements, classInfo)) {
                 addUsedDependencyAnnotationTypesOf(classInfo, fromDependencies, byPackage);
@@ -1687,7 +1693,7 @@ public class VaubanProcessor extends AbstractProcessor {
     /** Adds to the package of {@code classInfo} the dependency annotation types it uses. */
     private static void addUsedDependencyAnnotationTypesOf(ClassInfo classInfo,
             Map<DotName, ClassInfo> fromDependencies,
-            Map<String, java.util.LinkedHashMap<DotName, ClassInfo>> byPackage) {
+            Map<String, Map<DotName, ClassInfo>> byPackage) {
         var used = new java.util.ArrayList<DotName>();
         collectAnnotationNames(classInfo, used);
         for (var name : used) {

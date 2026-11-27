@@ -62,7 +62,7 @@ public final class InstanceImpl<T> implements Instance<T>, Serializable {
     private final transient Annotation[] qualifiers;
     private final transient jakarta.enterprise.inject.spi.InjectionPoint injectionPoint;
     private final transient CreationalContextImpl<?> parentCreationalContext;
-    private final transient Map<Object, jakarta.enterprise.context.spi.CreationalContext<?>> dependentInstances =
+    private final transient IdentityHashMap<Object, jakarta.enterprise.context.spi.CreationalContext<?>> dependentInstances =
             new IdentityHashMap<>();
     /** The container injected it at {@link #injectionPoint}: it moves by that injection point. */
     private final transient boolean injected;

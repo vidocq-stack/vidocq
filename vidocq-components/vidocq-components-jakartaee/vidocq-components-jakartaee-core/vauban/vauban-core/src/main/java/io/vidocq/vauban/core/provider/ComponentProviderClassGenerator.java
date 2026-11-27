@@ -124,6 +124,7 @@ public final class ComponentProviderClassGenerator {
     public record ProducerProxy(String key, String proxyFqn) {}
 
     /** A generated class: its fully-qualified name and its bytecode. */
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents; a published signature
     public record Generated(String className, byte[] bytecode) {
 
         /** Equal to a generated class of the same name and the same bytes. */

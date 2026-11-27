@@ -59,7 +59,7 @@ class BceEnumMembersTest {
         private final String label;
 
         Level(@Marked String label, boolean flag) {
-            this.label = flag ? label : label.toUpperCase();
+            this.label = flag ? label : label.toUpperCase(java.util.Locale.ROOT);
         }
 
         public String label() {

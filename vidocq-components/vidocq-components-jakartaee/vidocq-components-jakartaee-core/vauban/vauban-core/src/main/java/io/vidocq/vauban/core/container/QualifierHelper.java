@@ -148,7 +148,7 @@ final class QualifierHelper {
 
     /** {@code candidate} over {@code found} when there is none yet, or when it names its class and the other not. */
     private static InjectionPointInfo preferred(InjectionPointInfo found, InjectionPointInfo candidate) {
-        return found == null || found.declaringClass() == null && candidate.declaringClass() != null
+        return found == null || (found.declaringClass() == null && candidate.declaringClass() != null)
                 ? candidate : found;
     }
 

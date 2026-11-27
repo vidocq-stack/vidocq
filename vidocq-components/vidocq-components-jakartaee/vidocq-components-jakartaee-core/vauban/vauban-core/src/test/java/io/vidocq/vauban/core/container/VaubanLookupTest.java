@@ -92,7 +92,7 @@ class VaubanLookupTest {
 
     public static class BeanWithField {
         public String message;
-        @SuppressWarnings("java:S1068") // read through reflection by the tests
+        @SuppressWarnings({"java:S1068", "UnusedVariable"}) // read through reflection by the tests
         private int count;
     }
 

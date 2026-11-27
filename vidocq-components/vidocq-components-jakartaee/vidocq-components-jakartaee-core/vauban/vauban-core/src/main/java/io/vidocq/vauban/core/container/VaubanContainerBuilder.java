@@ -620,7 +620,7 @@ public final class VaubanContainerBuilder {
      * chain's service catalogs, and the layer loader's own chain already reaches the application loader — a
      * composite parented elsewhere would hide the layer's providers (generated _VaubanComponents, Cassini adapters…).
      */
-    private static java.util.SequencedSet<ClassLoader> layerLoaderFirst(java.util.LinkedHashSet<ClassLoader> loaders) {
+    private static java.util.SequencedSet<ClassLoader> layerLoaderFirst(java.util.SequencedSet<ClassLoader> loaders) {
         ClassLoader layerLoader = null;
         for (var loader : loaders) {
             if (layerLoader == null && loader instanceof io.vidocq.vauban.classloader.VaubanClassLoader) {

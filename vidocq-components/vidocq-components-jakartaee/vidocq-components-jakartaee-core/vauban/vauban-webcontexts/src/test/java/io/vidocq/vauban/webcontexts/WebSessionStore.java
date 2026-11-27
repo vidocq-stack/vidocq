@@ -61,6 +61,7 @@ final class WebSessionStore implements SessionStore {
     }
 
     @Override
+    @SuppressWarnings("ReferenceEquality") // the session, by identity
     public boolean isSession(Object instance) {
         return instance == session;
     }

@@ -134,6 +134,7 @@ class InterceptorInjectConstructorTest {
     @Greeted
     @jakarta.interceptor.Interceptor
     @Priority(jakarta.interceptor.Interceptor.Priority.APPLICATION)
+    @SuppressWarnings("MoreThanOneInjectableConstructor") // fixture: the definition error under test
     public static class TwoInjectConstructorsInterceptor {
         @Inject
         public TwoInjectConstructorsInterceptor(@Formal Salutation salutation) {

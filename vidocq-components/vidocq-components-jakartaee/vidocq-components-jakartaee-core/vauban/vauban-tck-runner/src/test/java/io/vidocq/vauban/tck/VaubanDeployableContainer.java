@@ -141,7 +141,7 @@ public class VaubanDeployableContainer implements DeployableContainer<VaubanCont
     }
 
     private void extractClass(org.jboss.shrinkwrap.api.asset.Asset asset,
-            Map<String, byte[]> classBytecodeMap, ArrayList<String> classNames) {
+            Map<String, byte[]> classBytecodeMap, java.util.List<String> classNames) {
         try (InputStream is = asset.openStream()) {
             var bytes = is.readAllBytes();
             try {

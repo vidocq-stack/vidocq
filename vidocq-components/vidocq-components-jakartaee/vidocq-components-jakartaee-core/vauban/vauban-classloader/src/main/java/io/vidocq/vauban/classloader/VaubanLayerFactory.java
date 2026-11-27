@@ -278,7 +278,7 @@ public final class VaubanLayerFactory {
             return reference;
         }
 
-        var merged = new LinkedHashMap<String, LinkedHashSet<String>>();
+        var merged = new LinkedHashMap<String, Set<String>>();
         for (var provides : descriptor.provides()) {
             providersOf(merged, provides.service()).addAll(provides.providers());
         }
@@ -301,7 +301,7 @@ public final class VaubanLayerFactory {
      *
      * @return whether a provider was added
      */
-    private static boolean mergeServiceFiles(Map<String, LinkedHashSet<String>> merged,
+    private static boolean mergeServiceFiles(Map<String, Set<String>> merged,
             Map<String, List<String>> fromFiles, ModuleDescriptor descriptor, ModuleFinder base, ModuleLayer parent) {
         var changed = false;
         Set<String> readable = null;
@@ -325,7 +325,7 @@ public final class VaubanLayerFactory {
     /** The providers of {@code service} in {@code merged}, an empty set added there when it has none yet. */
     // A local map of the start, one thread: computeIfAbsent's lambda would spin a class at every start (vauban#347)
     @SuppressWarnings("java:S3824")
-    private static Set<String> providersOf(Map<String, LinkedHashSet<String>> merged, String service) {
+    private static Set<String> providersOf(Map<String, Set<String>> merged, String service) {
         var providers = merged.get(service);
         if (providers == null) {
             providers = new LinkedHashSet<>();
@@ -508,7 +508,7 @@ public final class VaubanLayerFactory {
         }
         var all = new LinkedHashSet<>(descriptor.packages());
         all.addAll(packages);
-        var provides = new LinkedHashMap<String, LinkedHashSet<String>>();
+        var provides = new LinkedHashMap<String, Set<String>>();
         for (var p : descriptor.provides()) {
             provides.put(p.service(), new LinkedHashSet<>(p.providers()));
         }
@@ -523,13 +523,13 @@ public final class VaubanLayerFactory {
 
     /** Rebuilds {@code descriptor} identically, with {@code provides} replaced. */
     private static ModuleDescriptor rebuildWithProvides(ModuleDescriptor descriptor,
-            java.util.Map<String, LinkedHashSet<String>> provides) {
+            java.util.Map<String, Set<String>> provides) {
         return rebuild(descriptor, provides, descriptor.packages());
     }
 
     /** Rebuilds {@code descriptor} identically, with {@code provides} and its packages replaced. */
     private static ModuleDescriptor rebuild(ModuleDescriptor descriptor,
-            java.util.Map<String, LinkedHashSet<String>> provides, Set<String> packages) {
+            java.util.Map<String, Set<String>> provides, Set<String> packages) {
         var builder = ModuleDescriptor.newModule(descriptor.name(), descriptor.modifiers());
         var version = descriptor.rawVersion();
         if (version.isPresent()) {

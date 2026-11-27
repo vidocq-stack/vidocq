@@ -109,6 +109,7 @@ final class InterceptorBeanWrapper {
     }
 
     /** An instance of the interceptor {@code descriptor} describes, which {@code ctx} does not hold yet. */
+    @SuppressWarnings("ReferenceEquality") // NO_BEAN is a sentinel, compared by identity
     private Object createdInterceptorInstance(InterceptorDescriptor descriptor, CreationalContext<?> ctx) {
         String className = descriptor.interceptorClass().value();
         var asBean = interceptorInstanceAsBean(className, ctx);
@@ -419,7 +420,8 @@ final class InterceptorBeanWrapper {
         runtimeGeneration.generated(interfaceProxyKind(bean), beanClass.getName());
         java.util.Set<Class<?>> ifaceSet = new java.util.LinkedHashSet<>();
         for (var t : bean.getTypes()) {
-            if (rawClassOf(t) instanceof Class<?> c && c.isInterface()) {
+            var c = rawClassOf(t);
+            if (c != null && c.isInterface()) {
                 ifaceSet.add(c);
             }
         }
@@ -788,7 +790,8 @@ final class InterceptorBeanWrapper {
         if (isProducer(bean)) {
             // First pass: prefer a concrete (non-interface) type
             for (var type : bean.getTypes()) {
-                if (rawClassOf(type) instanceof Class<?> c && !c.isInterface()) {
+                var c = rawClassOf(type);
+                if (c != null && !c.isInterface()) {
                     return c;
                 }
             }
@@ -796,7 +799,8 @@ final class InterceptorBeanWrapper {
             // (e.g. JsonWebToken). Return the interface so getOrCreateProxy() can detect it
             // and create a java.lang.reflect.Proxy instead of a subclass proxy.
             for (var type : bean.getTypes()) {
-                if (rawClassOf(type) instanceof Class<?> c) {
+                var c = rawClassOf(type);
+                if (c != null) {
                     return c;
                 }
             }

@@ -523,6 +523,7 @@ class BuiltInPassivationTest {
 
         @Inject
         @Loud
+        @SuppressWarnings("HidingField") // fixture: the hiding field is the case under test
         Event<Ping> pings;
 
         @Inject

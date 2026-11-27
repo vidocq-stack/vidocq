@@ -60,8 +60,8 @@ public record DisposerDescriptor(
     public static boolean disposes(TypeInfo disposedType, BeanDescriptor producer) {
         for (var producerType : producer.types()) {
             if (producerType.equals(disposedType)
-                    || producerType instanceof TypeInfo.ClassType(var name)
-                    && disposedType instanceof TypeInfo.ClassType(var disposedName) && name.equals(disposedName)) {
+                    || (producerType instanceof TypeInfo.ClassType(var name)
+                    && disposedType instanceof TypeInfo.ClassType(var disposedName) && name.equals(disposedName))) {
                 return true;
             }
         }

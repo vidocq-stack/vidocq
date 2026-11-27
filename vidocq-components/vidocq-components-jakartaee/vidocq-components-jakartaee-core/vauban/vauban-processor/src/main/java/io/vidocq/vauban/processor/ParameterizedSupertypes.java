@@ -283,7 +283,7 @@ final class ParameterizedSupertypes implements Function<TypeInfo, Optional<List<
 
     /** A bound in the index's terms, {@code null} for none or for {@code Object}, which reflection leaves out. */
     private TypeInfo boundInfo(TypeMirror bound, Reading reading) {
-        return bound == null || bound instanceof DeclaredType declared && isObject(declared)
+        return bound == null || (bound instanceof DeclaredType declared && isObject(declared))
                 ? null : typeInfo(bound, reading);
     }
 

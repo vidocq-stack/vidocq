@@ -78,7 +78,7 @@ public final class ShadowedDefaults {
     }
 
     /** The declaring interface first, then the bean's superinterfaces that extend it, nearest first. */
-    private static LinkedHashSet<Class<?>> interfaceClosure(Class<?> beanClass, Class<?> declaring) {
+    private static java.util.SequencedSet<Class<?>> interfaceClosure(Class<?> beanClass, Class<?> declaring) {
         var closure = new LinkedHashSet<Class<?>>();
         closure.add(declaring);
         var queue = new ArrayDeque<Class<?>>();
@@ -104,6 +104,7 @@ public final class ShadowedDefaults {
         }
     }
 
+    @SuppressWarnings("ReferenceEquality") // the same defining class loader, by identity: a runtime package
     private static boolean accessible(Class<?> candidate, Class<?> beanClass, boolean samePackageAllowed) {
         if (Modifier.isPublic(candidate.getModifiers())) {
             var module = candidate.getModule();

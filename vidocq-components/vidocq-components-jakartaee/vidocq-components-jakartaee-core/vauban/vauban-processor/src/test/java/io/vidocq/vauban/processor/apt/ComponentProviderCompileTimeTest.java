@@ -524,6 +524,7 @@ class ComponentProviderCompileTimeTest {
 
     @Test
     @DisplayName("the compiled provider declares exactly what its switches handle, a nested bean included")
+    @SuppressWarnings("ReferenceEquality") // NOT_INVOKED is a sentinel, compared by identity
     void compiledProviderCoverageMatchesItsSwitches() throws Exception {
         var result = compile("Greeter", """
                 package app;

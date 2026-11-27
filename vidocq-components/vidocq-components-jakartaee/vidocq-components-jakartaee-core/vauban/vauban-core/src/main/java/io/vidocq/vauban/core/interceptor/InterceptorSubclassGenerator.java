@@ -264,6 +264,7 @@ public final class InterceptorSubclassGenerator {
      * in its class file — declared public, or a protected member class — in a package its module
      * exports to the bean's module, which reads it. An array, as its element type.
      */
+    @SuppressWarnings("ReferenceEquality") // the same defining class loader, by identity: a runtime package
     static boolean accessibleFrom(Class<?> type, Class<?> beanClass) {
         while (type.isArray()) type = type.getComponentType();
         if (type.isPrimitive()) return true;
@@ -291,6 +292,7 @@ public final class InterceptorSubclassGenerator {
         return !io.vidocq.vauban.core.codegen.BeanMembers.hasNonBusinessMethodAnnotation(method);
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // equals, hashCode and toString are overridden to compare the array contents; a published signature
     public record GeneratedInterceptedClass(String className, byte[] bytecode) {
         @Override public boolean equals(Object o) {
             return o instanceof GeneratedInterceptedClass(var otherName, var otherBytecode)

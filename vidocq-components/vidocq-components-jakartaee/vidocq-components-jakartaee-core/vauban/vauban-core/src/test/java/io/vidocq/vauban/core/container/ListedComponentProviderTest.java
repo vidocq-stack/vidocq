@@ -60,7 +60,7 @@ class ListedComponentProviderTest {
     /** No bean defining annotation, an observer: added with addBeanClass, it is no bean. */
     public static class PlainObserver {
         void onStartup(@Observes Startup event) {
-            event.toString();
+            java.util.Objects.requireNonNull(event);
         }
     }
 

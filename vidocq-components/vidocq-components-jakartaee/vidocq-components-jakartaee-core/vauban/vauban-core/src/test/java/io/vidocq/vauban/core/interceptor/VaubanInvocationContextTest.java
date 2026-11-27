@@ -107,6 +107,7 @@ class VaubanInvocationContextTest {
 
     static final class AsyncForker {
         CompletableFuture<Object> future = new CompletableFuture<>();
+        @SuppressWarnings("FutureReturnValueIgnored") // the interceptor hands the stage back to its caller, which waits on it
         public Object around(InvocationContext ctx) {
             // Reproduces Heisenberg's AsynchronousEngine pattern:
             // forks a virtual thread that will call ctx.proceed() AFTER this
@@ -145,6 +146,7 @@ class VaubanInvocationContextTest {
     // --- 4. concurrent proceed() from 2 vthreads sharing the same ctx ---
 
     static final class ConcurrentForker {
+        @SuppressWarnings("FutureReturnValueIgnored") // the interceptor hands the stage back to its caller, which waits on it
         public Object around(InvocationContext ctx) {
             var f1 = CompletableFuture.supplyAsync(() -> safe(ctx),
                     r -> Thread.ofVirtual().start(r));
@@ -162,6 +164,7 @@ class VaubanInvocationContextTest {
     void concurrentProceedCalls() throws Exception {
         AtomicInteger counter = new AtomicInteger();
         Object target = new Object() {
+            @SuppressWarnings({"EffectivelyPrivate", "UnusedMethod"}) // the target under test, called by reflection
             public String exec() { counter.incrementAndGet(); return "x"; }
         };
         Method m = target.getClass().getDeclaredMethod("exec");

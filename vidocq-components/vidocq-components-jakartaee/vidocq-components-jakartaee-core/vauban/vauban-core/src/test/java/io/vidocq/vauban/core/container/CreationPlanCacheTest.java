@@ -43,6 +43,7 @@ class CreationPlanCacheTest {
 
     static class Leaf extends Base<Integer> {
         @Inject Object leafField;
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         @Inject void initializer(String value) { /* no behaviour needed */ }
         @PreDestroy void destroy() { /* no behaviour needed */ }
     }

@@ -76,7 +76,7 @@ public final class FrozenContexts {
                         if (line.isEmpty() || line.startsWith("#")) {
                             continue;
                         }
-                        String[] parts = line.split(";");
+                        String[] parts = line.split(";", -1);
                         if (parts.length != 3) {
                             throw new IllegalStateException("Malformed line in " + url + ": " + line);
                         }

@@ -51,7 +51,7 @@ final class DeploymentFingerprint {
     private final Map<String, byte[]> extensionCode = new HashMap<>();
     private final String settings;
     /** The checksum of each class, by name, computed at the first read. */
-    private TreeMap<String, String> classes;
+    private java.util.SortedMap<String, String> classes;
 
     /** @param settings the builder settings that change what discovery finds, as one line */
     DeploymentFingerprint(String settings) {
@@ -94,7 +94,7 @@ final class DeploymentFingerprint {
         }
     }
 
-    private TreeMap<String, String> classes() {
+    private java.util.SortedMap<String, String> classes() {
         var computed = classes;
         if (computed == null) {
             computed = new TreeMap<>();

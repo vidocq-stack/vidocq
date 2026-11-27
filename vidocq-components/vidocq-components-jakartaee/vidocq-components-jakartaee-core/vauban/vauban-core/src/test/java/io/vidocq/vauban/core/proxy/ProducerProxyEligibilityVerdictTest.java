@@ -129,7 +129,7 @@ class ProducerProxyEligibilityVerdictTest {
         }
 
         @Override
-        @SuppressWarnings({"deprecation", "removal", "java:S1113"})
+        @SuppressWarnings({"deprecation", "removal", "java:S1113", "Finalize"}) // fixture: a finalize() override is the case under test
         protected void finalize() {
         }
 

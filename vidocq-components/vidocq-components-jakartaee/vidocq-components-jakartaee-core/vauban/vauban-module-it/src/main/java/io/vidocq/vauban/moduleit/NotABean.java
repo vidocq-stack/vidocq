@@ -22,6 +22,7 @@ package io.vidocq.vauban.moduleit;
 /** A class of the module that no container manages ({@code ModuleLookupModulePathTest}). */
 public class NotABean {
 
+    @SuppressWarnings("UnusedMethod") // reached by reflection only, which the test expects to fail
     private String secret() {
         return "unreachable";
     }

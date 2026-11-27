@@ -194,7 +194,7 @@ public record ClientProxyShape(
         var names = new ArrayList<String>(methods.size());
         int idx = 0;
         for (ProxyMethodShape m : methods) {
-            names.add(m.needsMethodHandle() ? MH_FIELD_PREFIX + m.name() + "_" + (idx++) : null);
+            names.add(m.needsMethodHandle() ? MH_FIELD_PREFIX + m.name() + "_" + idx++ : null);
         }
         return java.util.Collections.unmodifiableList(names);
     }

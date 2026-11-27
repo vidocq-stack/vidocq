@@ -50,6 +50,7 @@ class TypesMatchCharacterizationTest {
         List<?> listOfAny();
         List<? extends Number> listOfExtendsNumber();
         List<? super Integer> listOfSuperInteger();
+        @SuppressWarnings("NonApiType") // fixture: the type is the case under test
         ArrayList<String> arrayListOfString();
         Map<String, String> mapOfString();
         Class<?>[] arrayOfClassOfAny();

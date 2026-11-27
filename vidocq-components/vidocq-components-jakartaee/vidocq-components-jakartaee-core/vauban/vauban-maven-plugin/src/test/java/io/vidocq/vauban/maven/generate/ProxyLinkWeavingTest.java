@@ -143,6 +143,7 @@ class ProxyLinkWeavingTest {
 
     // ---- Fixtures (raw bytecode — no ProxyLink anywhere in the "application") -------------------
 
+    @SuppressWarnings("ArrayRecordComponent") // never compared as a whole
     private record Fixture(String fqn, byte[] bytes) {}
 
     /** {@code @ApplicationScoped} bean with a no-arg ctor and a {@code String name()} method. */

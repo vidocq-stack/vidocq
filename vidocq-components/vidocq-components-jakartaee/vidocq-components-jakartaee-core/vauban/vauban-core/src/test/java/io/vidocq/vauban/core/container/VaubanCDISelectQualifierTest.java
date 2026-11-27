@@ -76,8 +76,8 @@ class VaubanCDISelectQualifierTest {
         public Object create(jakarta.enterprise.inject.Instance<Object> lookup,
                              jakarta.enterprise.inject.build.compatible.spi.Parameters params) {
             var ip = lookup.select(jakarta.enterprise.inject.spi.InjectionPoint.class).get();
-            String seen = ip.getType().getTypeName() + "|" + (ip.getQualifiers().stream()
-                    .anyMatch(q -> q.annotationType() == Flavored.class));
+            String seen = ip.getType().getTypeName() + "|" + ip.getQualifiers().stream()
+                    .anyMatch(q -> q.annotationType() == Flavored.class);
             return (Echo) () -> seen;
         }
     }

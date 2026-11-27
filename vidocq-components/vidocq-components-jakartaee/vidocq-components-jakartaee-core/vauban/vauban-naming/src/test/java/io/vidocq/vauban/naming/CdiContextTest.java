@@ -40,6 +40,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /** The {@code Context} contract beyond a string lookup: names, links, environment, and what it refuses. */
+@SuppressWarnings("BanJNDI") // tests of Vidocq's own java: naming, which deserializes nothing
 class CdiContextTest {
 
     private final VaubanContainer container = VaubanContainer.builder()

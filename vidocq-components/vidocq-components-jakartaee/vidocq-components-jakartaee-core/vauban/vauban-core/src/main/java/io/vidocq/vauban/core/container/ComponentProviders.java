@@ -213,6 +213,7 @@ record ComponentProviders(List<VaubanComponentProvider> providers) {
         return null;
     }
 
+    @SuppressWarnings("ReferenceEquality") // class loaders compared by identity along the parent chain
     private static boolean definedUnderLayer(VaubanComponentProvider provider, ClassLoader layerLoader) {
         for (ClassLoader l = provider.getClass().getClassLoader(); l != null; l = l.getParent()) {
             if (l == layerLoader) return true;
@@ -298,6 +299,7 @@ record ComponentProviders(List<VaubanComponentProvider> providers) {
      * owning provider performs a direct call, so a thrown exception is the target method's own and
      * must propagate as-is (CDI producer/observer semantics).
      */
+    @SuppressWarnings("ReferenceEquality") // NOT_INVOKED is a sentinel, compared by identity
     Object invoke(Object target, String className, String methodId, Object[] args) {
         for (var provider : providers) {
             var result = provider.invoke(target, className, methodId, args);

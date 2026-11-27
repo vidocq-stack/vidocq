@@ -67,7 +67,7 @@ class EncryptedArchiveWeavingTest {
                     beanName + "_ClientProxy", beanName));
             out.closeEntry();
             out.putNextEntry(new JarEntry("META-INF/vauban-beans.list"));
-            out.write((beanName + "\n").getBytes());
+            out.write((beanName + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
             out.closeEntry();
         }
 

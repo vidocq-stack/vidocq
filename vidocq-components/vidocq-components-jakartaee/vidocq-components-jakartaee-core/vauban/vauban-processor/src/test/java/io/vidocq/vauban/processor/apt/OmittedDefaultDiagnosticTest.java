@@ -151,7 +151,7 @@ class OmittedDefaultDiagnosticTest {
     private static long lineOf(String source, String text) {
         var lines = source.split("\n", -1);
         for (int i = 0; i < lines.length; i++) {
-            if (lines[i].contains(text)) return i + 1;
+            if (lines[i].contains(text)) return i + 1L;
         }
         throw new AssertionError(text + " not found");
     }

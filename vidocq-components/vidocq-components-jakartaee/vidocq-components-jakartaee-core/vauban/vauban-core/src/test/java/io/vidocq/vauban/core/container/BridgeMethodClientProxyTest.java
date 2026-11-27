@@ -244,6 +244,7 @@ class BridgeMethodClientProxyTest {
 
     @Test
     @DisplayName("the bean's own get(), next to the bridge javac adds for Supplier<String>")
+    @SuppressWarnings("UnnecessaryMethodReference") // each reference is a call path under test: the bean's own get() and the bridge
     void ownGet() {
         try (var container = start(OwnSupplier.class)) {
             var bean = container.select(OwnSupplier.class);
@@ -254,6 +255,7 @@ class BridgeMethodClientProxyTest {
 
     @Test
     @DisplayName("get() inherited from a superclass that implements Supplier<String>")
+    @SuppressWarnings("UnnecessaryMethodReference") // each reference is a call path under test: the bean's own get() and the bridge
     void inheritedGet() {
         try (var container = start(InheritedSupplier.class)) {
             var bean = container.select(InheritedSupplier.class);
@@ -264,6 +266,7 @@ class BridgeMethodClientProxyTest {
 
     @Test
     @DisplayName("get() inherited through a superclass that is not public, which gives the bean a bridge of its own")
+    @SuppressWarnings("UnnecessaryMethodReference") // each reference is a call path under test: the bean's own get() and the bridge
     void getInheritedThroughAHiddenSuperclass() {
         try (var container = start(VisiblyInheritedSupplier.class)) {
             var bean = container.select(VisiblyInheritedSupplier.class);

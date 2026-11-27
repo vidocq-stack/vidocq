@@ -96,13 +96,14 @@ class ManagedBeanTypeResolutionTest {
 
         @Produces
         @Typed(Object.class)
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"}) // fixture: the producer's return type is the case under test
         public <T> T anything() {
             return (T) "anything";
         }
 
         @Produces
         @Typed(List.class)
+        @SuppressWarnings("NonApiType") // fixture: the producer's return type is the case under test
         public ArrayList<String> typedList() {
             return new ArrayList<>();
         }

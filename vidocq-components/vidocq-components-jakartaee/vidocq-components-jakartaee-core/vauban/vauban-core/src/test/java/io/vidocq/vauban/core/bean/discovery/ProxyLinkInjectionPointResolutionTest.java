@@ -58,6 +58,7 @@ class ProxyLinkInjectionPointResolutionTest {
         }
 
         @Inject
+        @SuppressWarnings("UnusedVariable") // fixture: the injection point is the case under test
         public Bean(Collaborator collaborator) {
             // nothing to initialise
         }

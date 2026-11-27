@@ -31,6 +31,7 @@ public class SecretKeeper {
     private Collaborator injectedField;
     private Collaborator initialized;
 
+    @SuppressWarnings("UnusedMethod") // an extension makes it an initializer, then the container calls it
     private void initialize(Collaborator dependency) {
         initialized = dependency;
     }
@@ -39,6 +40,7 @@ public class SecretKeeper {
         return injectedField != null && initialized != null;
     }
 
+    @SuppressWarnings("UnusedMethod") // reached by reflection only, through the module's lookup
     private String secret(String name) {
         return "secret of " + name;
     }

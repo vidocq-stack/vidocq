@@ -164,6 +164,7 @@ final class ConstructorTypeUses {
     }
 
     /** The path of {@code element} of an array: under it when written as {@code {...}}, the expression itself else. */
+    @SuppressWarnings("ReferenceEquality") // javac trees, by identity: the same node
     private static TreePath written(TreePath path, Tree expression, Tree element) {
         return expression == element ? path : new TreePath(path, element);
     }

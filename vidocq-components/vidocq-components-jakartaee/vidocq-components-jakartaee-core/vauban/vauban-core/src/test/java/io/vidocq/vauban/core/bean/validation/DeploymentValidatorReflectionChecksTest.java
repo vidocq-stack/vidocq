@@ -97,7 +97,7 @@ class DeploymentValidatorReflectionChecksTest {
 
     public static class ArgumentConstructor {
         public ArgumentConstructor(String argument) {
-            argument.length();
+            java.util.Objects.requireNonNull(argument);
         }
     }
 
@@ -105,19 +105,20 @@ class DeploymentValidatorReflectionChecksTest {
     public static class InjectConstructor {
         @Inject
         InjectConstructor(String argument) {
-            argument.length();
+            java.util.Objects.requireNonNull(argument);
         }
     }
 
+    @SuppressWarnings("MoreThanOneInjectableConstructor") // fixture: the definition error under test
     public static class TwoInjectConstructors {
         @Inject
         public TwoInjectConstructors(String argument) {
-            argument.length();
+            java.util.Objects.requireNonNull(argument);
         }
 
         @Inject
         public TwoInjectConstructors(Integer argument) {
-            argument.intValue();
+            java.util.Objects.requireNonNull(argument);
         }
     }
 
