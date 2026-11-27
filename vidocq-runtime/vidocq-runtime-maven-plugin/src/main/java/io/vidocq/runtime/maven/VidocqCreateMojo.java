@@ -37,7 +37,7 @@ import java.util.List;
  * project; outside one, the plugin is named in full:
  *
  * <pre>mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:&lt;version&gt;:create -Dname=my-api -DgroupId=com.acme
- *     -Dextensions=cassini-rest,knock-health</pre>
+ *     -Dextensions=rest-cassini,health-knock</pre>
  */
 @Mojo(name = "create",
       requiresProject = false,

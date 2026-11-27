@@ -70,15 +70,15 @@ class CreatePromptsTest {
 
     @Test
     void asksTheNameTheGroupAndTheExtensions() {
-        Scripted prompter = new Scripted("todo", "com.acme", "cassini-rest, knock-health");
+        Scripted prompter = new Scripted("todo", "com.acme", "rest-cassini, health-knock");
 
         ProjectSpec spec = CreatePrompts.ask(NOTHING_GIVEN, prompter);
 
         assertEquals("todo", spec.name());
         assertEquals("com.acme", spec.groupId());
         assertEquals("com.acme.todo", spec.pkg());
-        assertEquals(Set.of("cassini-rest", "knock-health"), spec.extensions());
-        assertEquals(List.of("Project name", "Group id [io.example]", "Extensions, comma-separated [cassini-rest]"),
+        assertEquals(Set.of("rest-cassini", "health-knock"), spec.extensions());
+        assertEquals(List.of("Project name", "Group id [io.example]", "Extensions, comma-separated [rest-cassini]"),
                 prompter.questions);
     }
 
@@ -88,7 +88,7 @@ class CreatePromptsTest {
         ProjectSpec spec = CreatePrompts.ask(NOTHING_GIVEN, new Scripted("todo", "", ""));
 
         assertEquals("io.example", spec.groupId());
-        assertEquals(Set.of("cassini-rest"), spec.extensions());
+        assertEquals(Set.of("rest-cassini"), spec.extensions());
     }
 
     @Test
@@ -102,7 +102,7 @@ class CreatePromptsTest {
 
         CreatePrompts.ask(NOTHING_GIVEN, prompter);
 
-        assertTrue(prompter.shown.stream().anyMatch(l -> l.contains("cassini-rest")
+        assertTrue(prompter.shown.stream().anyMatch(l -> l.contains("rest-cassini")
                 && l.contains("Jakarta REST")), prompter.shown.toString());
     }
 
@@ -117,8 +117,8 @@ class CreatePromptsTest {
         int jakarta = shown.indexOf("  Jakarta EE");
         int microprofile = shown.indexOf("  MicroProfile");
         assertTrue(jakarta >= 0 && microprofile > jakarta, shown.toString());
-        int rest = shown.indexOf(shown.stream().filter(l -> l.contains("cassini-rest")).findFirst().orElseThrow());
-        int health = shown.indexOf(shown.stream().filter(l -> l.contains("knock-health")).findFirst().orElseThrow());
+        int rest = shown.indexOf(shown.stream().filter(l -> l.contains("rest-cassini")).findFirst().orElseThrow());
+        int health = shown.indexOf(shown.stream().filter(l -> l.contains("health-knock")).findFirst().orElseThrow());
         assertTrue(jakarta < rest && rest < microprofile && microprofile < health, shown.toString());
     }
 
@@ -128,27 +128,27 @@ class CreatePromptsTest {
         Scripted prompter = new Scripted("todo");
 
         ProjectSpec spec = CreatePrompts.ask(
-                new Command.CreateInteractively("com.acme", null, Set.of("knock-health"), "0.4.0", true, false), prompter);
+                new Command.CreateInteractively("com.acme", null, Set.of("health-knock"), "0.4.0", true, false), prompter);
 
         assertEquals(List.of("Project name"), prompter.questions);
         assertEquals("com.acme", spec.groupId());
-        assertEquals(Set.of("knock-health"), spec.extensions());
+        assertEquals(Set.of("health-knock"), spec.extensions());
         assertEquals("0.4.0", spec.parentVersion());
         assertTrue(spec.main());
     }
 
     @Test
     void aWrongAnswerIsExplainedAndAskedAgain() {
-        Scripted prompter = new Scripted("", "ft-030", "todo", "", "cassini-rst", "cassini-rest");
+        Scripted prompter = new Scripted("", "ft-030", "todo", "", "cassini-rst", "rest-cassini");
 
         ProjectSpec spec = CreatePrompts.ask(NOTHING_GIVEN, prompter);
 
         assertEquals("todo", spec.name());
-        assertEquals(Set.of("cassini-rest"), spec.extensions());
+        assertEquals(Set.of("rest-cassini"), spec.extensions());
         assertTrue(prompter.shown.stream().anyMatch(l -> l.contains("'io.example.ft.030' is not a valid Java package")),
                 prompter.shown.toString());
         assertTrue(prompter.shown.stream().anyMatch(l -> l.contains("unknown extension 'cassini-rst'")
-                && l.contains("Did you mean: cassini-rest")), prompter.shown.toString());
+                && l.contains("Did you mean: rest-cassini")), prompter.shown.toString());
     }
 
     @Test
@@ -172,11 +172,11 @@ class CreatePromptsTest {
 
     @Test
     void withoutANameTheParserLeavesTheQuestionsToTheRunner() {
-        Command command = CliParser.parse(new String[]{"create", "-g", "com.acme", "-x", "knock-health"});
+        Command command = CliParser.parse(new String[]{"create", "-g", "com.acme", "-x", "health-knock"});
 
         Command.CreateInteractively interactive = (Command.CreateInteractively) command;
         assertEquals("com.acme", interactive.groupId());
-        assertEquals(Set.of("knock-health"), interactive.extensions());
+        assertEquals(Set.of("health-knock"), interactive.extensions());
         assertNull(interactive.parentVersion());
     }
 }

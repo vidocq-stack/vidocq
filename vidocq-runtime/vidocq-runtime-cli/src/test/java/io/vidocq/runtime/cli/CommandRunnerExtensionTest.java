@@ -73,7 +73,7 @@ class CommandRunnerExtensionTest {
         writePom("");
         writeModuleInfo();
 
-        Run run = run(List.of("cassini-rest"), true);
+        Run run = run(List.of("rest-cassini"), true);
 
         assertEquals(0, run.exit());
         String pom = pom();
@@ -81,7 +81,7 @@ class CommandRunnerExtensionTest {
         // The parent's plugin wires the codegen bundle at build time (#339, evolution 2).
         assertFalse(pom.contains("codegen"), pom);
         assertFalse(run.out().contains("Wired"), run.out());
-        assertTrue(run.out().contains("Added cassini-rest"), run.out());
+        assertTrue(run.out().contains("Added rest-cassini"), run.out());
         assertTrue(run.out().contains("pom.xml updated."), run.out());
         assertTrue(Files.readString(moduleInfo()).contains("requires jakarta.ws.rs;"));
     }
@@ -89,14 +89,14 @@ class CommandRunnerExtensionTest {
     @Test
     void addingTwiceLeavesThePomUntouched() throws IOException {
         writePom("");
-        run(List.of("cassini-rest"), true);
+        run(List.of("rest-cassini"), true);
         String once = pom();
 
-        Run run = run(List.of("cassini-rest"), true);
+        Run run = run(List.of("rest-cassini"), true);
 
         assertEquals(0, run.exit());
         assertEquals(once, pom());
-        assertTrue(run.out().contains("cassini-rest already present"), run.out());
+        assertTrue(run.out().contains("rest-cassini already present"), run.out());
         assertTrue(run.out().contains("No changes"), run.out());
     }
 
@@ -104,23 +104,23 @@ class CommandRunnerExtensionTest {
     void removeUndoesAdd() throws IOException {
         writePom("");
         String before = pom();
-        run(List.of("cassini-rest"), true);
+        run(List.of("rest-cassini"), true);
 
-        Run run = run(List.of("cassini-rest"), false);
+        Run run = run(List.of("rest-cassini"), false);
 
         assertEquals(0, run.exit());
         assertEquals(before, pom());
-        assertTrue(run.out().contains("Removed cassini-rest"), run.out());
+        assertTrue(run.out().contains("Removed rest-cassini"), run.out());
     }
 
     @Test
     void removingAnAbsentExtensionWarns() throws IOException {
         writePom("");
 
-        Run run = run(List.of("cassini-rest"), false);
+        Run run = run(List.of("rest-cassini"), false);
 
         assertEquals(0, run.exit());
-        assertTrue(run.out().contains("cassini-rest not found in pom.xml"), run.out());
+        assertTrue(run.out().contains("rest-cassini not found in pom.xml"), run.out());
     }
 
     /** BUG-20261024-04: an id outside the catalog used to become a coordinate that does not exist. */
@@ -133,7 +133,7 @@ class CommandRunnerExtensionTest {
 
         assertEquals(1, run.exit());
         assertEquals(before, pom());
-        assertTrue(run.out().contains("Did you mean: mansart-data, mansart-pool, mansart-transactions, noether-persistence?"), run.out());
+        assertTrue(run.out().contains("Did you mean: data-mansart, persistence-noether, pool-mansart, transactions-mansart?"), run.out());
     }
 
     @Test
@@ -153,7 +153,7 @@ class CommandRunnerExtensionTest {
         writePom(REPLACING_PATHS);
         beforeParent040();
 
-        Run run = run(List.of("cassini-rest"), true);
+        Run run = run(List.of("rest-cassini"), true);
 
         assertEquals(0, run.exit());
         assertTrue(pom().contains("<annotationProcessorPaths combine.children=\"append\">"), pom());
@@ -166,7 +166,7 @@ class CommandRunnerExtensionTest {
         writePom(REPLACING_PATHS);
         beforeParent040();
 
-        Run run = run(List.of("knock-health"), true);
+        Run run = run(List.of("health-knock"), true);
 
         assertEquals(0, run.exit());
         assertFalse(pom().contains("combine.children"), pom());
@@ -187,7 +187,7 @@ class CommandRunnerExtensionTest {
 
     @Test
     void aDirectoryWithoutPomFails() {
-        Run run = run(List.of("cassini-rest"), true);
+        Run run = run(List.of("rest-cassini"), true);
 
         assertEquals(1, run.exit());
         assertTrue(run.out().contains("No pom.xml"), run.out());

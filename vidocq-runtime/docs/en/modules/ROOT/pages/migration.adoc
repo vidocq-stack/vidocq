@@ -207,6 +207,16 @@ Payara Micro and Vidocq Runtime share the MicroProfile target. The main differen
 
 Seven extensions run the TCKs of their MicroProfile 7.2 specifications and the Metrics 5.1 extension runs its own TCK (Metrics is not part of the 7.2 platform); all eight pass on the assembled runtime, through the runners embedded in `vidocq-runtime-integration-tests` (Maven profile `tck`) — 1888 TCK tests green on 2026-10-04. The OpenAPI 4.2 and Telemetry 2.2 runs use release-candidate TCKs, byte-identical to the finals; the 7.2 platform release is still under ballot. See xref:tck.adoc[TCK status].
 
+[#extension-ids]
+== Extension ids name the function first
+
+From 0.4.1 the ids of `vidocq extension add|remove`, `vidocq create -x` and the `-Dextensions` of
+`vidocq:add-extension`, `vidocq:remove-extension` and `vidocq:create` put the function first and the codename last:
+`rest-cassini` instead of `cassini-rest`, `health-knock` instead of `knock-health`. Nothing to change: the former ids
+still name the same extensions, and the Maven artifactIds in your pom are the same. Scripts may move to the new ids
+at their pace; the table is in
+xref:modules/vidocq-runtime-cli.adoc#extension-ids[the CLI reference].
+
 [#dev-console-dependency]
 == The dev console is no longer a dependency
 
@@ -261,7 +271,7 @@ Add each one to the compiler's `annotationProcessorPaths`, next to the inherited
 The bundles are jars from 0.4.0: a `<path>` written for 0.3.0 with `<type>pom</type>` still builds, and
 `checkpom` warns about it so that IntelliJ's build runs the processors too; remove the line (see
 xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]).
-`vidocq extension add ravel-config` and `vidocq extension add cyrano-rest-client` write it for you. See
+`vidocq extension add config-ravel` and `vidocq extension add rest-client-cyrano` write it for you. See
 xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config extension] and
 xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].
 

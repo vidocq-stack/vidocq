@@ -30,7 +30,7 @@ NOTE: "Kerckhoffs" names the component. Besides Jakarta Security 4.0 it carries,
 | Version | {project-version}
 | Java modules | `io.vidocq.kerckhoffs.core`, `io.vidocq.kerckhoffs.cdi`, `io.vidocq.kerckhoffs.authentication`, `io.vidocq.kerckhoffs.authorization`, `io.vidocq.kerckhoffs.foy`
 | Depends on | The Jakarta Security API at `compile`; Authentication, Authorization, Servlet, CDI and EL APIs `provided`
-| Under Vidocq | `vidocq-runtime-kerckhoffs-security-extension` (`vidocq extension add kerckhoffs-security`)
+| Under Vidocq | `vidocq-runtime-kerckhoffs-security-extension` (`vidocq extension add security-kerckhoffs`)
 | Status | Preview: milestones K0 to K3 (identity stores, HTTP authentication mechanisms, `@RememberMe`, Jakarta Authorization); not certified
 | Jakarta Security 4.0 TCK | 13 applications, 81 tests, green on the Vidocq runtime; a measurement, not a certification — see xref:tck.adoc[detailed status]
 |===

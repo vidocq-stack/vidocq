@@ -65,16 +65,16 @@ class CliParserExtensionTest {
 
     @Test
     void addCollectsIds() {
-        Command c = CliParser.parse(new String[]{"extension", "add", "cassini-rest", "knock-health"});
+        Command c = CliParser.parse(new String[]{"extension", "add", "rest-cassini", "health-knock"});
         var add = assertInstanceOf(Command.Extension.Add.class, c);
-        assertEquals(List.of("cassini-rest", "knock-health"), add.ids());
+        assertEquals(List.of("rest-cassini", "health-knock"), add.ids());
     }
 
     @Test
     void removeCollectsIds() {
-        Command c = CliParser.parse(new String[]{"ext", "rm", "knock-health"});
+        Command c = CliParser.parse(new String[]{"ext", "rm", "health-knock"});
         var remove = assertInstanceOf(Command.Extension.Remove.class, c);
-        assertEquals(List.of("knock-health"), remove.ids());
+        assertEquals(List.of("health-knock"), remove.ids());
     }
 
     @Test

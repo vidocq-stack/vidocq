@@ -71,8 +71,8 @@ class ProjectExtensionsTest {
                                 "vidocq-runtime-cassini-rest-extension")));
 
         assertEquals(List.of(
-                new ProjectExtensions.Installed("cassini-rest", cassiniArtifact, true),
-                new ProjectExtensions.Installed("chappe-webserver", chappeArtifact, false),
+                new ProjectExtensions.Installed("rest-cassini", cassiniArtifact, true),
+                new ProjectExtensions.Installed("webserver-chappe", chappeArtifact, false),
                 new ProjectExtensions.Installed("acme-extension", thirdArtifact, false)), installed);
     }
 
@@ -81,7 +81,7 @@ class ProjectExtensionsTest {
         Path project = Files.createDirectories(dir.resolve("project"));
         Files.writeString(project.resolve("pom.xml"), "<project/>");
         Path snapshotJar = Files.writeString(dir.resolve("lib-1.0-SNAPSHOT.jar"), "v1");
-        var installed = new ProjectExtensions.Installed("cassini-rest",
+        var installed = new ProjectExtensions.Installed("rest-cassini",
                 new ResolvedArtifact("g", "a", "1.0", dir.resolve("a.jar")), true);
         Path cacheFile = dir.resolve("cache/project.cache");
         Files.createDirectories(cacheFile.getParent());

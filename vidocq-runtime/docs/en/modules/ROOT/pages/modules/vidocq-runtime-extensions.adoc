@@ -36,7 +36,7 @@
 
 | `vidocq-runtime-flyway-migration-extension`
 | `essentials`
-| Flyway-based schema migrations. [[flyway-opens-migrations]]`vidocq extension add flyway-migration` and `vidocq create -x flyway-migration`write `opens db.migration;` at once and create `src/main/resources/db/migration` with a `README.md`: the JVM refuses a module that opens a package without a file, and Flyway ignores everything but its scripts. A folder that already holds a script is left as it is. `liquibase-migration` does the same with `db.changelog` and `src/main/resources/db/changelog`, where Liquibase reads its default changelog, `db.changelog-master.xml`. An `opens` does not reach a sub-folder: `vidocq:check-module-info` asks for one per sub-folder of scripts too, such as `opens db.changelog.changes;` for an `includeAll path="db/changelog/changes/"`, and `vidocq doctor --fix` writes them. Without them a jlink image does not find the files.
+| Flyway-based schema migrations. [[flyway-opens-migrations]]`vidocq extension add migration-flyway` and `vidocq create -x migration-flyway`write `opens db.migration;` at once and create `src/main/resources/db/migration` with a `README.md`: the JVM refuses a module that opens a package without a file, and Flyway ignores everything but its scripts. A folder that already holds a script is left as it is. `migration-liquibase` does the same with `db.changelog` and `src/main/resources/db/changelog`, where Liquibase reads its default changelog, `db.changelog-master.xml`. An `opens` does not reach a sub-folder: `vidocq:check-module-info` asks for one per sub-folder of scripts too, such as `opens db.changelog.changes;` for an `includeAll path="db/changelog/changes/"`, and `vidocq doctor --fix` writes them. Without them a jlink image does not find the files.
 
 | `vidocq-runtime-liquibase-migration-extension`
 | `essentials`
@@ -77,7 +77,7 @@
 
 | `vidocq-runtime-mansart-pool-telemetry-extension`
 | `jakartaee-web`
-| [[jdbc-telemetry]]Database spans: with the Telemetry and Mansart Pool extensions, each statement the application runs on a Vidocq DataSource becomes an OpenTelemetry CLIENT span, child of the current one: the request's span under Humboldt. The span is named `<operation> <table>` (`SELECT books`), else after the operation, else after the database, and carries `db.system.name`, `db.namespace`, `db.operation.name`, `db.collection.name`, `db.query.text`, `server.address` and `server.port`, as the OpenTelemetry database conventions name them, plus `vidocq.datasource.name`. A plain `Statement`'s text has its literals replaced by `?`; a prepared statement's is kept as is, with its `?`. A failing statement records the exception, sets the status to ERROR and adds `db.response.status_code` (the SQLSTATE). A batch is one span. Its catalog id is `jdbc-telemetry`: `vidocq extension add` and `vidocq create` add it as soon as the project declares both `humboldt-telemetry` and `mansart-pool`, and `extension remove` takes it away with either. It plugs into the pool through `JdbcConnectionDecorator` (<<mansart-pool-connection-decorators>>) and depends on the OpenTelemetry API only, which Telemetry already brings; the wrappers it puts around connections and statements are generated from the `java.sql` interfaces, with no dynamic proxy.
+| [[jdbc-telemetry]]Database spans: with the Telemetry and Mansart Pool extensions, each statement the application runs on a Vidocq DataSource becomes an OpenTelemetry CLIENT span, child of the current one: the request's span under Humboldt. The span is named `<operation> <table>` (`SELECT books`), else after the operation, else after the database, and carries `db.system.name`, `db.namespace`, `db.operation.name`, `db.collection.name`, `db.query.text`, `server.address` and `server.port`, as the OpenTelemetry database conventions name them, plus `vidocq.datasource.name`. A plain `Statement`'s text has its literals replaced by `?`; a prepared statement's is kept as is, with its `?`. A failing statement records the exception, sets the status to ERROR and adds `db.response.status_code` (the SQLSTATE). A batch is one span. Its catalog id is `jdbc-telemetry`: `vidocq extension add` and `vidocq create` add it as soon as the project declares both `telemetry-humboldt` and `pool-mansart`, and `extension remove` takes it away with either. It plugs into the pool through `JdbcConnectionDecorator` (<<mansart-pool-connection-decorators>>) and depends on the OpenTelemetry API only, which Telemetry already brings; the wrappers it puts around connections and statements are generated from the `java.sql` interfaces, with no dynamic proxy.
 
 | `vidocq-runtime-mansart-data-extension`
 | `jakartaee-web`
@@ -85,7 +85,7 @@
 
 | `vidocq-runtime-mansart-transactions-extension`
 | `jakartaee-web`
-| Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>). A transaction a request leaves active is rolled back when the request ends (<<mansart-transactions-request-end>>).
+| Handles `@Transactional` via `transactions-mansart` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>). A transaction a request leaves active is rolled back when the request ends (<<mansart-transactions-request-end>>).
 
 | `vidocq-runtime-noether-persistence-extension`
 | `jakartaee-web`
@@ -160,7 +160,7 @@ bundle to the inherited compiler configuration:
 </annotationProcessorPaths>
 ----
 
-`vidocq extension add peano-el` adds these coordinates. The application module requires
+`vidocq extension add el-peano` adds these coordinates. The application module requires
 `io.vidocq.runtime.extensions.jakartaee.core.peano`; generated accessor classes and
 `@ELAccessible` annotations also require `io.vidocq.peano.api`. No package opens are
 needed for generated tables. [[peano-auto-accessors]]No annotation is needed for the
@@ -207,7 +207,7 @@ Declare the extension, and its codegen bundle on the processor path:
 </annotationProcessorPaths>
 ----
 
-The bundle generates the factories of the `@WebServlet`, `@WebFilter` and `@WebListener` classes, makes them beans (so they take `@Inject`), and registers the session context. `vidocq extension add foy-servlet` adds both, and `vidocq:checkpom` asks for the bundle when the extension is declared. In a named module, the application `requires io.vidocq.foy.api` for the generated code.
+The bundle generates the factories of the `@WebServlet`, `@WebFilter` and `@WebListener` classes, makes them beans (so they take `@Inject`), and registers the session context. `vidocq extension add servlet-foy` adds both, and `vidocq:checkpom` asks for the bundle when the extension is declared. In a named module, the application `requires io.vidocq.foy.api` for the generated code.
 
 [cols="2,1,3"]
 |===
@@ -315,7 +315,7 @@ Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section
 [[foy-websocket]]
 == Jakarta WebSocket (Foy)
 
-`vidocq-runtime-foy-websocket-extension` (Java module `io.vidocq.runtime.extensions.jakartaee.web.websocket`) brings Foy's `foy-websocket` module into the application: Jakarta WebSocket 2.2, programmatic server API. Foy puts the `ServerContainer` in the `jakarta.websocket.server.ServerContainer` servlet context attribute; an application adds its endpoints to it, from a `ServletContextListener` (`@WebListener`) for instance, with `ServerContainer.addEndpoint(ServerEndpointConfig)`. The Vaadin extension depends on this extension, so a Vaadin application needs no dependency of its own (<<vaadin>>). `vidocq extension add foy-websocket` adds it to any other application, or declare it:
+`vidocq-runtime-foy-websocket-extension` (Java module `io.vidocq.runtime.extensions.jakartaee.web.websocket`) brings Foy's `foy-websocket` module into the application: Jakarta WebSocket 2.2, programmatic server API. Foy puts the `ServerContainer` in the `jakarta.websocket.server.ServerContainer` servlet context attribute; an application adds its endpoints to it, from a `ServletContextListener` (`@WebListener`) for instance, with `ServerContainer.addEndpoint(ServerEndpointConfig)`. The Vaadin extension depends on this extension, so a Vaadin application needs no dependency of its own (<<vaadin>>). `vidocq extension add websocket-foy` adds it to any other application, or declare it:
 
 [source,xml]
 ----
@@ -378,7 +378,7 @@ module com.acme.shop {
 }
 ----
 
-`vidocq extension add ibarra-pages` adds the dependency and these directives.
+`vidocq extension add pages-ibarra` adds the dependency and these directives.
 
 Where the pages go, as Foy serves the web resources of a runtime application:
 
@@ -427,7 +427,7 @@ module com.acme.shop {
 }
 ----
 
-`vidocq extension add bodoni-jstl` adds the dependency and these directives. A page then declares a library with the URI of the specification and uses it as on any Pages container:
+`vidocq extension add jstl-bodoni` adds the dependency and these directives. A page then declares a library with the URI of the specification and uses it as on any Pages container:
 
 [source,jsp]
 ----
@@ -1370,7 +1370,7 @@ The check runs when the CDI request context of the request ends, on the thread t
 [#kerckhoffs-security]
 == Jakarta Security (Kerckhoffs)
 
-`vidocq-runtime-kerckhoffs-security-extension` puts the application's authentication under Jakarta Security 4.0, on xref:kerckhoffs::index.adoc[Kerckhoffs]. `vidocq extension add kerckhoffs-security` adds it with the Servlet extension it runs on; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Kerckhoffs's build compatible extensions, on the compiler's processor path.
+`vidocq-runtime-kerckhoffs-security-extension` puts the application's authentication under Jakarta Security 4.0, on xref:kerckhoffs::index.adoc[Kerckhoffs]. `vidocq extension add security-kerckhoffs` adds it with the Servlet extension it runs on; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Kerckhoffs's build compatible extensions, on the compiler's processor path.
 
 [source,xml,subs=attributes+]
 ----
@@ -1415,7 +1415,7 @@ How it works: the extension finds the `HttpAuthenticationMechanism` bean of the 
 [#noether-persistence]
 == Jakarta Persistence (Noether)
 
-`vidocq-runtime-noether-persistence-extension` runs the persistence units of the application's `META-INF/persistence.xml` and of its xref:#noether-persistence-keys[`vidocq.persistence.*` keys] on xref:noether::index.adoc[Noether], its Jakarta Persistence 3.2 provider. `vidocq extension add noether-persistence` adds it with the two extensions it runs on, Mansart Pool and Mansart Transactions; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Noether's annotation processor, on the compiler's processor path.
+`vidocq-runtime-noether-persistence-extension` runs the persistence units of the application's `META-INF/persistence.xml` and of its xref:#noether-persistence-keys[`vidocq.persistence.*` keys] on xref:noether::index.adoc[Noether], its Jakarta Persistence 3.2 provider. `vidocq extension add persistence-noether` adds it with the two extensions it runs on, Mansart Pool and Mansart Transactions; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Noether's annotation processor, on the compiler's processor path.
 
 [source,xml,subs=attributes+]
 ----
@@ -1572,7 +1572,7 @@ A name no pool answers fails the start, naming the key to set (`vidocq.pool.<nam
 
 *Mansart Data in the same transaction.* Within one transaction, a Jakarta Data repository and a JTA unit on the same pool work on the same connection: Mansart keeps one connection per transaction and per data source, which the extension hands the unit through Mansart's `JtaDataSource` over the pool bean the repository takes too (xref:{page-component-version}@mansart::modules/mansart-transactions.adoc#jta-datasource[One connection per transaction and data source]). Each sees what the other wrote before the commit, the unit's writes once it has flushed them (`flush()`, or a query that flushes), and the transaction commits or rolls back the writes of both together. A repository and a unit on two different pools work on two connections, one per pool: when neither can prepare (a single-phase `ConnectionXAResource`), the transaction commits them one after the other, and a failure of the second commit leaves the first one committed.
 
-*The application module.* Noether's processor generates, per package of entities, an accessor (`_NoetherJpaAccess`) that Noether calls instead of reflecting: the package needs no `opens`, and `vidocq:check-module-info` does not ask for one. The accessor implements Noether's SPI, so the module needs `requires io.vidocq.noether.jpa.core;`, which `vidocq extension add noether-persistence` writes with the `requires` of the extension. The processor lists the accessor in `META-INF/services`, and the layer `Vidocq.run` creates for the application turns that file into the `provides` of its module; a test that boots Vidocq without that layer declares it in its `module-info.java`: `provides io.vidocq.noether.jpa.core.spi.ManagedAccessProvider with com.acme.ledger._NoetherJpaAccess;`.
+*The application module.* Noether's processor generates, per package of entities, an accessor (`_NoetherJpaAccess`) that Noether calls instead of reflecting: the package needs no `opens`, and `vidocq:check-module-info` does not ask for one. The accessor implements Noether's SPI, so the module needs `requires io.vidocq.noether.jpa.core;`, which `vidocq extension add persistence-noether` writes with the `requires` of the extension. The processor lists the accessor in `META-INF/services`, and the layer `Vidocq.run` creates for the application turns that file into the `provides` of its module; a test that boots Vidocq without that layer declares it in its `module-info.java`: `provides io.vidocq.noether.jpa.core.spi.ManagedAccessProvider with com.acme.ledger._NoetherJpaAccess;`.
 
 [#noether-persistence-report]
 *In the startup report*. The extension writes the section `noether-persistence`, *Noether Persistence*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report]. Its summary counts the units the application injects and their entities, `3 persistence units, 3 entities`, or says `no persistence unit is injected`. In a dev boot, or at `vidocq.startup.report=detailed`, a row per unit gives:

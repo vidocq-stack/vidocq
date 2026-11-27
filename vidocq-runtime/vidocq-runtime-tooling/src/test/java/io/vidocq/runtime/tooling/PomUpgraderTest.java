@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PomUpgraderTest {
 
     private static String scaffolded(boolean withParent, String runtime) {
-        return ProjectScaffolder.buildPom(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("cassini-rest"),
+        return ProjectScaffolder.buildPom(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("rest-cassini"),
                 null, false, false, withParent), runtime, new RecordingReporter());
     }
 

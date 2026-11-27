@@ -18,7 +18,7 @@ The application declares the Vidocq runtime extension for Security, and nothing 
 
 [source,bash]
 ----
-vidocq extension add kerckhoffs-security
+vidocq extension add security-kerckhoffs
 ----
 
 The command adds the extension with the Servlet extension it runs on (`foy-servlet`), and the `requires` it needs in

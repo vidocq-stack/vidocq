@@ -64,14 +64,14 @@ class VidocqExtensionEditMojoTest {
         Path byGoal = project(dir.resolve("goal"));
         Path byEditor = project(dir.resolve("editor"));
 
-        mojo(new VidocqAddExtensionMojo(), byGoal, "cassini-rest, knock-health").execute();
-        ExtensionEditor.edit(byEditor, List.of("cassini-rest", "knock-health"), true, "1.2.3", SILENT);
+        mojo(new VidocqAddExtensionMojo(), byGoal, "rest-cassini, health-knock").execute();
+        ExtensionEditor.edit(byEditor, List.of("rest-cassini", "health-knock"), true, "1.2.3", SILENT);
 
         assertEquals(Files.readString(byEditor.resolve("pom.xml")), Files.readString(byGoal.resolve("pom.xml")));
         assertEquals(Files.readString(moduleInfo(byEditor)), Files.readString(moduleInfo(byGoal)));
         String pom = Files.readString(byGoal.resolve("pom.xml"));
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"), pom);
-        assertTrue(infos.contains("Added cassini-rest"
+        assertTrue(infos.contains("Added rest-cassini"
                 + " (io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-cassini-rest-extension)"), infos.toString());
         assertTrue(infos.contains("pom.xml updated."), infos.toString());
     }
@@ -79,9 +79,22 @@ class VidocqExtensionEditMojoTest {
     @Test
     void removeExtensionUndoesAddExtension(@TempDir Path dir) throws Exception {
         Path project = project(dir);
-        mojo(new VidocqAddExtensionMojo(), project, "cassini-rest").execute();
+        mojo(new VidocqAddExtensionMojo(), project, "rest-cassini").execute();
 
-        mojo(new VidocqRemoveExtensionMojo(), project, "cassini-rest").execute();
+        mojo(new VidocqRemoveExtensionMojo(), project, "rest-cassini").execute();
+
+        assertEquals(POM, Files.readString(project.resolve("pom.xml")));
+        assertEquals(MODULE_INFO, Files.readString(moduleInfo(project)));
+    }
+
+    /** Vidocq/vidocq#809: the goals take the ids up to 0.4.0 too, for the same extensions. */
+    @Test
+    void theFormerIdsNameTheSameExtensions(@TempDir Path dir) throws Exception {
+        Path project = project(dir);
+        mojo(new VidocqAddExtensionMojo(), project, "cassini-rest").execute();
+        assertTrue(Files.readString(project.resolve("pom.xml")).contains("vidocq-runtime-cassini-rest-extension"));
+
+        mojo(new VidocqRemoveExtensionMojo(), project, "rest-cassini").execute();
 
         assertEquals(POM, Files.readString(project.resolve("pom.xml")));
         assertEquals(MODULE_INFO, Files.readString(moduleInfo(project)));
@@ -90,12 +103,12 @@ class VidocqExtensionEditMojoTest {
     @Test
     void addingWhatIsThereChangesNothing(@TempDir Path dir) throws Exception {
         Path project = project(dir);
-        mojo(new VidocqAddExtensionMojo(), project, "knock-health").execute();
+        mojo(new VidocqAddExtensionMojo(), project, "health-knock").execute();
         infos.clear();
 
-        mojo(new VidocqAddExtensionMojo(), project, "knock-health").execute();
+        mojo(new VidocqAddExtensionMojo(), project, "health-knock").execute();
 
-        assertTrue(infos.contains("  • knock-health already present — skipped."), infos.toString());
+        assertTrue(infos.contains("  • health-knock already present — skipped."), infos.toString());
         assertTrue(infos.contains("No changes — pom.xml left untouched."), infos.toString());
     }
 
@@ -103,7 +116,7 @@ class VidocqExtensionEditMojoTest {
     void theRuntimeVersionDefaultsToThePlugin(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("pom.xml"), "<project>\n  <artifactId>demo</artifactId>\n</project>\n");
 
-        mojo(new VidocqAddExtensionMojo(), dir, "knock-health").execute();
+        mojo(new VidocqAddExtensionMojo(), dir, "health-knock").execute();
 
         assertTrue(Files.readString(dir.resolve("pom.xml")).contains("<version>1.2.3</version>"));
     }
@@ -122,7 +135,7 @@ class VidocqExtensionEditMojoTest {
     @Test
     void anErrorFailsTheBuild(@TempDir Path dir) {
         MojoFailureException failure = assertThrows(MojoFailureException.class,
-                () -> mojo(new VidocqRemoveExtensionMojo(), dir, "knock-health").execute());
+                () -> mojo(new VidocqRemoveExtensionMojo(), dir, "health-knock").execute());
 
         assertTrue(failure.getMessage().contains("remove-extension"), failure.getMessage());
         assertTrue(errors.stream().anyMatch(e -> e.startsWith("No pom.xml in ")), errors.toString());

@@ -45,7 +45,7 @@ class ProjectScaffolderFinishedProjectTest {
 
     @Test
     void aRestApplicationGetsAFirstTestOfItsResource(@TempDir Path dir) throws IOException {
-        Path project = scaffold(dir, Set.of("cassini-rest"), null, new RecordingReporter());
+        Path project = scaffold(dir, Set.of("rest-cassini"), null, new RecordingReporter());
 
         String test = Files.readString(project.resolve("src/test/java/com/acme/demo/HelloResourceTest.java"));
         assertTrue(test.startsWith("package com.acme.demo;\n"), test);
@@ -76,7 +76,7 @@ class ProjectScaffolderFinishedProjectTest {
     void underAParentBefore040NoTestIsWrittenAndTheUserIsTold(@TempDir Path dir) throws IOException {
         RecordingReporter reporter = new RecordingReporter();
 
-        Path project = scaffold(dir, Set.of("cassini-rest"), "0.3.0", reporter);
+        Path project = scaffold(dir, Set.of("rest-cassini"), "0.3.0", reporter);
 
         assertFalse(Files.exists(project.resolve("src/test")));
         String pom = Files.readString(project.resolve("pom.xml"));
@@ -88,7 +88,7 @@ class ProjectScaffolderFinishedProjectTest {
     /** No blank line before {@code </dependencies>}: {@code vidocq extension add} appends after it. */
     @Test
     void theDependenciesEndWithoutABlankLine(@TempDir Path dir) throws IOException {
-        for (Set<String> extensions : List.of(Set.<String>of(), Set.of("cassini-rest"))) {
+        for (Set<String> extensions : List.of(Set.<String>of(), Set.of("rest-cassini"))) {
             Path project = scaffold(dir.resolve(String.valueOf(extensions.size())), extensions, null,
                     new RecordingReporter());
 
@@ -110,7 +110,7 @@ class ProjectScaffolderFinishedProjectTest {
 
     @Test
     void theReadmeGivesTheCommandsThatWork(@TempDir Path dir) throws IOException {
-        Path project = scaffold(dir, Set.of("cassini-rest"), null, new RecordingReporter());
+        Path project = scaffold(dir, Set.of("rest-cassini"), null, new RecordingReporter());
 
         String readme = Files.readString(project.resolve("README.md"));
         assertTrue(readme.startsWith("# demo\n"), readme);

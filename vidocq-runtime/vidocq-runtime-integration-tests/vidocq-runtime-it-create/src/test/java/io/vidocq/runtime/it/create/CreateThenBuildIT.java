@@ -74,7 +74,7 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Vidocq/vidocq#339 (evolution 6) and #380: the project {@code vidocq create -x cassini-rest} writes passes
+ * Vidocq/vidocq#339 (evolution 6) and #380: the project {@code vidocq create -x rest-cassini} writes passes
  * {@code mvn verify vidocq:jlink} on this build. Without a parent, the plugin declared as a build extension gives the
  * build what {@code vidocq-runtime-parent} carried, and wires the codegen bundles: the Cassini processor writes the
  * resource's adapter source into {@code target/generated-sources/annotations}, the first test starts the application
@@ -163,7 +163,7 @@ class CreateThenBuildIT {
     void aCreatedRestApplicationBuildsTestsItselfPackagesAndLinksWithoutAWarning(@TempDir Path dir) throws Exception {
         String version = System.getProperty("it.version");
         ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
-                Set.of("cassini-rest"), null, false), dir, version, SILENT);
+                Set.of("rest-cassini"), null, false), dir, version, SILENT);
         Path project = dir.resolve("demo-app");
         useThisBuildsArtifacts(project);
         addAResourceOnlyDependency(project);
@@ -268,7 +268,7 @@ class CreateThenBuildIT {
     void aCreatedApplicationWithTheParentStillBuildsAndTestsItself(@TempDir Path dir) throws Exception {
         String version = System.getProperty("it.version");
         ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
-                Set.of("cassini-rest"), null, false, false, true), dir, version, SILENT);
+                Set.of("rest-cassini"), null, false, false, true), dir, version, SILENT);
         Path project = dir.resolve("demo-app");
         useThisBuildsArtifacts(project);
 
@@ -370,8 +370,8 @@ class CreateThenBuildIT {
      */
     static Stream<Arguments> servletApplications() {
         return Stream.of(
-                Arguments.of("servlet-rest", Set.of("foy-servlet", "cassini-rest"), true),
-                Arguments.of("servlet", Set.of("foy-servlet"), false));
+                Arguments.of("servlet-rest", Set.of("servlet-foy", "rest-cassini"), true),
+                Arguments.of("servlet", Set.of("servlet-foy"), false));
     }
 
     /**
@@ -453,7 +453,7 @@ class CreateThenBuildIT {
     void aPackagedSecurityApplicationAuthenticatesOnTheExtensionsFrozenAtBuild(@TempDir Path dir) throws Exception {
         String version = System.getProperty("it.version");
         ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
-                Set.of("foy-servlet", "kerckhoffs-security"), null, false), dir, version, SILENT);
+                Set.of("servlet-foy", "security-kerckhoffs"), null, false), dir, version, SILENT);
         Path project = dir.resolve("demo-app");
         useThisBuildsArtifacts(project);
         addTheSecuredServlet(project);
@@ -821,7 +821,7 @@ class CreateThenBuildIT {
     /** A created application (REST, the parent or not) under {@code root}, with this build's artifacts. */
     private static Path application(Path root, boolean withParent) throws IOException {
         ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
-                Set.of("cassini-rest"), null, false, false, withParent), root, System.getProperty("it.version"), SILENT);
+                Set.of("rest-cassini"), null, false, false, withParent), root, System.getProperty("it.version"), SILENT);
         useThisBuildsArtifacts(root.resolve("demo-app"));
         return root;
     }

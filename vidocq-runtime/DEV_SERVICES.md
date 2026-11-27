@@ -63,8 +63,8 @@ in `vidocq.properties` (see [Switching dev services on and off](#switching-dev-s
 | Keycloak | `vidocq-runtime-devservice-keycloak` | OIDC issuer / auth-server coordinates |
 | OpenTelemetry (Grafana LGTM) | `vidocq-runtime-devservice-otel` | `otel.exporter.otlp.endpoint`, `otel.exporter.otlp.protocol`, and `otel.sdk.disabled=false` unless set |
 
-`vidocq extension add` (and `vidocq create`, `vidocq doctor --fix`) declares the provider of `mansart-pool`,
-`cervantes-jwt` and `humboldt-telemetry` for you: on the plugin, in test scope with `vidocq-runtime-devservices-junit`
+`vidocq extension add` (and `vidocq create`, `vidocq doctor --fix`) declares the provider of `pool-mansart`,
+`jwt-cervantes` and `telemetry-humboldt` for you: on the plugin, in test scope with `vidocq-runtime-devservices-junit`
 (not for the collector), and the PostgreSQL driver for the pool (BUG-20261031-05). By hand, the provider goes in
 the **plugin**'s `<dependencies>` (not the project's):
 

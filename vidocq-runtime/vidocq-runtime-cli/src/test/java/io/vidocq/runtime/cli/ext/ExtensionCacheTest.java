@@ -41,7 +41,7 @@ class ExtensionCacheTest {
             new ExtensionCache.Fingerprint(Path.of("/m2/a-1.0-SNAPSHOT.jar"), 10, 1000);
 
     private static final ProjectExtensions.Installed CASSINI = new ProjectExtensions.Installed(
-            "cassini-rest",
+            "rest-cassini",
             new ResolvedArtifact("io.vidocq.runtime.extensions.jakartaee.core",
                     "vidocq-runtime-cassini-rest-extension", "0.4.0",
                     Path.of("/m2/cassini-0.4.0.jar")),
@@ -82,11 +82,25 @@ class ExtensionCacheTest {
         String earlier = """
                 pomHash=abc
                 snapshot=10|1000|/m2/a-1.0-SNAPSHOT.jar
-                extension=cassini-rest|true|g|a|0.4.0|/m2/cassini-0.4.0.jar
+                extension=rest-cassini|true|g|a|0.4.0|/m2/cassini-0.4.0.jar
                 """;
 
         assertTrue(ExtensionCache.read(earlier).isEmpty());
         assertTrue(ExtensionCache.read(earlier + "keyFiles=0\n").isPresent());
+    }
+
+    /** Vidocq/vidocq#809: a cache a CLI up to 0.4.0 wrote names the extensions by their former ids. */
+    @Test
+    void aCachedFormerIdIsReadAsTheNewOne() {
+        var entry = ExtensionCache.read("""
+                pomHash=abc
+                extension=knock-health|true|g|a|0.4.0|/m2/knock-0.4.0.jar
+                extension=acme-extension|true|com.acme|acme-extension|1.0|/m2/acme-1.0.jar
+                keyFiles=0
+                """).orElseThrow();
+
+        assertEquals(List.of("health-knock", "acme-extension"),
+                entry.extensions().stream().map(ProjectExtensions.Installed::id).toList());
     }
 
     @Test

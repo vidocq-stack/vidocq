@@ -57,7 +57,7 @@ class PomEditorAptTest {
             </project>
             """;
 
-    /** Shape produced by `vidocq create -x cassini-rest`: APT block already present. */
+    /** Shape produced by `vidocq create -x rest-cassini`: APT block already present. */
     private static final String POM_WITH_APT = """
             <project>
                 <build>

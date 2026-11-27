@@ -72,7 +72,7 @@ final class ModuleRequirementsCollector {
      * module. Only two of the first-party extensions ship a
      * {@link ModuleRequirementsDescriptor#RESOURCE} descriptor, while the catalog carries the same
      * information for the rest under {@code module-info.requires} -- so without this the check could not
-     * see, for instance, that an application using {@code cassini-rest} has to require
+     * see, for instance, that an application using {@code rest-cassini} has to require
      * {@code jakarta.ws.rs} itself.
      *
      * <p>A {@code requires static} is not reported: it is a separate catalog key and
@@ -117,7 +117,7 @@ final class ModuleRequirementsCollector {
      * to a module whose compiled classes refer to a package {@code <module>} exports: the catalog states
      * what an application USING an extension's API must declare, and a module that depends on the extension
      * only to extend it uses none of it (BUG-20261109-01 -- the first version of this check demanded five
-     * directives of Vidocq's own cassini-rest dev panel, which imports nothing from Jakarta REST).
+     * directives of Vidocq's own rest-cassini dev panel, which imports nothing from Jakarta REST).
      *
      * @param modulesInUse the modules the compiled classes refer to, or empty when that could not be
      *                     determined (an unreadable output directory or module path) -- then no

@@ -648,7 +648,7 @@ public final class CliParser {
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(
-                        "vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health"));
+                        "vidocq create --name my-api -g com.acme -x rest-cassini -x health-knock"));
             }
             case BUILD -> {
                 CliOutput.println(CliOutput.bold("vidocq build") + " — Build & package the project");
@@ -712,13 +712,15 @@ public final class CliParser {
                 cmd("add <id...>",                          "Add extensions to the project's pom.xml");
                 cmd("remove <id...>",                       "Remove extensions from the project's pom.xml");
                 CliOutput.println();
-                CliOutput.println("Ids may be a short name (e.g. " + CliOutput.cyan("knock-health")
-                        + "), an explicit " + CliOutput.cyan("groupId:artifactId") + ",");
-                CliOutput.println("or any name (resolved as io.vidocq.runtime:vidocq-runtime-<id>-extension).");
+                CliOutput.println("Ids name the function, then the codename (e.g. " + CliOutput.cyan("health-knock")
+                        + "); the function alone does when");
+                CliOutput.println("one id starts with it (" + CliOutput.cyan("health") + "). An extension outside the"
+                        + " catalog is " + CliOutput.cyan("groupId:artifactId") + ".");
+                CliOutput.println("The ids up to 0.4.0 (" + CliOutput.cyan("knock-health") + ") still work.");
                 CliOutput.println();
                 CliOutput.println(EXAMPLES);
                 CliOutput.println("  " + CliOutput.cyan("vidocq extension list --available"));
-                CliOutput.println("  " + CliOutput.cyan("vidocq extension add cassini-rest knock-health"));
+                CliOutput.println("  " + CliOutput.cyan("vidocq extension add rest-cassini health-knock"));
             }
             case CONFIG -> {
                 CliOutput.println(CliOutput.bold("vidocq config") + " — Read & write vidocq.properties");

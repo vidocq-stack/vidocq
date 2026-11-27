@@ -39,18 +39,18 @@ get a database, Keycloak or a collector without a step of your own.
 |===
 | Extension | Dev service | What is written
 
-| `mansart-pool`
+| `pool-mansart`
 | `vidocq-runtime-devservice-postgres`
 | The provider among `vidocq-runtime-maven-plugin`'s `<dependencies>`; the provider and
   `vidocq-runtime-devservices-junit` in `test` scope; the PostgreSQL driver `org.postgresql:postgresql` in
   `runtime` scope, unless the project declares a JDBC driver already, being then on another database
   (nothing is written then)
 
-| `cervantes-jwt`
+| `jwt-cervantes`
 | `vidocq-runtime-devservice-keycloak`
 | The provider on the plugin; the provider and `vidocq-runtime-devservices-junit` in `test` scope
 
-| `humboldt-telemetry`
+| `telemetry-humboldt`
 | `vidocq-runtime-devservice-otel`
 | The provider on the plugin only: a test needs no collector
 |===

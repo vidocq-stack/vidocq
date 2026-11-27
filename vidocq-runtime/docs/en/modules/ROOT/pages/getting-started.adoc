@@ -41,11 +41,11 @@ NOTE: No installer needed? Download `vidocq-runtime-cli-<version>-cli.zip` from 
 
 [source,bash]
 ----
-vidocq create --name todo --group-id com.acme --extension cassini-rest
+vidocq create --name todo --group-id com.acme --extension rest-cassini
 cd todo
 ----
 
-`--extension cassini-rest` (short: `-x`) enables Jakarta REST — it transitively brings the Chappe HTTP server, CDI (Vauban) and JSON-B (Champollion). The generated project is a standard Maven project of Java Modules:
+`--extension rest-cassini` (short: `-x`) enables Jakarta REST — it transitively brings the Chappe HTTP server, CDI (Vauban) and JSON-B (Champollion). The generated project is a standard Maven project of Java Modules:
 
 [source]
 ----
@@ -59,7 +59,7 @@ todo/
 ----
 <1> Imports `vidocq-runtime-bom` at `{release-version}`, sets `vidocq.mainModule` and declares `vidocq-runtime-maven-plugin` as a build extension, which gives the build everything else (no parent, Vidocq/vidocq#380), so `mvn package` produces a runnable distribution.
 <2> Module descriptor, pre-filled with the `requires`/`opens` a REST app needs.
-<3> A first resource, written for `cassini-rest` (Step 3).
+<3> A first resource, written for `rest-cassini` (Step 3).
 <4> MicroProfile-style configuration (`vidocq.http.port=8080`, …).
 
 There is no main class: the runtime's own main boots the application from
@@ -136,7 +136,7 @@ mvn vidocq:dev
 
 Dev mode launches the application on its module path and watches your sources. It uses the `vidocq.mainModule` property already set in the generated pom (and `vidocq.mainClass`, when `--main` set it).
 
-Nothing to add: since `todo` already has the Chappe HTTP server (through `cassini-rest`), `mvn vidocq:dev` also serves the xref:dev-console.adoc[dev console] on its own: `Vidocq dev console: http://127.0.0.1:8888/` opens the startup report of the running application and the live values of its extensions.
+Nothing to add: since `todo` already has the Chappe HTTP server (through `rest-cassini`), `mvn vidocq:dev` also serves the xref:dev-console.adoc[dev console] on its own: `Vidocq dev console: http://127.0.0.1:8888/` opens the startup report of the running application and the live values of its extensions.
 
 To run the application once, without the watcher, use `mvn vidocq:run`: it compiles, completes the bean index and forks the same JVM, and its exit code is the build's. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the `vidocq:run` goal].
 
@@ -166,7 +166,7 @@ NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven
 [source,bash]
 ----
 vidocq extension list --available
-vidocq extension add knock-health
+vidocq extension add health-knock
 mvn package
 ----
 

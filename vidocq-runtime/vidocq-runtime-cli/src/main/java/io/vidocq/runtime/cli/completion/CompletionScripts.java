@@ -19,6 +19,9 @@
  */
 package io.vidocq.runtime.cli.completion;
 
+import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.RegistryEntry;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,6 +42,7 @@ public final class CompletionScripts {
     private static final String CASE_INDENT = "        ";
     /** Closes a {@code case} branch that echoes its words. */
     private static final String END_ECHO = "\" ;;\n";
+    private static final String END_OF_CASE = " ;;\n";
 
     private CompletionScripts() {}
 
@@ -145,6 +149,7 @@ public final class CompletionScripts {
         sh.append(ESAC);
         shortAliases(sh);
         sh.append("}\n");
+        extensionIdOfArtifact(sh);
         sh.append("_vidocq_addable() {\n");
         sh.append("    local taken id\n");
         sh.append("    taken=\" $(_vidocq_dynamic @pom-extensions | tr '\\n' ' ') $* \"\n");
@@ -160,7 +165,8 @@ public final class CompletionScripts {
                                 [ -f "$f" ] && sed -n 's/^[[:space:]]*\\([^#![:space:]=:][^[:space:]=:]*\\)[[:space:]]*[=:].*/\\1/p' "$f"
                             done ;;
                         @pom-extensions)
-                            [ -f pom.xml ] && sed -n 's/.*<artifactId>vidocq-runtime-\\(.*\\)-extension<\\/artifactId>.*/\\1/p' pom.xml ;;
+                            [ -f pom.xml ] && sed -n 's/.*<artifactId>vidocq-runtime-\\(.*\\)-extension<\\/artifactId>.*/\\1/p' pom.xml \\
+                                | while read -r a; do _vidocq_extension_id "$a"; done ;;
                     esac
                     return 0
                 }""");
@@ -179,10 +185,29 @@ public final class CompletionScripts {
         sh.append(ESAC);
     }
 
+    /**
+     * {@code _vidocq_extension_id}: the catalog id of the extension whose artifactId is
+     * {@code vidocq-runtime-<stem>-extension}, from its stem; the stem itself outside the catalog, or when they match.
+     * The ids name the function first (Vidocq/vidocq#809), the artifactIds the codename.
+     */
+    private static void extensionIdOfArtifact(StringBuilder sh) {
+        sh.append("_vidocq_extension_id() {\n");
+        sh.append("    case \"$1\" in\n");
+        for (RegistryEntry e : KnownExtensions.catalog()) {
+            String stem = e.artifactId().replaceFirst("^vidocq-runtime-", "").replaceFirst("-extension$", "");
+            if (!stem.equals(e.id())) {
+                sh.append(CASE_INDENT).append(stem).append(") echo ").append(e.id()).append(END_OF_CASE);
+            }
+        }
+        sh.append(CASE_INDENT).append("*) echo \"$1\" ;;\n");
+        sh.append(ESAC);
+        sh.append("}\n");
+    }
+
     private static void aliases(StringBuilder sh, Map<String, String> aliases, String variable) {
         aliases.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e ->
                 sh.append(CASE_INDENT).append(e.getKey()).append(") ").append(variable)
-                        .append("=").append(e.getValue()).append(" ;;\n"));
+                        .append("=").append(e.getValue()).append(END_OF_CASE));
     }
 
     private static void cases(StringBuilder sh, Map<String, List<String>> map, String after) {
@@ -193,7 +218,7 @@ public final class CompletionScripts {
             } else {
                 sh.append("echo \"").append(join(words)).append("\"");
             }
-            sh.append(after).append(" ;;\n");
+            sh.append(after).append(END_OF_CASE);
         });
     }
 

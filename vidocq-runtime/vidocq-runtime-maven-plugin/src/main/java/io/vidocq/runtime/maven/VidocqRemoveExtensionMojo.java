@@ -27,7 +27,7 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
  * bundle's processor path and the {@code module-info.java} directives it marked, as
  * {@code vidocq extension remove} does (Vidocq/vidocq#314):
  *
- * <pre>mvn vidocq:remove-extension -Dextensions=knock-health</pre>
+ * <pre>mvn vidocq:remove-extension -Dextensions=health-knock</pre>
  *
  * <p>Has no default phase. It edits the project it runs on, once.</p>
  */

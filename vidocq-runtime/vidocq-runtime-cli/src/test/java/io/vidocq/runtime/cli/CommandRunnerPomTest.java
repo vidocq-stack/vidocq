@@ -131,7 +131,7 @@ class CommandRunnerPomTest {
     }
 
     private static Path pomAt(Path dir, boolean withParent, String version) throws IOException {
-        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("cassini-rest"), null,
+        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("rest-cassini"), null,
                 false, false, withParent), dir, version, SILENT);
         return dir.resolve("demo");
     }
@@ -257,7 +257,7 @@ class CommandRunnerPomTest {
     }
 
     private static Path withParent(Path dir) throws IOException {
-        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("cassini-rest"), null,
+        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("rest-cassini"), null,
                 false, false, true), dir, "0.4.0", SILENT);
         return dir.resolve("demo");
     }

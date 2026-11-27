@@ -96,7 +96,7 @@ class ProjectScaffolderVersionTest {
         // dependencyManagement, which re-evaluates to the app's version: dependencies pin it.
         ProjectScaffolder.scaffold(
                 new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), "0.3.0", false), dir, RUNTIME, SILENT);
+                        Set.of("rest-cassini"), "0.3.0", false), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertTrue(pom.contains("<artifactId>vidocq-runtime-core</artifactId>\n"
@@ -118,7 +118,7 @@ class ProjectScaffolderVersionTest {
     void underTheApplicationParentTheBomVersionsEveryVidocqArtifact(@TempDir Path dir) throws IOException {
         ProjectScaffolder.scaffold(
                 new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), "0.4.0", false, false, true), dir, RUNTIME, SILENT);
+                        Set.of("rest-cassini"), "0.4.0", false, false, true), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertEquals(List.of("0.4.0", "1.0.0-SNAPSHOT"), pom.lines()

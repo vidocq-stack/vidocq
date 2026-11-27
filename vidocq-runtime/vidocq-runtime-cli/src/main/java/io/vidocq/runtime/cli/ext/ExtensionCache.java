@@ -19,7 +19,9 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import io.vidocq.runtime.tooling.KnownExtensions;
 import io.vidocq.runtime.tooling.PomDependencies;
+import io.vidocq.runtime.tooling.RegistryEntry;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -197,7 +199,9 @@ public final class ExtensionCache {
                     }
                     case "extension" -> {
                         String[] f = value.split("\\|", 6);
-                        extensions.add(new ProjectExtensions.Installed(f[0],
+                        // By its catalog id, as an earlier CLI cached the id up to 0.4.0 (#809).
+                        String id = KnownExtensions.byId(f[0]).map(RegistryEntry::id).orElse(f[0]);
+                        extensions.add(new ProjectExtensions.Installed(id,
                                 new ResolvedArtifact(f[2], f[3], f[4], Path.of(f[5])),
                                 Boolean.parseBoolean(f[1])));
                     }

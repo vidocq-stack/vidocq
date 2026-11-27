@@ -102,7 +102,7 @@ public class VidocqPersistenceUnitBootstrap implements PersistenceUnitBootstrap 
         if (!beans.isResolvable()) {
             throw new PersistenceException("Persistence unit " + unit + " is JTA, and the application has no "
                     + type.getSimpleName() + " bean to share the connection of a transaction through: add the"
-                    + " mansart-transactions extension (`vidocq extension add mansart-transactions`), or make the"
+                    + " Mansart Transactions extension (`vidocq extension add transactions-mansart`), or make the"
                     + " unit RESOURCE_LOCAL");
         }
         return beans.get();

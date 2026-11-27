@@ -39,7 +39,7 @@ module io.vidocq.runtime.examples.noether {
     requires io.vidocq.runtime.extensions.jakartaee.web.noether.persistence;
     requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
     requires io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions;
-    // What `vidocq extension add noether-persistence` writes: the entity accessor Noether's processor generates
+    // What `vidocq extension add persistence-noether` writes: the entity accessor Noether's processor generates
     // (_NoetherJpaAccess) implements Noether's SPI. It replaces reflection, so the entity package has no `opens`.
     requires io.vidocq.noether.jpa.core;
 

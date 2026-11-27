@@ -32,7 +32,7 @@ class CracDoctorTest {
 
     @Test
     void aProjectWithoutTheCracExtensionIsNotChecked() {
-        assertEquals(Optional.empty(), ProjectDoctor.checkCrac(Set.of("cassini-rest"), false, "Mac OS X"));
+        assertEquals(Optional.empty(), ProjectDoctor.checkCrac(Set.of("rest-cassini"), false, "Mac OS X"));
     }
 
     @Test

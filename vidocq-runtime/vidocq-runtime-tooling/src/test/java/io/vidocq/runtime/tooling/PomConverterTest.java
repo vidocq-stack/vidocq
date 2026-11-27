@@ -43,7 +43,7 @@ class PomConverterTest {
     private static final String RUNTIME = "0.4.0";
 
     private static String scaffolded(boolean withParent, String runtime) {
-        return ProjectScaffolder.buildPom(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("cassini-rest"),
+        return ProjectScaffolder.buildPom(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("rest-cassini"),
                 null, false, false, withParent), runtime, new RecordingReporter());
     }
 

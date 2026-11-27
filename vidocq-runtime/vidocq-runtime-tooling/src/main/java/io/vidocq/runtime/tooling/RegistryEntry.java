@@ -22,7 +22,7 @@ package io.vidocq.runtime.tooling;
 /**
  * A single extension as advertised by the catalog / registry.
  *
- * @param id          short id, e.g. {@code knock-health}
+ * @param id          short id, e.g. {@code health-knock}
  * @param groupId     Maven groupId
  * @param artifactId  Maven artifactId
  * @param description human-readable one-liner

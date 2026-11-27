@@ -44,7 +44,7 @@ class CommandRunnerSaysLessTest {
     @Test
     void infoSummarisesTheProjectWithoutRunningMaven(@TempDir Path dir) throws IOException {
         CommandRunner.runCreate(new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                Set.of("cassini-rest"), "0.4.0", false)), dir);
+                Set.of("rest-cassini"), "0.4.0", false)), dir);
         Path project = dir.resolve("demo");
         Files.writeString(project.resolve("src/main/resources/vidocq.properties"), "vidocq.profile = staging\n");
 
@@ -93,9 +93,9 @@ class CommandRunnerSaysLessTest {
 
         List<String> headings = out.lines().filter(l -> l.matches("  [A-Z][\\w ]+")).map(String::strip).toList();
         assertEquals(List.of("Jakarta EE", "MicroProfile", "Data", "Web"), headings, out);
-        assertTrue(out.indexOf("cassini-rest") > out.indexOf("Jakarta EE")
-                && out.indexOf("cassini-rest") < out.indexOf("MicroProfile"), out);
-        assertTrue(out.contains("knock-health"), out);
+        assertTrue(out.indexOf("rest-cassini") > out.indexOf("Jakarta EE")
+                && out.indexOf("rest-cassini") < out.indexOf("MicroProfile"), out);
+        assertTrue(out.contains("health-knock"), out);
         assertFalse(out.toLowerCase().contains("offline"), out);
         assertFalse(out.contains("registry"), out);
     }

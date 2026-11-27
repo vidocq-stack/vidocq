@@ -299,7 +299,7 @@ class VidocqCheckPomMojoTest {
      */
     @Test
     void theExtensionDescriptorNamesTheCodegenBundle(@TempDir Path dir) throws Exception {
-        Path jar = jarWithDescriptor(dir, "id = cassini-rest\ncodegen = cassini-rest-processors\n");
+        Path jar = jarWithDescriptor(dir, "id = rest-cassini\ncodegen = cassini-rest-processors\n");
         Model model = new Model();
         model.setPackaging("jar");
         model.addDependency(cassini());
@@ -315,7 +315,7 @@ class VidocqCheckPomMojoTest {
     /** Vidocq/vidocq#314: a descriptor without {@code codegen} says the extension ships no bundle. */
     @Test
     void anExtensionWhoseDescriptorNamesNoCodegenNeedsNone(@TempDir Path dir) throws Exception {
-        Path jar = jarWithDescriptor(dir, "id = cassini-rest\ndescription = Jakarta REST\n");
+        Path jar = jarWithDescriptor(dir, "id = rest-cassini\ndescription = Jakarta REST\n");
         Model model = new Model();
         model.setPackaging("jar");
         model.addDependency(cassini());

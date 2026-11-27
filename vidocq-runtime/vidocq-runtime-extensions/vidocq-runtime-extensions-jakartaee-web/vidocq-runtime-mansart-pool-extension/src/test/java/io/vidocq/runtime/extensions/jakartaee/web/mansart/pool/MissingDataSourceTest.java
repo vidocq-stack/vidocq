@@ -39,7 +39,7 @@ class MissingDataSourceTest {
 
         assertTrue(message.contains("set vidocq.pool.url"), message);
         assertTrue(message.contains("vidocq-runtime-devservice-postgres"), message);
-        assertTrue(message.contains("vidocq extension add mansart-pool"), message);
+        assertTrue(message.contains("vidocq extension add pool-mansart"), message);
         assertTrue(message.contains("vidocq-runtime-devservices-junit"), message);
     }
 

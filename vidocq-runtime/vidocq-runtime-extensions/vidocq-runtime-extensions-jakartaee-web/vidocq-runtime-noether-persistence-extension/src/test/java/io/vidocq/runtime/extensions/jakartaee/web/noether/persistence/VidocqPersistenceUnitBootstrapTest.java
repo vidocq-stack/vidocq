@@ -59,7 +59,7 @@ class VidocqPersistenceUnitBootstrapTest {
                 () -> bootstrap.create("orders", null));
 
         assertTrue(refused.getMessage().contains("no TransactionManager bean"), refused.getMessage());
-        assertTrue(refused.getMessage().contains("vidocq extension add mansart-transactions"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("vidocq extension add transactions-mansart"), refused.getMessage());
     }
 
     @Test
@@ -71,7 +71,7 @@ class VidocqPersistenceUnitBootstrapTest {
                 () -> bootstrap.create("orders", null));
 
         assertTrue(refused.getMessage().contains("no TransactionSynchronizationRegistry bean"), refused.getMessage());
-        assertTrue(refused.getMessage().contains("vidocq extension add mansart-transactions"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("vidocq extension add transactions-mansart"), refused.getMessage());
     }
 
     @Test

@@ -166,7 +166,7 @@ class DiagnosticsTest {
                 "/opt/jdk", true, true, true, true, 0);
 
         assertTrue(byName(Diagnostics.run(ctx)).get("Extensions").hint()
-                .contains("vidocq extension add cassini-rest"));
+                .contains("vidocq extension add rest-cassini"));
     }
 
     @Test

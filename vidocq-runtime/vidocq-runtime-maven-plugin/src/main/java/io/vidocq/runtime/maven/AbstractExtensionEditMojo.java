@@ -38,7 +38,10 @@ abstract class AbstractExtensionEditMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.basedir}", readonly = true, required = true)
     private File basedir;
 
-    /** The extensions, comma-separated: catalog ids ({@code cassini-rest}) or {@code groupId:artifactId}. */
+    /**
+     * The extensions, comma-separated: catalog ids ({@code rest-cassini}; the ids up to 0.4.0, {@code cassini-rest},
+     * still work) or {@code groupId:artifactId}.
+     */
     @Parameter(property = "extensions")
     private String extensions;
 
@@ -59,7 +62,7 @@ abstract class AbstractExtensionEditMojo extends AbstractMojo {
                 .map(String::strip).filter(id -> !id.isEmpty()).toList();
         if (ids.isEmpty()) {
             throw new MojoFailureException("Name the extensions: mvn vidocq:" + goal()
-                    + " -Dextensions=cassini-rest,knock-health");
+                    + " -Dextensions=rest-cassini,health-knock");
         }
         ExtensionEditor.Outcome outcome = ExtensionEditor.edit(basedir.toPath(), ids, add(), runtimeVersion,
                 new LogReporter(getLog()));

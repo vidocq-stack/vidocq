@@ -65,7 +65,7 @@ class CommandRunnerMainlessTest {
         captured(() -> CommandRunner.runCreate(create(false), dir));
         Path moduleInfo = dir.resolve("demo/src/main/java/module-info.java");
 
-        String out = captured(() -> CommandRunner.updateModuleInfo(dir.resolve("demo"), List.of("cassini-rest"), true));
+        String out = captured(() -> CommandRunner.updateModuleInfo(dir.resolve("demo"), List.of("rest-cassini"), true));
 
         assertTrue(out.contains("has no class yet"), out);
         assertTrue(out.contains("opens com.acme.demo;"), out);
@@ -78,7 +78,7 @@ class CommandRunnerMainlessTest {
         Path pkg = dir.resolve("demo/src/main/java/com/acme/demo");
         Files.writeString(pkg.resolve("HelloResource.java"), "package com.acme.demo; class HelloResource {}");
 
-        String out = captured(() -> CommandRunner.updateModuleInfo(dir.resolve("demo"), List.of("cassini-rest"), true));
+        String out = captured(() -> CommandRunner.updateModuleInfo(dir.resolve("demo"), List.of("rest-cassini"), true));
 
         assertFalse(out.contains("has no class yet"), out);
         assertTrue(Files.readString(dir.resolve("demo/src/main/java/module-info.java")).contains("opens com.acme.demo"));

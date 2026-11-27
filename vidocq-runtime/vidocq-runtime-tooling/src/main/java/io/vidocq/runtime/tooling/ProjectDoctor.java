@@ -64,7 +64,7 @@ public final class ProjectDoctor {
     private static final String PORT_CHECK = "HTTP port";
     private static final String JWT_CHECK = "JWT verification";
     private static final String REQUIRED_CHECK = "Required extensions";
-    private static final String JWT = "cervantes-jwt";
+    private static final String JWT = "jwt-cervantes";
     private static final String CRAC = "crac";
     private static final String CRAC_CHECK = "CRaC";
     /** The keys MicroProfile JWT verifies a token's signature with: without one, it accepts none. */
@@ -313,7 +313,7 @@ public final class ProjectDoctor {
         }
         return Optional.of(Diagnostic.warn(REQUIRED_CHECK, String.join(", ", missing),
                 "Add it with vidocq extension add, unless the application provides it itself"
-                        + " (mansart-data: a @Produces DataSource)."));
+                        + " (data-mansart: a @Produces DataSource)."));
     }
 
     /**

@@ -45,10 +45,10 @@ class ProjectScaffolderExtensionsTest {
 
     @Test
     void knownExtensionUsesItsCatalogGroupId(@TempDir Path dir) throws IOException {
-        String pom = scaffoldPom(dir, Set.of("cassini-rest"));
+        String pom = scaffoldPom(dir, Set.of("rest-cassini"));
 
         assertTrue(pom.contains("<groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>"),
-                "cassini-rest must use its category groupId from the catalog, pom was:\n" + pom);
+                "rest-cassini must use its category groupId from the catalog, pom was:\n" + pom);
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"));
         assertFalse(pom.contains("""
                         <groupId>io.vidocq.runtime</groupId>
@@ -75,9 +75,9 @@ class ProjectScaffolderExtensionsTest {
     /** BUG-20261031-05, -06, -07: a created project with the pool gets its dev service as `extension add` wires it. */
     @Test
     void anExtensionWithADevServiceIsCreatedWithWhatItNeeds(@TempDir Path dir) throws IOException {
-        String pom = scaffoldPom(dir, Set.of("mansart-pool", "cervantes-jwt"));
+        String pom = scaffoldPom(dir, Set.of("pool-mansart", "jwt-cervantes"));
 
-        assertEquals(List.of(), DevServiceWiring.missing(List.of("mansart-pool", "cervantes-jwt"),
+        assertEquals(List.of(), DevServiceWiring.missing(List.of("pool-mansart", "jwt-cervantes"),
                 DevServiceWiring.Declared.of(pom)), pom);
         assertTrue(pom.contains("<extensions>true</extensions>"), "the plugin keeps its extension switch: " + pom);
     }
@@ -85,7 +85,7 @@ class ProjectScaffolderExtensionsTest {
     /** BUG-20261031-09: `create -x` writes the configuration of its extensions, as `extension add` does. */
     @Test
     void aCreatedProjectGetsTheConfigurationOfItsExtensions(@TempDir Path dir) throws IOException {
-        scaffoldPom(dir, Set.of("humboldt-telemetry"));
+        scaffoldPom(dir, Set.of("telemetry-humboldt"));
 
         String config = Files.readString(dir.resolve("demo/src/main/resources/vidocq.properties"));
         assertEquals("demo", PropertiesText.entries(config).get("otel.service.name"), config);
@@ -94,7 +94,7 @@ class ProjectScaffolderExtensionsTest {
 
     @Test
     void fromParent040AnExtensionIsItsDependencyAlone(@TempDir Path dir) throws IOException {
-        String pom = scaffoldPom(dir, Set.of("cassini-rest"));
+        String pom = scaffoldPom(dir, Set.of("rest-cassini"));
 
         // The parent loads the plugin as a build extension, which wires the codegen bundle (#339, evolution 2).
         assertFalse(pom.contains("codegen"), pom);
@@ -104,7 +104,7 @@ class ProjectScaffolderExtensionsTest {
     @Test
     void underAParentBefore040AnExtensionWithCodegenBundleGetsAnAnnotationProcessorPath(@TempDir Path dir)
             throws IOException {
-        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("cassini-rest"),
+        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("rest-cassini"),
                 "0.3.0", false), dir, RUNTIME, SILENT);
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
 
@@ -118,7 +118,7 @@ class ProjectScaffolderExtensionsTest {
 
     @Test
     void extensionWithoutCodegenBundleGetsNoAnnotationProcessorPath(@TempDir Path dir) throws IOException {
-        String pom = scaffoldPom(dir, Set.of("knock-health"));
+        String pom = scaffoldPom(dir, Set.of("health-knock"));
 
         assertFalse(pom.contains("annotationProcessorPaths"),
                 "no APT block is needed when no selected extension has a codegen bundle, pom was:\n" + pom);
@@ -128,7 +128,7 @@ class ProjectScaffolderExtensionsTest {
     void cassiniRestScaffoldsAReadyModuleInfo(@TempDir Path dir) throws IOException {
         ProjectScaffolder.scaffold(
                 new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), null, false), dir, RUNTIME, SILENT);
+                        Set.of("rest-cassini"), null, false), dir, RUNTIME, SILENT);
 
         String moduleInfo = Files.readString(dir.resolve("demo/src/main/java/module-info.java"));
         assertTrue(moduleInfo.contains("requires jakarta.ws.rs;"),

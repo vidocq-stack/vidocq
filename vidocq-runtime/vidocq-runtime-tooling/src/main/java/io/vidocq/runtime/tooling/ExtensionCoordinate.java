@@ -22,7 +22,7 @@ package io.vidocq.runtime.tooling;
 /**
  * A Maven {@code groupId:artifactId} pair identifying an extension dependency.
  *
- * <p>Pure value type — no I/O. Resolution of a short id (e.g. {@code knock-health})
+ * <p>Pure value type — no I/O. Resolution of a short id (e.g. {@code health-knock})
  * to a coordinate lives in {@link KnownExtensions#resolve(String)}.</p>
  */
 public record ExtensionCoordinate(String groupId, String artifactId) {

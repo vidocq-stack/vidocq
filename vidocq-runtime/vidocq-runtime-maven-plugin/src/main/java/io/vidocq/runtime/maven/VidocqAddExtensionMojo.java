@@ -27,7 +27,7 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
  * {@code annotationProcessorPaths} when the extension ships one, and its directives in
  * {@code src/main/java/module-info.java}, as {@code vidocq extension add} does (Vidocq/vidocq#314):
  *
- * <pre>mvn vidocq:add-extension -Dextensions=cassini-rest,knock-health</pre>
+ * <pre>mvn vidocq:add-extension -Dextensions=rest-cassini,health-knock</pre>
  *
  * <p>Has no default phase. It edits the project it runs on, once: in a multi-module build, run it on the
  * module to change ({@code -f app/pom.xml}).</p>

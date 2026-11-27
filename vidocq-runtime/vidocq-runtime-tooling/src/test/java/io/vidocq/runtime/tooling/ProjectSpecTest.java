@@ -36,9 +36,9 @@ class ProjectSpecTest {
 
     @Test
     void theGroupIdAndThePackageDefault() {
-        ProjectSpec spec = ProjectSpec.of("todo-api", null, null, List.of("cassini-rest"), null, false, "--package");
+        ProjectSpec spec = ProjectSpec.of("todo-api", null, null, List.of("rest-cassini"), null, false, "--package");
 
-        assertEquals(new ProjectSpec("todo-api", "io.example", "io.example.todo.api", Set.of("cassini-rest"), null,
+        assertEquals(new ProjectSpec("todo-api", "io.example", "io.example.todo.api", Set.of("rest-cassini"), null,
                 false), spec);
     }
 
@@ -61,7 +61,7 @@ class ProjectSpecTest {
                 () -> ProjectSpec.of("demo", null, null, typo, null, false, "--package"));
 
         assertTrue(e.getMessage().startsWith("unknown extension 'knock-helth': not in the Vidocq catalog."
-                + " Did you mean: knock-health?"), e.getMessage());
+                + " Did you mean: health-knock?"), e.getMessage());
     }
 
     @Test
@@ -95,9 +95,9 @@ class ProjectSpecTest {
     /** BUG-20261024-01: the extensions are written in the order given, the same on every run. */
     @Test
     void theExtensionsKeepTheOrderGiven() {
-        // mansart-data comes after the pool it requires, which -x does not name
-        List<String> ids = List.of("mansart-pool", "mansart-data", "cassini-rest", "knock-health", "ravel-config",
-                "foy-servlet");
+        // data-mansart comes after the pool it requires, which -x does not name
+        List<String> ids = List.of("pool-mansart", "data-mansart", "rest-cassini", "health-knock", "config-ravel",
+                "servlet-foy");
 
         ProjectSpec spec = ProjectSpec.of("demo", null, null, ids, null, false, "-");
 
@@ -105,22 +105,22 @@ class ProjectSpecTest {
         assertEquals(ids, List.copyOf(new ProjectSpec("demo", "g", "g.demo", spec.extensions(), null, false).extensions()));
     }
 
-    /** {@code vidocq create -x humboldt-telemetry -x mansart-pool} gets the JDBC spans glue too (BUG-20261030-25). */
+    /** {@code vidocq create -x telemetry-humboldt -x pool-mansart} gets the JDBC spans glue too (BUG-20261030-25). */
     @Test
     void aProjectWithTelemetryAndThePoolGetsTheirCompanion() {
-        ProjectSpec spec = ProjectSpec.of("library", null, null, List.of("humboldt-telemetry", "mansart-pool"), null,
+        ProjectSpec spec = ProjectSpec.of("library", null, null, List.of("telemetry-humboldt", "pool-mansart"), null,
                 false, "--package");
 
-        assertEquals(List.of("humboldt-telemetry", "mansart-pool", "jdbc-telemetry"),
+        assertEquals(List.of("telemetry-humboldt", "pool-mansart", "jdbc-telemetry"),
                 List.copyOf(spec.extensions()));
     }
 
-    /** Mansart Data reads its DataSource from the pool: {@code -x mansart-data} brings it, before itself. */
+    /** Mansart Data reads its DataSource from the pool: {@code -x data-mansart} brings it, before itself. */
     @Test
     void aProjectWithMansartDataGetsThePoolItNeeds() {
-        ProjectSpec spec = ProjectSpec.of("library", null, null, List.of("cassini-rest", "mansart-data"), null,
+        ProjectSpec spec = ProjectSpec.of("library", null, null, List.of("rest-cassini", "data-mansart"), null,
                 false, "--package");
 
-        assertEquals(List.of("cassini-rest", "mansart-pool", "mansart-data"), List.copyOf(spec.extensions()));
+        assertEquals(List.of("rest-cassini", "pool-mansart", "data-mansart"), List.copyOf(spec.extensions()));
     }
 }

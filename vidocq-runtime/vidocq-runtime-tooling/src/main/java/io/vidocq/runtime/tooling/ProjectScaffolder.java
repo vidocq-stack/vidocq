@@ -43,7 +43,7 @@ import java.util.Set;
  *     module-info.java
  *     &lt;package&gt;/
  *       &lt;ClassName&gt;.java        (--main only)
- *       HelloResource.java      (cassini-rest only)
+ *       HelloResource.java      (rest-cassini only)
  *   src/main/resources/
  *     vidocq.properties
  * </pre>
@@ -65,7 +65,7 @@ public final class ProjectScaffolder {
     static final String SNAPSHOT_MIRROR_URL = "https://maven.bak.vidocq.dev/snapshots/";
 
     /** The extension whose scaffold writes a {@code HelloResource}. */
-    private static final String REST_EXTENSION = "cassini-rest";
+    private static final String REST_EXTENSION = "rest-cassini";
 
     /** How the notes about the chosen parent start. */
     private static final String PARENT_VERSION = "Parent version ";

@@ -51,7 +51,7 @@ class CommandRunnerDoctorTest {
 
     private static Path project(Path dir) throws IOException {
         CommandRunner.runCreate(new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                Set.of("cassini-rest"), null, false)), dir);
+                Set.of("rest-cassini"), null, false)), dir);
         Path project = dir.resolve("demo");
         Path moduleInfo = project.resolve("src/main/java/module-info.java");
         Files.writeString(moduleInfo, Files.readString(moduleInfo).lines()
@@ -72,7 +72,7 @@ class CommandRunnerDoctorTest {
         assertEquals(1, doctor(project(dir), false, out));
 
         assertTrue(out.toString().contains("Module directives"), out.toString());
-        assertTrue(out.toString().contains("cassini-rest: requires jakarta.ws.rs"), out.toString());
+        assertTrue(out.toString().contains("rest-cassini: requires jakarta.ws.rs"), out.toString());
         assertTrue(out.toString().contains("Fix: vidocq doctor --fix"), out.toString());
     }
 
@@ -84,7 +84,7 @@ class CommandRunnerDoctorTest {
         assertEquals(0, doctor(project, true, out));
 
         assertTrue(Files.readString(project.resolve("src/main/java/module-info.java"))
-                .contains("requires jakarta.ws.rs; // vidocq:cassini-rest"));
+                .contains("requires jakarta.ws.rs; // vidocq:rest-cassini"));
         assertTrue(out.toString().contains("module-info.java updated"), out.toString());
         assertFalse(out.toString().contains("Fix: vidocq doctor --fix"), out.toString());
     }
@@ -92,7 +92,7 @@ class CommandRunnerDoctorTest {
     @Test
     void aHealthyProjectHasNothingToFix(@TempDir Path dir) {
         CommandRunner.runCreate(new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                Set.of("cassini-rest"), null, false)), dir);
+                Set.of("rest-cassini"), null, false)), dir);
         StringBuilder out = new StringBuilder();
 
         assertEquals(0, doctor(dir.resolve("demo"), true, out));
@@ -103,7 +103,7 @@ class CommandRunnerDoctorTest {
     /** A project created healthy, whose {@code vidocq.properties} gives {@code vidocq.sample.port} this value. */
     private static Path sampleProject(Path dir, String value) throws IOException {
         CommandRunner.runCreate(new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                Set.of("cassini-rest"), null, false)), dir);
+                Set.of("rest-cassini"), null, false)), dir);
         Path config = dir.resolve("demo/src/main/resources/vidocq.properties");
         Files.createDirectories(config.getParent());
         Files.writeString(config, "\nvidocq.sample.port=" + value + "\n",

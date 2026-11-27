@@ -86,11 +86,11 @@ class CliParserOptionValuesTest {
     void createReadsEveryValueOption() {
         Command.Create create = assertInstanceOf(Command.Create.class, CliParser.parse(new String[]{
                 "create", "-n", "demo", "-g", "org.acme", "--package", "org.acme.demo",
-                "-x", "cassini-rest", "--extension", "knock-health", "--parent-version", "1.2.3", "--main"}));
+                "-x", "rest-cassini", "--extension", "health-knock", "--parent-version", "1.2.3", "--main"}));
         assertEquals("demo", create.spec().name());
         assertEquals("org.acme", create.spec().groupId());
         assertEquals("org.acme.demo", create.spec().pkg());
-        assertEquals(Set.of("cassini-rest", "knock-health"), Set.copyOf(create.spec().extensions()));
+        assertEquals(Set.of("rest-cassini", "health-knock"), Set.copyOf(create.spec().extensions()));
     }
 
     @Test

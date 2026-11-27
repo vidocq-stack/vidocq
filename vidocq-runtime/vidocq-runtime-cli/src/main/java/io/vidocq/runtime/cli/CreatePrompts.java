@@ -37,7 +37,7 @@ import java.util.function.Consumer;
 final class CreatePrompts {
 
     /** The extensions Enter takes: a REST application, which {@code vidocq create} gives a first test. */
-    static final String DEFAULT_EXTENSIONS = "cassini-rest";
+    static final String DEFAULT_EXTENSIONS = "rest-cassini";
 
     private static final String PACKAGE_OPTION = "--package <pkg>";
 

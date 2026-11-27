@@ -924,7 +924,7 @@
         </mojo>
         <mojo>
             <goal>add-extension</goal>
-            <description>Add extensions to the project, as vidocq extension add does: the dependency, the codegen bundle on the compiler's annotationProcessorPaths when the extension ships one, and its directives in src/main/java/module-info.java. mvn vidocq:add-extension -Dextensions=cassini-rest,knock-health. No default phase; edits the project it runs on, once.</description>
+            <description>Add extensions to the project, as vidocq extension add does: the dependency, the codegen bundle on the compiler's annotationProcessorPaths when the extension ships one, and its directives in src/main/java/module-info.java. mvn vidocq:add-extension -Dextensions=rest-cassini,health-knock. No default phase; edits the project it runs on, once.</description>
             <requiresDependencyResolution>none</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
@@ -936,7 +936,7 @@
             <threadSafe>true</threadSafe>
             <parameters>
                 <parameter><name>basedir</name><type>java.io.File</type><required>true</required><editable>false</editable><description>The directory of the project to edit</description></parameter>
-                <parameter><name>extensions</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The extensions, comma-separated: catalog ids (cassini-rest) or groupId:artifactId</description></parameter>
+                <parameter><name>extensions</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The extensions, comma-separated: catalog ids (rest-cassini; the ids up to 0.4.0, cassini-rest, still work) or groupId:artifactId</description></parameter>
                 <parameter><name>runtimeVersion</name><type>java.lang.String</type><required>true</required><editable>false</editable><description>The version an added extension pins when the pom's parent gives none: this plugin's own</description></parameter>
             </parameters>
             <configuration>
@@ -947,7 +947,7 @@
         </mojo>
         <mojo>
             <goal>remove-extension</goal>
-            <description>Remove extensions from the project, undoing vidocq:add-extension, as vidocq extension remove does: the dependency, the codegen bundle's processor path and the module-info.java directives it marked. mvn vidocq:remove-extension -Dextensions=knock-health. No default phase.</description>
+            <description>Remove extensions from the project, undoing vidocq:add-extension, as vidocq extension remove does: the dependency, the codegen bundle's processor path and the module-info.java directives it marked. mvn vidocq:remove-extension -Dextensions=health-knock. No default phase.</description>
             <requiresDependencyResolution>none</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
@@ -959,7 +959,7 @@
             <threadSafe>true</threadSafe>
             <parameters>
                 <parameter><name>basedir</name><type>java.io.File</type><required>true</required><editable>false</editable><description>The directory of the project to edit</description></parameter>
-                <parameter><name>extensions</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The extensions, comma-separated: catalog ids (cassini-rest) or groupId:artifactId</description></parameter>
+                <parameter><name>extensions</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The extensions, comma-separated: catalog ids (rest-cassini; the ids up to 0.4.0, cassini-rest, still work) or groupId:artifactId</description></parameter>
                 <parameter><name>runtimeVersion</name><type>java.lang.String</type><required>true</required><editable>false</editable><description>The version an added extension pins when the pom's parent gives none: this plugin's own</description></parameter>
             </parameters>
             <configuration>
@@ -1064,7 +1064,7 @@
         </mojo>
         <mojo>
             <goal>create</goal>
-            <description>Scaffold a new Vidocq project, as vidocq create does: the pom, module-info.java, vidocq.properties and, with cassini-rest, a HelloResource. Needs no project: mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:&lt;version&gt;:create -Dname=my-api -DgroupId=com.acme -Dextensions=cassini-rest.</description>
+            <description>Scaffold a new Vidocq project, as vidocq create does: the pom, module-info.java, vidocq.properties and, with rest-cassini, a HelloResource. Needs no project: mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:&lt;version&gt;:create -Dname=my-api -DgroupId=com.acme -Dextensions=rest-cassini.</description>
             <requiresDependencyResolution>none</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>false</requiresProject>

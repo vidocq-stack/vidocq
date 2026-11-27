@@ -101,7 +101,7 @@ class ProjectSummaryTest {
 
         assertEquals("com.acme.demo", summary.mainModule());
         assertEquals("0.4.0", summary.runtimeVersion());
-        assertEquals(List.of("cassini-rest", "knock-health"), summary.extensions());
+        assertEquals(List.of("health-knock", "rest-cassini"), summary.extensions());
         assertEquals("staging", summary.profile());
         assertEquals("vidocq.properties", summary.profileSource());
     }

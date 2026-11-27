@@ -35,7 +35,7 @@ class ExtensionDescriptorTest {
     void aReactorModuleIsReadFromItsClassesDirectory(@TempDir Path classes) throws Exception {
         Path resource = classes.resolve(ExtensionDescriptor.RESOURCE);
         Files.createDirectories(resource.getParent());
-        Files.writeString(resource, "id = ravel-config\ncodegen =  vidocq-runtime-ravel-config-extension-codegen \n");
+        Files.writeString(resource, "id = config-ravel\ncodegen =  vidocq-runtime-ravel-config-extension-codegen \n");
 
         assertEquals(Optional.of("vidocq-runtime-ravel-config-extension-codegen"),
                 ExtensionDescriptor.of(classes).orElseThrow().codegen());
@@ -45,7 +45,7 @@ class ExtensionDescriptorTest {
     void aBlankCodegenMeansNone(@TempDir Path classes) throws Exception {
         Path resource = classes.resolve(ExtensionDescriptor.RESOURCE);
         Files.createDirectories(resource.getParent());
-        Files.writeString(resource, "id = knock-health\ncodegen =\n");
+        Files.writeString(resource, "id = health-knock\ncodegen =\n");
 
         assertEquals(Optional.empty(), ExtensionDescriptor.of(classes).orElseThrow().codegen());
     }

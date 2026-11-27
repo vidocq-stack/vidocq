@@ -127,7 +127,7 @@ class ProjectScaffolderAppTest {
 
     @Test
     void restScaffoldWithoutMainWritesAResourceInTheOpenedPackage(@TempDir Path dir) throws IOException {
-        Path project = scaffold(dir, Set.of("cassini-rest"), false);
+        Path project = scaffold(dir, Set.of("rest-cassini"), false);
 
         // An opens of a package without classes compiles with a warning, then the JVM
         // refuses the module: "Package com.acme.demo not found in module".
@@ -140,7 +140,7 @@ class ProjectScaffolderAppTest {
 
     @Test
     void noOpensForAPackageTheScaffoldLeavesEmpty(@TempDir Path dir) throws IOException {
-        Path project = scaffold(dir, Set.of("mansart-data"), false);
+        Path project = scaffold(dir, Set.of("data-mansart"), false);
 
         String moduleInfo = Files.readString(project.resolve("src/main/java/module-info.java"));
         assertFalse(moduleInfo.contains("opens com.acme.demo"),
@@ -151,7 +151,7 @@ class ProjectScaffolderAppTest {
 
     @Test
     void mainOptionKeepsTheOpensItsClassAnchors(@TempDir Path dir) throws IOException {
-        Path project = scaffold(dir, Set.of("mansart-data"), true);
+        Path project = scaffold(dir, Set.of("data-mansart"), true);
 
         String moduleInfo = Files.readString(project.resolve("src/main/java/module-info.java"));
         assertTrue(moduleInfo.contains("opens com.acme.demo;"), moduleInfo);

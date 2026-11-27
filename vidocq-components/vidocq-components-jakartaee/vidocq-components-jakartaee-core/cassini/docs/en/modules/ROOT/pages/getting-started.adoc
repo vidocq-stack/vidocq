@@ -6,7 +6,7 @@ Three minutes to serve a `@Path` resource over HTTP with Cassini standalone. One
 
 [TIP]
 ====
-Looking for the batteries-included experience (CDI, config, packaging, dev mode)? Use the **Vidocq runtime**: `vidocq create --name my-api -x cassini-rest` — see the https://doc.vidocq.dev/vidocq/getting-started[runtime getting-started guide]. This page covers Cassini **standalone**, without the runtime.
+Looking for the batteries-included experience (CDI, config, packaging, dev mode)? Use the **Vidocq runtime**: `vidocq create --name my-api -x rest-cassini` — see the https://doc.vidocq.dev/vidocq/getting-started[runtime getting-started guide]. This page covers Cassini **standalone**, without the runtime.
 ====
 
 == Prerequisites

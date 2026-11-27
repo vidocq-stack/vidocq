@@ -54,8 +54,8 @@ class VidocqCreateMojoTest {
         Path byGoal = Files.createDirectories(dir.resolve("goal"));
         Path byScaffolder = Files.createDirectories(dir.resolve("scaffolder"));
 
-        create(byGoal, "todo", "com.acme", null, "cassini-rest, knock-health", false).execute();
-        ProjectScaffolder.scaffold(ProjectSpec.of("todo", "com.acme", null, List.of("cassini-rest", "knock-health"),
+        create(byGoal, "todo", "com.acme", null, "rest-cassini, health-knock", false).execute();
+        ProjectScaffolder.scaffold(ProjectSpec.of("todo", "com.acme", null, List.of("rest-cassini", "health-knock"),
                 null, false, "-"), byScaffolder, "1.2.3", SILENT);
 
         assertEquals(files(byScaffolder.resolve("todo")), files(byGoal.resolve("todo")));
@@ -70,7 +70,7 @@ class VidocqCreateMojoTest {
     /** Vidocq/vidocq#380: {@code -DwithParent=true} writes the project under vidocq-runtime-parent, as {@code --with-parent} does. */
     @Test
     void withParentWritesTheProjectUnderTheParent() throws Exception {
-        VidocqCreateMojo mojo = create(dir, "demo", "com.acme", null, "cassini-rest", false);
+        VidocqCreateMojo mojo = create(dir, "demo", "com.acme", null, "rest-cassini", false);
         set(mojo, "withParent", true);
         mojo.execute();
 
@@ -81,7 +81,7 @@ class VidocqCreateMojoTest {
 
     @Test
     void openModuleWritesAnOpenModule() throws Exception {
-        VidocqCreateMojo mojo = create(dir, "demo", "com.acme", null, "flyway-migration", false);
+        VidocqCreateMojo mojo = create(dir, "demo", "com.acme", null, "migration-flyway", false);
         set(mojo, "openModule", true);
         mojo.execute();
 

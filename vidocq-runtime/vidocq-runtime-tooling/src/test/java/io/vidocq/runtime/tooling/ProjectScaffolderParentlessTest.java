@@ -37,7 +37,7 @@ class ProjectScaffolderParentlessTest {
     private static final String RUNTIME = "0.4.0";
 
     private static ProjectSpec rest(boolean withParent) {
-        return new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("cassini-rest"), null, false, false,
+        return new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("rest-cassini"), null, false, false,
                 withParent);
     }
 
@@ -131,7 +131,7 @@ class ProjectScaffolderParentlessTest {
     /** The dev services are wired on the plugin block as under the parent, which keeps its extension switch. */
     @Test
     void theDevServicesAreWiredOnThePluginBlockWithoutAParent() {
-        ProjectSpec spec = new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("mansart-pool"), null, false,
+        ProjectSpec spec = new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("pool-mansart"), null, false,
                 false, false);
 
         String pom = ProjectScaffolder.buildPom(spec, RUNTIME, new RecordingReporter());

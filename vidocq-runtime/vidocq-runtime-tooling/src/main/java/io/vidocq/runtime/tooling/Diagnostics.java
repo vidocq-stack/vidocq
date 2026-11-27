@@ -187,6 +187,6 @@ public final class Diagnostics {
                 EXTENSIONS,
                 Diagnostic.Status.OK,
                 "no extension: the application runs on CDI alone",
-                "Add one to enable features (e.g. 'vidocq extension add cassini-rest').");
+                "Add one to enable features (e.g. 'vidocq extension add rest-cassini').");
     }
 }

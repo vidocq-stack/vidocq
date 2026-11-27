@@ -59,8 +59,9 @@ public final class KnownExtensions {
 
     private static final String ARTIFACT_ID = ".artifactId";
     private static final String OPENS = "opens ";
+    private static final String FORMER_IDS = "former-ids";
 
-    /** Every catalog key, prefixed by the extension's short id, e.g. {@code knock-health.groupId}. */
+    /** Every catalog key, prefixed by the extension's short id, e.g. {@code health-knock.groupId}. */
     private static final Properties DESCRIPTORS = load();
 
     private static final List<RegistryEntry> CATALOG = DESCRIPTORS.stringPropertyNames().stream()
@@ -119,7 +120,10 @@ public final class KnownExtensions {
         return Collections.unmodifiableMap(byFamily);
     }
 
-    /** Looks up a catalog entry by its short id (case-insensitive). */
+    /**
+     * Looks up a catalog entry by its short id, or by an id it had before (case-insensitive): {@code knock-health}
+     * still names {@code health-knock} (Vidocq/vidocq#809).
+     */
     public static Optional<RegistryEntry> byId(String id) {
         if (id == null) {
             return Optional.empty();
@@ -127,13 +131,49 @@ public final class KnownExtensions {
         String needle = id.trim();
         return CATALOG.stream()
                 .filter(e -> e.id().equalsIgnoreCase(needle))
-                .findFirst();
+                .findFirst()
+                .or(() -> CATALOG.stream()
+                        .filter(e -> csv(property(e.id(), FORMER_IDS)).stream().anyMatch(needle::equalsIgnoreCase))
+                        .findFirst());
+    }
+
+    /**
+     * The catalog id {@code id} names: the extension's own id for one of its ids, former ones included, and for a
+     * function only one catalog id starts with ({@code health} names {@code health-knock}); otherwise {@code id}
+     * itself, trimmed, as an id outside the catalog or a {@code groupId:artifactId} is written (Vidocq/vidocq#809).
+     */
+    public static String canonicalId(String id) {
+        if (id == null) {
+            return null;
+        }
+        String trimmed = id.trim();
+        String prefix = trimmed.toLowerCase(Locale.ROOT) + "-";
+        Optional<RegistryEntry> known = byId(trimmed);
+        if (known.isPresent()) {
+            return known.get().id();
+        }
+        List<String> starting = CATALOG.stream().map(RegistryEntry::id).filter(c -> c.startsWith(prefix)).toList();
+        return starting.size() == 1 ? starting.getFirst() : trimmed;
+    }
+
+    /** {@link #canonicalId(String)} of each of {@code ids}, in order, each once. */
+    public static List<String> canonicalIds(Collection<String> ids) {
+        return List.copyOf(new LinkedHashSet<>(ids.stream().map(KnownExtensions::canonicalId).toList()));
+    }
+
+    /**
+     * The ids the extension {@code id} names had before its own (Vidocq/vidocq#809): its
+     * {@code module-info.java} lines may still be marked with one. Empty outside the catalog.
+     */
+    public static List<String> formerIds(String id) {
+        return byId(id).map(e -> csv(property(e.id(), FORMER_IDS))).orElse(List.of());
     }
 
     /**
      * Resolves a user-supplied id to a coordinate:
      * <ol>
-     *   <li>a known catalog short id → its (category-specific) coordinate;</li>
+     *   <li>a known catalog short id, a former one, or a function only one id starts with
+     *       ({@link #canonicalId(String)}) → its (category-specific) coordinate;</li>
      *   <li>an explicit {@code groupId:artifactId} → parsed verbatim.</li>
      * </ol>
      * Any other id is refused, naming the closest catalog ids: every Vidocq extension is in the catalog, under a
@@ -149,7 +189,7 @@ public final class KnownExtensions {
         if (trimmed.contains(":")) {
             return ExtensionCoordinate.parse(trimmed);
         }
-        return byId(trimmed).map(RegistryEntry::coordinate).orElseThrow(() -> unknown(trimmed));
+        return byId(canonicalId(trimmed)).map(RegistryEntry::coordinate).orElseThrow(() -> unknown(trimmed));
     }
 
     private static IllegalArgumentException unknown(String id) {
@@ -159,13 +199,14 @@ public final class KnownExtensions {
                 + " An extension outside the catalog is added as groupId:artifactId.");
     }
 
-    /** The catalog ids sharing a word with {@code id}, or within two edits of it. */
+    /** The catalog ids sharing a word with {@code id}, or within two edits of it or of a former id. */
     private static List<String> closest(String id) {
         String needle = id.toLowerCase(Locale.ROOT);
         Set<String> words = Set.of(needle.split("-"));
         return CATALOG.stream().map(RegistryEntry::id)
                 .filter(candidate -> Arrays.stream(candidate.split("-")).anyMatch(words::contains)
-                        || distance(needle, candidate) <= 2)
+                        || distance(needle, candidate) <= 2
+                        || formerIds(candidate).stream().anyMatch(former -> distance(needle, former) <= 2))
                 .toList();
     }
 
@@ -221,12 +262,13 @@ public final class KnownExtensions {
      * the pool (BUG-20261030-25).
      */
     public static List<String> companions(Collection<String> declared) {
+        List<String> ids = canonicalIds(declared);
         return CATALOG.stream()
                 .map(RegistryEntry::id)
-                .filter(id -> !declared.contains(id))
+                .filter(id -> !ids.contains(id))
                 .filter(id -> {
                     List<String> of = companionOf(id);
-                    return !of.isEmpty() && declared.containsAll(of);
+                    return !of.isEmpty() && ids.containsAll(of);
                 })
                 .toList();
     }
@@ -242,7 +284,7 @@ public final class KnownExtensions {
     /** {@code ids} with the extensions they require, transitively, each required one before the first that needs it. */
     public static List<String> withRequired(Collection<String> ids) {
         Set<String> ordered = new LinkedHashSet<>();
-        for (String id : ids) {
+        for (String id : canonicalIds(ids)) {
             addWithRequired(id, ordered);
         }
         return List.copyOf(ordered);
@@ -332,7 +374,7 @@ public final class KnownExtensions {
     /**
      * The modules {@code id} needs its consumer to declare as {@code requires static}: needed to
      * compile against the extension's generated sources, absent at run time. Empty for an id outside
-     * the catalog. Two ids use the key today ({@code cassini-rest} and {@code mansart-data}, both
+     * the catalog. Two ids use the key today ({@code rest-cassini} and {@code data-mansart}, both
      * {@code java.compiler}, for the {@code @Generated} annotation).
      */
     public static List<String> moduleRequiresStatic(String id) {

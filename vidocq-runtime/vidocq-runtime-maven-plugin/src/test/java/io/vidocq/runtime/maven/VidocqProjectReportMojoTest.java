@@ -67,9 +67,9 @@ class VidocqProjectReportMojoTest {
         mojo(new VidocqListExtensionsMojo(), project).execute();
 
         assertEquals("info: Installed extensions:", lines.getFirst());
-        assertTrue(lines.contains("info:   ✔ cassini-rest               " + CASSINI_GROUP + ":" + CASSINI + ":0.4.0"),
+        assertTrue(lines.contains("info:   ✔ rest-cassini               " + CASSINI_GROUP + ":" + CASSINI + ":0.4.0"),
                 lines.toString());
-        assertTrue(lines.contains("info:   ✔ chappe-webserver           io.vidocq.runtime.extensions.essentials:"
+        assertTrue(lines.contains("info:   ✔ webserver-chappe           io.vidocq.runtime.extensions.essentials:"
                 + "vidocq-runtime-chappe-webserver-extension:0.4.0  (transitive)"), lines.toString());
         assertEquals(3, lines.size(), "the core jar is no extension: " + lines);
     }
@@ -143,7 +143,7 @@ class VidocqProjectReportMojoTest {
 
         mojo.execute();
 
-        assertTrue(Files.readString(moduleInfo).contains("requires jakarta.ws.rs; // vidocq:cassini-rest"),
+        assertTrue(Files.readString(moduleInfo).contains("requires jakarta.ws.rs; // vidocq:rest-cassini"),
                 Files.readString(moduleInfo));
         assertTrue(Files.isRegularFile(dir.resolve("mvnw")), "the missing wrapper is written");
         assertTrue(lines.stream().anyMatch(l -> l.matches("info: ✔ Module directives +module-info.java declares.*")),

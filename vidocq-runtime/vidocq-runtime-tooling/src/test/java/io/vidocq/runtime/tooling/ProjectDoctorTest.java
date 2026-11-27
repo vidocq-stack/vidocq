@@ -101,7 +101,7 @@ class ProjectDoctorTest {
     /** What {@code vidocq create} writes is healthy: every check of {@code vidocq doctor} passes, none warns. */
     @Test
     void aCreatedProjectReportsNoWarning(@TempDir Path dir) throws IOException {
-        for (var extensions : List.of(Set.of("cassini-rest"), Set.<String>of())) {
+        for (var extensions : List.of(Set.of("rest-cassini"), Set.<String>of())) {
             Path project = create(dir.resolve(extensions.isEmpty() ? "plain" : "rest"), extensions,
                     extensions.isEmpty());
             DoctorContext environment = DoctorFacts.gather(project, System.getProperty("java.home"),
@@ -118,7 +118,7 @@ class ProjectDoctorTest {
     @Test
     void theProjectChecksAreNamed(@TempDir Path dir) throws IOException {
         assertEquals(Set.of("Codegen bundles", "Vauban indexer", "Dependency codegen", "Module directives",
-                "Dev services", "Maven version", "HTTP port"), check(create(dir, Set.of("cassini-rest"), false)).keySet());
+                "Dev services", "Maven version", "HTTP port"), check(create(dir, Set.of("rest-cassini"), false)).keySet());
     }
 
     // -------------------------------------------------------------------------
@@ -128,7 +128,7 @@ class ProjectDoctorTest {
     /** From 0.4.0 the parent runs vidocq:generate on every build: a created project needs nothing of its own. */
     @Test
     void theParentRunsTheDependencyCodegen(@TempDir Path dir) throws IOException {
-        Diagnostic d = check(createWithParent(dir, Set.of("cassini-rest"))).get("Dependency codegen");
+        Diagnostic d = check(createWithParent(dir, Set.of("rest-cassini"))).get("Dependency codegen");
 
         assertEquals(Diagnostic.Status.OK, d.status());
         assertTrue(d.detail().contains("vidocq-runtime-parent"), d.detail());
@@ -137,7 +137,7 @@ class ProjectDoctorTest {
     /** Vidocq/vidocq#380: without the parent, the plugin declared as a build extension binds vidocq:generate itself. */
     @Test
     void thePluginRunsTheDependencyCodegenWithoutTheParent(@TempDir Path dir) throws IOException {
-        Diagnostic d = check(create(dir, Set.of("cassini-rest"), false)).get("Dependency codegen");
+        Diagnostic d = check(create(dir, Set.of("rest-cassini"), false)).get("Dependency codegen");
 
         assertEquals(Diagnostic.Status.OK, d.status());
         assertTrue(d.detail().contains("build extension"), d.detail());
@@ -145,7 +145,7 @@ class ProjectDoctorTest {
 
     @Test
     void anOlderParentLeavesTheDependencyJarsAsTheyAre(@TempDir Path dir) throws IOException {
-        Diagnostic d = check(create(dir, Set.of("cassini-rest"), false, OLD_PARENT)).get("Dependency codegen");
+        Diagnostic d = check(create(dir, Set.of("rest-cassini"), false, OLD_PARENT)).get("Dependency codegen");
 
         assertEquals(Diagnostic.Status.WARN, d.status());
         assertTrue(d.hint().contains("<goal>generate</goal>"), d.hint());
@@ -164,7 +164,7 @@ class ProjectDoctorTest {
 
     @Test
     void anExecutionOfItsOwnRunsItUnderAnOlderParent(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false, OLD_PARENT);
+        Path project = create(dir, Set.of("rest-cassini"), false, OLD_PARENT);
         edit(project.resolve("pom.xml"), "<goal>package</goal>", "<goal>generate</goal><goal>package</goal>");
 
         assertEquals(Diagnostic.Status.OK, check(project).get("Dependency codegen").status());
@@ -172,7 +172,7 @@ class ProjectDoctorTest {
 
     @Test
     void skippingItIsAWarning(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = create(dir, Set.of("rest-cassini"), false);
         edit(project.resolve("pom.xml"), "<properties>",
                 "<properties>\n        <vidocq.generate.skip>true</vidocq.generate.skip>");
 
@@ -192,8 +192,8 @@ class ProjectDoctorTest {
      */
     @Test
     void jwtWithoutAVerificationKeyWarnsUntilTheApplicationSetsOne(@TempDir Path dir) throws IOException {
-        assertFalse(check(create(dir.resolve("rest"), Set.of("cassini-rest"), false)).containsKey("JWT verification"));
-        Path project = create(dir.resolve("jwt"), Set.of("cervantes-jwt"), false);
+        assertFalse(check(create(dir.resolve("rest"), Set.of("rest-cassini"), false)).containsKey("JWT verification"));
+        Path project = create(dir.resolve("jwt"), Set.of("jwt-cervantes"), false);
 
         Diagnostic jwt = check(project).get("JWT verification");
         assertEquals(Diagnostic.Status.WARN, jwt.status());
@@ -216,10 +216,10 @@ class ProjectDoctorTest {
      */
     @Test
     void aDevServiceWithoutWhatItNeedsWarnsAndIsFixed(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("mansart-pool"), false);
+        Path project = create(dir, Set.of("pool-mansart"), false);
         assertEquals(Diagnostic.Status.OK, check(project).get("Dev services").status());
         Path pom = project.resolve("pom.xml");
-        String unwired = DevServiceWiring.unwire(Files.readString(pom), "mansart-pool", List.of(),
+        String unwired = DevServiceWiring.unwire(Files.readString(pom), "pool-mansart", List.of(),
                 new RecordingReporter()).pom();
         Files.writeString(pom, PomEditor.remove(unwired, new ExtensionCoordinate("org.postgresql", "postgresql")).pom());
 
@@ -249,13 +249,13 @@ class ProjectDoctorTest {
 
     @Test
     void aMissingCodegenBundleFailsAndIsFixed(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false, OLD_PARENT);
+        Path project = create(dir, Set.of("rest-cassini"), false, OLD_PARENT);
         Path pom = project.resolve("pom.xml");
         removePath(pom, CODEGEN);
 
         Diagnostic codegen = check(project).get("Codegen bundles");
         assertEquals(Diagnostic.Status.FAIL, codegen.status());
-        assertTrue(codegen.detail().contains("cassini-rest: " + CODEGEN), codegen.detail());
+        assertTrue(codegen.detail().contains("rest-cassini: " + CODEGEN), codegen.detail());
         assertTrue(codegen.fixable());
 
         RecordingReporter reporter = new RecordingReporter();
@@ -274,7 +274,7 @@ class ProjectDoctorTest {
     /** From 0.4.0 the plugin, a build extension, puts the bundles on the processor path itself (#339). */
     @Test
     void underAParentFrom040TheCodegenBundlesAreThePluginsJob(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = create(dir, Set.of("rest-cassini"), false);
         Path pom = project.resolve("pom.xml");
         // vidocq create writes no codegen path there; add processor paths that replace the parent's.
         edit(pom, "    </plugins>\n    </build>", """
@@ -322,7 +322,7 @@ class ProjectDoctorTest {
     @Test
     void aCodegenBundleWithoutItsExtensionWarnsAndIsRemoved(@TempDir Path dir) throws IOException {
         // A parent before 0.4.0, where the project lists its codegen paths itself.
-        Path project = create(dir, Set.of("cassini-rest"), false, OLD_PARENT);
+        Path project = create(dir, Set.of("rest-cassini"), false, OLD_PARENT);
         Path pom = project.resolve("pom.xml");
         removeDependency(pom, "vidocq-runtime-cassini-rest-extension");
 
@@ -343,7 +343,7 @@ class ProjectDoctorTest {
     /** Processor paths that replace the parent's drop the Vauban indexer (BUG-20261023-02). */
     @Test
     void processorPathsThatReplaceTheParentsFailAndAreMadeToAppend(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false, OLD_PARENT);
+        Path project = create(dir, Set.of("rest-cassini"), false, OLD_PARENT);
         Path pom = project.resolve("pom.xml");
         edit(pom, "<annotationProcessorPaths combine.children=\"append\">", "<annotationProcessorPaths>");
 
@@ -365,7 +365,7 @@ class ProjectDoctorTest {
      */
     @Test
     void withoutTheVidocqParentTheIndexerMustBeDeclared(@TempDir Path dir) throws IOException {
-        Path project = createWithParent(dir, Set.of("cassini-rest"));
+        Path project = createWithParent(dir, Set.of("rest-cassini"));
         Path pom = project.resolve("pom.xml");
         String text = Files.readString(pom);
         int start = text.indexOf("<parent>");
@@ -391,7 +391,7 @@ class ProjectDoctorTest {
 
     @Test
     void aMissingRequiresFailsAndIsAddedWithItsMarker(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = create(dir, Set.of("rest-cassini"), false);
         Path moduleInfo = project.resolve("src/main/java/module-info.java");
         String text = Files.readString(moduleInfo);
         Files.writeString(moduleInfo, text.lines().filter(l -> !l.contains("jakarta.ws.rs"))
@@ -399,12 +399,12 @@ class ProjectDoctorTest {
 
         Diagnostic directives = check(project).get("Module directives");
         assertEquals(Diagnostic.Status.FAIL, directives.status());
-        assertTrue(directives.detail().contains("cassini-rest: requires jakarta.ws.rs"), directives.detail());
+        assertTrue(directives.detail().contains("rest-cassini: requires jakarta.ws.rs"), directives.detail());
         assertTrue(directives.fixable());
 
         ProjectDoctor.fix(project, RUNTIME, new RecordingReporter());
 
-        assertTrue(Files.readString(moduleInfo).contains("requires jakarta.ws.rs; // vidocq:cassini-rest"),
+        assertTrue(Files.readString(moduleInfo).contains("requires jakarta.ws.rs; // vidocq:rest-cassini"),
                 Files.readString(moduleInfo));
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
     }
@@ -416,20 +416,20 @@ class ProjectDoctorTest {
      */
     @Test
     void aClosedMigrationPackageFailsAndIsOpened(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("flyway-migration"), true);
+        Path project = create(dir, Set.of("migration-flyway"), true);
         Path moduleInfo = project.resolve("src/main/java/module-info.java");
-        edit(moduleInfo, "    opens db.migration; // vidocq:flyway-migration\n", "");
+        edit(moduleInfo, "    opens db.migration; // vidocq:migration-flyway\n", "");
         Path migration = project.resolve("src/main/resources/db/migration/V1__books.sql");
         Files.writeString(migration, "create table book (id bigint primary key);\n");
 
         Diagnostic directives = check(project).get("Module directives");
         assertEquals(Diagnostic.Status.FAIL, directives.status());
-        assertTrue(directives.detail().contains("flyway-migration: opens db.migration"), directives.detail());
+        assertTrue(directives.detail().contains("migration-flyway: opens db.migration"), directives.detail());
         assertTrue(directives.fixable());
 
         ProjectDoctor.fix(project, RUNTIME, new RecordingReporter());
 
-        assertTrue(Files.readString(moduleInfo).contains("opens db.migration; // vidocq:flyway-migration"),
+        assertTrue(Files.readString(moduleInfo).contains("opens db.migration; // vidocq:migration-flyway"),
                 Files.readString(moduleInfo));
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
     }
@@ -442,7 +442,7 @@ class ProjectDoctorTest {
      */
     @Test
     void aClosedSubFolderOfAResourcePackageFailsAndIsOpened(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("liquibase-migration"), true);
+        Path project = create(dir, Set.of("migration-liquibase"), true);
         Path moduleInfo = project.resolve("src/main/java/module-info.java");
         Path changes = Files.createDirectories(project.resolve("src/main/resources/db/changelog/changes"));
         Files.writeString(changes.resolve("001-things.sql"), "--liquibase formatted sql\n");
@@ -450,13 +450,13 @@ class ProjectDoctorTest {
 
         Diagnostic directives = check(project).get("Module directives");
         assertEquals(Diagnostic.Status.FAIL, directives.status());
-        assertTrue(directives.detail().contains("liquibase-migration: opens db.changelog.changes"),
+        assertTrue(directives.detail().contains("migration-liquibase: opens db.changelog.changes"),
                 directives.detail());
         assertFalse(directives.detail().contains("db.changelog.empty"), directives.detail());
 
         ProjectDoctor.fix(project, RUNTIME, new RecordingReporter());
 
-        assertTrue(Files.readString(moduleInfo).contains("opens db.changelog.changes; // vidocq:liquibase-migration"),
+        assertTrue(Files.readString(moduleInfo).contains("opens db.changelog.changes; // vidocq:migration-liquibase"),
                 Files.readString(moduleInfo));
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
     }
@@ -468,7 +468,7 @@ class ProjectDoctorTest {
      */
     @Test
     void aPackageReachedByReflectionAndClosedFailsAndIsOpened(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), true);
+        Path project = create(dir, Set.of("rest-cassini"), true);
         Path classes = project.resolve("target/classes");
         writeClass(classes, ClassDesc.of("com.acme.demo.book.Book"),
                 cb -> cb.withField("title", ConstantDescs.CD_String, ClassFile.ACC_PRIVATE));
@@ -498,7 +498,7 @@ class ProjectDoctorTest {
     /** Without compiled classes, the packages reached by reflection cannot be read: the check says to compile. */
     @Test
     void withoutCompiledClassesTheReflectedPackagesWaitForACompile(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), true);
+        Path project = create(dir, Set.of("rest-cassini"), true);
 
         Diagnostic directives = check(project).get("Module directives");
         assertEquals(Diagnostic.Status.OK, directives.status());
@@ -512,7 +512,7 @@ class ProjectDoctorTest {
      */
     @Test
     void theModuleDirectivesCheckCountsNoExtensions(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), true);
+        Path project = create(dir, Set.of("rest-cassini"), true);
 
         assertFalse(check(project).get("Module directives").detail().matches(".*\\d+ extensions?.*"),
                 check(project).get("Module directives").detail());
@@ -527,10 +527,10 @@ class ProjectDoctorTest {
     /** BUG-20261031-03: a created project with a migration extension has its folder, opened, before any script. */
     @Test
     void aCreatedProjectWithFlywayHasItsMigrationFolderOpened(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("flyway-migration"), true);
+        Path project = create(dir, Set.of("migration-flyway"), true);
 
         assertTrue(Files.readString(project.resolve("src/main/java/module-info.java"))
-                .contains("opens db.migration; // vidocq:flyway-migration"));
+                .contains("opens db.migration; // vidocq:migration-flyway"));
         assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/migration/README.md")));
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
     }
@@ -608,7 +608,7 @@ class ProjectDoctorTest {
 
     @Test
     void aTakenHttpPortWarnsWithTheKeyThatMovesIt(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = create(dir, Set.of("rest-cassini"), false);
 
         Diagnostic port = byName(ProjectDoctor.check(ProjectDoctor.read(project, p -> p != 8080))).get("HTTP port");
 
@@ -627,7 +627,7 @@ class ProjectDoctorTest {
 
     @Test
     void theConfiguredPortIsTheOneChecked(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = create(dir, Set.of("rest-cassini"), false);
         Path config = project.resolve("src/main/resources/vidocq.properties");
         edit(config, "vidocq.http.port=8080", "vidocq.http.port=9090");
         assertEquals(9090, ProjectDoctor.read(project, p -> true).httpPort());
@@ -642,7 +642,7 @@ class ProjectDoctorTest {
 
     @Test
     void aHealthyProjectNeedsNoFix(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = create(dir, Set.of("rest-cassini"), false);
         String pom = Files.readString(project.resolve("pom.xml"));
 
         assertFalse(ProjectDoctor.fix(project, RUNTIME, new RecordingReporter()));
@@ -674,19 +674,19 @@ class ProjectDoctorTest {
     @Test
     void anOpenModuleIsCreatedWithoutOpensAndPassesTheModuleCheck(@TempDir Path dir) throws IOException {
         ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                Set.of("cassini-rest", "flyway-migration"), null, false, true), dir, RUNTIME, new RecordingReporter());
+                Set.of("rest-cassini", "migration-flyway"), null, false, true), dir, RUNTIME, new RecordingReporter());
         Path project = dir.resolve("demo");
         String moduleInfo = Files.readString(project.resolve("src/main/java/module-info.java"));
 
         assertTrue(moduleInfo.contains("open module com.acme.demo {"), moduleInfo);
         assertFalse(moduleInfo.contains("opens "), moduleInfo);
-        assertTrue(moduleInfo.contains("// vidocq:flyway-migration"), moduleInfo);
+        assertTrue(moduleInfo.contains("// vidocq:migration-flyway"), moduleInfo);
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
     }
 
     @Test
     void anOpenModuleThatKeepsItsOpensLinesFailsAndFixLeavesOnlyRequires(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = create(dir, Set.of("rest-cassini"), false);
         Path moduleInfo = project.resolve("src/main/java/module-info.java");
         edit(moduleInfo, "module com.acme.demo {", "open module com.acme.demo {\n    opens com.acme.demo.legacy;");
 
@@ -708,21 +708,21 @@ class ProjectDoctorTest {
     /** Mansart Data without the pool has no DataSource, unless the application produces its own: a warning. */
     @Test
     void mansartDataWithoutThePoolWarns(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest", "mansart-data"), false);
-        ExtensionEditor.edit(project, List.of("mansart-pool"), false, RUNTIME, new RecordingReporter());
+        Path project = create(dir, Set.of("rest-cassini", "data-mansart"), false);
+        ExtensionEditor.edit(project, List.of("pool-mansart"), false, RUNTIME, new RecordingReporter());
 
         Diagnostic required = check(project).get("Required extensions");
 
         assertEquals(Diagnostic.Status.WARN, required.status());
-        assertTrue(required.detail().contains("mansart-data needs mansart-pool"), required.detail());
+        assertTrue(required.detail().contains("data-mansart needs pool-mansart"), required.detail());
         assertFalse(required.fixable());
     }
 
     @Test
     void mansartDataWithThePoolHasNothingToSay(@TempDir Path dir) throws IOException {
-        // as vidocq create does: ProjectSpec.of brings the pool mansart-data requires
+        // as vidocq create does: ProjectSpec.of brings the pool data-mansart requires
         ProjectScaffolder.scaffold(ProjectSpec.of("demo", "com.acme", "com.acme.demo",
-                List.of("cassini-rest", "mansart-data"), null, false, "--package"), dir, RUNTIME, new RecordingReporter());
+                List.of("rest-cassini", "data-mansart"), null, false, "--package"), dir, RUNTIME, new RecordingReporter());
         Path project = dir.resolve("demo");
 
         Diagnostic required = check(project).get("Required extensions");

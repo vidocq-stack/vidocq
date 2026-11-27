@@ -99,7 +99,7 @@ class ExtensionJarsTest {
 
     @Test
     void aCatalogExtensionIsNamedByItsIdAnyOtherByItsArtifactId() {
-        assertEquals("cassini-rest", KnownExtensions.idOf(new ExtensionCoordinate(
+        assertEquals("rest-cassini", KnownExtensions.idOf(new ExtensionCoordinate(
                 "io.vidocq.runtime.extensions.jakartaee.core", "vidocq-runtime-cassini-rest-extension")));
         assertEquals("acme-extension", KnownExtensions.idOf(new ExtensionCoordinate("com.acme", "acme-extension")));
     }

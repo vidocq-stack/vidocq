@@ -42,7 +42,7 @@ final class MissingDataSource {
 
     private static String waysOut(String urlKey, String devServiceCondition) {
         return "set " + urlKey + " (vidocq.properties, -D or the environment), or let the PostgreSQL dev service"
-                + " provide it" + devServiceCondition + ": `vidocq extension add mansart-pool` declares"
+                + " provide it" + devServiceCondition + ": `vidocq extension add pool-mansart` declares"
                 + " vidocq-runtime-devservice-postgres and the PostgreSQL driver; under `mvn test`, the dev service"
                 + " starts through vidocq-runtime-devservices-junit, in test scope. The dev services report says why"
                 + " one did not start.";

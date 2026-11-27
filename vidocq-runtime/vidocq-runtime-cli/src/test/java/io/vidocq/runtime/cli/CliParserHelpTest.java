@@ -53,7 +53,7 @@ class CliParserHelpTest {
     @Test
     void theHelpOptionWinsAfterOtherOptions() {
         Command.Help help = assertInstanceOf(Command.Help.class,
-                CliParser.parse(new String[]{"extension", "add", "cassini-rest", "--help"}));
+                CliParser.parse(new String[]{"extension", "add", "rest-cassini", "--help"}));
 
         assertEquals("extension", help.topic());
     }

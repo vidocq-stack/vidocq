@@ -86,7 +86,7 @@ public final class ExtensionEditor {
         boolean wiredByPlugin = PomDependencies.codegenWiredByPlugin(pom);
         boolean droppedInheritedPaths = !wiredByPlugin && PomEditor.dropsInheritedProcessorPaths(pom);
         boolean pomChanged = false;
-        ids = withCompanions(pom, ids, add, reporter);
+        ids = withCompanions(pom, canonical(ids, reporter), add, reporter);
         for (String id : ids) {
             ExtensionCoordinate coordinate;
             try {
@@ -120,6 +120,20 @@ public final class ExtensionEditor {
             }
         }
         return new Outcome(true, pomChanged, moduleInfoChanged);
+    }
+
+    /**
+     * The catalog ids {@code ids} name (Vidocq/vidocq#809): an id up to 0.4.0, {@code knock-health}, is now
+     * {@code health-knock}, and {@code health} names it too, as no other id starts with it. Each change is noted.
+     */
+    private static List<String> canonical(List<String> ids, Reporter reporter) {
+        for (String id : ids) {
+            String canonical = KnownExtensions.canonicalId(id);
+            if (!canonical.equalsIgnoreCase(id.trim())) {
+                reporter.note(id.trim() + " is " + canonical);
+            }
+        }
+        return KnownExtensions.canonicalIds(ids);
     }
 
     /** The project's artifactId, which names it in the settings an extension writes; else its directory's name. */
@@ -224,11 +238,10 @@ public final class ExtensionEditor {
             String source = Files.readString(file);
             String pkg = applicationPackage(source, file.getParent());
             String updated = source;
-            for (String id : ids) {
-                updated = (add
-                        ? ModuleInfoEditor.add(updated, id, directives(projectDir, id, pkg, reporter))
-                        : ModuleInfoEditor.remove(updated, id, KnownExtensions.moduleName(id).orElse(null)))
-                        .source();
+            for (String id : KnownExtensions.canonicalIds(ids)) {
+                updated = add
+                        ? ModuleInfoEditor.add(updated, id, directives(projectDir, id, pkg, reporter)).source()
+                        : removeDirectives(updated, id);
                 if (add && pkg == null) {
                     warnUnopenedPackage(id, moduleName(source), reporter);
                 }
@@ -238,12 +251,25 @@ public final class ExtensionEditor {
             }
             Files.writeString(file, updated);
             String added = ModuleInfoEditor.isOpenModule(updated) ? "requires for " : "requires/opens for ";
-            reporter.success("module-info.java updated", (add ? added : "dropped ") + String.join(", ", ids));
+            reporter.success("module-info.java updated",
+                    (add ? added : "dropped ") + String.join(", ", KnownExtensions.canonicalIds(ids)));
             return true;
         } catch (IOException | IllegalArgumentException e) {
             reporter.warning("Could not update module-info.java: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * {@code source} without the lines marked for {@code id}, nor those a CLI up to 0.4.0 marked with one of its former
+     * ids (#809), nor a {@code requires} of its module.
+     */
+    private static String removeDirectives(String source, String id) {
+        String updated = ModuleInfoEditor.remove(source, id, KnownExtensions.moduleName(id).orElse(null)).source();
+        for (String former : KnownExtensions.formerIds(id)) {
+            updated = ModuleInfoEditor.remove(updated, former, null).source();
+        }
+        return updated;
     }
 
     /**

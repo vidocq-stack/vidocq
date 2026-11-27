@@ -102,7 +102,7 @@ class ExtensionEditorTest {
         writeUnwiredPom("");
         writeModuleInfo();
 
-        ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest"), true);
+        ExtensionEditor.Outcome outcome = edit(List.of("rest-cassini"), true);
 
         assertEquals(new ExtensionEditor.Outcome(true, true, true), outcome);
         String pom = pom();
@@ -111,7 +111,7 @@ class ExtensionEditorTest {
         assertEquals(1, pom.split("<version>").length - 1, "the parent's version only, the BOM gives the rest:\n" + pom);
         assertTrue(Files.readString(moduleInfo()).contains("requires jakarta.ws.rs;"));
         assertTrue(reporter.lines.contains(
-                "success: Added cassini-rest (io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-cassini-rest-extension)"),
+                "success: Added rest-cassini (io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-cassini-rest-extension)"),
                 reporter.lines.toString());
         assertTrue(reporter.lines.contains(
                 "success: Wired vidocq-runtime-cassini-rest-extension-codegen (annotationProcessorPaths)"),
@@ -127,7 +127,7 @@ class ExtensionEditorTest {
         writePom("");
         writeModuleInfo();
 
-        edit(List.of("cassini-rest"), true);
+        edit(List.of("rest-cassini"), true);
 
         String pom = pom();
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"), pom);
@@ -165,7 +165,7 @@ class ExtensionEditorTest {
                   </build>
                 """);
 
-        edit(List.of("cassini-rest"), false);
+        edit(List.of("rest-cassini"), false);
 
         assertFalse(pom().contains("cassini"), pom());
     }
@@ -186,7 +186,7 @@ class ExtensionEditorTest {
                   </build>
                 """);
 
-        edit(List.of("cassini-rest"), true);
+        edit(List.of("rest-cassini"), true);
 
         assertFalse(pom().contains("codegen"), pom());
     }
@@ -197,40 +197,86 @@ class ExtensionEditorTest {
         writeModuleInfo();
         String pom = pom();
         String moduleInfo = Files.readString(moduleInfo());
-        edit(List.of("cassini-rest"), true);
+        edit(List.of("rest-cassini"), true);
 
-        ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest"), false);
+        ExtensionEditor.Outcome outcome = edit(List.of("rest-cassini"), false);
 
         assertEquals(new ExtensionEditor.Outcome(true, true, true), outcome);
         assertEquals(pom, pom());
         assertEquals(moduleInfo, Files.readString(moduleInfo()));
-        assertTrue(reporter.lines.contains("success: Removed cassini-rest"
+        assertTrue(reporter.lines.contains("success: Removed rest-cassini"
                 + " (io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-cassini-rest-extension)"));
         assertTrue(reporter.lines.contains(
                 "success: Unwired vidocq-runtime-cassini-rest-extension-codegen (annotationProcessorPaths)"));
     }
 
+    /** Vidocq/vidocq#809: the id of an extension up to 0.4.0 still adds it, under its new id, and says so. */
     @Test
-    void addingTwiceChangesNothing() throws IOException {
-        writePom("");
-        edit(List.of("cassini-rest"), true);
-        String once = pom();
+    void theFormerIdOfAnExtensionAddsItUnderItsNewId() throws IOException {
+        writeUnwiredPom("");
+        writeModuleInfo();
 
         ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest"), true);
 
+        assertEquals(new ExtensionEditor.Outcome(true, true, true), outcome);
+        assertTrue(pom().contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"), pom());
+        assertTrue(Files.readString(moduleInfo()).contains("requires jakarta.ws.rs; // vidocq:rest-cassini"),
+                Files.readString(moduleInfo()));
+        assertTrue(reporter.lines.contains("note: cassini-rest is rest-cassini"), reporter.lines.toString());
+    }
+
+    /** Vidocq/vidocq#809: {@code health} names the one extension whose id starts with it. */
+    @Test
+    void theFunctionAloneAddsTheOneExtensionThatStartsWithIt() throws IOException {
+        writePom("");
+
+        assertTrue(edit(List.of("health"), true).succeeded());
+
+        assertTrue(pom().contains("<artifactId>vidocq-runtime-knock-health-extension</artifactId>"), pom());
+        assertTrue(reporter.lines.contains("note: health is health-knock"), reporter.lines.toString());
+    }
+
+    /**
+     * Vidocq/vidocq#809: a project a CLI up to 0.4.0 edited has its module-info.java lines marked with the former id;
+     * removing the extension, by either id, drops them.
+     */
+    @Test
+    void removingAnExtensionDropsTheLinesMarkedWithItsFormerId() throws IOException {
+        writeUnwiredPom("");
+        writeModuleInfo();
+        String moduleInfo = Files.readString(moduleInfo());
+        edit(List.of("rest-cassini"), true);
+        Files.writeString(moduleInfo(), Files.readString(moduleInfo()).replace("// vidocq:rest-cassini",
+                "// vidocq:cassini-rest"));
+
+        ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest"), false);
+
+        assertEquals(new ExtensionEditor.Outcome(true, true, true), outcome);
+        assertEquals(moduleInfo, Files.readString(moduleInfo()));
+        assertFalse(pom().contains("vidocq-runtime-cassini-rest-extension"), pom());
+    }
+
+    @Test
+    void addingTwiceChangesNothing() throws IOException {
+        writePom("");
+        edit(List.of("rest-cassini"), true);
+        String once = pom();
+
+        ExtensionEditor.Outcome outcome = edit(List.of("rest-cassini"), true);
+
         assertEquals(new ExtensionEditor.Outcome(true, false, false), outcome);
         assertEquals(once, pom());
-        assertTrue(reporter.lines.contains("note: • cassini-rest already present — skipped."), reporter.lines.toString());
+        assertTrue(reporter.lines.contains("note: • rest-cassini already present — skipped."), reporter.lines.toString());
     }
 
     @Test
     void removingAnAbsentExtensionWarns() throws IOException {
         writePom("");
 
-        ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest"), false);
+        ExtensionEditor.Outcome outcome = edit(List.of("rest-cassini"), false);
 
         assertEquals(new ExtensionEditor.Outcome(true, false, false), outcome);
-        assertTrue(reporter.lines.contains("warning: cassini-rest not found in pom.xml — skipped."));
+        assertTrue(reporter.lines.contains("warning: rest-cassini not found in pom.xml — skipped."));
     }
 
     /** BUG-20261024-04: an unknown id used to become a coordinate that does not exist. */
@@ -239,12 +285,12 @@ class ExtensionEditorTest {
         writePom("");
         String before = pom();
 
-        ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest", "mansart-persistence"), true);
+        ExtensionEditor.Outcome outcome = edit(List.of("rest-cassini", "mansart-persistence"), true);
 
         assertFalse(outcome.succeeded());
         assertEquals(before, pom());
         assertTrue(reporter.lines.contains("error: Invalid extension id 'mansart-persistence': not in the Vidocq"
-                + " catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions, noether-persistence? An"
+                + " catalog. Did you mean: data-mansart, persistence-noether, pool-mansart, transactions-mansart? An"
                 + " extension outside"
                 + " the catalog is added as groupId:artifactId."), reporter.lines.toString());
     }
@@ -266,7 +312,7 @@ class ExtensionEditorTest {
     void replacingPathsThatListTheIndexerDoNotWarn() throws IOException {
         writeUnwiredPom(REPLACING_PATHS.replaceFirst("<path>", INDEXER_THEN_PATH));
 
-        edit(List.of("knock-health"), true);
+        edit(List.of("health-knock"), true);
 
         assertFalse(reporter.lines.stream().anyMatch(l -> l.contains("drops the Vauban indexer")),
                 reporter.lines.toString());
@@ -277,7 +323,7 @@ class ExtensionEditorTest {
     void wiringACodegenBundleMakesReplacingPathsAppend() throws IOException {
         writeUnwiredPom(REPLACING_PATHS);
 
-        edit(List.of("cassini-rest"), true);
+        edit(List.of("rest-cassini"), true);
 
         assertTrue(pom().contains("<annotationProcessorPaths combine.children=\"append\">"), pom());
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith(
@@ -289,7 +335,7 @@ class ExtensionEditorTest {
     void anExtensionWithoutCodegenWarnsAboutReplacingPaths() throws IOException {
         writeUnwiredPom(REPLACING_PATHS);
 
-        edit(List.of("knock-health"), true);
+        edit(List.of("health-knock"), true);
 
         assertFalse(pom().contains("combine.children"), pom());
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning:") && l.contains("drops the Vauban indexer")),
@@ -302,7 +348,7 @@ class ExtensionEditorTest {
         writePom("");
         Files.writeString(project.resolve("pom.xml"), pom().replace("9.9.9", "0.3.0"));
 
-        edit(List.of("cassini-rest"), true);
+        edit(List.of("rest-cassini"), true);
 
         assertTrue(pom().contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>\n"
                 + "            <version>0.3.0</version>"), pom());
@@ -330,7 +376,7 @@ class ExtensionEditorTest {
                 </project>
                 """);
 
-        edit(List.of("knock-health"), true);
+        edit(List.of("health-knock"), true);
 
         assertEquals(1, pom().split("<version>").length - 1, pom());
     }
@@ -339,7 +385,7 @@ class ExtensionEditorTest {
     void theDefaultRuntimeVersionPinsWhatTheParentDoesNotGive() throws IOException {
         Files.writeString(project.resolve("pom.xml"), "<project>\n  <artifactId>demo</artifactId>\n</project>\n");
 
-        edit(List.of("knock-health"), true);
+        edit(List.of("health-knock"), true);
 
         assertTrue(pom().contains("<version>1.2.3</version>"), pom());
     }
@@ -359,7 +405,7 @@ class ExtensionEditorTest {
 
     @Test
     void aDirectoryWithoutPomFails() {
-        ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest"), true);
+        ExtensionEditor.Outcome outcome = edit(List.of("rest-cassini"), true);
 
         assertFalse(outcome.succeeded());
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("error: No pom.xml in ")),
@@ -372,7 +418,7 @@ class ExtensionEditorTest {
         writeModuleInfo();
         Files.createDirectories(project.resolve("src/main/java/com/acme/demo"));
 
-        edit(List.of("cassini-rest"), true);
+        edit(List.of("rest-cassini"), true);
 
         assertFalse(Files.readString(moduleInfo()).contains("opens com.acme.demo"));
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning:") && l.contains("has no class yet")
@@ -386,7 +432,7 @@ class ExtensionEditorTest {
         Path pkg = Files.createDirectories(project.resolve("src/main/java/com/acme/demo"));
         Files.writeString(pkg.resolve("HelloResource.java"), "package com.acme.demo; class HelloResource {}");
 
-        edit(List.of("cassini-rest"), true);
+        edit(List.of("rest-cassini"), true);
 
         assertTrue(Files.readString(moduleInfo()).contains("opens com.acme.demo;"));
     }
@@ -403,9 +449,9 @@ class ExtensionEditorTest {
         Files.createDirectories(migration.getParent());
         Files.writeString(migration, "create table book (id bigint primary key);\n");
 
-        edit(List.of("flyway-migration"), true);
+        edit(List.of("migration-flyway"), true);
 
-        assertTrue(Files.readString(moduleInfo()).contains("opens db.migration; // vidocq:flyway-migration"),
+        assertTrue(Files.readString(moduleInfo()).contains("opens db.migration; // vidocq:migration-flyway"),
                 Files.readString(moduleInfo()));
     }
 
@@ -419,9 +465,9 @@ class ExtensionEditorTest {
         writePom("");
         writeModuleInfo();
 
-        edit(List.of("flyway-migration"), true);
+        edit(List.of("migration-flyway"), true);
 
-        assertTrue(Files.readString(moduleInfo()).contains("opens db.migration; // vidocq:flyway-migration"),
+        assertTrue(Files.readString(moduleInfo()).contains("opens db.migration; // vidocq:migration-flyway"),
                 Files.readString(moduleInfo()));
         assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/migration/README.md")));
         assertFalse(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ")), reporter.lines.toString());
@@ -436,10 +482,10 @@ class ExtensionEditorTest {
         writePom("");
         writeModuleInfo();
 
-        edit(List.of("liquibase-migration"), true);
+        edit(List.of("migration-liquibase"), true);
 
         String moduleInfo = Files.readString(moduleInfo());
-        assertTrue(moduleInfo.contains("opens db.changelog; // vidocq:liquibase-migration"), moduleInfo);
+        assertTrue(moduleInfo.contains("opens db.changelog; // vidocq:migration-liquibase"), moduleInfo);
         assertFalse(moduleInfo.contains("db.migration"), moduleInfo);
         assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/changelog/README.md")));
         assertFalse(Files.exists(project.resolve("src/main/resources/db/migration")));
@@ -451,13 +497,13 @@ class ExtensionEditorTest {
         writePom("");
         writeModuleInfo();
 
-        edit(List.of("mansart-data"), true);
+        edit(List.of("data-mansart"), true);
 
         String pom = pom();
         assertTrue(pom.contains("<artifactId>vidocq-runtime-mansart-pool-extension</artifactId>"), pom);
         assertTrue(pom.contains("<artifactId>postgresql</artifactId>"), pom);
         assertTrue(pom.contains("<artifactId>vidocq-runtime-devservice-postgres</artifactId>"), pom);
-        assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("mansart-pool") && l.contains("mansart-data needs")),
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("pool-mansart") && l.contains("data-mansart needs")),
                 reporter.lines.toString());
     }
 
@@ -466,15 +512,15 @@ class ExtensionEditorTest {
     void removingMansartDataKeepsThePoolAndSaysSo() throws IOException {
         writePom("");
         writeModuleInfo();
-        edit(List.of("mansart-data"), true);
+        edit(List.of("data-mansart"), true);
         reporter.lines.clear();
 
-        edit(List.of("mansart-data"), false);
+        edit(List.of("data-mansart"), false);
 
         String pom = pom();
         assertFalse(pom.contains("<artifactId>vidocq-runtime-mansart-data-extension</artifactId>"), pom);
         assertTrue(pom.contains("<artifactId>vidocq-runtime-mansart-pool-extension</artifactId>"), pom);
-        assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("vidocq extension remove mansart-pool")),
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("vidocq extension remove pool-mansart")),
                 reporter.lines.toString());
     }
 
@@ -483,12 +529,12 @@ class ExtensionEditorTest {
     void removingThePoolMansartDataNeedsWarns() throws IOException {
         writePom("");
         writeModuleInfo();
-        edit(List.of("mansart-data"), true);
+        edit(List.of("data-mansart"), true);
         reporter.lines.clear();
 
-        edit(List.of("mansart-pool"), false);
+        edit(List.of("pool-mansart"), false);
 
-        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ") && l.contains("mansart-data")),
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ") && l.contains("data-mansart")),
                 reporter.lines.toString());
     }
 
@@ -499,10 +545,10 @@ class ExtensionEditorTest {
         Files.createDirectories(moduleInfo().getParent());
         Files.writeString(moduleInfo(), "open module com.acme.demo {\n}\n");
 
-        edit(List.of("flyway-migration"), true);
+        edit(List.of("migration-flyway"), true);
 
         String source = Files.readString(moduleInfo());
-        assertTrue(source.contains("// vidocq:flyway-migration"), source);
+        assertTrue(source.contains("// vidocq:migration-flyway"), source);
         assertFalse(source.contains("opens "), source);
         assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/migration/README.md")));
         assertFalse(Files.readString(project.resolve("src/main/resources/db/migration/README.md")).contains("opens"));
@@ -519,7 +565,7 @@ class ExtensionEditorTest {
         Files.createDirectories(migration.getParent());
         Files.writeString(migration, "create table book (id bigint primary key);\n");
 
-        edit(List.of("flyway-migration"), true);
+        edit(List.of("migration-flyway"), true);
 
         assertFalse(Files.exists(migration.resolveSibling("README.md")));
     }
@@ -557,15 +603,15 @@ class ExtensionEditorTest {
     void theCompanionOfAPairComesAndGoesWithIt() throws IOException {
         writePom("");
         writeModuleInfo();
-        edit(List.of("humboldt-telemetry"), true);
+        edit(List.of("telemetry-humboldt"), true);
         assertFalse(pom().contains("vidocq-runtime-mansart-pool-telemetry-extension"), pom());
 
-        edit(List.of("mansart-pool"), true);
+        edit(List.of("pool-mansart"), true);
         assertTrue(pom().contains("<artifactId>vidocq-runtime-mansart-pool-telemetry-extension</artifactId>"), pom());
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("success: Added jdbc-telemetry")),
                 reporter.lines.toString());
 
-        edit(List.of("humboldt-telemetry"), false);
+        edit(List.of("telemetry-humboldt"), false);
         assertFalse(pom().contains("vidocq-runtime-mansart-pool-telemetry-extension"), pom());
         assertTrue(pom().contains("<artifactId>vidocq-runtime-mansart-pool-extension</artifactId>"), pom());
     }
@@ -579,14 +625,14 @@ class ExtensionEditorTest {
         writePom("");
         writeModuleInfo();
 
-        edit(List.of("mansart-pool"), true);
+        edit(List.of("pool-mansart"), true);
 
         DevServiceWiring.Declared declared = DevServiceWiring.Declared.of(pom());
-        assertEquals(List.of(), DevServiceWiring.missing(List.of("mansart-pool"), declared), pom());
+        assertEquals(List.of(), DevServiceWiring.missing(List.of("pool-mansart"), declared), pom());
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("success: Wired vidocq-runtime-devservice-postgres")),
                 reporter.lines.toString());
 
-        edit(List.of("mansart-pool"), false);
+        edit(List.of("pool-mansart"), false);
 
         DevServiceWiring.Declared after = DevServiceWiring.Declared.of(pom());
         assertEquals(List.of(), after.plugin(), pom());
@@ -602,14 +648,14 @@ class ExtensionEditorTest {
         Files.createDirectories(config.getParent());
         Files.writeString(config, "vidocq.http.port=8080\n");
 
-        edit(List.of("humboldt-telemetry"), true);
+        edit(List.of("telemetry-humboldt"), true);
 
         String written = Files.readString(config);
         assertEquals("demo", PropertiesText.entries(written).get("otel.service.name"), written);
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("success: vidocq.properties")),
                 reporter.lines.toString());
 
-        edit(List.of("humboldt-telemetry"), false);
+        edit(List.of("telemetry-humboldt"), false);
 
         assertEquals(written, Files.readString(config), "the application's configuration is its own");
     }

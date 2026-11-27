@@ -37,14 +37,14 @@ class ModuleInfoEditorTest {
 
     @Test
     void addsTheExtensionDirectivesBeforeTheClosingBraceWithAMarker() {
-        ModuleInfoEditor.Result r = ModuleInfoEditor.add(BARE, "knock-health",
+        ModuleInfoEditor.Result r = ModuleInfoEditor.add(BARE, "health-knock",
                 List.of("requires io.vidocq.runtime.extensions.microprofile.knock"));
 
         assertTrue(r.changed());
         assertEquals("""
                 module com.acme.todo {
                     requires io.vidocq.runtime.core;
-                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:knock-health
+                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:health-knock
                 }
                 """, r.source());
     }
@@ -53,18 +53,18 @@ class ModuleInfoEditorTest {
     void skipsADirectiveAlreadyDeclaredWhateverItsSpacing() {
         String src = BARE.replace("requires io.vidocq.runtime.core;", "requires   io.vidocq.runtime.core ;\n    requires jakarta.cdi;");
 
-        ModuleInfoEditor.Result r = ModuleInfoEditor.add(src, "cassini-rest",
+        ModuleInfoEditor.Result r = ModuleInfoEditor.add(src, "rest-cassini",
                 List.of("requires jakarta.cdi", "requires jakarta.ws.rs"));
 
         assertEquals(1, r.source().split("requires jakarta.cdi").length - 1, "no duplicate, source was:\n" + r.source());
-        assertTrue(r.source().contains("requires jakarta.ws.rs; // vidocq:cassini-rest"));
+        assertTrue(r.source().contains("requires jakarta.ws.rs; // vidocq:rest-cassini"));
     }
 
     @Test
     void addingTwiceIsANoOp() {
-        String once = ModuleInfoEditor.add(BARE, "knock-health", List.of("requires a.b")).source();
+        String once = ModuleInfoEditor.add(BARE, "health-knock", List.of("requires a.b")).source();
 
-        ModuleInfoEditor.Result again = ModuleInfoEditor.add(once, "knock-health", List.of("requires a.b"));
+        ModuleInfoEditor.Result again = ModuleInfoEditor.add(once, "health-knock", List.of("requires a.b"));
 
         assertFalse(again.changed());
         assertEquals(once, again.source());
@@ -72,20 +72,20 @@ class ModuleInfoEditorTest {
 
     @Test
     void removeUndoesAddAndAlsoDropsAnUnmarkedRequiresOfTheExtensionModule() {
-        String added = ModuleInfoEditor.add(BARE, "cassini-rest",
+        String added = ModuleInfoEditor.add(BARE, "rest-cassini",
                 List.of("requires jakarta.ws.rs", "requires io.vidocq.x.cassini")).source();
-        assertEquals(BARE, ModuleInfoEditor.remove(added, "cassini-rest", "io.vidocq.x.cassini").source());
+        assertEquals(BARE, ModuleInfoEditor.remove(added, "rest-cassini", "io.vidocq.x.cassini").source());
 
         String handWritten = BARE.replace("}", "    requires io.vidocq.x.cassini;\n}");
-        assertEquals(BARE, ModuleInfoEditor.remove(handWritten, "cassini-rest", "io.vidocq.x.cassini").source());
+        assertEquals(BARE, ModuleInfoEditor.remove(handWritten, "rest-cassini", "io.vidocq.x.cassini").source());
     }
 
     @Test
     void removeLeavesOtherExtensionsAndHandWrittenLinesAlone() {
-        String src = ModuleInfoEditor.add(BARE, "knock-health", List.of("requires k")).source()
+        String src = ModuleInfoEditor.add(BARE, "health-knock", List.of("requires k")).source()
                 .replace("}", "    requires jakarta.ws.rs;\n}");
 
-        ModuleInfoEditor.Result r = ModuleInfoEditor.remove(src, "cassini-rest", "io.vidocq.x.cassini");
+        ModuleInfoEditor.Result r = ModuleInfoEditor.remove(src, "rest-cassini", "io.vidocq.x.cassini");
 
         assertFalse(r.changed());
         assertEquals(src, r.source());
@@ -118,17 +118,17 @@ class ModuleInfoEditorTest {
     @Test
     void anExtensionAddedAfterAFixGoesBeforeTheBlock() {
         String fixed = ModuleInfoEditor.openForReflection(
-                ModuleInfoEditor.add(BARE, "cassini-rest", List.of("requires jakarta.ws.rs")).source(),
+                ModuleInfoEditor.add(BARE, "rest-cassini", List.of("requires jakarta.ws.rs")).source(),
                 List.of("com.acme.todo.book"));
 
-        String added = ModuleInfoEditor.add(fixed, "knock-health",
+        String added = ModuleInfoEditor.add(fixed, "health-knock",
                 List.of("requires io.vidocq.runtime.extensions.microprofile.knock")).source();
 
         assertEquals("""
                 module com.acme.todo {
                     requires io.vidocq.runtime.core;
-                    requires jakarta.ws.rs; // vidocq:cassini-rest
-                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:knock-health
+                    requires jakarta.ws.rs; // vidocq:rest-cassini
+                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:health-knock
 
                     %s
                     opens com.acme.todo.book; // vidocq:reflection
@@ -145,11 +145,11 @@ class ModuleInfoEditorTest {
         String old = """
                 module com.acme.todo {
                     requires io.vidocq.runtime.core;
-                    requires jakarta.ws.rs; // vidocq:cassini-rest
+                    requires jakarta.ws.rs; // vidocq:rest-cassini
 
                     %1$s
                     opens com.acme.todo.book;
-                    requires jakarta.data; // vidocq:mansart-data
+                    requires jakarta.data; // vidocq:data-mansart
 
                     %1$s
                     opens com.acme.todo.loan;
@@ -159,15 +159,15 @@ class ModuleInfoEditorTest {
                 }
                 """.formatted(HEADER);
 
-        String tidied = ModuleInfoEditor.add(old, "knock-health",
+        String tidied = ModuleInfoEditor.add(old, "health-knock",
                 List.of("requires io.vidocq.runtime.extensions.microprofile.knock")).source();
 
         assertEquals("""
                 module com.acme.todo {
                     requires io.vidocq.runtime.core;
-                    requires jakarta.ws.rs; // vidocq:cassini-rest
-                    requires jakarta.data; // vidocq:mansart-data
-                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:knock-health
+                    requires jakarta.ws.rs; // vidocq:rest-cassini
+                    requires jakarta.data; // vidocq:data-mansart
+                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:health-knock
 
                     %s
                     opens com.acme.todo.book; // vidocq:reflection
@@ -181,10 +181,10 @@ class ModuleInfoEditorTest {
     @Test
     void removingAnExtensionKeepsTheBlock() {
         String src = ModuleInfoEditor.openForReflection(
-                ModuleInfoEditor.add(BARE, "cassini-rest", List.of("requires jakarta.ws.rs")).source(),
+                ModuleInfoEditor.add(BARE, "rest-cassini", List.of("requires jakarta.ws.rs")).source(),
                 List.of("com.acme.todo.book"));
 
-        String removed = ModuleInfoEditor.remove(src, "cassini-rest", "jakarta.ws.rs").source();
+        String removed = ModuleInfoEditor.remove(src, "rest-cassini", "jakarta.ws.rs").source();
 
         assertEquals("""
                 module com.acme.todo {
@@ -210,7 +210,7 @@ class ModuleInfoEditorTest {
     private static final String OPEN = """
             /* the application */
             open module com.acme.todo {
-                requires jakarta.ws.rs; // vidocq:cassini-rest
+                requires jakarta.ws.rs; // vidocq:rest-cassini
             }
             """;
 
@@ -224,11 +224,11 @@ class ModuleInfoEditorTest {
 
     @Test
     void anExtensionAddsItsRequiresButNoOpensToAnOpenModule() {
-        var result = ModuleInfoEditor.add(OPEN, "flyway-migration",
+        var result = ModuleInfoEditor.add(OPEN, "migration-flyway",
                 List.of("requires org.flywaydb.core", "opens db.migration"));
 
         assertTrue(result.changed());
-        assertTrue(result.source().contains("requires org.flywaydb.core; // vidocq:flyway-migration"), result.source());
+        assertTrue(result.source().contains("requires org.flywaydb.core; // vidocq:migration-flyway"), result.source());
         assertFalse(result.source().contains("opens "), result.source());
     }
 
@@ -243,8 +243,8 @@ class ModuleInfoEditorTest {
     void openingTheModuleDropsEveryOpensLineAndNamesTheHandWrittenOnes() {
         String src = """
                 module com.acme.todo {
-                    requires jakarta.ws.rs; // vidocq:cassini-rest
-                    opens com.acme.todo; // vidocq:cassini-rest
+                    requires jakarta.ws.rs; // vidocq:rest-cassini
+                    opens com.acme.todo; // vidocq:rest-cassini
                     opens com.acme.todo.legacy;
 
                     // added by vidocq: the runtime reaches these packages by reflection
@@ -257,7 +257,7 @@ class ModuleInfoEditorTest {
         assertTrue(ModuleInfoEditor.isOpenModule(opened.source()), opened.source());
         assertFalse(opened.source().contains("opens "), opened.source());
         assertFalse(opened.source().contains("added by vidocq"), opened.source());
-        assertTrue(opened.source().contains("requires jakarta.ws.rs; // vidocq:cassini-rest"), opened.source());
+        assertTrue(opened.source().contains("requires jakarta.ws.rs; // vidocq:rest-cassini"), opened.source());
         assertEquals(List.of("com.acme.todo.legacy"), opened.handWritten());
         assertEquals(3, opened.removed().size(), opened.removed().toString());
     }

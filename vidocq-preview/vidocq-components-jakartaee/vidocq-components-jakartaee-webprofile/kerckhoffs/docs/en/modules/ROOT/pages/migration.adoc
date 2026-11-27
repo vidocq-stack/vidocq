@@ -40,7 +40,7 @@ configuration (a feature to enable, a security domain to map). Under Vidocq ther
 Security extension is the switch, and Kerckhoffs reads no configuration key.
 
 * **Enable** — declare `vidocq-runtime-kerckhoffs-security-extension`, or run
-`vidocq extension add kerckhoffs-security` (xref:getting-started.adoc[Getting started]).
+`vidocq extension add security-kerckhoffs` (xref:getting-started.adoc[Getting started]).
 * **Users** — a user registry or realm of the server has no equivalent. Declare the users in the application: an
 `IdentityStore` bean, or `@InMemoryIdentityStoreDefinition` for tests and demos
 (xref:usage.adoc#identity-stores[Identity stores]).

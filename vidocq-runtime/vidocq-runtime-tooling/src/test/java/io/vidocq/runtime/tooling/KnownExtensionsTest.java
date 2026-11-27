@@ -50,7 +50,7 @@ class KnownExtensionsTest {
 
     @Test
     void resolvesKnownShortIdToCategorySpecificGroupId() {
-        ExtensionCoordinate c = KnownExtensions.resolve("knock-health");
+        ExtensionCoordinate c = KnownExtensions.resolve("health-knock");
         assertEquals("io.vidocq.runtime.extensions.microprofile", c.groupId());
         assertEquals("vidocq-runtime-knock-health-extension", c.artifactId());
     }
@@ -59,10 +59,10 @@ class KnownExtensionsTest {
     void knowsTheHeisenbergFaultToleranceExtension() {
         // Wired into the runtime by the MicroProfile 7.1 certification PR (#19) —
         // the catalog must expose it to `extension list/add` and `create -x`.
-        ExtensionCoordinate c = KnownExtensions.resolve("heisenberg-fault-tolerance");
+        ExtensionCoordinate c = KnownExtensions.resolve("fault-tolerance-heisenberg");
         assertEquals("io.vidocq.runtime.extensions.microprofile", c.groupId());
         assertEquals("vidocq-runtime-heisenberg-fault-tolerance-extension", c.artifactId());
-        assertTrue(KnownExtensions.isKnown("heisenberg-fault-tolerance"));
+        assertTrue(KnownExtensions.isKnown("fault-tolerance-heisenberg"));
     }
 
     @Test
@@ -72,7 +72,7 @@ class KnownExtensionsTest {
         assertEquals(java.util.Optional.of(new ExtensionCoordinate(
                         "io.vidocq.runtime.extensions.microprofile",
                         "vidocq-runtime-ravel-config-extension-codegen")),
-                KnownExtensions.codegenBundle("ravel-config"));
+                KnownExtensions.codegenBundle("config-ravel"));
     }
 
     @Test
@@ -82,7 +82,7 @@ class KnownExtensionsTest {
         assertEquals(java.util.Optional.of(new ExtensionCoordinate(
                         "io.vidocq.runtime.extensions.microprofile",
                         "vidocq-runtime-cyrano-rest-client-extension-codegen")),
-                KnownExtensions.codegenBundle("cyrano-rest-client"));
+                KnownExtensions.codegenBundle("rest-client-cyrano"));
     }
 
     @Test
@@ -93,7 +93,7 @@ class KnownExtensionsTest {
         assertEquals(java.util.Optional.of(new ExtensionCoordinate(
                         "io.vidocq.runtime.extensions.microprofile",
                         "vidocq-runtime-humboldt-telemetry-extension-codegen")),
-                KnownExtensions.codegenBundle("humboldt-telemetry"));
+                KnownExtensions.codegenBundle("telemetry-humboldt"));
     }
 
     @Test
@@ -103,40 +103,40 @@ class KnownExtensionsTest {
         assertEquals(java.util.Optional.of(new ExtensionCoordinate(
                         "io.vidocq.runtime.extensions.jakartaee.web",
                         "vidocq-runtime-foy-servlet-extension-codegen")),
-                KnownExtensions.codegenBundle("foy-servlet"));
-        assertEquals("vidocq-runtime-foy-servlet-extension", KnownExtensions.resolve("foy-servlet").artifactId());
+                KnownExtensions.codegenBundle("servlet-foy"));
+        assertEquals("vidocq-runtime-foy-servlet-extension", KnownExtensions.resolve("servlet-foy").artifactId());
     }
 
     /** vidocq#232: the module compiles its pages into itself, so it requires the Ibarra and Peano APIs directly. */
     @Test
     void ibarraPagesRequiresTheApisItsCompiledPagesUse() {
-        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", KnownExtensions.resolve("ibarra-pages").groupId());
-        assertEquals("vidocq-runtime-ibarra-pages-extension", KnownExtensions.resolve("ibarra-pages").artifactId());
-        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("ibarra-pages"));
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", KnownExtensions.resolve("pages-ibarra").groupId());
+        assertEquals("vidocq-runtime-ibarra-pages-extension", KnownExtensions.resolve("pages-ibarra").artifactId());
+        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("pages-ibarra"));
         assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.web.ibarra",
                         "requires io.vidocq.ibarra.api", "requires io.vidocq.peano.api"),
-                KnownExtensions.moduleDirectives("ibarra-pages", "consumer"));
+                KnownExtensions.moduleDirectives("pages-ibarra", "consumer"));
     }
 
     /** vidocq#266: the pages read Bodoni's tag handlers, and the Ibarra and Peano APIs, themselves. */
     @Test
     void bodoniJstlRequiresTheModulesItsCompiledPagesUse() {
-        assertEquals("vidocq-runtime-bodoni-jstl-extension", KnownExtensions.resolve("bodoni-jstl").artifactId());
-        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("bodoni-jstl"));
+        assertEquals("vidocq-runtime-bodoni-jstl-extension", KnownExtensions.resolve("jstl-bodoni").artifactId());
+        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("jstl-bodoni"));
         assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.web.bodoni",
                         "requires io.vidocq.bodoni.core", "requires io.vidocq.ibarra.api", "requires io.vidocq.peano.api"),
-                KnownExtensions.moduleDirectives("bodoni-jstl", "consumer"));
+                KnownExtensions.moduleDirectives("jstl-bodoni", "consumer"));
     }
 
     /** vidocq#65: the endpoints of the application read the WebSocket API; the extension has no codegen bundle. */
     @Test
     void foyWebsocketRequiresTheWebSocketApiItsEndpointsRead() {
-        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", KnownExtensions.resolve("foy-websocket").groupId());
-        assertEquals("vidocq-runtime-foy-websocket-extension", KnownExtensions.resolve("foy-websocket").artifactId());
-        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("foy-websocket"));
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", KnownExtensions.resolve("websocket-foy").groupId());
+        assertEquals("vidocq-runtime-foy-websocket-extension", KnownExtensions.resolve("websocket-foy").artifactId());
+        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("websocket-foy"));
         assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.web.websocket",
                         "requires jakarta.websocket"),
-                KnownExtensions.moduleDirectives("foy-websocket", "consumer"));
+                KnownExtensions.moduleDirectives("websocket-foy", "consumer"));
     }
 
     /** vidocq#297: the java: namespace needs no codegen and no directive beyond its module. */
@@ -151,13 +151,13 @@ class KnownExtensionsTest {
 
     @Test
     void peanoElShipsItsAccessorCodegenBundle() {
-        assertEquals("io.vidocq.runtime.extensions.jakartaee.core",KnownExtensions.resolve("peano-el").groupId());
-        assertEquals("vidocq-runtime-peano-el-extension",KnownExtensions.resolve("peano-el").artifactId());
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.core",KnownExtensions.resolve("el-peano").groupId());
+        assertEquals("vidocq-runtime-peano-el-extension",KnownExtensions.resolve("el-peano").artifactId());
         assertEquals(java.util.Optional.of(new ExtensionCoordinate(
                 "io.vidocq.runtime.extensions.jakartaee.core","vidocq-runtime-peano-el-extension-codegen")),
-                KnownExtensions.codegenBundle("peano-el"));
+                KnownExtensions.codegenBundle("el-peano"));
         assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.core.peano","requires io.vidocq.peano.api"),
-                KnownExtensions.moduleDirectives("peano-el","consumer"));
+                KnownExtensions.moduleDirectives("el-peano","consumer"));
     }
 
     @Test
@@ -182,8 +182,8 @@ class KnownExtensionsTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> KnownExtensions.resolve("mansart-persistence"));
 
-        assertEquals("not in the Vidocq catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions,"
-                + " noether-persistence? An extension outside the catalog is added as groupId:artifactId.",
+        assertEquals("not in the Vidocq catalog. Did you mean: data-mansart, persistence-noether, pool-mansart,"
+                + " transactions-mansart? An extension outside the catalog is added as groupId:artifactId.",
                 e.getMessage());
         assertFalse(KnownExtensions.isKnown("mansart-persistence"));
     }
@@ -202,13 +202,13 @@ class KnownExtensionsTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> KnownExtensions.resolve("knock-helth"));
 
-        assertTrue(e.getMessage().contains("Did you mean: knock-health?"), e.getMessage());
+        assertTrue(e.getMessage().contains("Did you mean: health-knock?"), e.getMessage());
     }
 
-    /** BUG-20261024-03: mansart-data is Jakarta Data, not Jakarta Persistence. */
+    /** BUG-20261024-03: data-mansart is Jakarta Data, not Jakarta Persistence. */
     @Test
     void mansartDataIsDescribedAsJakartaData() {
-        assertEquals("Jakarta Data 1.0 repositories", KnownExtensions.byId("mansart-data").orElseThrow().description());
+        assertEquals("Jakarta Data 1.0 repositories", KnownExtensions.byId("data-mansart").orElseThrow().description());
     }
 
     @Test
@@ -340,15 +340,15 @@ class KnownExtensionsTest {
 
     @Test
     void cassiniRestNeedsWhatItsResourcesUseAndOpensTheApplicationPackage() {
-        List<String> directives = KnownExtensions.moduleDirectives("cassini-rest", "com.acme.todo");
+        List<String> directives = KnownExtensions.moduleDirectives("rest-cassini", "com.acme.todo");
 
         assertTrue(directives.containsAll(List.of("requires static java.compiler", "requires jakarta.ws.rs",
                 "requires jakarta.json.bind", "requires io.vidocq.cassini.api",
                 "requires io.vidocq.runtime.extensions.jakartaee.core.cassini", "opens com.acme.todo")));
-        assertFalse(KnownExtensions.moduleDirectives("cassini-rest", null).stream().anyMatch(d -> d.startsWith("opens")),
+        assertFalse(KnownExtensions.moduleDirectives("rest-cassini", null).stream().anyMatch(d -> d.startsWith("opens")),
                 "no package to open, no opens");
         assertEquals(List.of("requires io.vidocq.runtime.extensions.microprofile.knock"),
-                KnownExtensions.moduleDirectives("knock-health", "com.acme.todo"));
+                KnownExtensions.moduleDirectives("health-knock", "com.acme.todo"));
         assertEquals(List.of(), KnownExtensions.moduleDirectives("com.acme:unknown", "com.acme.todo"));
     }
 
@@ -378,10 +378,10 @@ class KnownExtensionsTest {
 
         assertEquals(List.of(ExtensionFamily.values()), List.copyOf(byFamily.keySet()));
         assertEquals(KnownExtensions.catalog().size(), byFamily.values().stream().mapToInt(List::size).sum());
-        assertTrue(byFamily.get(ExtensionFamily.MICROPROFILE).stream().anyMatch(e -> e.id().equals("knock-health")));
-        assertTrue(byFamily.get(ExtensionFamily.DATA).stream().anyMatch(e -> e.id().equals("mansart-data")));
-        assertTrue(byFamily.get(ExtensionFamily.WEB).stream().anyMatch(e -> e.id().equals("chappe-webserver")));
-        assertTrue(byFamily.get(ExtensionFamily.JAKARTA_EE).stream().anyMatch(e -> e.id().equals("cassini-rest")));
+        assertTrue(byFamily.get(ExtensionFamily.MICROPROFILE).stream().anyMatch(e -> e.id().equals("health-knock")));
+        assertTrue(byFamily.get(ExtensionFamily.DATA).stream().anyMatch(e -> e.id().equals("data-mansart")));
+        assertTrue(byFamily.get(ExtensionFamily.WEB).stream().anyMatch(e -> e.id().equals("webserver-chappe")));
+        assertTrue(byFamily.get(ExtensionFamily.JAKARTA_EE).stream().anyMatch(e -> e.id().equals("rest-cassini")));
     }
 
     @Test
@@ -396,9 +396,9 @@ class KnownExtensionsTest {
     @Test
     void theJdbcSpansGlueGoesWithTelemetryAndThePool() {
         assertEquals(List.of("jdbc-telemetry"),
-                KnownExtensions.companions(Set.of("humboldt-telemetry", "mansart-pool", "cassini-rest")));
-        assertEquals(List.of(), KnownExtensions.companions(Set.of("humboldt-telemetry")));
+                KnownExtensions.companions(Set.of("telemetry-humboldt", "pool-mansart", "rest-cassini")));
+        assertEquals(List.of(), KnownExtensions.companions(Set.of("telemetry-humboldt")));
         assertEquals(List.of(), KnownExtensions.companions(
-                Set.of("humboldt-telemetry", "mansart-pool", "jdbc-telemetry")));
+                Set.of("telemetry-humboldt", "pool-mansart", "jdbc-telemetry")));
     }
 }

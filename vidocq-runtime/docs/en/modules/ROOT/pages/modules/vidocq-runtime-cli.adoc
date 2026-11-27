@@ -109,9 +109,9 @@ hello-world/
 
 There is no application main class: the runtime's own main boots the application
 from `vidocq.mainModule`, under `vidocq dev`, `vidocq start` and the `bin/` launchers of
-`mvn package` alike. With `-x cassini-rest`, the package also gets a `HelloResource`
+`mvn package` alike. With `-x rest-cassini`, the package also gets a `HelloResource`
 (`GET /hello`), and `module-info.java` opens it to JAX-RS and JSON-B. An extension that
-reflects on the package without the scaffold writing a class into it (`mansart-data` alone)
+reflects on the package without the scaffold writing a class into it (`data-mansart` alone)
 gets no `opens`: the JVM refuses to open a package with no class, and `create` tells you to add
 the directive once the package has one.
 
@@ -198,7 +198,7 @@ add the Cassini REST extension and follow the full Jakarta REST + CDI walkthroug
 
 [source,bash]
 ----
-vidocq extension add cassini-rest
+vidocq extension add rest-cassini
 ----
 
 See xref:getting-started.adoc[Getting started] for a complete REST + persistence example,
@@ -277,7 +277,7 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 === `vidocq create`
 
 Scaffolds a minimal Maven project (`pom.xml`, `module-info.java` and `vidocq.properties`, plus a
-`HelloResource` with `-x cassini-rest` and an `…App` trampoline with `--main`: `DemoApp` for `demo-app`, `ShopApp`
+`HelloResource` with `-x rest-cassini` and an `…App` trampoline with `--main`: `DemoApp` for `demo-app`, `ShopApp`
 for `shop`). The project has a version of its own, `1.0.0-SNAPSHOT`, and the Maven wrapper of the
 Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`), pinned to the ecosystem's Maven version.
 Under a `--parent-version` before 0.4.0, whose `dependencyManagement` resolves at the project's
@@ -298,7 +298,7 @@ versions gives the build nothing.
 
 From 0.4.0 the project is finished (Vidocq/vidocq#339):
 
-* **A first test.** With `-x cassini-rest`, `src/test/java/<package>/HelloResourceTest.java` starts the application
+* **A first test.** With `-x rest-cassini`, `src/test/java/<package>/HelloResourceTest.java` starts the application
   with xref:testing.adoc[`@VidocqTest`] and checks `GET /hello`; the pom declares `vidocq-runtime-junit` and
   `junit-jupiter` in test scope, versioned by the BOMs the pom imports (by the parent, with `--with-parent`). Without
   it, the pom declares `junit-jupiter` alone. Under a parent before 0.4.0 no test is written, and `create` says why.
@@ -306,7 +306,7 @@ From 0.4.0 the project is finished (Vidocq/vidocq#339):
 * **`README.md`**: the commands that work on the project, with the CLI and with Maven alone.
 * **Questions on a console.** Without `--name`, on a terminal, `create` asks for the name, then for the group id and
   the extensions unless the command line gave them, showing the catalog first; Enter takes the default
-  (`io.example`, `cassini-rest`), `none` takes no extension, and a wrong answer is explained and asked again.
+  (`io.example`, `rest-cassini`), `none` takes no extension, and a wrong answer is explained and asked again.
   Without a terminal, `--name` stays required.
 
 [cols="1,2"]
@@ -326,7 +326,7 @@ From 0.4.0 the project is finished (Vidocq/vidocq#339):
 
 [source,bash]
 ----
-vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health
+vidocq create --name my-api -g com.acme -x rest-cassini -x health-knock
 ----
 
 [#create-snapshot]
@@ -338,7 +338,7 @@ A project created before this change declares `central-snapshots` instead: it ke
 
 [source,bash]
 ----
-vidocq create --name my-api -x cassini-rest --vidocq-version 0.5.0-SNAPSHOT
+vidocq create --name my-api -x rest-cassini --vidocq-version 0.5.0-SNAPSHOT
 ----
 
 A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-started.adoc[Getting started]) scaffolds with its own SNAPSHOT runtime, so `--vidocq-version` is not needed there. A SNAPSHOT changes with every push to `main`: run `mvn -U package` to pick up the newest one.
@@ -595,7 +595,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 | `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` lists the catalog built into the CLI, by family (Jakarta EE, MicroProfile, Data, Web); `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list.
 | `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when the build needs one (<<extension-codegen-path>>), and its directives into `src/main/java/module-info.java`. From 0.4.0, where `vidocq-runtime-bom` versions the Vidocq artifacts (the pom `vidocq create` writes, which imports it, or a `vidocq-runtime-parent` from 0.4.0), the `<dependency>` carries no `<version>` and no codegen path is written: the plugin wires the bundle. Under an older parent, the dependency and the codegen path carry the parent's version, written out.
 | `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`. The settings `add` wrote into `vidocq.properties` stay: they are the application's.
-| [[extension-required]]required extensions | An extension may need another to work: `mansart-data` reads the DataSource of `mansart-pool`. `add mansart-data` (and `create -x mansart-data`) adds the pool too, with its dev service, driver and test block, and says so. `remove mansart-data` keeps the pool, which works alone, and names `vidocq extension remove mansart-pool`; removing the pool while `mansart-data` stays warns, as Mansart Data then has no DataSource unless the application produces one. `vidocq doctor` shows **Required extensions** when one is missing.
+| [[extension-required]]required extensions | An extension may need another to work: `data-mansart` reads the DataSource of `pool-mansart`. `add data-mansart` (and `create -x data-mansart`) adds the pool too, with its dev service, driver and test block, and says so. `remove data-mansart` keeps the pool, which works alone, and names `vidocq extension remove pool-mansart`; removing the pool while `data-mansart` stays warns, as Mansart Data then has no DataSource unless the application produces one. `vidocq doctor` shows **Required extensions** when one is missing.
 |===
 
 [#extension-settings]
@@ -608,19 +608,19 @@ same blocks. `\{app}` below is the project's artifactId.
 |===
 | Extension | Block
 
-| `humboldt-telemetry`
+| `telemetry-humboldt`
 | `otel.sdk.disabled=false`, `otel.service.name=\{app}`, `otel.exporter.otlp.endpoint=http://localhost:4318` and
   `otel.exporter.otlp.protocol=http/protobuf`: a local collector. Under `vidocq dev`, the OpenTelemetry dev service
   sets the endpoint and the protocol to its own, as system properties, which outrank the file.
 
-| `cervantes-jwt`
+| `jwt-cervantes`
 | Comments only. The Keycloak dev service sets `mp.jwt.verify.issuer` and `mp.jwt.verify.publickey.location` under
   `vidocq dev`, `vidocq test` and `mvn test`; the block shows them, commented, for a realm named `\{app}` on your
   identity provider, and `vidocq.dev.keycloak.realm-import` / `vidocq.dev.keycloak.realm`, commented too: a realm
   import naming a file not there yet would stop the dev service. `vidocq doctor` warns until a verification key is
   set (<<doctor-project>>).
 
-| `mansart-pool`
+| `pool-mansart`
 | Comments only: `vidocq.pool.url=jdbc:postgresql://localhost:5432/\{app}`, `vidocq.pool.username=\{app}` and
   `vidocq.pool.password=\{app}`. The PostgreSQL dev service sets the three keys under `vidocq dev`, `vidocq test`
   and `mvn test`; uncommented, they are the database of `vidocq start` and of the packaged application. A
@@ -639,24 +639,66 @@ parent's, where `vidocq-runtime-core-codegen`, the Vauban indexer, is wired: wit
 block it fills, and warns when it adds an extension without a codegen bundle to a pom whose block still replaces
 the parent's; xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:checkpom`] fails such a build.
 
-An id may be a known short name (e.g. `cassini-rest`; the catalog now has `grimm-openapi`, `grimm-openapi-ui`,
-`migration`, `flyway-migration` and `liquibase-migration` too) or an explicit `groupId:artifactId`,
+An id may be a catalog id (`vidocq extension list --available` lists them) or an explicit `groupId:artifactId`,
 for an extension outside the catalog. Any other name is refused, with the closest catalog ids, and nothing is
 written:
 
 ----
 $ vidocq extension add mansart-persistence
-✘ Invalid extension id 'mansart-persistence': not in the Vidocq catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions? An extension outside the catalog is added as groupId:artifactId.
+✘ Invalid extension id 'mansart-persistence': not in the Vidocq catalog. Did you mean: data-mansart, persistence-noether, pool-mansart, transactions-mansart? An extension outside the catalog is added as groupId:artifactId.
 ----
+
+[[extension-ids]]
+*Extension ids.* A catalog id names the function first and the codename last (Vidocq/vidocq#809): `rest-cassini`,
+`health-knock`, `persistence-noether`. `vidocq extension add rest<TAB>` offers `rest-cassini` and
+`rest-client-cyrano`, and the function alone names an extension when only one id starts with it: `vidocq extension
+add health` adds `health-knock`, while `vidocq extension add rest` lists both. An extension without a codename keeps
+its name (`crac`, `migration`, `naming`, `jdbc-telemetry`), and the Flyway and Liquibase engines follow the
+migration facade: `migration-flyway`, `migration-liquibase`. The Maven artifactIds do not change
+(`vidocq-runtime-knock-health-extension`).
+
+The ids up to 0.4.0 still work wherever an id is accepted (`extension add`, `extension remove`, `create -x`, and the
+`-Dextensions` of the plugin goals), for the same extension, and the output names the new id
+(`cassini-rest is rest-cassini`); `extension remove` also drops the `module-info.java` lines an earlier CLI marked
+with the former id. Completion and `extension list` show the new ids only.
+
+[cols="1,1",options="header"]
+|===
+| Id | Up to 0.4.0
+
+| `config-ravel` | `ravel-config`
+| `data-mansart` | `mansart-data`
+| `el-peano` | `peano-el`
+| `fault-tolerance-heisenberg` | `heisenberg-fault-tolerance`
+| `health-knock` | `knock-health`
+| `jstl-bodoni` | `bodoni-jstl`
+| `jwt-cervantes` | `cervantes-jwt`
+| `metrics-dirac` | `dirac-metrics`
+| `migration-flyway` | `flyway-migration`
+| `migration-liquibase` | `liquibase-migration`
+| `openapi-grimm` | `grimm-openapi`
+| `openapi-ui-grimm` | `grimm-openapi-ui`
+| `pages-ibarra` | `ibarra-pages`
+| `persistence-noether` | `noether-persistence`
+| `pool-mansart` | `mansart-pool`
+| `rest-cassini` | `cassini-rest`
+| `rest-client-cyrano` | `cyrano-rest-client`
+| `security-kerckhoffs` | `kerckhoffs-security`
+| `servlet-foy` | `foy-servlet`
+| `telemetry-humboldt` | `humboldt-telemetry`
+| `transactions-mansart` | `mansart-transactions`
+| `webserver-chappe` | `chappe-webserver`
+| `websocket-foy` | `foy-websocket`
+|===
 
 A block that lists `vidocq-runtime-core-codegen` itself, as in a pom without the Vidocq parent, keeps the indexer:
 `add` does not warn about it.
 
 In `module-info.java`, `add` declares `requires` on the extension's module, which re-exports most
-extension APIs (MicroProfile Health through `knock-health`, Fault Tolerance through
-`heisenberg-fault-tolerance`, …). `cassini-rest` also needs Jakarta REST, JSON-B, CDI and the Cassini
+extension APIs (MicroProfile Health through `health-knock`, Fault Tolerance through
+`fault-tolerance-heisenberg`, …). `rest-cassini` also needs Jakarta REST, JSON-B, CDI and the Cassini
 API, `requires static java.compiler` for its generated adapters, and `opens` the application
-package its resources live in; `mansart-data` needs the same `requires static` and `opens`. Each
+package its resources live in; `data-mansart` needs the same `requires static` and `opens`. Each
 added line ends with `// vidocq:<id>`, which is what `remove` takes back — never a line written by
 hand, except a `requires` of the removed extension's own module, which no longer resolves.
 `vidocq create -x` writes the same directives.
@@ -674,7 +716,7 @@ catalog lists the extensions sorted by id.
 [source,properties]
 ----
 # The short id of `vidocq extension add <id>` and `vidocq create -x <id>`
-id = cassini-rest
+id = rest-cassini
 description = Jakarta REST (JAX-RS) endpoints
 # The APT bundle that goes on the annotationProcessorPaths, with the extension's groupId and version
 codegen = vidocq-runtime-cassini-rest-extension-codegen
@@ -714,7 +756,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:check-module-info`] 
 `list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
 with Maven (`maven-dependency-plugin:list`, compile + runtime scopes, transitively) and keep every
 JAR whose module provides `io.vidocq.runtime.spi.VidocqExtension`. An extension pulled in by
-another one — `chappe-webserver` under `cassini-rest` — is listed and marked `(transitive)`.
+another one — `webserver-chappe` under `rest-cassini` — is listed and marked `(transitive)`.
 Resolving takes as long as a Maven run, and may download artifacts on first use, so the answer
 is cached in `~/.vidocq/cache/project-extensions/`, one file per project:
 
@@ -730,8 +772,8 @@ is cached in `~/.vidocq/cache/project-extensions/`, one file per project:
 [source,bash]
 ----
 vidocq extension list --available
-vidocq extension add cassini-rest knock-health
-vidocq extension remove knock-health
+vidocq extension add rest-cassini health-knock
+vidocq extension remove health-knock
 ----
 
 [NOTE]
@@ -813,9 +855,9 @@ read what the pom and `module-info.java` declare.
 | **Vauban indexer** | ✔ the indexer, `vidocq-runtime-core-codegen`, is on the processor path; ✘ `annotationProcessorPaths` replace the parent's, which hold it, instead of appending (`combine.children="append"`), or, without the Vidocq parent, the pom does not declare it.
 | **Dependency codegen** |✔ `vidocq:generate` runs on the build: `vidocq-runtime-parent` from 0.4.0 binds it (0.4.0-RC1 aside), or the pom names `<goal>generate</goal>`; ⚠ it does not run, or `vidocq.generate.skip` turns it off — the dependency jars then get no generated code (see xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal]).
 | **Module directives** | ✔ `module-info.java` declares the `requires` (and `opens`) of each extension, the `opens` of the resource packages it reads included, such as Flyway's `opens db.migration`, and, once the application is compiled, the `opens` of the packages the runtime reaches by reflection, read from `target/classes` as `vidocq:check-module-info` reads them (entities (Jakarta Data) without a model generated at build time, the types a REST resource returns, interceptors with a private method); before a compile it says to compile for those; ✘ one is missing, which `vidocq:check-module-info` would fail the build on; ⚠ no `module-info.java`.
-| **Required extensions**| Shown only when a declared extension lacks one it requires: ⚠ `mansart-data needs mansart-pool`. Not fixable: the application may provide it itself, its own `@Produces DataSource` for Mansart Data.
-| **JWT verification**| Shown with `cervantes-jwt`. ✔ `vidocq.properties` sets `mp.jwt.verify.publickey.location` or `mp.jwt.verify.publickey`, in any profile; ⚠ none: the Keycloak dev service sets it under `vidocq dev` and the tests, and production would reject every token. Not fixable: only the application knows its identity provider.
-| **Dev services**| ✔ each extension with a dev service (`mansart-pool`, `cervantes-jwt`, `humboldt-telemetry`) has its provider on `vidocq-runtime-maven-plugin`, the provider and `vidocq-runtime-devservices-junit` in test scope (not for the collector), and, for the pool, a JDBC driver; ⚠ one is missing (xref:dev-services.adoc#declared-for-you[Declared for you]).
+| **Required extensions**| Shown only when a declared extension lacks one it requires: ⚠ `data-mansart needs pool-mansart`. Not fixable: the application may provide it itself, its own `@Produces DataSource` for Mansart Data.
+| **JWT verification**| Shown with `jwt-cervantes`. ✔ `vidocq.properties` sets `mp.jwt.verify.publickey.location` or `mp.jwt.verify.publickey`, in any profile; ⚠ none: the Keycloak dev service sets it under `vidocq dev` and the tests, and production would reject every token. Not fixable: only the application knows its identity provider.
+| **Dev services**| ✔ each extension with a dev service (`pool-mansart`, `jwt-cervantes`, `telemetry-humboldt`) has its provider on `vidocq-runtime-maven-plugin`, the provider and `vidocq-runtime-devservices-junit` in test scope (not for the collector), and, for the pool, a JDBC driver; ⚠ one is missing (xref:dev-services.adoc#declared-for-you[Declared for you]).
 | **Maven version** | ✔ the wrapper runs the Maven Vidocq is built with, or a newer one; ⚠ an older one. Shown when the project has a wrapper.
 | **HTTP port** | ✔ the port of `vidocq.chappe.listener.default.port`, else `vidocq.http.port`, else 8080, is free; ⚠ something listens there.
 |===

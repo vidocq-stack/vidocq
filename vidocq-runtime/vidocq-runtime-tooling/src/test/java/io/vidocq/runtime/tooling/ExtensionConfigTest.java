@@ -39,7 +39,7 @@ class ExtensionConfigTest {
     @Test
     void telemetryGetsItsServiceNameTheSdkAndALocalCollector() {
         Map<String, String> entries = PropertiesText.entries(
-                ExtensionConfig.append(BASE, List.of("humboldt-telemetry"), "library"));
+                ExtensionConfig.append(BASE, List.of("telemetry-humboldt"), "library"));
 
         assertEquals("false", entries.get("otel.sdk.disabled"));
         assertEquals("library", entries.get("otel.service.name"));
@@ -54,7 +54,7 @@ class ExtensionConfigTest {
      */
     @Test
     void jwtWritesHintsAndNoKeyTheDevServiceSets() {
-        String text = ExtensionConfig.append(BASE, List.of("cervantes-jwt"), "library");
+        String text = ExtensionConfig.append(BASE, List.of("jwt-cervantes"), "library");
 
         Map<String, String> entries = PropertiesText.entries(text);
         assertFalse(entries.keySet().stream().anyMatch(k -> k.startsWith("mp.jwt.") || k.startsWith("vidocq.dev.")),
@@ -72,7 +72,7 @@ class ExtensionConfigTest {
      */
     @Test
     void thePoolWritesItsConnectionCommented() {
-        String text = ExtensionConfig.append(BASE, List.of("mansart-pool"), "library");
+        String text = ExtensionConfig.append(BASE, List.of("pool-mansart"), "library");
 
         assertFalse(PropertiesText.entries(text).keySet().stream().anyMatch(k -> k.startsWith("vidocq.pool.")), text);
         assertTrue(text.contains("#vidocq.pool.url=jdbc:postgresql://localhost:5432/library\n"), text);
@@ -83,7 +83,7 @@ class ExtensionConfigTest {
     /** BUG-20261123-43: the comment names the CLI's command that runs the application, {@code vidocq start}. */
     @Test
     void thePoolCommentNamesACommandTheCliHas() {
-        String text = ExtensionConfig.append(BASE, List.of("mansart-pool"), "library");
+        String text = ExtensionConfig.append(BASE, List.of("pool-mansart"), "library");
 
         assertTrue(text.contains("Everywhere else (vidocq start, the packaged application)"), text);
         assertFalse(text.contains("vidocq run"), text);
@@ -91,14 +91,14 @@ class ExtensionConfigTest {
 
     @Test
     void aBlockIsWrittenOnce() {
-        String once = ExtensionConfig.append(BASE, List.of("humboldt-telemetry"), "library");
+        String once = ExtensionConfig.append(BASE, List.of("telemetry-humboldt"), "library");
 
-        assertEquals(once, ExtensionConfig.append(once, List.of("humboldt-telemetry"), "library"));
+        assertEquals(once, ExtensionConfig.append(once, List.of("telemetry-humboldt"), "library"));
     }
 
     @Test
     void aKeyTheApplicationSetIsNeverOverwritten() {
-        String text = ExtensionConfig.append(BASE + "otel.service.name=books\n", List.of("humboldt-telemetry"),
+        String text = ExtensionConfig.append(BASE + "otel.service.name=books\n", List.of("telemetry-humboldt"),
                 "library");
 
         assertEquals("books", PropertiesText.entries(text).get("otel.service.name"));
@@ -107,6 +107,6 @@ class ExtensionConfigTest {
 
     @Test
     void anExtensionWithoutConfigurationWritesNothing() {
-        assertEquals(BASE, ExtensionConfig.append(BASE, List.of("cassini-rest"), "library"));
+        assertEquals(BASE, ExtensionConfig.append(BASE, List.of("rest-cassini"), "library"));
     }
 }

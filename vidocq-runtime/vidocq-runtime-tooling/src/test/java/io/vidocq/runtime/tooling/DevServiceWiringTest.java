@@ -78,8 +78,8 @@ class DevServiceWiringTest {
         return coordinate.dependencyXml("    ") + "\n";
     }
 
-    private static final String POOL = dependency(KnownExtensions.resolve("mansart-pool"));
-    private static final String JWT = dependency(KnownExtensions.resolve("cervantes-jwt"));
+    private static final String POOL = dependency(KnownExtensions.resolve("pool-mansart"));
+    private static final String JWT = dependency(KnownExtensions.resolve("jwt-cervantes"));
     private static final String H2 = """
                 <dependency>
                   <groupId>com.h2database</groupId>
@@ -93,48 +93,48 @@ class DevServiceWiringTest {
     @Test
     void theCatalogNamesTheDevServiceOfThePoolJwtAndTelemetry() {
         assertEquals("vidocq-runtime-devservice-postgres",
-                DevServiceWiring.provider("mansart-pool").orElseThrow().artifactId());
+                DevServiceWiring.provider("pool-mansart").orElseThrow().artifactId());
         assertEquals("vidocq-runtime-devservice-keycloak",
-                DevServiceWiring.provider("cervantes-jwt").orElseThrow().artifactId());
+                DevServiceWiring.provider("jwt-cervantes").orElseThrow().artifactId());
         assertEquals("vidocq-runtime-devservice-otel",
-                DevServiceWiring.provider("humboldt-telemetry").orElseThrow().artifactId());
-        assertTrue(DevServiceWiring.provider("cassini-rest").isEmpty());
+                DevServiceWiring.provider("telemetry-humboldt").orElseThrow().artifactId());
+        assertTrue(DevServiceWiring.provider("rest-cassini").isEmpty());
     }
 
     @Test
     void wiringThePoolWritesTheProviderTheTestHostAndTheDriver() {
-        String pom = DevServiceWiring.wire(pom(POOL, PLUGIN), List.of("mansart-pool"), null, reporter).pom();
+        String pom = DevServiceWiring.wire(pom(POOL, PLUGIN), List.of("pool-mansart"), null, reporter).pom();
 
         DevServiceWiring.Declared declared = DevServiceWiring.Declared.of(pom);
-        ExtensionCoordinate provider = DevServiceWiring.provider("mansart-pool").orElseThrow();
+        ExtensionCoordinate provider = DevServiceWiring.provider("pool-mansart").orElseThrow();
         assertTrue(declared.plugin().contains(provider), pom);
         assertTrue(pom.contains("<version>${project.parent.version}</version>"),
                 "the BOM does not version a plugin's dependencies: " + pom);
         assertEquals("test", declared.scopes().get(provider), pom);
         assertEquals("test", declared.scopes().get(DevServiceWiring.JUNIT_HOST), pom);
         assertEquals("runtime", declared.scopes().get(new ExtensionCoordinate("org.postgresql", "postgresql")), pom);
-        assertEquals(List.of(), DevServiceWiring.missing(List.of("mansart-pool"), declared));
+        assertEquals(List.of(), DevServiceWiring.missing(List.of("pool-mansart"), declared));
     }
 
     /** A test needs no collector: Telemetry's dev service goes on the plugin only, never into mvn test. */
     @Test
     void telemetrysDevServiceStaysOutOfTheTests() {
-        String pom = DevServiceWiring.wire(pom(dependency(KnownExtensions.resolve("humboldt-telemetry")), PLUGIN),
-                List.of("humboldt-telemetry"), null, reporter).pom();
+        String pom = DevServiceWiring.wire(pom(dependency(KnownExtensions.resolve("telemetry-humboldt")), PLUGIN),
+                List.of("telemetry-humboldt"), null, reporter).pom();
 
         DevServiceWiring.Declared declared = DevServiceWiring.Declared.of(pom);
-        ExtensionCoordinate otel = DevServiceWiring.provider("humboldt-telemetry").orElseThrow();
+        ExtensionCoordinate otel = DevServiceWiring.provider("telemetry-humboldt").orElseThrow();
         assertTrue(declared.plugin().contains(otel), pom);
         assertFalse(declared.scopes().containsKey(otel), pom);
         assertFalse(declared.scopes().containsKey(DevServiceWiring.JUNIT_HOST), pom);
-        assertEquals(List.of(), DevServiceWiring.missing(List.of("humboldt-telemetry"), declared));
+        assertEquals(List.of(), DevServiceWiring.missing(List.of("telemetry-humboldt"), declared));
     }
 
     @Test
     void wiringTwiceChangesNothing() {
-        String once = DevServiceWiring.wire(pom(POOL, PLUGIN), List.of("mansart-pool"), null, reporter).pom();
+        String once = DevServiceWiring.wire(pom(POOL, PLUGIN), List.of("pool-mansart"), null, reporter).pom();
 
-        PomEditor.Result twice = DevServiceWiring.wire(once, List.of("mansart-pool"), null, reporter);
+        PomEditor.Result twice = DevServiceWiring.wire(once, List.of("pool-mansart"), null, reporter);
 
         assertFalse(twice.changed());
         assertEquals(once, twice.pom());
@@ -142,16 +142,16 @@ class DevServiceWiringTest {
 
     @Test
     void aProjectWithoutThePluginGetsItDeclaredForItsDependencies() {
-        String pom = DevServiceWiring.wire(pom(JWT, ""), List.of("cervantes-jwt"), null, reporter).pom();
+        String pom = DevServiceWiring.wire(pom(JWT, ""), List.of("jwt-cervantes"), null, reporter).pom();
 
         assertTrue(DevServiceWiring.Declared.of(pom).plugin()
-                .contains(DevServiceWiring.provider("cervantes-jwt").orElseThrow()), pom);
+                .contains(DevServiceWiring.provider("jwt-cervantes").orElseThrow()), pom);
         assertFalse(pom.contains("<artifactId>postgresql</artifactId>"), "JWT needs no JDBC driver: " + pom);
     }
 
     @Test
     void whatIsMissingIsSaidPieceByPiece() {
-        List<String> missing = DevServiceWiring.missing(List.of("mansart-pool"),
+        List<String> missing = DevServiceWiring.missing(List.of("pool-mansart"),
                 DevServiceWiring.Declared.of(pom(POOL, PLUGIN)));
 
         assertEquals(3, missing.size(), missing.toString());
@@ -167,25 +167,25 @@ class DevServiceWiringTest {
     void aPoolOnAnotherDatabaseNeedsNoPostgres() {
         String pom = pom(POOL + H2, PLUGIN);
 
-        assertEquals(List.of(), DevServiceWiring.missing(List.of("mansart-pool"), DevServiceWiring.Declared.of(pom)));
-        assertFalse(DevServiceWiring.wire(pom, List.of("mansart-pool"), null, reporter).changed());
+        assertEquals(List.of(), DevServiceWiring.missing(List.of("pool-mansart"), DevServiceWiring.Declared.of(pom)));
+        assertFalse(DevServiceWiring.wire(pom, List.of("pool-mansart"), null, reporter).changed());
     }
 
     @Test
     void unwiringTakesTheProvidersAwayAndKeepsTheDriver() {
-        String wired = DevServiceWiring.wire(pom(POOL + JWT, PLUGIN), List.of("mansart-pool", "cervantes-jwt"), null,
+        String wired = DevServiceWiring.wire(pom(POOL + JWT, PLUGIN), List.of("pool-mansart", "jwt-cervantes"), null,
                 reporter).pom();
 
-        String withoutPool = DevServiceWiring.unwire(wired, "mansart-pool", List.of("cervantes-jwt"), reporter).pom();
+        String withoutPool = DevServiceWiring.unwire(wired, "pool-mansart", List.of("jwt-cervantes"), reporter).pom();
         DevServiceWiring.Declared afterPool = DevServiceWiring.Declared.of(withoutPool);
-        ExtensionCoordinate postgres = DevServiceWiring.provider("mansart-pool").orElseThrow();
+        ExtensionCoordinate postgres = DevServiceWiring.provider("pool-mansart").orElseThrow();
         assertFalse(afterPool.plugin().contains(postgres), withoutPool);
         assertFalse(afterPool.scopes().containsKey(postgres), withoutPool);
         assertEquals("test", afterPool.scopes().get(DevServiceWiring.JUNIT_HOST), "keycloak still needs it");
         assertTrue(afterPool.scopes().containsKey(new ExtensionCoordinate("org.postgresql", "postgresql")),
                 "the application may query the database itself");
 
-        String withoutJwt = DevServiceWiring.unwire(withoutPool, "cervantes-jwt", List.of(), reporter).pom();
+        String withoutJwt = DevServiceWiring.unwire(withoutPool, "jwt-cervantes", List.of(), reporter).pom();
         Map<ExtensionCoordinate, String> scopes = DevServiceWiring.Declared.of(withoutJwt).scopes();
         assertFalse(scopes.containsKey(DevServiceWiring.JUNIT_HOST), withoutJwt);
     }

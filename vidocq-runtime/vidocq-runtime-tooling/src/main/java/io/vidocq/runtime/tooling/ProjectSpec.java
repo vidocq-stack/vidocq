@@ -31,7 +31,8 @@ import java.util.Set;
  * @param name          the project directory and artifactId
  * @param groupId       the Maven groupId
  * @param pkg           the root Java package, which is also the module name
- * @param extensions    the catalog ids of the extensions to enable, written in this order
+ * @param extensions    the catalog ids of the extensions to enable, written in this order; a former id or a
+ *                      function only one id starts with is replaced by the catalog id it names
  * @param parentVersion the Vidocq runtime version the project builds on, the version of {@code vidocq-runtime-parent}
  *                      with {@code withParent}, or {@code null} for the tool's runtime version
  * @param main          whether to write an {@code @VidocqMain} trampoline
@@ -58,8 +59,8 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
 
     public ProjectSpec {
         // In the order given: Set.copyOf iterates in an order that changes from one JVM to the next
-        // (BUG-20261024-01).
-        extensions = Collections.unmodifiableSequencedSet(new LinkedHashSet<>(extensions));
+        // (BUG-20261024-01). Each by its catalog id, whichever of its ids was given (Vidocq/vidocq#809).
+        extensions = Collections.unmodifiableSequencedSet(new LinkedHashSet<>(KnownExtensions.canonicalIds(extensions)));
     }
 
     /** A spec whose module is not open, without the parent. */

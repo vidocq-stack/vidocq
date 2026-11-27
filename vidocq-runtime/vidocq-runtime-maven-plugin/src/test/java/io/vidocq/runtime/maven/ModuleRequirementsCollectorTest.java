@@ -125,7 +125,7 @@ class ModuleRequirementsCollectorTest {
                         "jakarta.ws.rs"),
                 collected.stream().filter(r -> r.kind() == Requirement.Kind.REQUIRES)
                         .map(Requirement::name).sorted().toList(),
-                "the catalog's module-info.requires of cassini-rest must be collected");
+                "the catalog's module-info.requires of rest-cassini must be collected");
         assertTrue(collected.stream().allMatch(r -> !r.reason().isBlank()),
                 "every requirement carries a reason, so the goals can explain the fix");
     }
@@ -147,7 +147,7 @@ class ModuleRequirementsCollectorTest {
         assertTrue(collected.stream()
                         .noneMatch(r -> "java.compiler".equals(r.name())
                                 && r.kind() == Requirement.Kind.REQUIRES),
-                "mansart-data declares java.compiler as requires static, which must not become a plain requires");
+                "data-mansart declares java.compiler as requires static, which must not become a plain requires");
         assertTrue(collected.stream()
                         .anyMatch(r -> "java.compiler".equals(r.name())
                                 && r.kind() == Requirement.Kind.REQUIRES_STATIC),
@@ -157,10 +157,10 @@ class ModuleRequirementsCollectorTest {
     @Test
     void aCatalogRequiresIsDroppedForAModuleThatUsesNoneOfTheExtensionsApi(@TempDir Path empty) {
         Set<Requirement> required = Set.of(
-                Requirement.requires("jakarta.ws.rs", "cassini-rest does not re-export it"),
+                Requirement.requires("jakarta.ws.rs", "rest-cassini does not re-export it"),
                 Requirement.requiresStatic("java.compiler", "generated sources need it"));
 
-        // Vidocq's own cassini-rest dev panel: it depends on the extension to extend it and imports
+        // Vidocq's own rest-cassini dev panel: it depends on the extension to extend it and imports
         // nothing from Jakarta REST, so the check must demand nothing (BUG-20261109-01).
         Set<Requirement> applicable =
                 ModuleRequirementsCollector.applicableTo(required, empty.toFile(), Optional.of(Set.of()));
@@ -171,8 +171,8 @@ class ModuleRequirementsCollectorTest {
     @Test
     void aCatalogRequiresIsKeptForAModuleThatUsesTheApi(@TempDir Path empty) {
         Set<Requirement> required = Set.of(
-                Requirement.requires("jakarta.ws.rs", "cassini-rest does not re-export it"),
-                Requirement.requires("jakarta.json.bind", "cassini-rest does not re-export it"));
+                Requirement.requires("jakarta.ws.rs", "rest-cassini does not re-export it"),
+                Requirement.requires("jakarta.json.bind", "rest-cassini does not re-export it"));
 
         Set<Requirement> applicable = ModuleRequirementsCollector.applicableTo(
                 required, empty.toFile(), Optional.of(Set.of("jakarta.ws.rs")));

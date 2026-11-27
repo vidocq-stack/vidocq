@@ -12,7 +12,7 @@ Some libraries of the runtime look inside your classes by reflection: JSON-B rea
 [source,java]
 ----
 module com.example.library {
-    requires io.vidocq.runtime.extensions.jakartaee.core.cassini; // vidocq:cassini-rest
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini; // vidocq:rest-cassini
     // added by vidocq: the runtime reaches these packages by reflection
     opens com.example.library.book; // vidocq:reflection
 }
@@ -104,7 +104,7 @@ The output is the same as the reflective mapping, character for character (`@Jso
 [#entities]
 == Entities and repositories (Jakarta Data)
 
-Mansart's processor, run by the `mansart-data` extension's codegen bundle, generates each entity's model (`_Book`), each repository's implementation (`BooksImpl`), the code that builds the records a JDQL query projects into, and, per package, a `_MansartComponents` service that hands them to Mansart by plain calls. Mansart reaches none of them by reflection, so a package of entities, repositories or projection records needs no `opens` for Jakarta Data, and `vidocq:check-module-info` and `vidocq doctor` do not ask for one when the generated `_MansartComponents` names the entity.
+Mansart's processor, run by the `data-mansart` extension's codegen bundle, generates each entity's model (`_Book`), each repository's implementation (`BooksImpl`), the code that builds the records a JDQL query projects into, and, per package, a `_MansartComponents` service that hands them to Mansart by plain calls. Mansart reaches none of them by reflection, so a package of entities, repositories or projection records needs no `opens` for Jakarta Data, and `vidocq:check-module-info` and `vidocq doctor` do not ask for one when the generated `_MansartComponents` names the entity.
 
 They still ask for it when Mansart falls back to reflection: an entity no generated model covers (a module compiled without the processor), which Mansart then reads by reflection, as it does under another container (Weld, Open Liberty). The reason line says so: `opens com.acme.shop.data;   (com.acme.shop.data.Loan, an entity (Jakarta Data) without a model generated at build time)`. An entity a REST resource returns is a plain class to the JSON-B processor like any other: it gets its generated binding (`Product$$Binding`) and needs no `opens` for JSON-B either, unless one of the reasons above applies. The details are in Mansart's reference, xref:mansart::reference.adoc#application-modules[Your entities and repositories need no `opens`].
 
@@ -143,13 +143,13 @@ If you would rather never think about `opens`, make the application an **open mo
 
 [source,bash]
 ----
-vidocq create --name library --group-id com.example -x cassini-rest --open-module
+vidocq create --name library --group-id com.example -x rest-cassini --open-module
 ----
 
 [source,java]
 ----
 open module com.example.library {
-    requires io.vidocq.runtime.extensions.jakartaee.core.cassini; // vidocq:cassini-rest
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini; // vidocq:rest-cassini
 }
 ----
 
