@@ -318,24 +318,19 @@ final class CassiniInvocationBuilder implements Invocation.Builder {
                 client, configuration, uri, method, headers, entityValue, entityMediaType);
         properties.forEach(reqCtx::setProperty);
 
-        List<ClientRequestFilter> requestFilters = configuration.getRequestFilters();
-        for (ClientRequestFilter f : requestFilters) {
-            try { f.filter(reqCtx); }
-            catch (IOException e) { throw new ProcessingException("ClientRequestFilter " + f.getClass().getName() + " failed", e); }
-            if (reqCtx.abortResponse() != null) break;
-        }
-
+        // A failure before the response filters all ran goes to the listener a request filter left (#686).
         CassiniClientResponseContext respCtx;
-        if (reqCtx.abortResponse() != null) {
-            respCtx = CassiniClientResponseContext.fromAborted(reqCtx.abortResponse());
-        } else {
-            respCtx = sendHttp(reqCtx);
-        }
-
-        List<ClientResponseFilter> responseFilters = configuration.getResponseFilters();
-        for (ClientResponseFilter f : responseFilters) {
-            try { f.filter(reqCtx, respCtx); }
-            catch (IOException e) { throw new ProcessingException("ClientResponseFilter " + f.getClass().getName() + " failed", e); }
+        try {
+            runRequestFilters(reqCtx);
+            if (reqCtx.abortResponse() != null) {
+                respCtx = CassiniClientResponseContext.fromAborted(reqCtx.abortResponse());
+            } else {
+                respCtx = sendHttp(reqCtx);
+            }
+            runResponseFilters(reqCtx, respCtx);
+        } catch (RuntimeException failure) {
+            notifyFailure(reqCtx, failure);
+            throw failure;
         }
 
         Response response = respCtx.toResponse();
@@ -345,6 +340,42 @@ final class CassiniInvocationBuilder implements Invocation.Builder {
             ccr.setProviders(configuration.getInstances());
         }
         return response;
+    }
+
+    private void runRequestFilters(CassiniClientRequestContext reqCtx) {
+        for (ClientRequestFilter f : configuration.getRequestFilters()) {
+            try { f.filter(reqCtx); }
+            catch (IOException e) { throw new ProcessingException("ClientRequestFilter " + f.getClass().getName() + " failed", e); }
+            if (reqCtx.abortResponse() != null) break;
+        }
+    }
+
+    private void runResponseFilters(CassiniClientRequestContext reqCtx, CassiniClientResponseContext respCtx) {
+        for (ClientResponseFilter f : configuration.getResponseFilters()) {
+            try { f.filter(reqCtx, respCtx); }
+            catch (IOException e) { throw new ProcessingException("ClientResponseFilter " + f.getClass().getName() + " failed", e); }
+        }
+    }
+
+    /**
+     * Request property under which a {@link ClientRequestFilter} may leave a {@code Consumer<Throwable>}: the
+     * invocation hands it the failure of a call that ends before its response filters all ran (no response, or a
+     * filter that threw), once, before the caller sees it. Jakarta REST has no such callback, and the telemetry
+     * filters end the CLIENT span they opened there (Vidocq/vidocq#686). Cyrano reads the same property
+     * ({@code io.vidocq.cyrano.spi.Cyrano.CALL_FAILURE_LISTENER_PROPERTY}).
+     */
+    static final String FAILURE_LISTENER_PROPERTY = "io.vidocq.rest.client.failure-listener";
+
+    @SuppressWarnings("unchecked")
+    private static void notifyFailure(CassiniClientRequestContext reqCtx, RuntimeException failure) {
+        Object listener = reqCtx.getProperty(FAILURE_LISTENER_PROPERTY);
+        if (!(listener instanceof java.util.function.Consumer<?> consumer)) return;
+        reqCtx.removeProperty(FAILURE_LISTENER_PROPERTY);
+        try {
+            ((java.util.function.Consumer<Throwable>) consumer).accept(failure);
+        } catch (RuntimeException listenerFailure) {
+            failure.addSuppressed(listenerFailure);
+        }
     }
 
     private CassiniClientResponseContext sendHttp(CassiniClientRequestContext reqCtx) {

@@ -606,3 +606,41 @@ The script predates the workspace rule "never install into `~/.m2` from a branch
 Every Maven call of the script takes `-Dmaven.repo.local=<Cyrano folder>/.tck-repository
 -Dmaven.repo.local.tail=$HOME/.m2/repository` (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there
 first, and only reads `~/.m2`. `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `AGENTS.md`, `CLAUDE.md`.
+
+## BUG-20261127-41 — a call that gets no response tells its filters nothing; the telemetry CLIENT span never ends
+
+- **Opened**: 2026-11-27 (Vidocq/vidocq#686; the Humboldt side is BUG-20261102-03, same cause in Cassini's client)
+- **Status**: FIXED (fix/client-span-on-failed-call)
+
+### Symptom
+
+A REST client call that gets no response (refused connection, read timeout, I/O error, interrupt at shutdown)
+produced no CLIENT span with the Telemetry extension: `HumboldtClientRequestFilter` starts the span,
+`HumboldtClientResponseFilter` ends it, and Cyrano runs the response filters only when there is a response. The span
+was never ended, so never exported, and the trace of the calling request showed no client call at all.
+
+### Minimal Repro
+
+`CyranoCallFailureListenerTest`: a client registered with a request filter that leaves a listener, to a port that
+refuses the connection, or to a server that never answers with `readTimeout(200 ms)`: the call throws a
+`ProcessingException`, and nothing ever told the filters.
+
+### Root Cause
+
+Jakarta REST gives a client filter no callback for a call that fails, and Cyrano had none of its own.
+
+### Resolution
+
+A request filter may leave a `java.util.function.Consumer<Throwable>` under the request property
+`io.vidocq.cyrano.spi.Cyrano.CALL_FAILURE_LISTENER_PROPERTY` (`io.vidocq.rest.client.failure-listener`). Cyrano hands
+it the exception of a call that ends before its response filters all ran: a request filter that throws after it, the
+transport failure (synchronous, or the failed `CompletionStage`, unwrapped), or a response filter that throws. Once,
+before the caller receives the exception; what the listener throws is added to it as suppressed. A call whose response
+filters ran does not call it. Additive: one new constant, no signature changed; no Humboldt type in Cyrano. Humboldt's
+request filter leaves a listener that ends the span in error.
+
+**Regression tests**: `CyranoCallFailureListenerTest` (8 tests); Humboldt's `FailedClientCallSpanTest` drives Cyrano
+with the Telemetry filters.
+
+**Not covered**: a `Publisher<T>` (SSE) method runs no `ClientResponseFilter`, even when the stream opens, so its
+CLIENT span does not end either. Not changed here.

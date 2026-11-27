@@ -354,7 +354,21 @@ The warning is logged when a scope is closed while another context, attached aft
 | Set on the server span only when `status_code ≥ 500` (4xx leaves the span status `UNSET` — OTel HTTP convention).
 |===
 
-For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate them automatically: set them in application code (either as plain `AttributeKey`s, or with the constants from `opentelemetry-semconv` — an artifact Humboldt itself does not ship). Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
+[#client-spans]
+=== Client spans
+
+`HumboldtClientRequestFilter` starts a CLIENT span for each call of a MicroProfile Rest Client (registered by `HumboldtMpRestClientListener`) or of a Jakarta REST `Client` (registered by `HumboldtClientTracingFeature`), named after the method, with `http.request.method`, `url.full` (without user info or fragment), `server.address` and `server.port` (left out for the scheme's default port), and injects the propagation headers. `HumboldtClientResponseFilter` adds `http.response.status_code` and ends it; any status `≥ 400` sets the span status to `ERROR`.
+
+[.tag-new]#NEW# A call that gets no response (refused connection, timeout, I/O error, interrupt at shutdown), or whose response filters do not all run, never reaches the response filter. With the Vidocq clients, Cyrano and `cassini-client`, the span still ends: the request filter leaves a listener under the request property `io.vidocq.rest.client.failure-listener` (`HumboldtClientRequestFilter.FAILURE_LISTENER_PROPERTY`) that they call with the failure (xref:cyrano::reference.adoc#call-failure-listener[Cyrano's call failure listener]). The span then ends with:
+
+* span status `ERROR`, described as `<SimpleName>: <message>` of the exception;
+* `error.type` set to the exception's fully qualified class name (`java.net.ConnectException`, `java.net.http.HttpTimeoutException`), as the HTTP client conventions ask for a request that fails before a response;
+* the exception recorded as an `exception` event (<<exception-attributes>>);
+* no `http.response.status_code`.
+
+The `ProcessingException`, `CompletionException` or `ExecutionException` the client wraps the failure in is unwrapped first. The span ends once, by the listener or by the response filter. Another Jakarta REST client (the server's own, on an application server) does not call the listener: there, the span of a call that gets no response is not ended, so not exported (Vidocq/vidocq#686).
+
+For other client-side attributes (DB, messaging…), Humboldt does not generate them automatically: set them in application code (either as plain `AttributeKey`s, or with the constants from `opentelemetry-semconv` — an artifact Humboldt itself does not ship). Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
 
 [#exception-attributes]
 == Exception attributes

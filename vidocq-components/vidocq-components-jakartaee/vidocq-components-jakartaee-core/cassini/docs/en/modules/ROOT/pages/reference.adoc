@@ -196,6 +196,9 @@ Cassini does not need Vauban. `cassini-cdi` finds the running container through 
 
 Client side (`cassini-client`): `Client`, `ClientBuilder`, `WebTarget`, `Invocation`, `Invocation.Builder`, `AsyncInvoker`, `ClientRequestContext`, `ClientResponseContext`, `ClientRequestFilter`, `ClientResponseFilter`.
 
+[#client-failure-listener]
+[.tag-new]#NEW# A call that ends before its response filters all ran (refused connection, timeout, I/O error, interrupt, or a filter that throws) runs no `ClientResponseFilter`, and Jakarta REST gives a filter no other callback. `cassini-client` hands that failure to the `java.util.function.Consumer<Throwable>` a `ClientRequestFilter` left under the request property `io.vidocq.rest.client.failure-listener`, once, before the caller (or the `Future` of an asynchronous call) receives it; what the listener throws is added to the failure as suppressed. Cyrano reads the same property. Humboldt's client filter uses it to end the CLIENT span of a failed call in error (Vidocq/vidocq#686).
+
 [#configuration]
 == Configuration
 

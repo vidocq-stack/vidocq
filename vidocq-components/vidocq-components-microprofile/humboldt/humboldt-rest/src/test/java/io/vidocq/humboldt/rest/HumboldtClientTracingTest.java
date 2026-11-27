@@ -136,6 +136,77 @@ class HumboldtClientTracingTest {
         assertTrue(headers.getFirst("traceparent") instanceof String, "the client span is still propagated");
     }
 
+    /**
+     * A call that gets no response runs no response filter: the client calls the failure listener the request filter
+     * left in the request properties, and the CLIENT span ends there, in error, with the exception recorded
+     * (Vidocq/vidocq#686, BUG-20261102-03).
+     */
+    @Test
+    void a_call_that_gets_no_response_ends_its_span_in_error_through_the_failure_listener() {
+        Map<String, Object> props = new HashMap<>();
+        ClientRequestContext req = clientRequest(METHOD_GET, URI.create("http://api.example.com:8081/slow"),
+                new MultivaluedHashMap<>(), props);
+        filter().filter(req);
+        assertTrue(exporter.getFinishedSpans().isEmpty(), "the span is still open after the request filter");
+
+        java.net.SocketTimeoutException timeout = new java.net.SocketTimeoutException("request timed out");
+        failureListener(req).accept(new jakarta.ws.rs.ProcessingException(timeout));
+
+        SpanData span = exporter.getFinishedSpans().getFirst();
+        assertEquals(SpanKind.CLIENT, span.kind());
+        assertEquals(StatusCode.ERROR, span.status().code());
+        assertEquals("SocketTimeoutException: request timed out", span.status().description());
+        assertEquals("java.net.SocketTimeoutException",
+                span.attributes().get(HumboldtClientRequestFilter.ERROR_TYPE), "error.type names the cause");
+        assertNull(span.attributes().get(HTTP_RESPONSE_STATUS_CODE), "no status code: there was no response");
+        var event = span.events().getFirst();
+        assertEquals("exception", event.name());
+        assertEquals("java.net.SocketTimeoutException",
+                event.attributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("exception.type")));
+        assertTrue(props.isEmpty(), "the listener removes the span property: " + props);
+    }
+
+    @Test
+    void the_failure_listener_ends_the_span_once() {
+        ClientRequestContext req = clientRequest(METHOD_GET, URI.create("http://api.example.com/x"),
+                new MultivaluedHashMap<>(), new HashMap<>());
+        filter().filter(req);
+        var listener = failureListener(req);
+
+        listener.accept(new IllegalStateException("first"));
+        listener.accept(new IllegalStateException("second"));
+
+        assertEquals(1, exporter.getFinishedSpans().size());
+        assertEquals("IllegalStateException: first", exporter.getFinishedSpans().getFirst().status().description());
+    }
+
+    @Test
+    void the_response_filter_removes_the_failure_listener() {
+        Map<String, Object> props = new HashMap<>();
+        ClientRequestContext req = clientRequest(METHOD_GET, URI.create("http://api.example.com/x"),
+                new MultivaluedHashMap<>(), props);
+        filter().filter(req);
+        var listener = failureListener(req);
+        new HumboldtClientResponseFilter().filter(req, clientResponse(200));
+
+        assertFalse(props.containsKey(HumboldtClientRequestFilter.FAILURE_LISTENER_PROPERTY));
+        listener.accept(new IllegalStateException("late"));
+        assertEquals(StatusCode.UNSET, exporter.getFinishedSpans().getFirst().status().code(),
+                "a span ended by the response filter is not ended again");
+    }
+
+    @Test
+    void the_failure_listener_property_is_the_one_the_vidocq_clients_read() {
+        assertEquals("io.vidocq.rest.client.failure-listener", HumboldtClientRequestFilter.FAILURE_LISTENER_PROPERTY);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.function.Consumer<Throwable> failureListener(ClientRequestContext req) {
+        Object listener = req.getProperty(HumboldtClientRequestFilter.FAILURE_LISTENER_PROPERTY);
+        assertTrue(listener instanceof java.util.function.Consumer<?>, "the request filter leaves a listener");
+        return (java.util.function.Consumer<Throwable>) listener;
+    }
+
     @Test
     void url_full_drops_user_info_and_fragment() {
         String url = traced(URI.create("https://user:secret@api.example.com/p?q=1#frag"));

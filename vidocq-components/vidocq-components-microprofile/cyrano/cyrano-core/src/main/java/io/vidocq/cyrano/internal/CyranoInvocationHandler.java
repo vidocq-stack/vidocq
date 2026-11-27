@@ -178,27 +178,33 @@ public class CyranoInvocationHandler implements io.vidocq.cyrano.spi.gen.ClientI
         //MP Rest Client §4.2 — standard filter property
         reqCtx.setProperty("org.eclipse.microprofile.rest.client.invokedMethod", spec.method());
 
-        //5. Pipeline ClientRequestFilter (top-up priorities)
-        runRequestFilters(reqCtx, spec);
+        //A failure before the response filters all ran tells the listener a request filter left (#686).
+        CyranoClientResponseContext respCtx;
+        try {
+            //5. Pipeline ClientRequestFilter (top-up priorities)
+            runRequestFilters(reqCtx, spec);
 
-        //SSE — MP Rest Client 4.0 §10: org.reactivestreams.Publisher<T> return
-        //type streams the text/event-stream response (Accept already seeded
-        //from @Produces). The class is matched by NAME so the reactive-streams
-        //jar stays optional at runtime — only SseReturnSupport imports it.
-        if (isReactiveStreamsPublisher(spec.returnType())) {
-            return ssePublisher(reqCtx, spec);
+            //SSE — MP Rest Client 4.0 §10: org.reactivestreams.Publisher<T> return
+            //type streams the text/event-stream response (Accept already seeded
+            //from @Produces). The class is matched by NAME so the reactive-streams
+            //jar stays optional at runtime — only SseReturnSupport imports it.
+            if (isReactiveStreamsPublisher(spec.returnType())) {
+                return ssePublisher(reqCtx, spec);
+            }
+
+            //6. Either we've been aborted or we're actually sending the request.
+            if (asyncReturn) {
+                return invokeAsync(reqCtx, spec);
+            }
+
+            respCtx = reqCtx.isAborted()
+                    ? CyranoClientResponseContext.fromAbort(reqCtx.abortResponse())
+                    : send(reqCtx);
+        } catch (RuntimeException failure) {
+            throw notifyFailure(reqCtx, failure);
         }
 
-        //6. Either we've been aborted or we're actually sending the request.
-        if (asyncReturn) {
-            return invokeAsync(reqCtx, spec);
-        }
-
-        CyranoClientResponseContext respCtx = reqCtx.isAborted()
-                ? CyranoClientResponseContext.fromAbort(reqCtx.abortResponse())
-                : send(reqCtx);
-
-        //7. Pipeline ClientResponseFilter (top-down priorities)
+        //7. Pipeline ClientResponseFilter (top-down priorities); tells the failure listener itself
         runResponseFilters(reqCtx, respCtx);
 
         // 8. Final mapping of the return value
@@ -227,9 +233,34 @@ public class CyranoInvocationHandler implements io.vidocq.cyrano.spi.gen.ClientI
             try {
                 f.filter(reqCtx, respCtx);
             } catch (IOException ioe) {
-                throw new jakarta.ws.rs.ProcessingException(ioe);
+                throw notifyFailure(reqCtx, new jakarta.ws.rs.ProcessingException(ioe));
+            } catch (RuntimeException failure) {
+                throw notifyFailure(reqCtx, failure);
             }
         }
+    }
+
+    /**
+     * Hands {@code failure} to the {@code Consumer<Throwable>} a request filter left under
+     * {@link io.vidocq.cyrano.spi.Cyrano#CALL_FAILURE_LISTENER_PROPERTY}, once: the property is removed first. Jakarta
+     * REST runs no response filter for a call that gets no response, so a filter that opened something on the
+     * request side (Humboldt's CLIENT span) has no other way to close it (Vidocq/vidocq#686). What the listener
+     * throws is added to {@code failure} as suppressed: the caller still receives the failure of its call.
+     *
+     * @return {@code failure}, for the caller to throw
+     */
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> T notifyFailure(CyranoClientRequestContext reqCtx, T failure) {
+        Object listener = reqCtx.getProperty(io.vidocq.cyrano.spi.Cyrano.CALL_FAILURE_LISTENER_PROPERTY);
+        if (listener instanceof java.util.function.Consumer<?> consumer) {
+            reqCtx.removeProperty(io.vidocq.cyrano.spi.Cyrano.CALL_FAILURE_LISTENER_PROPERTY);
+            try {
+                ((java.util.function.Consumer<Throwable>) consumer).accept(failure);
+            } catch (RuntimeException listenerFailure) {
+                failure.addSuppressed(listenerFailure);
+            }
+        }
+        return failure;
     }
 
     private Object ssePublisher(CyranoClientRequestContext reqCtx, RequestSpec spec) {
@@ -263,7 +294,12 @@ public class CyranoInvocationHandler implements io.vidocq.cyrano.spi.gen.ClientI
         }
 
         HttpRequest finalReq = buildHttpRequest(reqCtx);
-        return transport.sendAsync(finalReq).thenApplyAsync(resp -> {
+        return transport.sendAsync(finalReq).whenComplete((resp, failure) -> {
+            if (failure != null) {
+                notifyFailure(reqCtx, failure instanceof java.util.concurrent.CompletionException ce
+                        && ce.getCause() != null ? ce.getCause() : failure);
+            }
+        }).thenApplyAsync(resp -> {
             applyContexts(asyncInterceptors);
             try {
                 return filterAndMap(reqCtx, CyranoClientResponseContext.of(resp),

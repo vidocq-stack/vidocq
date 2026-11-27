@@ -7,3 +7,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Transports
 
 * xref:internals.adoc#shared-prefix[The REST stack says whether a resource matches a path] [.tag-new]#NEW# — `CassiniHttpAdapter.hasResourceAt(String)` and `ChappeHttpAdapter.serves(Request)` answer whether a resource matches the path of a request for some HTTP method, without dispatching it. The Vidocq runtime asks it when the REST resources share their prefix with static files or servlets (Vidocq/vidocq#802), so a path no resource matches goes to the next handler of the prefix. An adapter that does not override `hasResourceAt` serves every path, as before.
+
+== Client
+
+* xref:reference.adoc#client-failure-listener[A client filter hears about a call that fails] [.tag-new]#NEW# — `cassini-client` calls the `Consumer<Throwable>` a request filter left under the property `io.vidocq.rest.client.failure-listener` for a call that ends before its response filters ran, as Cyrano does; Humboldt ends the CLIENT span of a failed call there (Vidocq/vidocq#686).

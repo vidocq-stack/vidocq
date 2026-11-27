@@ -55,7 +55,9 @@ import java.net.URI;
  * is sufficient; the pattern is only known server-side via {@code @Path}).</p>
  *
  * <p>The span is stored in the {@link ClientRequestContext} properties for retrieval by
- * {@link HumboldtClientResponseFilter}, which ends it. No scope is held across the call: only the
+ * {@link HumboldtClientResponseFilter}, which ends it; a call that gets no response ends it through the
+ * {@link #FAILURE_LISTENER_PROPERTY} listener, in error, when the client is a Vidocq one (Vidocq/vidocq#686).
+ * No scope is held across the call: only the
  * header injection needs the span as the current one, the filter injects from the context it builds, and a call
  * that gets no response (timeout, connection error, interrupt) never runs the response filter — a scope left
  * attached on the calling thread would then be found by the next scope closed on that thread, as an
@@ -74,11 +76,19 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
      * closes a scope found under it.
      */
     public static final String SCOPE_PROPERTY = "io.vidocq.humboldt.rest.client.scope";
+    /**
+     * Request property under which the filter leaves a {@code java.util.function.Consumer<Throwable>} that ends the
+     * span in error: the Vidocq REST clients call it for a call that ends before its response filters ran, which
+     * Jakarta REST has no callback for (Vidocq/vidocq#686). Same value as Cyrano's
+     * {@code io.vidocq.cyrano.spi.Cyrano.CALL_FAILURE_LISTENER_PROPERTY}, which this module does not depend on.
+     */
+    public static final String FAILURE_LISTENER_PROPERTY = "io.vidocq.rest.client.failure-listener";
 
     static final AttributeKey<String> HTTP_REQUEST_METHOD = AttributeKey.stringKey("http.request.method");
     static final AttributeKey<String> URL_FULL = AttributeKey.stringKey("url.full");
     static final AttributeKey<String> SERVER_ADDRESS = AttributeKey.stringKey("server.address");
     static final AttributeKey<Long> SERVER_PORT = AttributeKey.longKey("server.port");
+    static final AttributeKey<String> ERROR_TYPE = AttributeKey.stringKey("error.type");
 
     /**
      * {@link TextMapSetter} that writes the W3C headers ({@code traceparent}, {@code tracestate},
@@ -119,6 +129,7 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
         propagator.inject(withSpan, requestContext, HEADER_SETTER);
 
         requestContext.setProperty(SPAN_PROPERTY, span);
+        requestContext.setProperty(FAILURE_LISTENER_PROPERTY, new ClientCallFailureListener(span, requestContext));
     }
 
     /**

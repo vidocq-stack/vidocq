@@ -4,4 +4,4 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+* xref:reference.adoc#client-spans[A REST client call that gets no response exports its CLIENT span] [.tag-new]#NEW# — with Cyrano or `cassini-client`, a call that fails before a response (refused connection, timeout, I/O error, interrupt) ends its CLIENT span with status `ERROR`, `error.type` and the exception recorded, instead of leaving it open and never exported (Vidocq/vidocq#686).

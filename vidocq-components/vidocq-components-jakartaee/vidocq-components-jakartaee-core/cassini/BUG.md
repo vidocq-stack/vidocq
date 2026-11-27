@@ -1214,3 +1214,21 @@ The 500 is empty, and the log line names the exception's class only, with a mess
   TCK nightly's earlier install of the component stays visible. The signature test reads the API jar from
   `cassini-tck/target/signature-api/` (copied by `maven-dependency-plugin` in `tck-official`) instead of a fixed
   `~/.m2` path, which a jar resolved into the private repository would miss. `.tck-repository/` is git-ignored.
+
+## BUG-20261127-41 — a client call that gets no response tells its filters nothing; the telemetry CLIENT span never ends
+
+- **Date**: 2026-11-27 (Vidocq/vidocq#686; the Humboldt side is BUG-20261102-03, the same bug in Cyrano)
+- **Status**: FIXED (fix/client-span-on-failed-call)
+- **Symptom**: with the Telemetry extension, a `cassini-client` call that gets no response (refused connection,
+  timeout, I/O error, interrupt) produced no CLIENT span: Humboldt's response filter ends it, and the client runs the
+  response filters only when there is a response.
+- **Minimal repro**: `CallFailureListenerTest`: a request filter leaves a listener, the call goes to a closed port and
+  throws a `ProcessingException`; nothing told the filters.
+- **Cause**: Jakarta REST gives a client filter no callback for a call that fails.
+- **Fix**: `CassiniInvocationBuilder.invoke` hands the failure of a call that ends before its response filters all ran
+  (a request filter that throws, the transport, a response filter that throws) to the `Consumer<Throwable>` a request
+  filter left under the request property `io.vidocq.rest.client.failure-listener`, the one Cyrano reads; once, before
+  the caller (or the `Future` of an asynchronous call) receives it. What the listener throws is added to the failure as
+  suppressed. No new public type.
+- **Regression tests**: `CallFailureListenerTest` (5 tests); Humboldt's `FailedClientCallSpanTest` drives the client
+  with the Telemetry filters.

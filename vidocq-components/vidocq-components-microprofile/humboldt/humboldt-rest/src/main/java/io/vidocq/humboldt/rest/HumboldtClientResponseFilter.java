@@ -53,6 +53,11 @@ public class HumboldtClientResponseFilter implements ClientResponseFilter {
         Object spanObj = requestContext.getProperty(HumboldtClientRequestFilter.SPAN_PROPERTY);
         Object scopeObj = requestContext.getProperty(HumboldtClientRequestFilter.SCOPE_PROPERTY);
         if (!(spanObj instanceof Span span)) return;
+        Object listener = requestContext.getProperty(HumboldtClientRequestFilter.FAILURE_LISTENER_PROPERTY);
+        requestContext.removeProperty(HumboldtClientRequestFilter.FAILURE_LISTENER_PROPERTY);
+        if (listener instanceof ClientCallFailureListener failure && !failure.claim()) {
+            return; // already ended in error by the failure listener
+        }
 
         int status = responseContext.getStatus();
         span.setAttribute(HTTP_RESPONSE_STATUS_CODE, (long) status);

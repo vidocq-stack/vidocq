@@ -238,6 +238,17 @@ Two stable SPI packages are exported by `cyrano-api`, plus one runtime SPI in `c
 
 There is no transport-substitution SPI: the transport is `java.net.http.HttpClient`, and the extension points around a request are the standard JAX-RS/MP providers (`ClientRequestFilter`, `ClientResponseFilter`, `MessageBodyReader`/`Writer`, `ResponseExceptionMapper`, `ParamConverterProvider`, `ClientHeadersFactory`).
 
+[#call-failure-listener]
+=== Call failure listener [.tag-new]#NEW#
+
+A call that ends before its response filters all ran runs no `ClientResponseFilter`, and Jakarta REST gives a filter no other callback: a filter that opened something on the request side could not close it. A `ClientRequestFilter` may leave a `java.util.function.Consumer<Throwable>` under the request property `io.vidocq.cyrano.spi.Cyrano.CALL_FAILURE_LISTENER_PROPERTY` (`io.vidocq.rest.client.failure-listener`). Cyrano hands it the exception of:
+
+* a request filter that throws after it;
+* a call that gets no response: refused connection, read or connect timeout, I/O error, interrupt; for a `CompletionStage` method, the exception the stage fails with, without its `CompletionException` wrapper;
+* a response filter that throws.
+
+It is called once, on the thread that sees the failure, before the caller receives the exception; Cyrano removes the property first. What the listener throws is added to the exception as suppressed. A call whose response filters ran, even with an error status, does not call it. A `Publisher` (SSE) method runs no response filter and does not call it either. Humboldt's client filter uses it to end the CLIENT span of a failed call in error (Vidocq/vidocq#686); `cassini-client` reads the same property.
+
 [#runtime-prerequisites]
 == Runtime prerequisites
 

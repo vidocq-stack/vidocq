@@ -39,6 +39,18 @@ public final class Cyrano {
     public static final String SPEC_VERSION = "4.0";
 
     /**
+     * Request property under which a {@code ClientRequestFilter} may leave a
+     * {@code java.util.function.Consumer<Throwable>}: Cyrano hands it the exception of a call that ends before its
+     * response filters all ran (no response: refused connection, timeout, I/O error, interrupt; or a filter that
+     * throws), once, on the thread that sees the failure, before the caller receives it. Jakarta REST gives a client
+     * filter no callback for a call that fails, so a filter that opened something on the request side (the CLIENT
+     * span of the telemetry filters) closes it there. Cyrano removes the property before it calls the listener, and a response
+     * filter that already closed what it opened removes it too. What the listener throws is added to the exception
+     * as suppressed. Vidocq's Jakarta REST client (Cassini) reads the same property.
+     */
+    public static final String CALL_FAILURE_LISTENER_PROPERTY = "io.vidocq.rest.client.failure-listener";
+
+    /**
      * Current Cyrano implementation version, filtered by the Maven build into a
      * same-module resource. Not a compile-time constant on purpose: consumers
      * always read the version of the artifact actually on their module path.
