@@ -35,13 +35,18 @@ class PageElIntegrationTest {
         var observed = new java.util.concurrent.atomic.AtomicReference<ClassLoader>();
         var fail = new java.util.concurrent.atomic.AtomicBoolean(true);
         var resolver = new jakarta.el.ELResolver() {
+            @Override
             public Object getValue(jakarta.el.ELContext context, Object base, Object property) {
                 if (base == null && "provider".equals(property)) { context.setPropertyResolved(true); return "direct"; }
                 return null;
             }
+            @Override
             public Class<?> getType(jakarta.el.ELContext context, Object base, Object property) { return null; }
+            @Override
             public void setValue(jakarta.el.ELContext context, Object base, Object property, Object value) { /* Read-only resolver. */ }
+            @Override
             public boolean isReadOnly(jakarta.el.ELContext context, Object base, Object property) { return true; }
+            @Override
             public Class<?> getCommonPropertyType(jakarta.el.ELContext context, Object base) { return null; }
         };
         var factory = new ExpressionFactory() {
@@ -50,9 +55,13 @@ class PageElIntegrationTest {
                 if (fail.getAndSet(false)) throw new jakarta.el.ELException("provider failed");
                 return resolver;
             }
+            @Override
             public jakarta.el.ValueExpression createValueExpression(jakarta.el.ELContext context, String text, Class<?> type) { return delegate.createValueExpression(context, text, type); }
+            @Override
             public jakarta.el.ValueExpression createValueExpression(Object value, Class<?> type) { return delegate.createValueExpression(value, type); }
+            @Override
             public jakarta.el.MethodExpression createMethodExpression(jakarta.el.ELContext context, String text, Class<?> type, Class<?>[] parameters) { return delegate.createMethodExpression(context, text, type, parameters); }
+            @Override
             public <T> T coerceToType(Object value, Class<T> type) { return delegate.coerceToType(value, type); }
         };
         var page = new IbarraPageContext(new IbarraApplicationContext(factory));

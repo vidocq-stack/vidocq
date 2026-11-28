@@ -44,7 +44,9 @@ class PagePolicyTest {
     private static final class ImportedPage extends jakarta.servlet.http.HttpServlet implements jakarta.servlet.jsp.HttpJspPage, PageOptions {
         @Override public boolean usesStaticELImports() { return true; }
         @Override public Class<?> resolveELClass(String name) { return "Entry".equals(name) ? java.util.Map.Entry.class : null; }
-        public void jspInit() { /* Fixture page: nothing to initialize. */ } public void jspDestroy() { /* Fixture page: nothing to release. */ }
+        @Override
+        public void jspInit() { /* Fixture page: nothing to initialize. */ } @Override public void jspDestroy() { /* Fixture page: nothing to release. */ }
+        @Override
         public void _jspService(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) { /* Fixture page: never rendered by this test. */ }
     }
     @Test
@@ -115,13 +117,18 @@ class PagePolicyTest {
         web.request.setAttribute("data", java.util.Map.of());
         var application = new IbarraApplicationContext();
         application.addELResolver(new ELResolver() {
+            @Override
             public Object getValue(ELContext context, Object base, Object property) {
                 if (base == null && "nullable".equals(property)) context.setPropertyResolved(true);
                 return null;
             }
+            @Override
             public Class<?> getType(ELContext context, Object base, Object property) { return null; }
+            @Override
             public void setValue(ELContext context, Object base, Object property, Object value) { /* Read-only resolver. */ }
+            @Override
             public boolean isReadOnly(ELContext context, Object base, Object property) { return true; }
+            @Override
             public Class<?> getCommonPropertyType(ELContext context, Object base) { return null; }
         });
         var page = open(web, application, true);

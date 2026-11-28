@@ -43,9 +43,13 @@ class PageApplicationTest {
             for (var context : List.of(first, second)) {
                 var servlet = new TestPage();
                 servlet.init(new jakarta.servlet.ServletConfig() {
+                    @Override
                     public String getServletName() { return "page"; }
+                    @Override
                     public jakarta.servlet.ServletContext getServletContext() { return context; }
+                    @Override
                     public String getInitParameter(String name) { return null; }
+                    @Override
                     public java.util.Enumeration<String> getInitParameterNames() { return java.util.Collections.emptyEnumeration(); }
                 });
                 var page = factory.getPageContext(servlet, new ServletDoubles.Request(), new ServletDoubles.Response(), null, false, 64, true);
@@ -88,8 +92,11 @@ class PageApplicationTest {
     }
 
     public static final class TestPage extends HttpServlet implements HttpJspPage {
+        @Override
         public void jspInit() { /* Fixture page: nothing to initialize. */ }
+        @Override
         public void jspDestroy() { /* Fixture page: nothing to release. */ }
+        @Override
         public void _jspService(HttpServletRequest request, HttpServletResponse response) { /* Fixture page: never rendered by this test. */ }
     }
 }

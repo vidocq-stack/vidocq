@@ -58,7 +58,7 @@ final class BeanInfoEditors {
         var method = model.methods().stream().filter(m -> m.methodName().equalsString("getPropertyDescriptors")
                 && m.methodType().equalsString("()[Ljava/beans/PropertyDescriptor;")).findFirst().orElseThrow();
         Object returned = reader.evaluate(method);
-        if (returned == NULL) return new Metadata(Set.of(), Map.of());
+        if (same(returned, NULL)) return new Metadata(Set.of(), Map.of());
         var result = new LinkedHashMap<String, String>();
         var properties = new HashSet<String>();
         for (Object value : (Object[]) returned) {
@@ -87,7 +87,7 @@ final class BeanInfoEditors {
                 if (taken(branch, stack)) next = labels.get(branch.target());
             } else if (elements.get(pc) instanceof Instruction instruction) {
                 Object returned = execute(instruction, stack, locals);
-                if (returned != CONTINUE) return returned;
+                if (!same(returned, CONTINUE)) return returned;
             }
             pc = next;
         }
@@ -163,11 +163,11 @@ final class BeanInfoEditors {
         if (!field.owner().asInternalName().equals(info) || !field.type().equalsString("[Ljava/beans/PropertyDescriptor;"))
             throw new IllegalArgumentException("Dynamic metadata field");
         if (field.opcode() == Opcode.GETFIELD) {
-            if (pop(stack) != instance) throw new IllegalArgumentException(FOREIGN_INSTANCE);
+            if (!same(pop(stack), instance)) throw new IllegalArgumentException(FOREIGN_INSTANCE);
             stack.add(fields.getOrDefault(field.name().stringValue(), NULL));
         } else if (field.opcode() == Opcode.PUTFIELD) {
             Object value = pop(stack);
-            if (pop(stack) != instance) throw new IllegalArgumentException(FOREIGN_INSTANCE);
+            if (!same(pop(stack), instance)) throw new IllegalArgumentException(FOREIGN_INSTANCE);
             fields.put(field.name().stringValue(), value);
         } else throw new IllegalArgumentException("Static metadata field");
     }
@@ -176,7 +176,7 @@ final class BeanInfoEditors {
         var opcode = branch.opcode();
         if (opcode == Opcode.GOTO || opcode == Opcode.GOTO_W) return true;
         if (opcode != Opcode.IFNULL && opcode != Opcode.IFNONNULL) throw new IllegalArgumentException("Dynamic metadata branch");
-        boolean isNull = pop(stack) == NULL;
+        boolean isNull = same(pop(stack), NULL);
         return opcode == Opcode.IFNULL ? isNull : !isNull;
     }
 
@@ -185,14 +185,14 @@ final class BeanInfoEditors {
         String name = call.name().stringValue();
         String type = call.type().stringValue();
         if (owner.equals("java/beans/SimpleBeanInfo") && name.equals(INIT_NAME) && type.equals("()V")) {
-            if (pop(stack) != instance) throw new IllegalArgumentException("Foreign BeanInfo constructor");
+            if (!same(pop(stack), instance)) throw new IllegalArgumentException("Foreign BeanInfo constructor");
         } else if (owner.equals(DESCRIPTOR) && name.equals(INIT_NAME)
                 && type.equals("(Ljava/lang/String;Ljava/lang/Class;)V")) {
             constructDescriptor(stack);
         } else if (owner.equals(DESCRIPTOR) && name.equals("setPropertyEditorClass") && type.equals("(Ljava/lang/Class;)V")) {
             Object editor = pop(stack);
             var descriptor = (Descriptor) pop(stack);
-            descriptor.editor = editor == NULL ? null : ((ClassDesc) editor).descriptorString().substring(1,
+            descriptor.editor = same(editor, NULL) ? null : ((ClassDesc) editor).descriptorString().substring(1,
                     ((ClassDesc) editor).descriptorString().length() - 1).replace('/', '.');
         } else if (owner.equals("java/util/Arrays") && name.equals("copyOf") && type.equals("([Ljava/lang/Object;I)[Ljava/lang/Object;")) {
             int size = (Integer) pop(stack);
@@ -211,4 +211,8 @@ final class BeanInfoEditors {
     }
 
     private static Object pop(List<Object> stack) { return stack.removeLast(); }
+
+    // Identity on purpose: NULL, CONTINUE and instance are private sentinels of the interpreter, never values.
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean same(Object value, Object sentinel) { return value == sentinel; }
 }

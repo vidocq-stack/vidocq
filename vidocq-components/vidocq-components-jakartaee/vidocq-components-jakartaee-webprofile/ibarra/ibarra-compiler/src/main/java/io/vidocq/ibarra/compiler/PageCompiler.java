@@ -72,7 +72,7 @@ public final class PageCompiler {
         for (var source : sources) {
             for (var generated : source.auxiliaryClasses()) {
                 var previous = auxiliary.putIfAbsent(generated.className(), generated);
-                if (names.contains(generated.className()) || previous != null && !previous.equals(generated))
+                if (names.contains(generated.className()) || (previous != null && !previous.equals(generated)))
                     throw new IllegalArgumentException("Conflicting generated class: " + generated.className());
             }
         }

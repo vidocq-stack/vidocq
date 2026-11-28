@@ -341,9 +341,9 @@ class TagGenerationTest {
     void jspIdsAreUniqueStableAndInitializedForInheritedClassicAndSimpleConsumers() throws Exception {
         var options = jspIdOptions();
         String output = render("<x:simple label='one'/>|<x:classic/>|<x:simple label='two'/>;", false, options, 2);
-        String[] requests = output.split(";");
+        String[] requests = fields(output, ";");
         assertEquals(2, requests.length); assertEquals(requests[0], requests[1]);
-        String[] ids = requests[0].split("\\|");
+        String[] ids = fields(requests[0], "|");
         assertEquals(3, new HashSet<>(List.of(ids)).size());
         for (String id : ids) assertTrue(id.matches("[A-Za-z_][A-Za-z0-9_-]*"), id);
     }
@@ -352,18 +352,18 @@ class TagGenerationTest {
     void repeatedStaticIncludesReceiveDistinctIdsEvenWithIdenticalSourceLocations() throws Exception {
         var ids = jspIdOptions();
         var options = new GenerationOptions(ids.propertyGroups(), Map.of("/piece.jspf", "<x:simple/>"), false, ids.byteSources(), ids.tagLibraries());
-        String[] values = render("<%@ include file='piece.jspf' %>|<%@ include file='piece.jspf' %>", false, options).split("\\|");
+        String[] values = fields(render("<%@ include file='piece.jspf' %>|<%@ include file='piece.jspf' %>", false, options), "|");
         assertEquals(2, values.length); assertNotEquals(values[0], values[1]);
     }
 
     @Test
     void tagsInRepeatedFragmentsKeepTheirOwnIdsAndFreshHandlerInstances() throws Exception {
         var options = jspIdOptions();
-        String[] ids = render("<x:echo label='fragment' count='2'><x:simple/>|<x:classic/>;</x:echo>", false,
+        String[] ids = fields(render("<x:echo label='fragment' count='2'><x:simple/>|<x:classic/>;</x:echo>", false,
                 new GenerationOptions(options.propertyGroups(), options.sources(), false, options.byteSources(),
-                        Map.of("urn:test", mergeJspIds(options.tagLibraries().get("urn:test"), options().tagLibraries().get("urn:test"))))).replace("[fragment:", "").replace("]", "").split(";");
+                        Map.of("urn:test", mergeJspIds(options.tagLibraries().get("urn:test"), options().tagLibraries().get("urn:test"))))).replace("[fragment:", "").replace("]", ""), ";");
         assertEquals(2, ids.length); assertEquals(ids[0], ids[1]);
-        String[] nested = ids[0].split("\\|"); assertNotEquals(nested[0], nested[1]);
+        String[] nested = fields(ids[0], "|"); assertNotEquals(nested[0], nested[1]);
     }
 
     private TagLibraryDescriptor mergeJspIds(TagLibraryDescriptor ids, TagLibraryDescriptor ordinary) {
@@ -391,9 +391,9 @@ class TagGenerationTest {
     void xmlTagsReceiveStableIdentifiersAcrossRequests() throws Exception {
         String source = "<jsp:root xmlns:jsp='http://java.sun.com/JSP/Page' xmlns:x='urn:test' version='3.0'>"
                 + "<jsp:directive.page session='false'/><x:simple label='xml'/>|<x:classic/>;</jsp:root>";
-        String[] requests = render(source, false, jspIdOptions(), 2).split(";");
+        String[] requests = fields(render(source, false, jspIdOptions(), 2), ";");
         assertEquals(2, requests.length); assertEquals(requests[0], requests[1]);
-        String[] ids = requests[0].split("\\|"); assertEquals(2, ids.length); assertNotEquals(ids[0], ids[1]);
+        String[] ids = fields(requests[0], "|"); assertEquals(2, ids.length); assertNotEquals(ids[0], ids[1]);
     }
 
     private GenerationOptions jspIdOptions() throws Exception {
@@ -659,6 +659,27 @@ class TagGenerationTest {
 
         assertEquals("ok", render("<x:inspect/>", false, configured));
     }
+    @Test void passesRequestTimeAttributesToTagExtraInfoValidationAsRequestTimeValues() throws Exception {
+        String tld = """
+                <taglib><uri>urn:test</uri>
+                  <tag><name>probe</name><tag-class>fixture.Tags$TagDataEcho</tag-class>
+                    <tei-class>fixture.Tags$TagDataProbe</tei-class><body-content>empty</body-content>
+                    <attribute><name>literal</name></attribute>
+                    <attribute><name>expr</name><rtexprvalue>true</rtexprvalue></attribute>
+                    <attribute><name>frag</name><fragment>true</fragment></attribute>
+                    <attribute><name>named</name></attribute>
+                    <attribute><name>namedEl</name><rtexprvalue>true</rtexprvalue></attribute>
+                    <attribute><name>namedFrag</name><fragment>true</fragment></attribute></tag>
+                </taglib>
+                """;
+        var library = new TldParser().parse("/WEB-INF/probe.tld", tld.getBytes(StandardCharsets.UTF_8));
+        var configured = new GenerationOptions(List.of(), Map.of(), false, Map.of(), Map.of("urn:test", library));
+
+        assertEquals("literal=text;expr=rt;frag=null;named=plain;namedEl=rt;namedFrag=rt;",
+                render("<x:probe literal='text' expr='<%= \"one\" %>'><jsp:attribute name='named'>plain</jsp:attribute>"
+                        + "<jsp:attribute name='namedEl'>${1}</jsp:attribute>"
+                        + "<jsp:attribute name='namedFrag'>piece</jsp:attribute></x:probe>", false, configured));
+    }
     @Test void exposesTagLibraryHeaderAndImportedLibrariesToTagExtraInfoValidation() throws Exception {
         String primaryTld = """
                 <taglib version="3.0"><description>Primary library</description><tlib-version>1.0</tlib-version>
@@ -809,7 +830,7 @@ class TagGenerationTest {
         var page = new TranslationUnit(options).read("/index.jsp",
                 "<%@ taglib prefix='t' tagdir='/WEB-INF/tags' %><t:sample/>");
         var paths = new ArrayList<Path>(); paths.add(directory);
-        for (String path : modulePath().split(java.util.regex.Pattern.quote(File.pathSeparator))) paths.add(Path.of(path));
+        paths.addAll(modulePathEntries());
         var compiled = TagFileCompiler.compile(List.of(page), options, "fixture.tagfiles", paths);
         var tag = compiled.sources().stream().filter(source -> source.source().contains("_jspxValidateTagLibraries"))
                 .findFirst().orElseThrow(() -> new AssertionError("No tag-file library validation generated: "
@@ -1303,6 +1324,20 @@ class TagGenerationTest {
         assertTrue(failure.getMessage().contains("implicit.tld"));
     }
 
+    @Test void rejectsAnImplicitTldVersionWithoutDigitsAsATranslationError() {
+        // BUG-20261128-70: a version made of separators only failed with an ArrayIndexOutOfBoundsException.
+        var options = tagDirectoryOptions("<taglib version='.'><tlib-version>1.0</tlib-version></taglib>");
+        var page = new TranslationUnit(options).read("/index.jsp",
+                "<%@ taglib prefix='t' tagdir='/WEB-INF/tags' %><t:sample/>");
+
+        var pages = List.of(page);
+        List<Path> modulePath = List.of();
+        var failure = assertThrows(PageParseException.class,
+                () -> TagFileCompiler.compile(pages, options, "fixture.tagfiles", modulePath));
+
+        assertTrue(failure.getMessage().contains("Invalid JSP version in implicit.tld"), failure.getMessage());
+    }
+
     @Test void rejectsTagDeclarationsInImplicitTld() {
         var options = tagDirectoryOptions("""
                 <taglib version="2.1"><tlib-version>1.0</tlib-version>
@@ -1591,7 +1626,7 @@ class TagGenerationTest {
     }
     private PageGenerator generator() {
         var paths = new ArrayList<Path>(); paths.add(directory);
-        for (String path : modulePath().split(java.util.regex.Pattern.quote(File.pathSeparator))) paths.add(Path.of(path));
+        paths.addAll(modulePathEntries());
         return new PageGenerator(paths);
     }
     /** Defers one generation, so that an expected failure can only come from {@code generate}. */
@@ -1614,7 +1649,7 @@ class TagGenerationTest {
         var page = new TranslationUnit(options).read("/tags.jsp", pageSource);
         var paths = new ArrayList<Path>();
         paths.add(directory);
-        for (String path : modulePath().split(java.util.regex.Pattern.quote(File.pathSeparator))) paths.add(Path.of(path));
+        paths.addAll(modulePathEntries());
         var tagFiles = TagFileCompiler.compile(List.of(page), options, "fixture.tagfiles", paths);
         var tagLibraries = new LinkedHashMap<>(options.tagLibraries());
         tagLibraries.putAll(tagFiles.libraries());
@@ -1665,6 +1700,19 @@ class TagGenerationTest {
                 "--add-reads","io.vidocq.ibarra.core=io.vidocq.peano.api",
                 "--patch-module","io.vidocq.ibarra.core="+directory));
     }
+    /** The entries of {@link #modulePath()}, without empty ones. */
+    private List<Path> modulePathEntries() {
+        return Arrays.stream(modulePath().split(java.util.regex.Pattern.quote(File.pathSeparator), -1))
+                .filter(entry -> !entry.isEmpty()).map(Path::of).toList();
+    }
+
+    /** Splits on a literal separator; the empty field after a trailing separator (each request ends with ';') is dropped. */
+    private static String[] fields(String value, String separator) {
+        var fields = new ArrayList<>(List.of(value.split(java.util.regex.Pattern.quote(separator), -1)));
+        if (fields.getLast().isEmpty()) fields.removeLast();
+        return fields.toArray(String[]::new);
+    }
+
     private String modulePath() {
         var names=Set.of("io.vidocq.ibarra.api","io.vidocq.ibarra.core","io.vidocq.peano.api","io.vidocq.peano.core","jakarta.servlet","jakarta.servlet.jsp","jakarta.el");
         String available=System.getProperty("jdk.module.path","")+File.pathSeparator+System.getProperty("surefire.test.class.path","");
@@ -1868,6 +1916,27 @@ class TagGenerationTest {
                         public void doTag() throws java.io.IOException {
                             getJspContext().getOut().write(Validation.calls+":"+Validation.functionMetadata+":"+value);
                         }
+                    }
+                    public static class TagDataProbe extends TagExtraInfo {
+                        static String seen = "";
+                        public ValidationMessage[] validate(TagData data) {
+                            var text = new StringBuilder();
+                            for (String name : new String[] {"literal", "expr", "frag", "named", "namedEl", "namedFrag"}) {
+                                Object value = data.getAttribute(name);
+                                text.append(name).append('=').append(value == TagData.REQUEST_TIME_VALUE ? "rt" : value).append(';');
+                            }
+                            seen = text.toString();
+                            return null;
+                        }
+                    }
+                    public static class TagDataEcho extends SimpleTagSupport {
+                        public void setLiteral(String value) { }
+                        public void setExpr(String value) { }
+                        public void setFrag(JspFragment value) { }
+                        public void setNamed(String value) { }
+                        public void setNamedEl(String value) { }
+                        public void setNamedFrag(JspFragment value) { }
+                        public void doTag() throws java.io.IOException { getJspContext().getOut().write(TagDataProbe.seen); }
                     }
                     public static class TagFileMetadata extends SimpleTagSupport {
                         public void doTag() throws java.io.IOException { getJspContext().getOut().write("ok"); }

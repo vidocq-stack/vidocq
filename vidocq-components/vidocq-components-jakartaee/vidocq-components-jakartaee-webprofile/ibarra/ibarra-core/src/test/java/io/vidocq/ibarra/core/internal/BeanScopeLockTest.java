@@ -45,6 +45,8 @@ class BeanScopeLockTest {
         assertNotSame(lock, ((BeanScopeContext) page(factory, web, true)).beanScopeLock(PageContext.APPLICATION_SCOPE));
     }
 
+    // Thread.yield() inside the critical section widens the window a missing lock would let another thread enter.
+    @SuppressWarnings("ThreadPriorityCheck")
     @Test
     void locksAreReentrantAndCoordinateVirtualThreads() throws Exception {
         var factory = new IbarraJspFactory();
@@ -91,9 +93,13 @@ class BeanScopeLockTest {
     private PageContext page(IbarraJspFactory factory, ServletDoubles.Context context, boolean session) throws Exception {
         var servlet = new PageApplicationTest.TestPage();
         servlet.init(new ServletConfig() {
+            @Override
             public String getServletName() { return "scope"; }
+            @Override
             public ServletContext getServletContext() { return context; }
+            @Override
             public String getInitParameter(String name) { return null; }
+            @Override
             public Enumeration<String> getInitParameterNames() { return Collections.emptyEnumeration(); }
         });
         return Objects.requireNonNull(factory.getPageContext(servlet, new ServletDoubles.Request(),

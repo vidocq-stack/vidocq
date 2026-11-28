@@ -1,5 +1,17 @@
 # BUG.md — Ibarra
 
+## BUG-20261128-70 · 2026-11-28 · A tag library version without digits failed translation with an ArrayIndexOutOfBoundsException
+
+- Symptom: an `implicit.tld` whose version is `.` (or `..`) made `TagFileCompiler.compile` throw
+  `ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0` instead of the `PageParseException`
+  "Invalid JSP version in implicit.tld". The check of whether a tag file reads `#{` as a literal splits the version
+  the same way and had the same flaw (read from the code, no test of its own).
+- Repro: `TagGenerationTest.rejectsAnImplicitTldVersionWithoutDigitsAsATranslationError` (`ibarra-compiler`).
+- Cause: `String.split("\\.")` drops trailing empty fields, so `".".split("\\.")` is an empty array, and
+  `parts[0]` failed before `Integer.parseInt` could reject the value. Found by Error Prone's `StringSplitter` (#832).
+- Status: FIXED on `refactor/ibarra-errorprone`: both calls take `split("\\.", -1)`, so `.` gives two empty fields,
+  which `Integer.parseInt` rejects as before for any other malformed version. The test was red before, green after.
+
 ## BUG-20261123-58 · 2026-11-23 · The TCK nightly ran no Ibarra TCK
 
 - Symptom: the `TCK nightly` workflow of the monorepo runs for a component only what its root POM names in

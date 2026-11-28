@@ -26,6 +26,8 @@ import java.util.Objects;
 import javax.lang.model.SourceVersion;
 
 /** Immutable application-owned class file produced by a build-time compiler. */
+// Published API: the array component stays; the record copies it both ways and compares and hashes its content.
+@SuppressWarnings("ArrayRecordComponent")
 public record GeneratedClass(String className, byte[] bytes) {
     public GeneratedClass {
         Objects.requireNonNull(className);

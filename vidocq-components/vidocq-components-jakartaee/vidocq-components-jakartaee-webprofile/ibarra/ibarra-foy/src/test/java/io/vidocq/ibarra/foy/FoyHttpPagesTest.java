@@ -388,14 +388,18 @@ class FoyHttpPagesTest {
 
     static class Configuration implements ContainerConfiguration {
         Path directory; String modulePath;
+        @Override
         public void validate() { Objects.requireNonNull(directory); Objects.requireNonNull(modulePath); }
     }
     /** Arquillian deployable-container adapter; application and server run only on the module path. */
     static class PagesContainer implements DeployableContainer<Configuration> {
         private Configuration configuration; private Process process;
+        @Override
         public Class<Configuration> getConfigurationClass() { return Configuration.class; }
         @Override public void setup(Configuration configuration) { configuration.validate(); this.configuration = configuration; }
+        @Override
         public ProtocolDescription getDefaultProtocol() { return new ProtocolDescription("Servlet 3.0"); }
+        @Override
         public ProtocolMetaData deploy(Archive<?> archive) throws DeploymentException {
             try {
                 Path jar = configuration.directory.resolve("deployed.jar"); archive.as(ZipExporter.class).exportTo(jar.toFile(), true);
@@ -420,6 +424,7 @@ class FoyHttpPagesTest {
                 throw new DeploymentException("Server did not start: " + Files.readString(log));
             } catch (Exception failure) { if (failure instanceof DeploymentException deployment) throw deployment; throw new DeploymentException("Cannot deploy modular pages", failure); }
         }
+        @Override
         public void undeploy(Archive<?> archive) throws DeploymentException {
             if (process == null) return;
             try {

@@ -34,8 +34,11 @@ class RouterLifecycleTest {
     void concurrentFirstRequestsInitializeOnePageAndMissingPathsDoNotAllocateFactories() throws Exception {
         var created = new AtomicInteger(); var initialized = new AtomicInteger();
         PageApplication application = new PageApplication() {
+            @Override
             public boolean containsPage(String path) { return path.equals("/page.jsp"); }
+            @Override
             public HttpJspPage createPage(String path) { created.incrementAndGet(); return new TestPage(initialized, new AtomicInteger(), false); }
+            @Override
             public void close() { /* Nothing to release: pages are created on demand. */ }
         };
         var router = new IbarraJspEngine.Router(application);
@@ -57,8 +60,11 @@ class RouterLifecycleTest {
     void failingDestroyDoesNotPreventOtherPagesFromBeingDestroyed() throws Exception {
         var destroyed = new AtomicInteger();
         PageApplication application = new PageApplication() {
+            @Override
             public boolean containsPage(String path) { return true; }
+            @Override
             public HttpJspPage createPage(String path) { return new TestPage(new AtomicInteger(), destroyed, path.equals("/bad.jsp")); }
+            @Override
             public void close() { /* Nothing to release: pages are created on demand. */ }
         };
         var router = new IbarraJspEngine.Router(application);
@@ -71,10 +77,13 @@ class RouterLifecycleTest {
     static final class TestPage extends HttpServlet implements HttpJspPage {
         private final AtomicInteger initialized, destroyed; private final boolean failDestroy;
         TestPage(AtomicInteger initialized, AtomicInteger destroyed, boolean failDestroy) { this.initialized = initialized; this.destroyed = destroyed; this.failDestroy = failDestroy; }
+        @Override
         public void jspInit() { /* Lifecycle is observed through init() and destroy(). */ }
+        @Override
         public void jspDestroy() { /* Lifecycle is observed through init() and destroy(). */ }
         @Override public void init() { initialized.incrementAndGet(); }
         @Override public void destroy() { destroyed.incrementAndGet(); if (failDestroy) throw new IllegalStateException("destroy failure"); }
+        @Override
         public void _jspService(HttpServletRequest request, HttpServletResponse response) { /* Fixture page: never rendered by this test. */ }
     }
 }

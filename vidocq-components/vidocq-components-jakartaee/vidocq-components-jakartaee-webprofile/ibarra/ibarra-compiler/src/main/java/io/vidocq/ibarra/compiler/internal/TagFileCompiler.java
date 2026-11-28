@@ -389,11 +389,11 @@ public final class TagFileCompiler {
             }
         }
         if (requiredVersion == null || requiredVersion.isBlank()) return true; // The JSP default for tag files is 2.0.
-        String[] parts = requiredVersion.split("\\.");
+        String[] parts = requiredVersion.split("\\.", -1); // "." gives two empty fields, not none
         try {
             int major = Integer.parseInt(parts[0]);
             int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
-            return major < 2 || major == 2 && minor < 1;
+            return major < 2 || (major == 2 && minor < 1);
         } catch (NumberFormatException ignored) {
             return false;
         }
@@ -403,7 +403,7 @@ public final class TagFileCompiler {
         SourceLocation at = new SourceLocation(path, 1, 1);
         String version = library.requiredVersion();
         if (version != null && !version.isBlank()) {
-            String[] parts = version.split("\\.");
+            String[] parts = version.split("\\.", -1); // "." gives two empty fields, not none
             try {
                 if (Integer.parseInt(parts[0]) < 2)
                     throw new PageParseException(at, "implicit.tld requires JSP version 2.0 or later");
@@ -812,7 +812,7 @@ public final class TagFileCompiler {
         String reader = values.get("varReader");
         if (variable != null && reader != null)
             throw new PageParseException(at, "jsp:" + actionName + " cannot specify both var and varReader");
-        if (reader == null && values.containsKey(VAR_READER_SCOPE) || variable == null && reader == null && values.containsKey(SCOPE))
+        if ((reader == null && values.containsKey(VAR_READER_SCOPE)) || (variable == null && reader == null && values.containsKey(SCOPE)))
             throw new PageParseException(at, "jsp:" + actionName + " scope requires its matching variable");
         if (variable == null && reader == null) return "if (" + fragment + " != null) " + fragment + ".invoke(null);\n";
         String output = "_jspx" + (actionName.equals(DO_BODY) ? "DoBody" : "Invoke") + "Content" + index;
@@ -916,7 +916,7 @@ public final class TagFileCompiler {
         }
         if (explicitBody != null) content = explicitBody;
         String name = "_jspxTagFileElementName" + index;
-        var source = new StringBuilder("String ").append(name).append(" = ").append(actionValue(rawName, index, action.location())).append(";\n")
+        var source = new StringBuilder("String ").append(name).append(" = ").append(actionValue(rawName, action.location())).append(";\n")
                 .append("out.write(\"<\"); out.write(").append(name).append(");\n");
         for (var attribute : attributes) {
             String attrName = attribute.attributes().get("name");
@@ -932,7 +932,7 @@ public final class TagFileCompiler {
         return source.toString();
     }
 
-    private static String actionValue(String raw, int index, SourceLocation at) {
+    private static String actionValue(String raw, SourceLocation at) {
         var scriptlet = java.util.regex.Pattern.compile("^\\s*<%=\\s*(.*?)\\s*%>\\s*$", java.util.regex.Pattern.DOTALL).matcher(raw);
         if (scriptlet.matches()) return "String.valueOf(" + scriptlet.group(1).trim() + ")";
         if (raw.contains("${"))
@@ -1213,7 +1213,6 @@ public final class TagFileCompiler {
             boolean deferredSyntaxIsLiteral) {
         if (!action.children().isEmpty())
             throw new PageParseException(action.location(), "Bodies on nested tag files in standard tag files are not supported yet");
-        String local = action.name().substring(action.name().lastIndexOf(':') + 1);
         var supplied = new LinkedHashMap<String, String>();
         for (var attribute : action.attributes().entrySet()) {
             if (isNamespaceDeclaration(attribute.getKey())) continue;
@@ -1386,17 +1385,6 @@ public final class TagFileCompiler {
         return path;
     }
 
-    private static String source(String className, boolean declaration, String markup) {
-        int split = className.lastIndexOf('.');
-        String source = "package " + className.substring(0, split) + ";\n"
-                + "public final class " + className.substring(split + 1)
-                + " extends jakarta.servlet.jsp.tagext.SimpleTagSupport {\n"
-                + "public void doTag() throws java.io.IOException {\n";
-        if (declaration) source += "getJspContext().getOut().write(\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>\");\n";
-        source += "getJspContext().getOut().write(" + JavaSource.quote(markup) + ");\n} }\n";
-        return source;
-    }
-
     private static String source(String className, StandardTagFile tag) {
         int split = className.lastIndexOf('.');
         var source = new StringBuilder("package ").append(className, 0, split).append(";\n")
@@ -1476,55 +1464,6 @@ public final class TagFileCompiler {
         }
         source.append("}\n}\n");
         return source.toString();
-    }
-
-    private static String staticMarkup(List<PageNode> nodes) {
-        var result = new StringBuilder();
-        append(nodes, result);
-        return result.toString();
-    }
-
-    private static void append(List<PageNode> nodes, StringBuilder result) {
-        for (var node : nodes) {
-            switch (node) {
-                case PageNode.Text text -> result.append(escapeText(text.value()));
-                case PageNode.RawText text -> result.append(text.value());
-                case PageNode.Directive directive ->
-                        throw new PageParseException(directive.location(), "Directives in XML tag files are not supported yet");
-                case PageNode.Expression expression ->
-                        throw new PageParseException(expression.location(), "Expressions in XML tag files are not supported yet");
-                case PageNode.Script script ->
-                        throw new PageParseException(script.location(), "Scripting in XML tag files is not supported yet");
-                case PageNode.Element element -> element(element, result);
-            }
-        }
-    }
-
-    private static void element(PageNode.Element element, StringBuilder result) {
-        String local = element.name().substring(element.name().lastIndexOf(':') + 1);
-        if (element.namespace().equals(JSP_NAMESPACE)) {
-            if (local.equals("output")) return;
-            if (local.equals("root")) {
-                String version = element.attributes().get("version");
-                if (!"1.2".equals(version) && !"2.0".equals(version))
-                    throw new PageParseException(element.location(), "Invalid jsp:root version: " + version);
-                append(element.children(), result);
-                return;
-            }
-            if (local.equals("text") || local.equals("body")) { append(element.children(), result); return; }
-            throw new PageParseException(element.location(), "Action in XML tag files is not supported yet: " + element.name());
-        }
-        result.append('<').append(element.name());
-        for (var attribute : element.attributes().entrySet()) {
-            if (attribute.getKey().startsWith("xmlns") && attribute.getValue().equals(JSP_NAMESPACE)) continue;
-            if (attribute.getValue().contains("${") || attribute.getValue().contains("#{"))
-                throw new PageParseException(element.location(), "Expressions in XML tag-file attributes are not supported yet");
-            result.append(' ').append(attribute.getKey()).append("=\"").append(escapeAttribute(attribute.getValue())).append('"');
-        }
-        if (element.selfClosing()) result.append("/>");
-        else {
-            result.append('>'); append(element.children(), result); result.append("</").append(element.name()).append('>');
-        }
     }
 
     private static String escapeText(String text) {

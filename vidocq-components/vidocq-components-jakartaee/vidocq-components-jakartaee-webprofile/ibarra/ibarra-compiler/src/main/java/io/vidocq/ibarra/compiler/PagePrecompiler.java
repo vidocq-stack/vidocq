@@ -234,7 +234,7 @@ public final class PagePrecompiler {
             int slash = source.lastIndexOf('/');
             String failedDirectory = slash <= 0 ? null : source.substring(0, slash);
             return units.entrySet().stream().filter(entry -> entry.getKey().equals(source)
-                    || failedDirectory != null && TagFileCompiler.referencesDirectory(entry.getValue(), failedDirectory))
+                    || (failedDirectory != null && TagFileCompiler.referencesDirectory(entry.getValue(), failedDirectory)))
                     .map(Map.Entry::getKey).toList();
         }
 

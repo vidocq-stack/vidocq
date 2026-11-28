@@ -58,6 +58,7 @@ class TagMetadataTest {
     @Test
     void malformedOrConflictingDeferredMetadataFailsAtTheDescriptor() {
         for (String fields : List.of("<deferred-value/><deferred-method/>", "<fragment>true</fragment><deferred-value/>",
+                "<fragment>true</fragment><deferred-method><method-signature>void run()</method-signature></deferred-method>",
                 "<deferred-value><type>void</type></deferred-value>",
                 "<deferred-value><type>java.lang.String</type><type>java.lang.Object</type></deferred-value>",
                 "<deferred-method><method-signature>not a signature</method-signature></deferred-method>",

@@ -113,6 +113,23 @@ class TldParserTest {
     }
 
     @Test
+    void aTagDeclaresEachVariableNameOnce() {
+        String given = "<variable><name-given>result</name-given></variable>";
+        String fromAttribute = "<variable><name-from-attribute>variableName</name-from-attribute></variable>";
+        String attribute = "<attribute><name>variableName</name><required>true</required></attribute>";
+        for (String variables : List.of(given + given, fromAttribute + fromAttribute)) {
+            byte[] tld = ("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>" + variables + attribute
+                    + "</tag></taglib>").getBytes(StandardCharsets.UTF_8);
+            var parser = new TldParser();
+            var failure = assertThrows(PageParseException.class, () -> parser.parse("/WEB-INF/tags.tld", tld));
+            assertTrue(failure.getMessage().contains("Duplicate tag variable name declaration"), failure.getMessage());
+        }
+        var tag = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>" + given + fromAttribute
+                + attribute + "</tag></taglib>").tags().get("x");
+        assertEquals(2, tag.variables().size());
+    }
+
+    @Test
     void nameFromAttributeVariablesRetainTheirMetadata() {
         var tag = parse("<taglib><tag><name>x</name><tag-class>example.Handler</tag-class>"
                 + "<variable><name-from-attribute>variableName</name-from-attribute><scope>AT_BEGIN</scope></variable>"

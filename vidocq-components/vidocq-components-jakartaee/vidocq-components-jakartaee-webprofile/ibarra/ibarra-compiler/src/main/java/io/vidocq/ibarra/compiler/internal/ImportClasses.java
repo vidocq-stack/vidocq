@@ -119,7 +119,7 @@ public final class ImportClasses {
         if (target != null && !readable.contains(descriptor.name())) return false;
         if (descriptor.isAutomatic()) return true;
         return descriptor.exports().stream().anyMatch(export -> export.source().equals(pkg)
-                && (!export.isQualified() || target != null && export.targets().contains(target.name())));
+                && (!export.isQualified() || (target != null && export.targets().contains(target.name()))));
     }
 
     private Set<String> packageTypes(String pkg, SourceLocation at) {

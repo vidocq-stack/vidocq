@@ -221,8 +221,8 @@ public final class TldParser {
 
     private static void addVariable(List<TagVariableDescriptor> variables, TagVariableDescriptor variable, SourceLocation at) {
         boolean duplicate = variables.stream().anyMatch(previous ->
-                variable.name() != null && variable.name().equals(previous.name())
-                || variable.nameFromAttribute() != null && variable.nameFromAttribute().equals(previous.nameFromAttribute()));
+                (variable.name() != null && variable.name().equals(previous.name()))
+                || (variable.nameFromAttribute() != null && variable.nameFromAttribute().equals(previous.nameFromAttribute())));
         if (duplicate) throw new PageParseException(at, "Duplicate tag variable name declaration");
         variables.add(variable);
     }

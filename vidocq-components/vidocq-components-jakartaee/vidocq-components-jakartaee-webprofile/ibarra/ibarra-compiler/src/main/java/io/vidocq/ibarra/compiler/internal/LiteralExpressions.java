@@ -73,7 +73,7 @@ public final class LiteralExpressions {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             digest.update(("ibarra-literal-v1:" + (method ? "method:" : "value:")).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-            for (char unit : literal.toCharArray()) { digest.update((byte) (unit >>> 8)); digest.update((byte) unit); }
+            for (int i = 0; i < literal.length(); i++) { char unit = literal.charAt(i); digest.update((byte) (unit >>> 8)); digest.update((byte) unit); }
             return "ibarra-literal-v1:" + (method ? "method:" : "value:") + HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException impossible) { throw new AssertionError(impossible); }
     }

@@ -37,7 +37,8 @@ public final class XmlParser {
     private static final String INSTRUCTION_START = "<?";
     private static final String INSTRUCTION_END = "?>";
     private final SourceDocument source;
-    private final Map<PageNode.Text, List<SourceLocation>> origins = new IdentityHashMap<>();
+    // Equal texts at different places keep their own origins.
+    private final IdentityHashMap<PageNode.Text, List<SourceLocation>> origins = new IdentityHashMap<>();
     private final LexicalCursor lexical;
     private final TagDependentBodies rawBodies;
 
@@ -117,7 +118,7 @@ public final class XmlParser {
         if (parentRaw) stack.peek().children().add(new PageNode.RawText(
                 source.text.substring(start, lexical.cursor), source.at(start)));
         boolean dependent = !parentRaw && !wrapper && rawBodies != null && rawBodies.raw(name, namespace, source.at(start), false);
-        boolean raw = parentRaw || dependent || wrapper && reader.getLocalName().equals("body");
+        boolean raw = parentRaw || dependent || (wrapper && reader.getLocalName().equals("body"));
         stack.push(new Frame(name, namespace, attributes, new ArrayList<>(),
                 source.text.charAt(lexical.cursor - 2) == '/', source.at(start), raw, parentRaw, dependent, new Envelope()));
     }

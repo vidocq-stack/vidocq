@@ -30,7 +30,7 @@ public record TagAttribute(String name, String type, boolean required, boolean r
     }
     public TagAttribute {
         Objects.requireNonNull(name); Objects.requireNonNull(type);
-        if (deferredValueType != null && deferredMethod != null || fragment && (deferredValueType != null || deferredMethod != null))
+        if ((deferredValueType != null && deferredMethod != null) || (fragment && (deferredValueType != null || deferredMethod != null)))
             throw new IllegalArgumentException("Conflicting deferred attribute contracts");
     }
     /** Whether this attribute permits deferred expressions. */

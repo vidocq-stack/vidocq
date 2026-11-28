@@ -373,6 +373,8 @@ public final class PageGenerator {
             if (previous != null && !previous.equals(value))
                 throw error(directive.location(), "Conflicting page attribute: " + name);
         }
+        // A trailing comma in the import list stays tolerated, as an empty entry inside the list stays an error.
+        @SuppressWarnings("StringSplitter")
         private void pageImports(PageNode.Directive directive, String value) {
             for (String declared : value.split(",")) {
                 String name = declared.trim();
@@ -850,7 +852,7 @@ public final class PageGenerator {
         }
         private String namedTagDataValue(TagAttribute attribute, PageNode.Element named) {
             List<PageNode> content = namedContent(named);
-            if (attribute != null && attribute.fragment() || !content.stream().allMatch(PageNode.Text.class::isInstance))
+            if ((attribute != null && attribute.fragment()) || !content.stream().allMatch(PageNode.Text.class::isInstance))
                 return TAG_DATA_REQUEST_TIME_VALUE;
             return tagDataValue(content.stream().map(PageNode.Text.class::cast).map(PageNode.Text::value)
                     .collect(java.util.stream.Collectors.joining()), attribute, named.location());
@@ -1050,7 +1052,7 @@ public final class PageGenerator {
         }
 
         private String tagDataValue(String raw, TagAttribute attribute, SourceLocation at) {
-            if (attribute != null && attribute.fragment() || raw.startsWith("<%=") && raw.endsWith("%>"))
+            if ((attribute != null && attribute.fragment()) || (raw.startsWith("<%=") && raw.endsWith("%>")))
                 return TAG_DATA_REQUEST_TIME_VALUE;
             var normalized = new PageNormalizer(sourceSyntaxes.getOrDefault(at.source(), Page.Syntax.STANDARD),
                     parserOptions(), Map.of())

@@ -48,7 +48,8 @@ public final class TranslationUnit {
     private static final String TAGDIR = "tagdir";
     private final GenerationOptions options;
     private final ParserOptions parserDefaults;
-    private final Map<PageNode.Text, List<SourceLocation>> origins = new IdentityHashMap<>();
+    // Equal texts at different places keep their own origins.
+    private final IdentityHashMap<PageNode.Text, List<SourceLocation>> origins = new IdentityHashMap<>();
     private final Set<String> stack = new LinkedHashSet<>();
     private final Map<String, Page.Syntax> sourceSyntaxes = new HashMap<>();
     private final Map<String, SourceDecoder.Decoded> decodedSources = new HashMap<>();
@@ -217,7 +218,7 @@ public final class TranslationUnit {
             sourceSyntaxes.put(path, fileSyntax);
             List<PageNode> raw;
             if (fileSyntax == Page.Syntax.XML) {
-                var parser = new XmlParser(document, rawBodies); raw = parser.parse(); origins.putAll(parser.origins());
+                var parser = new XmlParser(document, rawBodies); raw = parser.parse(); parser.origins().forEach(origins::put);
             } else raw = new StandardParser(document, unitOptions == null
                     ? parserOptions(properties)
                     : unitOptions, unitBindings, strictNamespaces, rawBodies, Map.of()).parse();
@@ -405,6 +406,7 @@ public final class TranslationUnit {
     }
 
     private record Match(int category, int length) implements Comparable<Match> {
+        @Override
         public int compareTo(Match other) { int result = Integer.compare(category, other.category); return result == 0 ? Integer.compare(length, other.length) : result; }
     }
     public static boolean matches(JspPropertyGroup group, String path) {

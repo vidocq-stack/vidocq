@@ -117,7 +117,7 @@ class BeanAccessorsTest {
         String path=String.join(java.io.File.pathSeparator,modules.stream().map(Path::toString).toList());
         var diagnostics=new java.io.ByteArrayOutputStream();
         assertEquals(0,ToolProvider.getSystemJavaCompiler().run(null,diagnostics,diagnostics,
-                "--module-path",path,"--patch-module",name+"="+output,"-d",output.toString(),source.toString()),diagnostics.toString());
+                "--module-path",path,"--patch-module",name+"="+output,"-d",output.toString(),source.toString()),diagnostics.toString(java.nio.charset.Charset.defaultCharset())); // javac writes in the default charset
     }
     private void bean(Path output,String name,ClassDesc parent) throws IOException {
         ClassDesc owner=ClassDesc.of(name);

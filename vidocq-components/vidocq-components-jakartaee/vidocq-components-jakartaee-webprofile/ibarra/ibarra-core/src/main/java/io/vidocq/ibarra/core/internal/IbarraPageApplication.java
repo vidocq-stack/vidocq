@@ -55,11 +55,13 @@ public final class IbarraPageApplication implements PageApplication {
     private IbarraPageApplication(ServletContext context, PrecompiledPages pages, IbarraJspFactory factory) {
         this.context = context; this.pages = pages; this.factory = factory;
     }
+    @Override
     public HttpJspPage createPage(String path) {
         if (closed.get()) throw new IllegalStateException("JSP application is closed");
         var descriptor = pages.find(path);
         return descriptor == null ? null : descriptor.createPage();
     }
+    @Override
     public boolean containsPage(String path) {
         if (closed.get()) throw new IllegalStateException("JSP application is closed");
         return pages.find(path) != null;

@@ -159,7 +159,7 @@ class CollectionAccessorsTest {
     private void compile(Path source) {
         var diagnostics=new java.io.ByteArrayOutputStream();
         assertEquals(0,ToolProvider.getSystemJavaCompiler().run(null,diagnostics,diagnostics,"--module-path",join(modules),
-                "--patch-module","tck.application="+classes,"-d",classes.toString(),source.toString()),diagnostics.toString());
+                "--patch-module","tck.application="+classes,"-d",classes.toString(),source.toString()),diagnostics.toString(java.nio.charset.Charset.defaultCharset())); // javac writes in the default charset
     }
     private static String join(List<Path> paths) { return String.join(java.io.File.pathSeparator,paths.stream().map(Path::toString).toList()); }
 }

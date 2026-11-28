@@ -314,11 +314,11 @@ class PageGeneratorTest {
 
     @Test
     void useBeanBeanNameLoadsSerializedResourceAndCastsToDeclaredType() throws Exception {
-        try (var output = new java.io.ObjectOutputStream(Files.newOutputStream(directory.resolve("date.ser")))) {
-            output.writeObject(new java.util.Date(42));
+        try (var output = new java.io.ObjectOutputStream(Files.newOutputStream(directory.resolve("counter.ser")))) {
+            output.writeObject(new java.util.concurrent.atomic.AtomicLong(42));
         }
-        String jsp = "<%@ page session='false' %><jsp:useBean id='bean' type='java.util.Date' beanName='date'/>"
-                + "<%= bean.getTime() %>";
+        String jsp = "<%@ page session='false' %><jsp:useBean id='bean' type='java.lang.Number' beanName='counter'/>"
+                + "<%= bean.longValue() %>";
         assertEquals("42", render(jsp, "", ""));
     }
 

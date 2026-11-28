@@ -56,7 +56,7 @@ final class TagExtraInfoVariables {
         if ((flags & ClassFile.ACC_PUBLIC) == 0 || (flags & (ClassFile.ACC_STATIC | ClassFile.ACC_ABSTRACT)) != 0)
             throw new IllegalArgumentException("getVariableInfo must be a public instance method");
         Object returned = new TagExtraInfoVariables().evaluate(method.orElseThrow());
-        if (returned == NULL) return Optional.of(List.of());
+        if (same(returned, NULL)) return Optional.of(List.of());
         if (!(returned instanceof Object[] values)) throw new IllegalArgumentException("Invalid variable metadata result");
         var result = new ArrayList<Variable>(values.length);
         var names = new HashSet<String>();
@@ -78,7 +78,7 @@ final class TagExtraInfoVariables {
         for (var element : elements) {
             if (element instanceof Instruction instruction) {
                 Object returned = execute(instruction, stack, locals);
-                if (returned != CONTINUE) return returned;
+                if (!same(returned, CONTINUE)) return returned;
             }
         }
         throw new IllegalArgumentException("getVariableInfo did not return");
@@ -146,4 +146,8 @@ final class TagExtraInfoVariables {
     }
 
     private static Object pop(List<Object> stack) { return stack.removeLast(); }
+
+    // Identity on purpose: NULL and CONTINUE are private sentinels of the interpreter, never values.
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean same(Object value, Object sentinel) { return value == sentinel; }
 }

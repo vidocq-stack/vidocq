@@ -33,6 +33,7 @@ class PrecompiledPagesTest {
         int[] created = {0};
         var listener = new io.vidocq.ibarra.spi.ListenerDescriptor(TestListener.class, () -> { created[0]++; return new TestListener(); });
         PageIndex index = new PageIndex() {
+            @Override
             public List<PageDescriptor> pages() { return List.of(); }
             @Override public List<io.vidocq.ibarra.spi.ListenerDescriptor> listeners() { return List.of(listener, listener); }
         };
@@ -81,8 +82,11 @@ class PrecompiledPagesTest {
     }
 
     public static final class TestPage extends HttpServlet implements HttpJspPage {
+        @Override
         public void jspInit() { /* Fixture page: nothing to initialize. */ }
+        @Override
         public void jspDestroy() { /* Fixture page: nothing to release. */ }
+        @Override
         public void _jspService(HttpServletRequest request, HttpServletResponse response) { /* Fixture page: never rendered by this test. */ }
     }
 }

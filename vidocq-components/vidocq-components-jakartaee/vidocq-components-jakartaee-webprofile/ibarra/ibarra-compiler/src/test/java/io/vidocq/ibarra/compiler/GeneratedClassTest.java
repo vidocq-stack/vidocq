@@ -63,6 +63,25 @@ class GeneratedClassTest {
         assertThrows(IllegalArgumentException.class, () -> compiler.compile(sources, output, compilerOptions));
         assertFalse(Files.exists(output));
     }
+    @Test void twoPagesMayShareAnAuxiliaryClassOnlyWithTheSameBytecode() throws Exception {
+        byte[] three = io.vidocq.peano.compiler.ExpressionCompiler.compile("example.Shared", "${1+2}");
+        byte[] four = io.vidocq.peano.compiler.ExpressionCompiler.compile("example.Shared", "${2+2}");
+        var first = new GeneratedPage("example.First", "package example; public class First {}",
+                Map.of(), List.of(new GeneratedClass("example.Shared", three)));
+        var same = new GeneratedPage("example.Second", "package example; public class Second {}",
+                Map.of(), List.of(new GeneratedClass("example.Shared", three.clone())));
+        var different = new GeneratedPage("example.Second", "package example; public class Second {}",
+                Map.of(), List.of(new GeneratedClass("example.Shared", four)));
+        var compiler = new PageCompiler();
+        List<String> compilerOptions = List.of();
+
+        compiler.compile(List.of(first, same), directory.resolve("same"), compilerOptions);
+        assertTrue(Files.isRegularFile(directory.resolve("same/example/Shared.class")));
+        var conflicting = List.of(first, different);
+        Path output = directory.resolve("different");
+        var failure = assertThrows(IllegalArgumentException.class, () -> compiler.compile(conflicting, output, compilerOptions));
+        assertTrue(failure.getMessage().contains("Conflicting generated class: example.Shared"), failure.getMessage());
+    }
     @Test void javacNestedClassesCannotReplaceAuxiliaryBytecode() {
         byte[] bytes = io.vidocq.peano.compiler.ExpressionCompiler.compile("example.Page$Expression0", "${1+2}");
         var source = new GeneratedPage("example.Page", "package example; public class Page { public static class Expression0 {} }",
