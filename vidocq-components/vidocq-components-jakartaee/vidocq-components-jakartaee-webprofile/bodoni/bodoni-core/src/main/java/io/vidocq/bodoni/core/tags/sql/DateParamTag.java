@@ -81,6 +81,8 @@ public class DateParamTag extends TagSupport {
         type = null;
     }
 
+    // sql:dateParam takes a java.util.Date and binds the java.sql type JDBC expects (Tags 3.0 §10.8).
+    @SuppressWarnings("JavaUtilDate")
     private Object convert(String kind) {
         if (value == null) {
             return null;

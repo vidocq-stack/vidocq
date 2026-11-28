@@ -96,6 +96,8 @@ public final class DataSources {
     }
 
     /** The bound object, or {@code null} when the name cannot be resolved through JNDI. */
+    // The JNDI lookup of a data source name is what Tags 3.0 §10.1.1 mandates (AGENTS.md constraint 7).
+    @SuppressWarnings("BanJNDI")
     private static Object lookup(String name) {
         InitialContext context = null;
         try {

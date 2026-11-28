@@ -67,6 +67,9 @@ abstract class DocumentTagSupport extends TagSupport implements BodyTag {
      * @deprecated the Tags 3.0 alias of {@link #setDoc(Object)}; use {@code doc}
      */
     @Deprecated(since = "JSTL 1.1")
+    // A JavaBeans setter the container calls for the xml attribute: no caller to inline, and @InlineMe would make
+    // the published method final.
+    @SuppressWarnings("InlineMeSuggester")
     public void setXml(Object xml) {
         setDoc(xml);
     }

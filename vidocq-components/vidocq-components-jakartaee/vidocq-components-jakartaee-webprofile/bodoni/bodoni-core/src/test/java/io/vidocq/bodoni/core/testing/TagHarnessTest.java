@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.tagext.BodyContent;
@@ -65,7 +66,7 @@ class TagHarnessTest {
         public int doAfterBody() throws JspException {
             try {
                 BodyContent bc = getBodyContent();
-                bc.getEnclosingWriter().write(bc.getString().toUpperCase());
+                bc.getEnclosingWriter().write(bc.getString().toUpperCase(Locale.ROOT));
             } catch (java.io.IOException e) {
                 throw new JspException(e);
             }
@@ -228,6 +229,8 @@ class TagHarnessTest {
     }
 
     @Test
+    // Whether the very writer of the page is current again: identity, not equality.
+    @SuppressWarnings("ReferenceEquality")
     void emptyElementSkipsTheBodyLifecycle() throws Exception {
         // JSP 4.0 BodyTag: for an empty element (<x/>) the container calls neither
         // setBodyContent nor doInitBody nor doAfterBody, even on EVAL_BODY_BUFFERED.

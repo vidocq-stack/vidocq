@@ -73,7 +73,6 @@ class OfficialTckRunnerTest {
             PACKAGE + "spec.xml.xmlcore.bindings" + CLIENT);
     private static final String TCK_LOCAL_REPOSITORY = "TCK_LOCAL_REPOSITORY";
     private static final String SHARED_REPOSITORY = "-Dmaven.repo.local.tail=" + System.getenv("HOME") + "/.m2/repository";
-    private static final FileTime AN_HOUR_AGO = FileTime.from(Instant.now().minus(Duration.ofHours(1)));
 
     @TempDir
     Path work;
@@ -507,7 +506,7 @@ class OfficialTckRunnerTest {
     }
 
     private static Path onPath(String tool) {
-        for (String directory : System.getenv(PATH).split(File.pathSeparator)) {
+        for (String directory : System.getenv(PATH).split(File.pathSeparator, -1)) {
             Path candidate = Path.of(directory, tool);
             if (Files.isExecutable(candidate)) {
                 return candidate;
@@ -530,7 +529,7 @@ class OfficialTckRunnerTest {
     }
 
     private static void aged(Path path) throws IOException {
-        Files.setLastModifiedTime(path, AN_HOUR_AGO);
+        Files.setLastModifiedTime(path, FileTime.from(Instant.now().minus(Duration.ofHours(1))));
     }
 
     private static Path projectRoot() throws IOException {

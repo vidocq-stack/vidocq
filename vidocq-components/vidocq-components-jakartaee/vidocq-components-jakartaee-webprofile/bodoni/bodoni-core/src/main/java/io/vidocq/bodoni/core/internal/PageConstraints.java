@@ -133,6 +133,8 @@ public final class PageConstraints {
     }
 
     /** A Bodoni tag library: the URIs of its family and the per-library constraints. */
+    // The fields are immutable: Set.of, Map.of and a record of strings, which the check cannot see.
+    @SuppressWarnings("ImmutableEnumChecker")
     public enum Library {
         /** {@code c:}. */
         CORE(Set.of("jakarta.tags.core", "http://java.sun.com/jsp/jstl/core", "http://java.sun.com/jstl/core_rt"),

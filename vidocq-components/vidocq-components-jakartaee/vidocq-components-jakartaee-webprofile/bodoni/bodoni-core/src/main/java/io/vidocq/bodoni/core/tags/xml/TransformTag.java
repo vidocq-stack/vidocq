@@ -95,6 +95,9 @@ public class TransformTag extends DocumentTagSupport {
      * @deprecated the Tags 3.0 alias of {@link #setDocSystemId(String)}; use {@code docSystemId}
      */
     @Deprecated(since = "JSTL 1.1")
+    // A JavaBeans setter the container calls for the xmlSystemId attribute: no caller to inline, and @InlineMe would
+    // make the published method final.
+    @SuppressWarnings("InlineMeSuggester")
     public void setXmlSystemId(String systemId) {
         setDocSystemId(systemId);
     }

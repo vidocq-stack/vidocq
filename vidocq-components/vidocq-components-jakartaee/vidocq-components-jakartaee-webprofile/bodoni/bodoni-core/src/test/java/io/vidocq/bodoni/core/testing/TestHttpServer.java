@@ -121,7 +121,7 @@ public final class TestHttpServer implements AutoCloseable {
             if (requestLine == null) {
                 return;
             }
-            String[] parts = requestLine.split(" ");
+            String[] parts = requestLine.split(" ", -1);
             String path = parts.length > 1 ? parts[1] : "";
             requestedPaths.add(path);
             if (dropped.contains(path)) {

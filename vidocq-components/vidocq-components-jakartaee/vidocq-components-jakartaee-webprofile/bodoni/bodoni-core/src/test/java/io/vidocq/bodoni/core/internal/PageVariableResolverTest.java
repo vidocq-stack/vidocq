@@ -143,7 +143,8 @@ class PageVariableResolverTest {
         Element element = document.createElement("e");
         NodeSet nodes = NodeSet.of(List.of(element));
 
-        assertSame(Boolean.FALSE, toXPath(Boolean.FALSE));
+        Boolean kept = false;
+        assertSame(kept, toXPath(kept));
         assertSame("name", toXPath("name"));
         assertSame(document, toXPath(document));
         assertSame(element, toXPath(element));

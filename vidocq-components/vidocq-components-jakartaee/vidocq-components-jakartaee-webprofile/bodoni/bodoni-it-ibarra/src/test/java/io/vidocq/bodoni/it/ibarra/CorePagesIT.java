@@ -512,7 +512,7 @@ class CorePagesIT {
     private static List<ModuleReference> modularEntries() throws IOException {
         String classPath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
         List<Path> modular = new ArrayList<>();
-        for (String item : classPath.split(Pattern.quote(File.pathSeparator))) {
+        for (String item : classPath.split(Pattern.quote(File.pathSeparator), -1)) {
             if (item.isEmpty()) {
                 continue;
             }

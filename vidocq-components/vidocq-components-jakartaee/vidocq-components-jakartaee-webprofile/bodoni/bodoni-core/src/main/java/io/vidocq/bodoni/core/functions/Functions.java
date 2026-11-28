@@ -207,11 +207,17 @@ public final class Functions {
     }
 
     /** {@code fn:toLowerCase}. */
+    // Tags 3.0 §15.15: "according to the semantics of method toLowerCase() of the Java class java.lang.String",
+    // the default locale, as the reference implementation does.
+    @SuppressWarnings("StringCaseLocaleUsage")
     public static String toLowerCase(String string) {
         return nn(string).toLowerCase();
     }
 
     /** {@code fn:toUpperCase}. */
+    // Tags 3.0 §15.16: "according to the semantics of method toUpperCase() of the Java class java.lang.String",
+    // the default locale, as the reference implementation does.
+    @SuppressWarnings("StringCaseLocaleUsage")
     public static String toUpperCase(String string) {
         return nn(string).toUpperCase();
     }

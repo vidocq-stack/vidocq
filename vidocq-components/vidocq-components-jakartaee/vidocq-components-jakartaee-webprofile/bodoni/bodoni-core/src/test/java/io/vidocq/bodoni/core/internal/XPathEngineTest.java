@@ -139,8 +139,8 @@ class XPathEngineTest {
 
     @Test
     void booleansAreXPathBooleans() throws Exception {
-        pc.setAttribute("b", Boolean.TRUE);
-        pc.setAttribute("f", Boolean.FALSE);
+        pc.setAttribute("b", true);
+        pc.setAttribute("f", false);
 
         assertTrue(XPathEngine.bool(pc, null, "boolean($b)"));
         assertFalse(XPathEngine.bool(pc, null, "boolean($f)"));
@@ -187,8 +187,8 @@ class XPathEngineTest {
     void resultsMapToJavaTypes() throws Exception {
         pc.setAttribute("doc", parse(SERVER));
 
-        assertEquals(Boolean.TRUE, XPathEngine.select(pc, null,
-                "boolean($doc/Server/GlobalNamingResources/ResourceParams)"));
+        assertTrue(assertInstanceOf(Boolean.class, XPathEngine.select(pc, null,
+                "boolean($doc/Server/GlobalNamingResources/ResourceParams)")));
         assertEquals(2.0, XPathEngine.select(pc, null,
                 "count($doc/Server/GlobalNamingResources/ResourceParams/parameter)"));
         assertInstanceOf(String.class, XPathEngine.select(pc, null, "string($doc/*)"));

@@ -96,6 +96,8 @@ public final class TestNaming {
         }
 
         @Override
+        // Context.getEnvironment returns a Hashtable, and a proxy equals only itself.
+        @SuppressWarnings({"JdkObsolete", "ReferenceEquality"})
         public Context getInitialContext(Hashtable<?, ?> environment) {
             InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
                 case "lookup" -> lookup(args[0]);

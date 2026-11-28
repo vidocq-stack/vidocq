@@ -96,6 +96,10 @@ class XmlFactoriesTest {
 
     @Test
     void jdkSideFetchingIsClosed() throws Exception {
+        assertJdkSideFetchingIsClosed();
+    }
+
+    private void assertJdkSideFetchingIsClosed() throws Exception {
         assertEquals("", XmlFactories.documentBuilderFactory().getAttribute(ACCESS_EXTERNAL_DTD));
         assertEquals("", XmlFactories.documentBuilderFactory().getAttribute(ACCESS_EXTERNAL_SCHEMA));
         XMLReader reader = XmlFactories.xmlReader(nullResolver);
@@ -225,7 +229,7 @@ class XmlFactoriesTest {
                 "javax.xml.accessExternalDTD", "all",
                 "javax.xml.accessExternalSchema", "all",
                 "javax.xml.accessExternalStylesheet", "all"), () -> {
-                    jdkSideFetchingIsClosed();
+                    assertJdkSideFetchingIsClosed();
                     return null;
                 });
     }

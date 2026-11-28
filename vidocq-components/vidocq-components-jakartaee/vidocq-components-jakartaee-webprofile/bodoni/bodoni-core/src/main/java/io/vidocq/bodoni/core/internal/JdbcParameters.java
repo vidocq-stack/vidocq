@@ -154,7 +154,7 @@ public record JdbcParameters(String url, String driver, String user, String pass
         String cut = beforeProperties();
         addUserInfoSecret(secrets, url);
         addUserInfoSecret(secrets, cut);
-        for (String property : PROPERTY_SEPARATORS.split(url.substring(cut.length()))) {
+        for (String property : PROPERTY_SEPARATORS.split(url.substring(cut.length()), -1)) {
             addPropertySecret(secrets, property);
         }
         return Set.copyOf(secrets);

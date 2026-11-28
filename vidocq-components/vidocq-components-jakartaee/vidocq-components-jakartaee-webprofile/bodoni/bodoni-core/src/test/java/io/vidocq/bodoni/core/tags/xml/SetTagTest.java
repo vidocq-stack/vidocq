@@ -62,7 +62,7 @@ class SetTagTest {
 
     @Test
     void aBooleanIsABoolean() throws Exception {
-        assertEquals(Boolean.TRUE, set("boolean($d//b)"));
+        assertTrue(assertInstanceOf(Boolean.class, set("boolean($d//b)")));
     }
 
     @Test

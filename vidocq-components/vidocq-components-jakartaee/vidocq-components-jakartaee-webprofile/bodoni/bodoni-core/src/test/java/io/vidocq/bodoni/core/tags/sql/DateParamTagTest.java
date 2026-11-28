@@ -52,6 +52,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** {@code <sql:dateParam>} (Tags 3.0 §10.8). */
+// sql:dateParam takes a java.util.Date (Tags 3.0 §10.8): the tests pass one.
+@SuppressWarnings("JavaUtilDate")
 class DateParamTagTest {
 
     private final TestServletContext context = new TestServletContext();

@@ -167,6 +167,19 @@ class FunctionsTest {
     }
 
     @Test
+    void caseConversionFollowsTheDefaultLocaleAsTheSpecificationSays() {
+        // Tags 3.0 §15.15 and §15.16: the semantics of String.toLowerCase() and toUpperCase(), the default locale.
+        Locale saved = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            assertEquals("F\u0130LE", Functions.toUpperCase("file"));
+            assertEquals("t\u0131tle", Functions.toLowerCase("TITLE"));
+        } finally {
+            Locale.setDefault(saved);
+        }
+    }
+
+    @Test
     void caseAndTrim() {
         assertEquals("abc", Functions.toLowerCase("AbC"));
         assertEquals("ABC", Functions.toUpperCase("AbC"));

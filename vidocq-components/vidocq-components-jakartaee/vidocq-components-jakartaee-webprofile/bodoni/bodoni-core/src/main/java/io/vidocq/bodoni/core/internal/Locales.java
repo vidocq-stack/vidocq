@@ -85,7 +85,7 @@ public final class Locales {
         }
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z')) {
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
                 return false;
             }
         }

@@ -21,9 +21,11 @@
 package io.vidocq.bodoni.core.tags.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.vidocq.bodoni.core.testing.TagHarness;
 import io.vidocq.bodoni.core.testing.TestPageContext;
@@ -57,7 +59,7 @@ class IfTagTest {
         tag.setVar("r");
         tag.setScope("request");
         TagHarness.run(tag, pc, p -> { });
-        assertEquals(Boolean.TRUE, pc.getAttribute("r", PageContext.REQUEST_SCOPE));
+        assertTrue(assertInstanceOf(Boolean.class, pc.getAttribute("r", PageContext.REQUEST_SCOPE)));
     }
 
     @Test
@@ -69,7 +71,7 @@ class IfTagTest {
         tag.setTest(false);
         tag.setVar("r");
         assertEquals("", TagHarness.run(tag, pc, p -> p.getOut().print("x")));
-        assertEquals(Boolean.FALSE, pc.getAttribute("r", PageContext.PAGE_SCOPE));
+        assertFalse(assertInstanceOf(Boolean.class, pc.getAttribute("r", PageContext.PAGE_SCOPE)));
     }
 
     @Test
@@ -98,6 +100,6 @@ class IfTagTest {
         tag.setVar("r");
 
         assertEquals("body", TagHarness.run(tag, pc, p -> p.getOut().print("body")));
-        assertEquals(Boolean.TRUE, pc.getAttribute("r", PageContext.PAGE_SCOPE));
+        assertTrue(assertInstanceOf(Boolean.class, pc.getAttribute("r", PageContext.PAGE_SCOPE)));
     }
 }

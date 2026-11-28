@@ -45,6 +45,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+// fmt:formatDate formats a java.util.Date (Tags 3.0 §9.9): the tests build one.
+@SuppressWarnings("JavaUtilDate")
 class FormatDateTagTest {
 
     private static final Date INSTANT = new Date(1018656000000L);

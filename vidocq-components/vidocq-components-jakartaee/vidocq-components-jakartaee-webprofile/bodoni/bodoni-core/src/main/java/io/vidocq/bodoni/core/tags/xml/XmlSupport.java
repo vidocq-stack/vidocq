@@ -231,6 +231,8 @@ final class XmlSupport {
         }
     }
 
+    // Whether that very exception is in the chain: identity, not equality.
+    @SuppressWarnings("ReferenceEquality")
     private static boolean reaches(Throwable chain, Throwable target) {
         for (Throwable t = chain; t != null; t = t.getCause()) {
             if (t == target) {

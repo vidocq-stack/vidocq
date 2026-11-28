@@ -177,7 +177,7 @@ class TckDatabaseTest {
     @Test
     void noOtherSocketCanTakeTheLoopbackPortOfTheUrl() throws Exception {
         database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT), name);
-        InetAddress loopback = InetAddress.getByName(TckDatabase.LOOPBACK);
+        InetAddress loopback = InetAddress.getByAddress(TckDatabase.LOOPBACK, new byte[] {127, 0, 0, 1});
         int port = database.port();
 
         assertThrows(BindException.class, () -> new ServerSocket(port, 0, loopback).close());

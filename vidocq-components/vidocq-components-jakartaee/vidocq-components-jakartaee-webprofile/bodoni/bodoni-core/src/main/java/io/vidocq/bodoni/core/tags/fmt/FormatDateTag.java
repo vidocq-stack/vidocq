@@ -61,6 +61,8 @@ public class FormatDateTag extends DateTagSupport {
     }
 
     @Override
+    // The value of fmt:formatDate is a java.util.Date (Tags 3.0 §9.9).
+    @SuppressWarnings("JavaUtilDate")
     String convert(Object raw) throws JspTagException {
         Date value = (Date) raw;
         Locale locale = FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.dateLocales());

@@ -442,7 +442,7 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
      * {@code /;jsessionid=1/x} stays a plain path.
      */
     private static boolean hasDotSegment(String path) {
-        for (String segment : SEPARATORS.split(path)) {
+        for (String segment : SEPARATORS.split(path, -1)) {
             if (!segment.isEmpty() && withoutTrailingDotsAndBlanks(segment, segment.length()).isEmpty()) {
                 return true;
             }
@@ -472,7 +472,7 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
         if (decoded == null) {
             return null;
         }
-        for (String segment : SEPARATORS.split(decoded)) {
+        for (String segment : SEPARATORS.split(decoded, -1)) {
             String name = segmentName(segment);
             if (!name.isEmpty()) {
                 return protectedName(name);

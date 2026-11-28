@@ -95,6 +95,8 @@ public final class TagHarness {
         throw new IllegalStateException("unsupported writer " + w.getClass());
     }
 
+    // Body.NONE is a sentinel instance: identity is the intent.
+    @SuppressWarnings("ReferenceEquality")
     private static void lifecycle(Tag tag, TestPageContext pc, Body body, int[] end) throws Exception {
         int r = tag.doStartTag();
         if (r == Tag.SKIP_BODY || body == Body.NONE) {

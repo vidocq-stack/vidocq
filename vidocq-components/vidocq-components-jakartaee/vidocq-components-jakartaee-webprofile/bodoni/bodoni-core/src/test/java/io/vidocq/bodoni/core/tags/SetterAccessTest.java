@@ -66,7 +66,7 @@ class SetterAccessTest {
 
     private static Object defaultValue(Class<?> parameter) {
         if (parameter == boolean.class) {
-            return Boolean.FALSE;
+            return false;
         }
         if (parameter == int.class) {
             return 0;
