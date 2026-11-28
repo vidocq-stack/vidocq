@@ -131,7 +131,7 @@ class DefaultPbkdf2PasswordHashTest {
     void generate_uses_the_documented_defaults_and_format() {
         var encoded = new DefaultPbkdf2PasswordHash().generate("secret1".toCharArray());
 
-        var parts = encoded.split(":");
+        var parts = encoded.split(":", -1);
         assertEquals(4, parts.length);
         assertEquals("PBKDF2WithHmacSHA256", parts[0]);
         assertEquals("2048", parts[1]);
@@ -163,7 +163,7 @@ class DefaultPbkdf2PasswordHashTest {
         var hash = configured(Map.of(ALGORITHM, "PBKDF2WithHmacSHA512", ITERATIONS, "4096", SALT_SIZE, "16",
                 KEY_SIZE, "64"));
 
-        var parts = hash.generate("secret1".toCharArray()).split(":");
+        var parts = hash.generate("secret1".toCharArray()).split(":", -1);
 
         assertEquals("PBKDF2WithHmacSHA512", parts[0]);
         assertEquals("4096", parts[1]);

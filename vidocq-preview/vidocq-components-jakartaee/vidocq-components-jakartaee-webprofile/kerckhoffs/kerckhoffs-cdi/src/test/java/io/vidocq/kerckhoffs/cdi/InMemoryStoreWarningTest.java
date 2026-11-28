@@ -78,7 +78,7 @@ class InMemoryStoreWarningTest {
     }
 
     private List<String> warnings() {
-        return records.stream().filter(r -> r.getLevel() == Level.WARNING).map(LogRecord::getMessage).toList();
+        return records.stream().filter(r -> Level.WARNING.equals(r.getLevel())).map(LogRecord::getMessage).toList();
     }
 
     @Test

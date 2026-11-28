@@ -125,7 +125,7 @@ class IdTokenValidatorTest {
     @Test
     void aTamperedPayloadIsRefused() throws Exception {
         String token = rs256(valid());
-        String[] parts = token.split("\\.");
+        String[] parts = token.split("\\.", -1);
         String forged = claims(ISSUER, "\"" + CLIENT + "\"", NOW.getEpochSecond() + 600, NONCE)
                 .replace("alice", "mallory");
         rejected(parts[0] + "." + b64(forged) + "." + parts[2]);

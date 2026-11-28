@@ -104,7 +104,8 @@ public final class BasicAuthenticationMechanism implements HttpAuthenticationMec
     /** A realm name is a quoted string of the challenge: no control character, and quotes escaped. */
     private static String quote(String realm) {
         var clean = new StringBuilder(realm.length());
-        for (char c : realm.toCharArray()) {
+        for (int i = 0; i < realm.length(); i++) {
+            char c = realm.charAt(i);
             if (c < 0x20 || c == 0x7f) continue;
             if (c == '"' || c == '\\') clean.append('\\');
             clean.append(c);

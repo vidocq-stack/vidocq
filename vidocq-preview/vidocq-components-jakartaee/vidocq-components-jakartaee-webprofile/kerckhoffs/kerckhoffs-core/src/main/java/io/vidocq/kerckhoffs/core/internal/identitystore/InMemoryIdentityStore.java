@@ -164,6 +164,8 @@ public final class InMemoryIdentityStore implements IdentityStore {
         return validationTypes;
     }
 
+    // ByteBufferBackingArray: the whole backing array is wiped on purpose, whatever the buffer's offset.
+    @SuppressWarnings("ByteBufferBackingArray")
     private static byte[] utf8(char[] password) {
         ByteBuffer encoded = StandardCharsets.UTF_8.encode(CharBuffer.wrap(password));
         byte[] bytes = new byte[encoded.remaining()];

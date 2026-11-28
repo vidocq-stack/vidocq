@@ -76,8 +76,9 @@ public final class HttpAuthenticationMechanismModule implements ServerAuthModule
             throw authException("the authentication mechanism failed", e);
         }
         if (status == null) throw new AuthException("the authentication mechanism answered nothing");
-        if (status == AuthenticationStatus.SUCCESS && authTypeOf(mechanism) instanceof String type) {
-            info.getMap().putIfAbsent(AUTH_TYPE, type);
+        String authType = authTypeOf(mechanism);
+        if (status == AuthenticationStatus.SUCCESS && Objects.nonNull(authType)) {
+            info.getMap().putIfAbsent(AUTH_TYPE, authType);
         }
         return switch (status) {
             case SUCCESS, NOT_DONE -> AuthStatus.SUCCESS;

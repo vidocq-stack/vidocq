@@ -123,10 +123,10 @@ public final class ServletContainerProfile {
         info.getMap().put(MANDATORY, Boolean.toString(mandatory));
         var client = new Subject();
         AuthStatus status = module.validateRequest(info, client, null);
-        if (status == AuthStatus.SEND_FAILURE || status == AuthStatus.SEND_CONTINUE) {
+        if (AuthStatus.SEND_FAILURE.equals(status) || AuthStatus.SEND_CONTINUE.equals(status)) {
             return new Result(Status.RESPONSE_SENT, null, Set.of(), false, null);
         }
-        if (status != AuthStatus.SUCCESS) {
+        if (!AuthStatus.SUCCESS.equals(status)) {
             throw new AuthException("a request cannot end with the status " + status);
         }
         boolean register = Boolean.parseBoolean(String.valueOf(info.getMap().get(REGISTER_SESSION)));

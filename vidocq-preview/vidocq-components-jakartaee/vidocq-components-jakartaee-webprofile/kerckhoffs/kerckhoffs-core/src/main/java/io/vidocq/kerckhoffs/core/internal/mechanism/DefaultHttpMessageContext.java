@@ -80,7 +80,7 @@ public final class DefaultHttpMessageContext implements HttpMessageContext {
     }
 
     @Override public void setRegisterSession(String callerName, Set<String> callerGroups) {
-        info.getMap().put(REGISTER_SESSION, Boolean.TRUE.toString());
+        info.getMap().put(REGISTER_SESSION, Boolean.toString(true));
         notifyContainerAboutLogin(callerName, callerGroups);
     }
 
