@@ -52,7 +52,10 @@ enum SessionAttribute {
         void to(Connection driver, Object value) throws SQLException;
     }
 
+    // Each constant holds a stateless method reference or lambda: the fields never change what they do.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final Read  read;
+    @SuppressWarnings("ImmutableEnumChecker")
     private final Write write;
 
     SessionAttribute(Read read, Write write) {
@@ -66,11 +69,6 @@ enum SessionAttribute {
 
     void write(Connection driver, Object value) throws SQLException {
         write.to(driver, value);
-    }
-
-    /** The bit of this attribute in a set of attributes. */
-    int bit() {
-        return 1 << ordinal();
     }
 
     /**

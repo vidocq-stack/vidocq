@@ -100,7 +100,7 @@ public final class RuntimeEntityModelBuilder {
             VersionAttribute<E, ?> version = null;
 
             for (Field field : persistedFields) {
-                boolean implicitId = field == implicitIdField;
+                boolean implicitId = field.equals(implicitIdField);
                 Attribute<E, ?> a = describeField(entityClass, field, lookup, implicitId);
                 attrs.add(a);
                 if (a instanceof IdAttribute<?, ?>      ida) id      = (IdAttribute<E, ?>) ida;

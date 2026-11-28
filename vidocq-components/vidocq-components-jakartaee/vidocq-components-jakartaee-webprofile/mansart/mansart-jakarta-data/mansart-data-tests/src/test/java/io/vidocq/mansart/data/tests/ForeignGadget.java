@@ -30,4 +30,8 @@ public class ForeignGadget {
     private String label;
 
     public ForeignGadget() {}
+
+    public String getLabel() {
+        return label;
+    }
 }

@@ -217,4 +217,13 @@ class MigrationTableCheckTest {
 
         assertThat(warnings(List.of("-Amansart.migrations=" + elsewhere), "")).hasSize(1);
     }
+
+    /** A blank entry of the list (",," or a trailing comma) names no folder: only the named ones are read. */
+    @Test
+    void blankEntriesOfTheMigrationListAreSkipped() throws IOException {
+        Path elsewhere = Files.createDirectories(out.resolve("sql"));
+        Files.writeString(elsewhere.resolve("V1__book.sql"), "CREATE TABLE book (id BIGINT);");
+
+        assertThat(warnings(List.of("-Amansart.migrations= ," + elsewhere + ",,"), "")).hasSize(1);
+    }
 }

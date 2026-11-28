@@ -21,6 +21,7 @@ package io.vidocq.mansart.data.core;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -266,9 +267,9 @@ public final class JdqlAst {
                 pos++;
             String w = src.substring(s, pos);
             if (w.equalsIgnoreCase("true") || w.equalsIgnoreCase("false")) {
-                return new Token(Tk.BOOL_LIT, w.toLowerCase());
+                return new Token(Tk.BOOL_LIT, w.toLowerCase(Locale.ROOT));
             }
-            if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
+            if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase(Locale.ROOT));
             return new Token(Tk.IDENT, w);
         }
         private static boolean isKeyword(String w) {
@@ -276,7 +277,7 @@ public final class JdqlAst {
             // as keywords here. Doing so would shadow homonym attribute names (notably the
             // TCK uses an entity attribute called {@code length}). The parser detects them
             // contextually as IDENT followed by '('.
-            return switch (w.toUpperCase()) {
+            return switch (w.toUpperCase(Locale.ROOT)) {
                 case "FROM", WHERE, "ORDER", "BY", "AND", "OR", "NOT",
                      "IS", "NULL", BETWEEN, "LIKE", "ASC", "DESC",
                      "SELECT", UPDATE, DELETE, "SET", "IN", "COUNT", "THIS",
@@ -472,7 +473,7 @@ public final class JdqlAst {
                 // promoting these names to keywords, because TCK entities use them as attribute
                 // names too (e.g. Box.length).
                 String name = lex.consume().text;
-                String upper = name.toUpperCase();
+                String upper = name.toUpperCase(Locale.ROOT);
                 if (lex.peek().kind == Tk.LPAREN && isScalarFn(upper)) {
                     lex.consume();
                     List<Expr> args = new ArrayList<>();
@@ -552,7 +553,7 @@ public final class JdqlAst {
             // We detect this contextually: an IDENT whose name matches a scalar function and
             // is immediately followed by '(' — this avoids shadowing entity attributes that
             // happen to be named "length" etc.
-            if (lex.peek().kind == Tk.IDENT && isUnaryFn(lex.peek().text.toUpperCase())) {
+            if (lex.peek().kind == Tk.IDENT && isUnaryFn(lex.peek().text.toUpperCase(Locale.ROOT))) {
                 return parseFnOrHomonymAttribute();
             }
             String attr = expectAttr();
@@ -564,7 +565,7 @@ public final class JdqlAst {
             // We need to look one further — but the lexer is single-token lookahead. Use a
             // throw-away consume sequence guarded by attribute fallback.
             Token saved = lex.consume();
-            String upper = saved.text.toUpperCase();
+            String upper = saved.text.toUpperCase(Locale.ROOT);
             if (lex.peek().kind == Tk.LPAREN) {
                 lex.consume();
                 String attr = expectAttr();

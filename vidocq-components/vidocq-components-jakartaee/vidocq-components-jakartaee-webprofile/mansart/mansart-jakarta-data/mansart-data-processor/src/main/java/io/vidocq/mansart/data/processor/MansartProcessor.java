@@ -139,7 +139,8 @@ public final class MansartProcessor extends AbstractProcessor {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
                     "[mansart-data] Failed to write the _MansartComponents classes: " + ex.getMessage());
         }
-        return true;
+        // Never claim @Entity or @Repository: a persistence provider's processor reads them too (BUG-20261128-90).
+        return false;
     }
 
     /** Writes the Jakarta Data metamodel {@code _Entity}; the JPA metamodel {@code Entity_} is the provider's. */
@@ -288,7 +289,7 @@ public final class MansartProcessor extends AbstractProcessor {
 
     /** The error, or the warning with {@code -Amansart.privateRepositories=warn}, for a private repository. */
     private void reportPrivateRepository(TypeElement repo, TypeElement hidden) {
-        String what = hidden == repo ? " is private" : " is nested in the private type " + hidden.getQualifiedName();
+        String what = hidden.equals(repo) ? " is private" : " is nested in the private type " + hidden.getQualifiedName();
         String message = "[mansart-data] " + repo.getQualifiedName() + what + ", so no class of its package can"
                 + " implement it: make it, and the types it is nested in, at least package-private.";
         if ("warn".equalsIgnoreCase(processingEnv.getOptions().get(PRIVATE_REPOSITORIES))) {

@@ -82,9 +82,9 @@ public class TransactionCycleBench {
     }
 
     @TearDown
-    public void tearDown() {
+    public void tearDown() throws Exception {
         if (ds instanceof AutoCloseable c) {
-            try { c.close(); } catch (Exception ignored) {}
+            c.close();
         }
     }
 

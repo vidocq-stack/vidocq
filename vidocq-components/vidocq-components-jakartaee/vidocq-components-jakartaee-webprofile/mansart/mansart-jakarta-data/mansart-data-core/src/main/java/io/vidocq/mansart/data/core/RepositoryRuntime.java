@@ -110,7 +110,7 @@ public final class RepositoryRuntime {
             if (!first) sb.append(", ");
             sb.append(a.columnName()).append(' ')
               .append(sqlDdlType(ColumnValues.ddlType(a)));
-            if (a == model.id()) sb.append(" PRIMARY KEY");
+            if (a.equals(model.id())) sb.append(" PRIMARY KEY");
             first = false;
         }
         sb.append(')');
@@ -712,7 +712,7 @@ public final class RepositoryRuntime {
     private <E> int bindNonIdAttributes(PreparedStatement ps, EntityModel<E> model, E entity) throws SQLException {
         int idx = 1;
         for (Attribute<E, ?> a : model.attributes()) {
-            if (a == model.id()) continue;
+            if (a.equals(model.id())) continue;
             dialect.bind(ps, idx++, valueToBind(a, readAttribute(a, entity)), bindType(a));
         }
         return idx;
@@ -759,7 +759,7 @@ public final class RepositoryRuntime {
     private <E> void bindWritableAttributes(PreparedStatement ps, EntityModel<E> model, E entity) throws SQLException {
         int idx = 1;
         for (Attribute<E, ?> a : model.attributes()) {
-            if (a == model.id() && model.id().generated()) continue;
+            if (a.equals(model.id()) && model.id().generated()) continue;
             Object v = readAttribute(a, entity);
             dialect.bind(ps, idx++, valueToBind(a, v), bindType(a));
         }

@@ -72,6 +72,7 @@ public final class JtaConnections {
 
     /** Identity key: two keys match when they hold the same data source instance. */
     private record Key(DataSource dataSource) {
+        @SuppressWarnings("ReferenceEquality") // the key is the data source instance, whatever its equals says
         @Override public boolean equals(Object other) {
             return other instanceof Key(var otherSource) && otherSource == dataSource;
         }

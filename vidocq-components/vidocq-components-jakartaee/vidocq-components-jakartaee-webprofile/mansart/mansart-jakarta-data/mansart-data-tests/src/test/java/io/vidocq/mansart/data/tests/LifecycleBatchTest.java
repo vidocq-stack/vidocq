@@ -33,6 +33,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -100,7 +101,7 @@ class LifecycleBatchTest {
     @MethodSource("repositories")
     void updatesSavesAndDeletesSeveralEntities(ArticleBatchRepository repo) {
         List<Article> created = repo.createAll(List.of(article("a"), article("b"), article("c")));
-        created.forEach(a -> a.setTitle(a.getTitle().toUpperCase()));
+        created.forEach(a -> a.setTitle(a.getTitle().toUpperCase(Locale.ROOT)));
 
         assertThat(repo.modifyAll(created.subList(0, 2))).extracting(Article::getVersion).containsExactly(1, 1);
         assertThat(repo.storeAll(List.of(created.get(2), article("d")))).hasSize(2);
@@ -127,7 +128,7 @@ class LifecycleBatchTest {
 
         one.setTitle("ONE");
         assertThat(repo.update(one).getVersion()).isEqualTo(1);
-        more.forEach(a -> a.setTitle(a.getTitle().toUpperCase()));
+        more.forEach(a -> a.setTitle(a.getTitle().toUpperCase(Locale.ROOT)));
         assertThat(repo.updateAll(more)).extracting(Article::getVersion).containsExactly(1, 1);
         assertThat(repo.findAll().map(Article::getTitle).sorted()).containsExactly("ONE", "THREE", "TWO");
 

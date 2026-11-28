@@ -78,6 +78,8 @@ class DataStoreResolverScopeTest {
             return (Instance<Object>) instance(null);
         }
 
+        // A proxy is equal to itself only: identity is what Object.equals means for it.
+        @SuppressWarnings("ReferenceEquality")
         private Object instance(Class<?> type) {
             return Proxy.newProxyInstance(DataStoreResolverScopeTest.class.getClassLoader(), new Class<?>[] {Instance.class},
                     (proxy, method, args) -> switch (method.getName()) {

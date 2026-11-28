@@ -20,6 +20,7 @@
 package io.vidocq.mansart.data.tests;
 
 import io.vidocq.mansart.data.core.MansartData;
+import io.vidocq.mansart.data.core.MansartDataException;
 import io.vidocq.mansart.data.core.PathResolver;
 import io.vidocq.mansart.data.core.RepositoryRuntime;
 import io.vidocq.mansart.data.dialect.Attribute;
@@ -29,6 +30,7 @@ import io.vidocq.mansart.data.dialect.Where;
 import io.vidocq.mansart.data.dialect.h2.H2Dialect;
 import io.vidocq.mansart.data.dialect.postgresql.PostgresqlDialect;
 import org.h2.jdbcx.JdbcDataSource;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -126,6 +128,14 @@ class DialectPredicatesTest {
         assertThat(names(rt, Where.ALWAYS_TRUE)).hasSize(3);
         Where unsupported = new Where.Func(UPPER, new Where.And(List.of(new Where.Eq(n), new Where.Eq(n))));
         assertThatThrownBy(() -> names(rt, unsupported)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** BUG-20261128-92 — a path that ends on a dot names no leaf: it fails instead of resolving to the relation. */
+    @Test
+    void aPathEndingOnADotIsRejected() {
+        assertThatThrownBy(() -> PathResolver.resolve(_Book.$MODEL, "author."))
+                .isInstanceOf(MansartDataException.class)
+                .hasMessageContaining("Unknown leaf ''");
     }
 
     @ParameterizedTest(name = "{0}")

@@ -93,6 +93,8 @@ final class DataStoreResolver {
                 .build().runtime();
     }
 
+    // The application names this java: data store in @Repository(dataStore): looking it up is the contract.
+    @SuppressWarnings("BanJNDI")
     private static DataSource jndiLookup(String name) {
         try {
             Object obj = new InitialContext().lookup(name);

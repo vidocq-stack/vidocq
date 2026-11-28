@@ -9,6 +9,42 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## BUG-20261128-90 — The Data processor claimed `@Entity` and `@Repository`
+
+- **Date**: 2026-11-28 (found by Error Prone's `DoNotClaimAnnotations`, Vidocq/vidocq#832)
+- **Status**: FIXED on `refactor/mansart-errorprone`
+- **Symptom**: `MansartProcessor.process` returned `true` once a round had collected its types, so javac handed
+  `jakarta.persistence.Entity` and `jakarta.data.repository.Repository` to no processor after it: a persistence
+  provider's metamodel processor (Noether's, Hibernate Processor) on the same processor path, run after Mansart's,
+  saw no entity.
+- **Minimal repro**: `ProcessorSharesAnnotationsTest` (mansart-data-tests) compiles an entity and a repository with
+  the Mansart processor and a recording processor after it: the recorder saw neither annotation.
+- **Cause**: the processor claimed the annotations it supports.
+- **Fix**: `process` returns `false` in every case.
+
+## BUG-20261128-91 — The recovery log dropped a record whose branch qualifier is empty
+
+- **Date**: 2026-11-28 (found by Error Prone's `StringSplitter`, Vidocq/vidocq#832)
+- **Status**: FIXED on `refactor/mansart-errorprone`
+- **Severity**: low (Mansart's own transactions log a one-byte branch qualifier; an `Xid` built elsewhere and
+  appended to a `FileRecoveryLog` can have an empty one, which the `Xid` contract allows)
+- **Symptom**: a record whose `Xid` has an empty branch qualifier was lost: its line ends on the `|` separator,
+  `split("\\|")` drops the trailing empty field, and the line, with three fields instead of four, was taken for a
+  corrupt tail, skipped by `scan()` and removed by the compaction of the next open. A crash after `PREPARED` left
+  that transaction out of `recover()`.
+- **Minimal repro**: `RecoveryLogTest.anXidWithAnEmptyBranchQualifierIsReadBack`.
+- **Fix**: both read paths split with `split("\\|", -1)`, which keeps the empty field.
+
+## BUG-20261128-92 — A relation path ending on a dot resolved to the relation itself
+
+- **Date**: 2026-11-28 (found by Error Prone's `StringSplitter`, Vidocq/vidocq#832)
+- **Status**: FIXED on `refactor/mansart-errorprone`
+- **Severity**: low (the generated code passes paths built from method names, which never end on a dot)
+- **Symptom**: `PathResolver.resolve(_Book.$MODEL, "author.")` returned a joined attribute with no join step on the
+  `author` relation, instead of failing on a path with no leaf.
+- **Minimal repro**: `DialectPredicatesTest.aPathEndingOnADotIsRejected`.
+- **Fix**: `split("\\.", -1)` keeps the empty leaf, which then fails as an unknown leaf.
+
 ## BUG-20261123-57 — The TCK scripts install the branch into the shared `~/.m2`
 
 - **Date**: 2026-11-23 (same bug in Foy, Peano, Ibarra, Bodoni, Cassini, Champollion, Kerckhoffs and Noether)

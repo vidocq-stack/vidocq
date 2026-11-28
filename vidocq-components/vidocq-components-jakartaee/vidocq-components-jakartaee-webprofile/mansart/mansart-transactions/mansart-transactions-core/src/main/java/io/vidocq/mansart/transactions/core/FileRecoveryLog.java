@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Append-only text journal — one line per {@link Record}, fsync'd to disk after every write.
@@ -91,7 +92,7 @@ public final class FileRecoveryLog implements RecoveryLog {
         var inDoubt = new java.util.LinkedHashMap<String, String>();
         for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
             int sep = line.indexOf(SEP);
-            if (sep < 0 || line.split("\\|").length != 4) continue;      // corrupt or truncated line
+            if (sep < 0 || fields(line).length != 4) continue;      // corrupt or truncated line
             String transaction = line.substring(sep);
             if (line.startsWith(Type.COMPLETED.name() + SEP)) {
                 inDoubt.remove(transaction);
@@ -120,7 +121,7 @@ public final class FileRecoveryLog implements RecoveryLog {
     public synchronized void append(Record entry) throws IOException {
         reopen();
         String line = entry.type().name() + SEP
-                + Integer.toHexString(entry.xid().getFormatId()).toUpperCase() + SEP
+                + Integer.toHexString(entry.xid().getFormatId()).toUpperCase(Locale.ROOT) + SEP
                 + HEX.formatHex(entry.xid().getGlobalTransactionId()) + SEP
                 + HEX.formatHex(entry.xid().getBranchQualifier()) + "\n";
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
@@ -134,6 +135,11 @@ public final class FileRecoveryLog implements RecoveryLog {
         }
     }
 
+    /** The fields of a line, the trailing empty one of an empty branch qualifier included (BUG-20261128-91). */
+    private static String[] fields(String line) {
+        return line.split("\\|", -1);
+    }
+
     @Override
     public List<Record> scan() throws IOException {
         if (!Files.exists(file)) return List.of();
@@ -141,7 +147,7 @@ public final class FileRecoveryLog implements RecoveryLog {
         try (var lines = Files.lines(file, StandardCharsets.UTF_8)) {
             lines.forEach(line -> {
                 if (line.isBlank()) return;
-                String[] parts = line.split("\\|");
+                String[] parts = fields(line);
                 if (parts.length != 4) return;     // skip corrupt / truncated tail line
                 try {
                     Type type = Type.valueOf(parts[0]);
@@ -187,6 +193,7 @@ public final class FileRecoveryLog implements RecoveryLog {
 
     /** Lightweight {@link Xid} constructed by {@link #scan()} — only the bytes matter for
      *  comparison, so {@code MansartXid} would be overkill (it pins the format id). */
+    @SuppressWarnings("ArrayRecordComponent") // equals and hashCode below compare the arrays by content
     private record ScannedXid(int format, byte[] gtrid, byte[] bqual) implements Xid {
         @Override public int    getFormatId()             { return format; }
         @Override public byte[] getGlobalTransactionId()  { return gtrid.clone(); }

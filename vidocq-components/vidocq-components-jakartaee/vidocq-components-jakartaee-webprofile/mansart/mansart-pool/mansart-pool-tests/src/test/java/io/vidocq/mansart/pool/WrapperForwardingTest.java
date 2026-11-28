@@ -280,6 +280,7 @@ class WrapperForwardingTest {
         }
 
         /** {@code equals}, {@code hashCode} and {@code toString} of a proxy: identity, never recorded. */
+        @SuppressWarnings("ReferenceEquality") // a proxy is equal to itself only, as Object.equals says
         private static Object identity(Object proxy, Method method, Object[] args) {
             return switch (method.getName()) {
                 case "equals"   -> proxy == args[0];

@@ -63,12 +63,12 @@ public final class Joins {
         LinkedHashMap<JoinPath, String> aliasByPath = new LinkedHashMap<>();
         int i = 1;
         for (JoinPath p : ordered) {
-            aliasByPath.put(p, "t" + (i++));
+            aliasByPath.put(p, "t" + i++);
         }
         return new Plan(aliasByPath);
     }
 
-    private static void registerWithPrefixes(JoinPath p, java.util.LinkedHashSet<JoinPath> sink) {
+    private static void registerWithPrefixes(JoinPath p, java.util.Set<JoinPath> sink) {
         for (int n = 1; n <= p.steps().size(); n++) sink.add(p.prefix(n));
     }
 
@@ -96,14 +96,17 @@ public final class Joins {
         }
     }
 
+    /** A join path and the alias allocated to it. */
+    public record Entry(JoinPath path, String alias) {}
+
     /**
      * Per-query plan: the alias allocated to each join path (root excluded — always {@code t0}).
      * {@link #aliasFor(Attribute)} returns the alias for a {@link JoinedAttribute}, or
      * {@code null} for plain attributes (the dialect should fall back to the root alias if
      * non-empty, or no prefix at all if {@link #isEmpty()}).
+     *
+     * @param aliasByPath the alias of each join path, in allocation order
      */
-    public record Entry(JoinPath path, String alias) {}
-
     public record Plan(LinkedHashMap<JoinPath, String> aliasByPath) {
 
         public boolean isEmpty() { return aliasByPath.isEmpty(); }

@@ -528,12 +528,12 @@ public final class JdqlExecutor {
         }
 
         Object count(BuiltWhere bw) {
-            return bw.where == Where.ALWAYS_FALSE ? 0L : runtime.countWhere(model, bw.where, bw.args);
+            return bw.where instanceof Where.AlwaysFalse ? 0L : runtime.countWhere(model, bw.where, bw.args);
         }
 
         Object select(BuiltWhere bw) {
             Class<?> rt = shape.returnType();
-            if (bw.where == Where.ALWAYS_FALSE) return noMatch(rt);
+            if (bw.where instanceof Where.AlwaysFalse) return noMatch(rt);
             if (rt == long.class || rt == Long.class) return runtime.countWhere(model, bw.where, bw.args);
             if (rt == boolean.class || rt == Boolean.class) return runtime.existsWhere(model, bw.where, bw.args);
             boolean cursorRet = jakarta.data.page.CursoredPage.class.isAssignableFrom(rt);
@@ -630,7 +630,16 @@ public final class JdqlExecutor {
         return new OrderBy(out);
     }
 
-    private record BuiltWhere(Where where, Object[] args) {}
+    /** A WHERE tree and its bind values, in placeholder order. A class, not a record: never compared. */
+    private static final class BuiltWhere {
+        final Where where;
+        final Object[] args;
+
+        BuiltWhere(Where where, Object[] args) {
+            this.where = where;
+            this.args = args;
+        }
+    }
 
     private static BuiltWhere buildWhere(JdqlAst.Pred p, EntityModel<?> model,
                                          Map<String, Attribute<?, ?>> attrIndex,
@@ -725,7 +734,7 @@ public final class JdqlExecutor {
 
     /** {@code where}, {@code alwaysFalse} set when it is the empty-IN {@link Where#ALWAYS_FALSE}. */
     private static Where flagNoMatch(Where where, boolean[] alwaysFalse) {
-        if (where == Where.ALWAYS_FALSE) alwaysFalse[0] = true;
+        if (where instanceof Where.AlwaysFalse) alwaysFalse[0] = true;
         return where;
     }
 

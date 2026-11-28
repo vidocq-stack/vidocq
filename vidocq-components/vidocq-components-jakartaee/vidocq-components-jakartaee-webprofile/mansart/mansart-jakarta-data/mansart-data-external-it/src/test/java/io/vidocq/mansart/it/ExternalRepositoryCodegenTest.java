@@ -103,7 +103,7 @@ class ExternalRepositoryCodegenTest {
                 Class.forName(METAMODEL_FQN).getField("$MODEL").get(null);
         assertThat(model.entityClass()).isEqualTo(Gadget.class);
 
-        GadgetRepository repo = (GadgetRepository) Class.forName(IMPL_FQN)
+        GadgetRepository repo = Class.forName(IMPL_FQN).asSubclass(GadgetRepository.class)
                 .getConstructor(RepositoryRuntime.class)
                 .newInstance(runtime);
 

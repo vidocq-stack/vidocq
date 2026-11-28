@@ -50,7 +50,7 @@ public final class PostgresqlDialect extends AbstractSqlDialect {
             cols.append(a.columnName());
             vals.append('?');
             firstCol = false;
-            if (a == model.id()) continue;
+            if (a.equals(model.id())) continue;
             if (!firstSet) set.append(", ");
             set.append(a.columnName()).append(" = EXCLUDED.")
                .append(a.columnName());

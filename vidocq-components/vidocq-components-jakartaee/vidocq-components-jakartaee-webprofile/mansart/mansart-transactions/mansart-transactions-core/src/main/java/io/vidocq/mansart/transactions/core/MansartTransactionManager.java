@@ -63,6 +63,9 @@ public class MansartTransactionManager implements TransactionManager {
     /** A node id, an 8-byte start instant and an 8-byte sequence fit the 64 bytes of a global transaction id. */
     public static final int MAX_NODE_ID_BYTES = 32;
 
+    // Per instance on purpose: each manager has its own association of threads to transactions, so two managers
+    // (tests, two runtimes in one JVM) never see each other's transaction. The architecture tests document it.
+    @SuppressWarnings("ThreadLocalUsage")
     private final ThreadLocal<MansartTransaction> active = new ThreadLocal<>();
     /** Seconds given by {@link #setTransactionTimeout(int)} to the transactions this thread begins. */
     private final ThreadLocal<Integer> timeoutSeconds = new ThreadLocal<>();

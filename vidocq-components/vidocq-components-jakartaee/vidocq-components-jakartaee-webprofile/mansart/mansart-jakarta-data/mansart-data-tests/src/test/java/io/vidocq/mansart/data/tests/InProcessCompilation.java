@@ -21,6 +21,7 @@ package io.vidocq.mansart.data.tests;
 
 import io.vidocq.mansart.data.processor.MansartProcessor;
 
+import javax.annotation.processing.Processor;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
@@ -110,6 +111,16 @@ final class InProcessCompilation {
      */
     static Result compileSources(Path out, List<String> options, List<Path> extraClassPath,
                                  String... fqnAndSourcePairs) throws IOException {
+        return compile(writeSources(out, fqnAndSourcePairs), out, options, extraClassPath, List.of());
+    }
+
+    /** Writes each {@code fqn -> source} pair under {@code out/src} and compiles them, {@code others} after Mansart's. */
+    static Result compileSourcesWith(Path out, List<Processor> others, String... fqnAndSourcePairs)
+            throws IOException {
+        return compile(writeSources(out, fqnAndSourcePairs), out, List.of(), List.of(), others);
+    }
+
+    private static List<Path> writeSources(Path out, String... fqnAndSourcePairs) throws IOException {
         List<Path> sources = new ArrayList<>();
         for (int i = 0; i < fqnAndSourcePairs.length; i += 2) {
             Path file = out.resolve("src").resolve(fqnAndSourcePairs[i].replace('.', '/') + JAVA);
@@ -117,15 +128,15 @@ final class InProcessCompilation {
             Files.writeString(file, fqnAndSourcePairs[i + 1], StandardCharsets.UTF_8);
             sources.add(file);
         }
-        return compile(sources, out, options, extraClassPath);
+        return sources;
     }
 
     private static Result compile(List<Path> sources, Path out, List<String> options) throws IOException {
-        return compile(sources, out, options, List.of());
+        return compile(sources, out, options, List.of(), List.of());
     }
 
-    private static Result compile(List<Path> sources, Path out, List<String> options, List<Path> extraClassPath)
-            throws IOException {
+    private static Result compile(List<Path> sources, Path out, List<String> options, List<Path> extraClassPath,
+                                  List<Processor> others) throws IOException {
         Path classes = Files.createDirectories(out.resolve("classes"));
         Path generated = Files.createDirectories(out.resolve("generated"));
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
@@ -141,7 +152,10 @@ final class InProcessCompilation {
                     Stream.concat(Stream.of("-parameters", "-proc:full", "-Xlint:none"), options.stream()).toList(),
                     null,
                     files.getJavaFileObjectsFromPaths(sources));
-            task.setProcessors(List.of(new MansartProcessor()));
+            List<Processor> processors = new ArrayList<>();
+            processors.add(new MansartProcessor());
+            processors.addAll(others);
+            task.setProcessors(processors);
             boolean success = task.call();
             return new Result(success, List.copyOf(diagnostics.getDiagnostics()), classes, generated);
         }

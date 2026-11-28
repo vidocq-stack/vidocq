@@ -32,6 +32,7 @@ import java.util.HexFormat;
  * <p>Format identifier {@link #FORMAT_ID} is fixed — chosen so it doesn't collide with the
  * common JBoss / Atomikos / Bitronix values that show up in recovery logs out in the wild.
  */
+@SuppressWarnings("ArrayRecordComponent") // equals and hashCode below compare the arrays by content
 record MansartXid(byte[] gtrid, byte[] bqual) implements Xid {
 
     /** Mansart-specific format id — picked at random in the user-defined range (>= 0x4D414E53 = "MANS"). */

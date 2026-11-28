@@ -56,7 +56,8 @@ public final class PathResolver {
                     new MansartDataException("Unknown attribute '" + path + ON_ENTITY
                             + rootModel.entityClass().getSimpleName()));
         }
-        String[] segments = path.split("\\.");
+        // -1 keeps a trailing empty segment ("author."): it fails as an unknown leaf (BUG-20261128-92).
+        String[] segments = path.split("\\.", -1);
         java.util.List<JoinPath.Step> steps = new java.util.ArrayList<>(segments.length - 1);
         EntityModel<?> currentModel = rootModel;
         for (int i = 0; i < segments.length - 1; i++) {

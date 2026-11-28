@@ -207,14 +207,14 @@ public final class RuntimeRepositoryProxy {
         for (Method m : allInterfaceMethods(repoInterface)) {
             if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
             EntityModel<?> chosen = modelOfParameters(m, primary, models);
-            if (chosen == primary) {
+            if (chosen.equals(primary)) {
                 Class<?> e = entityFromCarrier(m.getGenericReturnType());
                 if (e != null && models.containsKey(e)) chosen = models.get(e);
             }
             // Last resort: extract the simple entity name from a @Query "FROM X", "UPDATE X",
             // or "DELETE FROM X" clause and match it against the registered models. Covers
             // resizeAll(int, int) where the entity is only implied by "UPDATE Box SET …".
-            if (chosen == primary) chosen = modelNamedInQuery(m, primary, models);
+            if (chosen.equals(primary)) chosen = modelNamedInQuery(m, primary, models);
             out.put(m, chosen);
         }
         return out;
@@ -246,7 +246,7 @@ public final class RuntimeRepositoryProxy {
         if (jdql == null) return null;
         String s = jdql.trim();
         // Tokenize gently: skip "SELECT …" prefix, then look for FROM / UPDATE / DELETE FROM.
-        String[] words = s.split("\\s+");
+        String[] words = s.split("\\s+", -1);
         for (int i = 0; i < words.length; i++) {
             String w = words[i].toUpperCase(java.util.Locale.ROOT);
             if (("FROM".equals(w) || "UPDATE".equals(w)) && i + 1 < words.length) {
@@ -581,8 +581,8 @@ public final class RuntimeRepositoryProxy {
         return null;
     }
 
-    /* ---- @Find dispatcher (M7-8 push) ----
-     * Jakarta Data {@code @jakarta.data.repository.Find}: every method parameter whose name
+    /**
+     * The dispatcher of a Jakarta Data {@code @Find} method (M7-8): every method parameter whose name
      * matches an entity attribute name is folded into a WHERE clause as {@code attr = ?}. The
      * usual control parameters (Limit, Sort, Order, PageRequest, Sort[]) are passed through to
      * the underlying queryList/queryPage call.
@@ -763,7 +763,7 @@ public final class RuntimeRepositoryProxy {
         Class<?> returnType = plan.method().getReturnType();
         boolean returnsList = List.class.isAssignableFrom(returnType)
                 || java.util.Collection.class == returnType || Iterable.class == returnType;
-        if (w == Where.ALWAYS_FALSE) {
+        if (w instanceof Where.AlwaysFalse) {
             return emptyForReturn(returnType == java.util.stream.Stream.class,
                     returnType == java.util.Optional.class, returnsList);
         }
@@ -912,7 +912,16 @@ public final class RuntimeRepositoryProxy {
         return new OrderBy(out);
     }
 
-    private record BuiltWhere(Where where, Object[] args) {}
+    /** A WHERE tree and its bind values, in placeholder order. A class, not a record: never compared. */
+    private static final class BuiltWhere {
+        final Where where;
+        final Object[] args;
+
+        BuiltWhere(Where where, Object[] args) {
+            this.where = where;
+            this.args = args;
+        }
+    }
 
     private static BuiltWhere buildWhere(QueryMethodParser.QueryDescriptor desc,
                                          Map<String, Attribute<?, ?>> attrIndex, Object[] callArgs) {
@@ -982,8 +991,8 @@ public final class RuntimeRepositoryProxy {
             case CONTAINS    -> bindValue(new Where.Like(a), "%" + values.next() + "%", args);
             case STARTS_WITH -> bindValue(new Where.Like(a), values.next() + "%", args);
             case ENDS_WITH   -> bindValue(new Where.Like(a), "%" + values.next(), args);
-            case TRUE        -> bindValue(new Where.Eq(a), Boolean.TRUE, args);
-            case FALSE       -> bindValue(new Where.Eq(a), Boolean.FALSE, args);
+            case TRUE        -> bindValue(new Where.Eq(a), true, args);
+            case FALSE       -> bindValue(new Where.Eq(a), false, args);
             case IN          -> inPredicate(a, values.next(), args);
         };
     }

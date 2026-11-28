@@ -25,6 +25,7 @@ import javax.lang.model.type.TypeMirror;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -506,7 +507,7 @@ final class JdqlParser {
     }
 
     private static final class DynCtx {
-        final Map<Object, String> colVar = new java.util.IdentityHashMap<>();
+        final java.util.IdentityHashMap<Object, String> colVar = new java.util.IdentityHashMap<>();
         int counter = 0;
     }
 
@@ -1033,14 +1034,14 @@ final class JdqlParser {
             String w = src.substring(start, pos);
             // Keywords are matched on the *full* token but only when they don't contain
             // a dot — a dotted token is necessarily an attribute path.
-            if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
+            if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase(Locale.ROOT));
             return new Token(Tk.IDENT, w);
         }
         private static boolean isKeyword(String w) {
             // M8-1 — scalar function names (UPPER/LOWER/LENGTH/ABS/CONCAT) are NOT registered
             // as keywords here — they would shadow homonym attribute names (e.g. TCK Box.length).
             // The parser detects them contextually as IDENT followed by '('.
-            return switch (w.toUpperCase()) {
+            return switch (w.toUpperCase(Locale.ROOT)) {
                 case "FROM", WHERE, "ORDER", "BY", "AND", "OR", "NOT",
                      "IS", "NULL", BETWEEN, "LIKE", "ASC", "DESC",
                      "SELECT", "UPDATE", "DELETE", "SET", "IN", "COUNT", "THIS",
@@ -1233,7 +1234,7 @@ final class JdqlParser {
             // M8-1 — LHS may be a unary scalar function on an attribute: UPPER(name) = ?, …
             // Detected contextually (IDENT immediately followed by '(') so that attribute
             // names like Box.length are not shadowed by the LENGTH function name.
-            if (lex.peek().kind == Tk.IDENT && isUnaryFn(lex.peek().text.toUpperCase())) {
+            if (lex.peek().kind == Tk.IDENT && isUnaryFn(lex.peek().text.toUpperCase(Locale.ROOT))) {
                 return parseFunctionOrAttribute(lex.consume());
             }
             String attr = expectAttr();
@@ -1242,7 +1243,7 @@ final class JdqlParser {
 
         /** After an identifier named like a unary function: {@code fn(attr) …}, or the attribute of that name. */
         private Pred parseFunctionOrAttribute(Token name) {
-            String upper = name.text.toUpperCase();
+            String upper = name.text.toUpperCase(Locale.ROOT);
             if (lex.peek().kind == Tk.LPAREN) {
                 lex.consume();
                 String attr = expectAttr();

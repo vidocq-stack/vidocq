@@ -46,6 +46,8 @@ final class ColumnValues {
     }
 
     /** {@code value} as the column holds it. */
+    // EnumType.ORDINAL stores the constant's ordinal: that is the mapping the entity asks for.
+    @SuppressWarnings("EnumOrdinal")
     static Object toColumn(Attribute<?, ?> a, Object value) {
         if (value instanceof Enum<?> e && isOrdinal(a)) return e.ordinal();
         return value;

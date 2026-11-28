@@ -67,7 +67,7 @@ class LastResourceCommitOrderTest {
         @Override public void rollback(Xid xid)               { log.add(name + ".rollback"); }
         @Override public void forget(Xid xid)                 { /* no-op */ }
         @Override public Xid[] recover(int flag)              { return new Xid[0]; }
-        @Override public boolean isSameRM(XAResource other)   { return this == other; }
+        @Override public boolean isSameRM(XAResource other)   { return this.equals(other); }
         @Override public int     getTransactionTimeout()      { return 0; }
         @Override public boolean setTransactionTimeout(int s) { return false; }
     }
@@ -88,7 +88,7 @@ class LastResourceCommitOrderTest {
         @Override public void rollback(Xid xid)               { log.add(name + ".rollback"); }
         @Override public void forget(Xid xid)                 { /* no-op */ }
         @Override public Xid[] recover(int flag)              { return new Xid[0]; }
-        @Override public boolean isSameRM(XAResource other)   { return this == other; }
+        @Override public boolean isSameRM(XAResource other)   { return this.equals(other); }
         @Override public int     getTransactionTimeout()      { return 0; }
         @Override public boolean setTransactionTimeout(int s) { return false; }
     }

@@ -25,7 +25,6 @@ import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
@@ -101,14 +100,6 @@ class RuntimeFindWithoutParameterNamesTest {
                     + " (3, 'Candide', 'Voltaire')");
         }
         return MansartData.builder().dataSource(ds).build().runtimeRepository(loader.loadClass(name));
-    }
-
-    private static Object call(Object books, String method, Class<?> type, Object arg) throws Throwable {
-        try {
-            return books.getClass().getMethod(method, type).invoke(books, arg);
-        } catch (InvocationTargetException e) {
-            throw e.getCause();
-        }
     }
 
     @Test

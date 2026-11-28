@@ -25,4 +25,8 @@ public class NotAnEntity {
     private String label;
 
     public NotAnEntity() {}
+
+    public String getLabel() {
+        return label;
+    }
 }

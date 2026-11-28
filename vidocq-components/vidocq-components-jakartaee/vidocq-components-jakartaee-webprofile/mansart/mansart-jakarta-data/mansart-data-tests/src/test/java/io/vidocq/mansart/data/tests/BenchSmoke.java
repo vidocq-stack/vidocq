@@ -88,7 +88,7 @@ class BenchSmoke {
             try (var vts = Executors.newVirtualThreadPerTaskExecutor()) {
                 for (int t = 0; t < threads; t++) {
                     final int seed = t;
-                    vts.submit(() -> {
+                    vts.execute(() -> {
                         try {
                             for (int n = 0; n < opsPerThread; n++) {
                                 if (repo.findById(1L + ((seed * 31 + n) % 10_000)).isEmpty()) errors.incrementAndGet();

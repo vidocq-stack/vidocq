@@ -161,7 +161,8 @@ class PostgresqlCrudIntegrationTest {
                 List.of(a.getId(), b.getId(), d.getId()));
         assertThat(hits).hasSize(2)
                 .extracting(Author::getId)
-                .containsExactlyInAnyOrder(a.getId(), b.getId());
+                .containsExactlyInAnyOrder(a.getId(), b.getId())
+                .doesNotContain(c.getId());
     }
 
     @Test

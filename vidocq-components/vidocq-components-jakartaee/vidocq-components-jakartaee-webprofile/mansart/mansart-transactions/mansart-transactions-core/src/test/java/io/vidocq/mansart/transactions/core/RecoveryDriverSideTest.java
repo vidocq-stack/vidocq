@@ -188,6 +188,11 @@ class RecoveryDriverSideTest {
             this.inDoubt = inDoubt;
         }
 
+        @Override
+        public String toString() {
+            return "RecoverableXAResource(" + name + ")";
+        }
+
         @Override public Xid[] recover(int flag) {
             // CDI/JTA semantics : caller invokes once with TMSTARTRSCAN | TMENDRSCAN to get
             // everything in one shot.

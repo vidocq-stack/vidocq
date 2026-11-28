@@ -24,7 +24,6 @@ import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -53,7 +52,6 @@ class VirtualThreadsConcurrencyTest {
     private static final int CONCURRENCY  = 1_000;
     private static final int OPS_PER_TASK = 50;
 
-    private static DataSource dataSource;
     private static MansartData mansartData;
     private static AuthorRepository repo;
     private static long seedAuthorId;
@@ -65,7 +63,6 @@ class VirtualThreadsConcurrencyTest {
         JdbcConnectionPool ds = JdbcConnectionPool.create(
                 "jdbc:h2:mem:mansart-vt;DB_CLOSE_DELAY=-1", "sa", "");
         ds.setMaxConnections(64);
-        dataSource = ds;
         try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
             s.execute("DROP TABLE IF EXISTS authors");
             s.execute("CREATE TABLE authors ("
@@ -87,7 +84,7 @@ class VirtualThreadsConcurrencyTest {
 
         try (ExecutorService vts = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int i = 0; i < CONCURRENCY; i++) {
-                vts.submit(() -> {
+                vts.execute(() -> {
                     try {
                         for (int n = 0; n < OPS_PER_TASK; n++) {
                             var found = repo.findById(seedAuthorId);
@@ -125,7 +122,7 @@ class VirtualThreadsConcurrencyTest {
             CountDownLatch latch = new CountDownLatch(inserts);
             for (int i = 0; i < inserts; i++) {
                 final int n = i;
-                vts.submit(() -> {
+                vts.execute(() -> {
                     try {
                         repo.save(makeAuthor("VT-" + n));
                     } catch (Throwable t) {

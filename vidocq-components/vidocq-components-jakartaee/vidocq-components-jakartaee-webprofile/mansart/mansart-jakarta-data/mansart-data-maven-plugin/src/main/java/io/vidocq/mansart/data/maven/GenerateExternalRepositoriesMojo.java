@@ -172,7 +172,7 @@ public class GenerateExternalRepositoriesMojo extends AbstractMojo {
     }
 
     private static String sanitizePackage(String raw) {
-        String[] segments = raw.split("\\.");
+        String[] segments = raw.split("\\.", -1);
         StringBuilder sb = new StringBuilder();
         for (String seg : segments) {
             if (seg.isEmpty()) continue;

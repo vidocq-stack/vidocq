@@ -59,7 +59,7 @@ final class MigrationTables {
         boolean matches(String wanted) {
             boolean delimited = wanted.length() > 1 && wanted.startsWith("\"") && wanted.endsWith("\"");
             String bare = delimited ? wanted.substring(1, wanted.length() - 1) : wanted;
-            return quoted && delimited ? name.equals(bare) : name.equalsIgnoreCase(bare);
+            return (quoted && delimited) ? name.equals(bare) : name.equalsIgnoreCase(bare);
         }
     }
 
@@ -76,14 +76,7 @@ final class MigrationTables {
      * there is no SQL migration there: the check then has nothing to compare with.
      */
     static Optional<MigrationTables> read(Filer filer, String locations) {
-        List<Path> dirs = new ArrayList<>();
-        if (locations != null && !locations.isBlank()) {
-            for (String location : locations.split(",")) {
-                dirs.add(Path.of(location.strip()));
-            }
-        } else {
-            classOutput(filer).ifPresent(out -> dirs.add(out.resolve("db").resolve("migration")));
-        }
+        List<Path> dirs = folders(filer, locations);
         List<Table> tables = new ArrayList<>();
         boolean any = false;
         for (Path dir : dirs) {
@@ -97,6 +90,20 @@ final class MigrationTables {
         }
         String where = locations != null && !locations.isBlank() ? locations.strip() : "db/migration";
         return any ? Optional.of(new MigrationTables(List.copyOf(tables), where)) : Optional.empty();
+    }
+
+    /** The folders {@code locations} names, or {@code <class output>/db/migration} when it names none. */
+    private static List<Path> folders(Filer filer, String locations) {
+        List<Path> dirs = new ArrayList<>();
+        if (locations != null && !locations.isBlank()) {
+            for (String location : locations.split(",", -1)) {
+                // A blank entry (",," or a trailing comma) names no folder, not the working directory.
+                if (!location.isBlank()) dirs.add(Path.of(location.strip()));
+            }
+        } else {
+            classOutput(filer).ifPresent(out -> dirs.add(out.resolve("db").resolve("migration")));
+        }
+        return dirs;
     }
 
     /** Whether a migration creates {@code table} (Mansart's name for it, unquoted in the message). */

@@ -28,6 +28,8 @@ public sealed interface Pagination {
 
     record None() implements Pagination {}
     record Offset(long offset, int limit) implements Pagination {}
+    // Published API (japicmp): equals, hashCode and toString below compare and print the cursor by content.
+    @SuppressWarnings("ArrayRecordComponent")
     record Keyset(int limit, Object[] cursor, OrderBy order) implements Pagination {
 
         /** By content (MANSART-011): the record default would compare the cursor arrays by identity. */

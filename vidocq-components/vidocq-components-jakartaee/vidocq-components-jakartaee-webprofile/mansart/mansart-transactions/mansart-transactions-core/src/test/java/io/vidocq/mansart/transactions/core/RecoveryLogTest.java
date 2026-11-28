@@ -59,6 +59,24 @@ class RecoveryLogTest {
         }
     }
 
+    /** BUG-20261128-91 — an empty branch qualifier ends its line on the separator: the scan kept it too. */
+    @Test
+    void anXidWithAnEmptyBranchQualifierIsReadBack(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("tx.log");
+        Xid global = new MansartXid(new byte[]{7}, new byte[0]);
+
+        try (var log = new FileRecoveryLog(file)) {
+            log.append(new RecoveryLog.Record(RecoveryLog.Type.PREPARED, global));
+        }
+
+        try (var log = new FileRecoveryLog(file)) {
+            var records = log.scan();
+            assertThat(records).hasSize(1);
+            assertThat(records.getFirst().xid().getGlobalTransactionId()).containsExactly(7);
+            assertThat(records.getFirst().xid().getBranchQualifier()).isEmpty();
+        }
+    }
+
     @Test
     void noOpLogScansEmpty() {
         var log = NoOpRecoveryLog.INSTANCE;

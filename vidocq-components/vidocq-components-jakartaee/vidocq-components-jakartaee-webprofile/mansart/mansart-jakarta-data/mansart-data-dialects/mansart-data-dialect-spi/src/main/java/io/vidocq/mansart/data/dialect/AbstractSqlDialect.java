@@ -120,7 +120,7 @@ public abstract class AbstractSqlDialect implements Dialect {
         StringBuilder vals = new StringBuilder();
         boolean first = true;
         for (Attribute<?, ?> a : model.attributes()) {
-            if (a == model.id() && model.id().generated()) continue;
+            if (a.equals(model.id()) && model.id().generated()) continue;
             if (!first) { cols.append(", "); vals.append(", "); }
             cols.append(a.columnName());
             vals.append('?');
@@ -141,7 +141,7 @@ public abstract class AbstractSqlDialect implements Dialect {
         StringBuilder sb = new StringBuilder("UPDATE ").append(qualified(model)).append(" SET ");
         boolean first = true;
         for (Attribute<?, ?> a : model.attributes()) {
-            if (a == model.id()) continue;
+            if (a.equals(model.id())) continue;
             if (!first) sb.append(", ");
             sb.append(a.columnName()).append(" = ?");
             first = false;
@@ -203,8 +203,8 @@ public abstract class AbstractSqlDialect implements Dialect {
     @Override
     public <T> T extract(ResultSet rs, int idx, Class<T> javaType) throws SQLException {
         if (javaType.isEnum()) return extractEnum(rs, idx, javaType);
-        if (javaType == Character.class) return extractCharacter(rs, idx);
-        if (javaType == Instant.class) return extractInstant(rs, idx);
+        if (javaType == Character.class) return javaType.cast(extractCharacter(rs, idx));
+        if (javaType == Instant.class) return javaType.cast(extractInstant(rs, idx));
         if (javaType == String.class || javaType == BigDecimal.class) return extractReference(rs, idx, javaType);
         return extractWrapperOrObject(rs, idx, javaType);
     }
@@ -216,20 +216,19 @@ public abstract class AbstractSqlDialect implements Dialect {
 
     /** Boxed primitives read through the primitive getter (null on SQL NULL); anything else by type. */
     private static <T> T extractWrapperOrObject(ResultSet rs, int idx, Class<T> javaType) throws SQLException {
-        if (javaType == Boolean.class) return nullable(rs.getBoolean(idx), rs);
-        if (javaType == Byte.class)    return nullable(rs.getByte(idx), rs);
-        if (javaType == Short.class)   return nullable(rs.getShort(idx), rs);
-        if (javaType == Integer.class) return nullable(rs.getInt(idx), rs);
-        if (javaType == Long.class)    return nullable(rs.getLong(idx), rs);
-        if (javaType == Float.class)   return nullable(rs.getFloat(idx), rs);
-        if (javaType == Double.class)  return nullable(rs.getDouble(idx), rs);
+        if (javaType == Boolean.class) return javaType.cast(nullable(rs.getBoolean(idx), rs));
+        if (javaType == Byte.class)    return javaType.cast(nullable(rs.getByte(idx), rs));
+        if (javaType == Short.class)   return javaType.cast(nullable(rs.getShort(idx), rs));
+        if (javaType == Integer.class) return javaType.cast(nullable(rs.getInt(idx), rs));
+        if (javaType == Long.class)    return javaType.cast(nullable(rs.getLong(idx), rs));
+        if (javaType == Float.class)   return javaType.cast(nullable(rs.getFloat(idx), rs));
+        if (javaType == Double.class)  return javaType.cast(nullable(rs.getDouble(idx), rs));
         return rs.getObject(idx, javaType);
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> T extractInstant(ResultSet rs, int idx) throws SQLException {
+    private static Instant extractInstant(ResultSet rs, int idx) throws SQLException {
         OffsetDateTime odt = rs.getObject(idx, OffsetDateTime.class);
-        return odt == null ? null : (T) odt.toInstant();
+        return odt == null ? null : odt.toInstant();
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -238,15 +237,13 @@ public abstract class AbstractSqlDialect implements Dialect {
         return s == null ? null : (T) Enum.valueOf((Class) javaType, s);
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> T extractCharacter(ResultSet rs, int idx) throws SQLException {
+    private static Character extractCharacter(ResultSet rs, int idx) throws SQLException {
         String s = rs.getString(idx);
-        return (s == null || s.isEmpty()) ? null : (T) Character.valueOf(s.charAt(0));
+        return (s == null || s.isEmpty()) ? null : Character.valueOf(s.charAt(0));
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> T nullable(Object primitive, ResultSet rs) throws SQLException {
-        return rs.wasNull() ? null : (T) primitive;
+    private static Object nullable(Object primitive, ResultSet rs) throws SQLException {
+        return rs.wasNull() ? null : primitive;
     }
 
     /* ---- helpers ---- */

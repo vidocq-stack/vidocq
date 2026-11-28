@@ -81,7 +81,7 @@ class DialectBindingTest {
                         "TIMESTAMP WITH TIME ZONE"},
                 new Object[]{Instant.parse("2026-10-28T12:30:00Z"), Instant.class, "TIMESTAMP WITH TIME ZONE"},
                 new Object[]{UUID.fromString("4d414e53-0000-0000-0000-000000000001"), UUID.class, "UUID"},
-                new Object[]{Priority.values()[0], Priority.class, "VARCHAR(20)"},
+                new Object[]{Priority.LOW, Priority.class, "VARCHAR(20)"},
                 new Object[]{'x', Character.class, "VARCHAR(1)"});
         return cases.flatMap(c -> Stream.of(new H2Dialect(), new PostgresqlDialect())
                 .flatMap(d -> Stream.of(Arguments.of(d.name(), d, c[0], c[1], c[2]),

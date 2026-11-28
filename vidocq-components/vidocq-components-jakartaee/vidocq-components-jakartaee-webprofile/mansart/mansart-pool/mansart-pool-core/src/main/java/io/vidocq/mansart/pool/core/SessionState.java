@@ -21,7 +21,11 @@ package io.vidocq.mansart.pool.core;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The {@link SessionAttribute session attributes} of one physical connection: the value the driver opened it with,
@@ -34,30 +38,25 @@ import java.util.Objects;
  */
 final class SessionState {
 
-    private static final SessionAttribute[] ATTRIBUTES = SessionAttribute.values();
-
-    private final Object[] initial = new Object[ATTRIBUTES.length];
-    private final Object[] current = new Object[ATTRIBUTES.length];
-    /** The attributes whose initial value is known. */
-    private int known;
+    private final Map<SessionAttribute, Object> initial = new EnumMap<>(SessionAttribute.class);
+    private final Map<SessionAttribute, Object> current = new EnumMap<>(SessionAttribute.class);
     /** The attributes a borrower set since the last restore. */
-    private int changed;
+    private final Set<SessionAttribute> changed = EnumSet.noneOf(SessionAttribute.class);
     /** An initial value could not be read: the connection cannot be put back as the driver opened it. */
     private boolean lost;
 
     /** Called before a borrower sets {@code attribute} to {@code value} on {@code driver}. */
     void changing(Connection driver, SessionAttribute attribute, Object value) {
-        int bit = attribute.bit();
-        if ((known & bit) == 0) {
+        // The initial value is known once read: a null value (no schema) is a value, hence containsKey.
+        if (!initial.containsKey(attribute)) {
             try {
-                initial[attribute.ordinal()] = attribute.read(driver);
-                known |= bit;
+                initial.put(attribute, attribute.read(driver));
             } catch (SQLException _) {
                 lost = true;    // the borrower's change still goes through; the release discards the connection
             }
         }
-        current[attribute.ordinal()] = value;
-        changed |= bit;
+        current.put(attribute, value);
+        changed.add(attribute);
     }
 
     /**
@@ -67,17 +66,17 @@ final class SessionState {
      *                      connection instead of lending it again
      */
     void restore(Connection driver) throws SQLException {
-        if (changed == 0) return;
+        if (changed.isEmpty()) return;
         if (lost) {
             throw new SQLException("A session attribute changed by a borrower could not be read first: the pool"
                     + " cannot put the connection back as the driver opened it");
         }
-        for (SessionAttribute attribute : ATTRIBUTES) {
-            int i = attribute.ordinal();
-            if ((changed & attribute.bit()) != 0 && !Objects.equals(current[i], initial[i])) {
-                attribute.write(driver, initial[i]);
+        for (SessionAttribute attribute : changed) {
+            Object initialValue = initial.get(attribute);
+            if (!Objects.equals(current.get(attribute), initialValue)) {
+                attribute.write(driver, initialValue);
             }
         }
-        changed = 0;
+        changed.clear();
     }
 }

@@ -87,7 +87,7 @@ class EnumStorageTest {
         try (Connection c = dataSource.getConnection(); Statement s = c.createStatement();
              ResultSet rs = s.executeQuery("SELECT rank, label, plain FROM enum_tickets")) {
             assertThat(rs.next()).isTrue();
-            assertThat(rs.getInt(1)).isEqualTo(Priority.HIGH.ordinal());
+            assertThat(rs.getInt(1)).as("HIGH, the third constant").isEqualTo(2);
             assertThat(rs.getString(2)).isEqualTo("MEDIUM");
             assertThat(rs.getString(3)).isEqualTo("LOW");
         }

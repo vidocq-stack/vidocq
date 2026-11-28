@@ -91,7 +91,8 @@ class ProcessorReproducibilityTest {
                 .stream().filter(l -> !l.startsWith("#")).toList();
 
         assertThat(entries).isNotEmpty().allSatisfy(entry -> {
-            String[] pair = entry.split("=");
+            String[] pair = entry.split("=", -1);
+            assertThat(pair).hasSize(2);
             assertThat(pair[1]).isEqualTo(pair[0] + "Impl");
             assertThat(result.classes().resolve(pair[1].replace('.', '/') + ".class")).exists();
         });

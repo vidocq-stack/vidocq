@@ -30,4 +30,8 @@ public class UnscannedGadget {
     private String label;
 
     public UnscannedGadget() {}
+
+    public String getLabel() {
+        return label;
+    }
 }

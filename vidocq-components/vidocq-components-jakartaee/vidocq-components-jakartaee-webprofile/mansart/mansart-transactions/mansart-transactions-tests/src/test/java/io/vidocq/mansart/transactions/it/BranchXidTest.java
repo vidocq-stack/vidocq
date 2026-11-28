@@ -59,12 +59,23 @@ class BranchXidTest {
         @Override public void rollback(Xid xid)              { rolledBack.add(xid); }
         @Override public void forget(Xid xid)                 { /* no-op */ }
         @Override public Xid[] recover(int flag)              { return recoverable.toArray(Xid[]::new); }
-        @Override public boolean isSameRM(XAResource other)   { return this == other; }
+        @Override public boolean isSameRM(XAResource other)   { return this.equals(other); }
         @Override public int     getTransactionTimeout()      { return 0; }
         @Override public boolean setTransactionTimeout(int s) { return false; }
     }
 
-    private record FixedXid(int formatId, byte[] gtrid, byte[] bqual) implements Xid {
+    /** A driver's Xid: the arrays as given, no value semantics. */
+    private static final class FixedXid implements Xid {
+        private final int formatId;
+        private final byte[] gtrid;
+        private final byte[] bqual;
+
+        FixedXid(int formatId, byte[] gtrid, byte[] bqual) {
+            this.formatId = formatId;
+            this.gtrid = gtrid;
+            this.bqual = bqual;
+        }
+
         @Override public int    getFormatId()            { return formatId; }
         @Override public byte[] getGlobalTransactionId() { return gtrid; }
         @Override public byte[] getBranchQualifier()     { return bqual; }

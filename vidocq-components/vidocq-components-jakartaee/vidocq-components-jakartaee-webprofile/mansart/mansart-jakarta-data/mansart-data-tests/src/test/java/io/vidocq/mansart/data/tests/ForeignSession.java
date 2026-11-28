@@ -24,4 +24,9 @@ package io.vidocq.mansart.data.tests;
  * library compiled with Hibernate Processor runs without Hibernate.
  */
 public final class ForeignSession {
+
+    @Override
+    public String toString() {
+        return "ForeignSession";
+    }
 }
