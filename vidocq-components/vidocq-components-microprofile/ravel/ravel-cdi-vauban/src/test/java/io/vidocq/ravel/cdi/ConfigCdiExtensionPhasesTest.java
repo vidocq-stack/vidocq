@@ -65,6 +65,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("ConfigCdiExtension — enhancement, registration and synthesis phases")
@@ -401,6 +402,13 @@ class ConfigCdiExtensionPhasesTest {
         assertFalse(ConfigCdiExtension.isSupportedType(parameterizedType(null, classType(STRING))));
         assertFalse(ConfigCdiExtension.isSupportedType(
                 parameterizedType("java.util.Optional", classType(STRING), classType(STRING))));
+    }
+
+    @Test
+    void toRuntimeClass_of_a_parameterized_type_is_its_generic_class() {
+        assertEquals(Optional.class,
+                ConfigCdiExtension.toRuntimeClass(parameterizedType("java.util.Optional", classType(STRING))));
+        assertNull(ConfigCdiExtension.toRuntimeClass(parameterizedType(null, classType(STRING))));
     }
 
     // -- Fixtures --------------------------------------------------------------------------------

@@ -123,7 +123,7 @@ class RavelConfigBuilderTest {
                 .withSources(MapConfigSource.of("s", 100, Map.of("i", "7", "b", "true")))
                 .build();
         assertEquals(7, cfg.getValue("i", Integer.class));
-        assertEquals(Boolean.TRUE, cfg.getValue("b", Boolean.class));
+        assertEquals(true, cfg.getValue("b", Boolean.class));
     }
 
     @Test

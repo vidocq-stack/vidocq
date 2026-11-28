@@ -38,6 +38,7 @@ import javax.tools.StandardLocation;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -150,7 +151,7 @@ public final class RavelProcessor extends AbstractProcessor {
             boolean viaHandle = field.getModifiers().contains(Modifier.PRIVATE);
             String name = field.getSimpleName().toString();
             if (viaHandle) {
-                handles.append("    private static final java.lang.invoke.VarHandle ").append(name.toUpperCase())
+                handles.append("    private static final java.lang.invoke.VarHandle ").append(name.toUpperCase(Locale.ROOT))
                         .append("_HANDLE = handle(\"").append(name).append("\", ")
                         .append(erasure(field.asType())).append(".class);\n");
             }
@@ -256,7 +257,7 @@ public final class RavelProcessor extends AbstractProcessor {
             }
         }
         String assign = viaHandle
-                ? fieldName.toUpperCase() + "_HANDLE.set(instance, (" + castType(type) + ") value)"
+                ? fieldName.toUpperCase(Locale.ROOT) + "_HANDLE.set(instance, (" + castType(type) + ") value)"
                 : "instance." + fieldName + " = (" + castType(type) + ") value";
         return "        {\n"
                 + "            java.util.Optional<?> found = " + lookup + ";\n"

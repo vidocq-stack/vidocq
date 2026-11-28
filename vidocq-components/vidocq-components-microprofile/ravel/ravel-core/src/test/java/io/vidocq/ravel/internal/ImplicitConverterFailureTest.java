@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DisplayName("ImplicitConverter — §5.2 factory selection and failure reporting")
@@ -67,8 +66,9 @@ class ImplicitConverterFailureTest {
     void factory_method_failures_keep_IAE_and_NPE_and_wrap_the_others() {
         Converter<ThrowingFactory> converter = ImplicitConverter.create(ThrowingFactory.class);
 
-        assertSame(ThrowingFactory.IAE_FAILURE, assertThrows(IllegalArgumentException.class, () -> converter.convert(IAE)));
-        assertSame(ThrowingFactory.NPE_FAILURE, assertThrows(NullPointerException.class, () -> converter.convert(NPE)));
+        // Kept: the very exception the factory threw (its message, no cause, thrown from of(String)).
+        assertThrownByTheFactory(IAE, assertThrows(IllegalArgumentException.class, () -> converter.convert(IAE)));
+        assertThrownByTheFactory(NPE, assertThrows(NullPointerException.class, () -> converter.convert(NPE)));
         IllegalArgumentException wrapped = assertThrows(IllegalArgumentException.class, () -> converter.convert(OTHER));
         assertInstanceOf(IllegalStateException.class, wrapped.getCause());
     }
@@ -136,9 +136,13 @@ class ImplicitConverterFailureTest {
         }
     }
 
+    private static void assertThrownByTheFactory(String message, RuntimeException thrown) {
+        assertEquals(message, thrown.getMessage());
+        assertNull(thrown.getCause());
+        assertEquals(ThrowingFactory.class.getName(), thrown.getStackTrace()[0].getClassName());
+    }
+
     public static final class ThrowingFactory {
-        static final IllegalArgumentException IAE_FAILURE = new IllegalArgumentException(IAE);
-        static final NullPointerException NPE_FAILURE = new NullPointerException(NPE);
 
         private ThrowingFactory() {
             // instances only come from of(String), which always fails
@@ -146,8 +150,8 @@ class ImplicitConverterFailureTest {
 
         public static ThrowingFactory of(String value) {
             switch (value) {
-                case IAE -> throw IAE_FAILURE;
-                case NPE -> throw NPE_FAILURE;
+                case IAE -> throw new IllegalArgumentException(IAE);
+                case NPE -> throw new NullPointerException(NPE);
                 default -> throw new IllegalStateException(value);
             }
         }

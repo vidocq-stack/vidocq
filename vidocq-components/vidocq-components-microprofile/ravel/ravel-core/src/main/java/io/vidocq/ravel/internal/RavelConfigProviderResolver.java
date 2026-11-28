@@ -72,6 +72,8 @@ public final class RavelConfigProviderResolver extends ConfigProviderResolver im
     }
 
     @Override
+    // Identity on purpose: the very Config instance is released, not an equal one.
+    @SuppressWarnings("ReferenceEquality")
     public void releaseConfig(Config config) {
         Objects.requireNonNull(config, "config");
         // Remove by value identity, independent of ClassLoader key.
@@ -93,6 +95,8 @@ public final class RavelConfigProviderResolver extends ConfigProviderResolver im
     }
 
     /** Whether {@code root} is {@code loader} or one of its ancestors. */
+    // Identity on purpose: class loaders are compared as instances.
+    @SuppressWarnings("ReferenceEquality")
     private static boolean isSameOrDescendant(ClassLoader loader, ClassLoader root) {
         for (ClassLoader cl = loader; cl != null; cl = cl.getParent()) {
             if (cl == root) {

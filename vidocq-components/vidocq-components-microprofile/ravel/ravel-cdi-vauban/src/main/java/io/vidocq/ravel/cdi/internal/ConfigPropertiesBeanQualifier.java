@@ -47,17 +47,31 @@ public @interface ConfigPropertiesBeanQualifier {
         }
 
         public static ConfigPropertiesBeanQualifier of(String prefix) {
-            return new ConfigPropertiesBeanQualifier() {
-                @Override
-                public String prefix() {
-                    return prefix;
-                }
+            return new Instance(prefix);
+        }
 
-                @Override
-                public Class<? extends ConfigPropertiesBeanQualifier> annotationType() {
-                    return ConfigPropertiesBeanQualifier.class;
-                }
-            };
+        /** A literal that is equal to the annotation it stands for, as {@link java.lang.annotation.Annotation} says. */
+        private record Instance(String prefix) implements ConfigPropertiesBeanQualifier {
+
+            @Override
+            public Class<? extends ConfigPropertiesBeanQualifier> annotationType() {
+                return ConfigPropertiesBeanQualifier.class;
+            }
+
+            @Override
+            public boolean equals(Object other) {
+                return other instanceof ConfigPropertiesBeanQualifier qualifier && prefix.equals(qualifier.prefix());
+            }
+
+            @Override
+            public int hashCode() {
+                return (127 * "prefix".hashCode()) ^ prefix.hashCode();
+            }
+
+            @Override
+            public String toString() {
+                return "@" + ConfigPropertiesBeanQualifier.class.getName() + "(prefix=\"" + prefix + "\")";
+            }
         }
     }
 }

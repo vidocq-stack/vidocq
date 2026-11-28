@@ -109,9 +109,9 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
 
     /**
      * Types annotated with @ConfigProperties collected during {@code @Registration}.
-     * Key = type string, Value = (type, prefix) pair.
+     * Key = type string. The prefix is not kept: it is resolved at runtime from the injection point.
      */
-    private final Map<String, ConfigPropertiesEntry> configPropertiesTypes = new LinkedHashMap<>();
+    private final Map<String, Type> configPropertiesTypes = new LinkedHashMap<>();
 
     /**
      * True when a bean typed {@link Config} is already registered — e.g.
@@ -122,19 +122,6 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
      * bean would make every {@code @Inject Config} ambiguous.
      */
     private boolean configBeanAlreadyRegistered;
-
-    /**
-     * Entry to store a @ConfigProperties type together with its prefix.
-     */
-    private static class ConfigPropertiesEntry {
-        final Type type;
-        final String prefix;
-
-        ConfigPropertiesEntry(Type type, String prefix) {
-            this.type = type;
-            this.prefix = prefix;
-        }
-    }
 
     /**
      * Binary names of type-level {@code @ConfigProperties} classes vetoed during
@@ -244,8 +231,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             return;
         }
         String fieldPrefix = extractRawPrefix(configPropertiesQual);
-        configPropertiesTypes.putIfAbsent(ipType.toString(),
-            new ConfigPropertiesEntry(ipType, fieldPrefix));
+        configPropertiesTypes.putIfAbsent(ipType.toString(), ipType);
         injectedConfigProperties.add(new InjectedConfigProperties(
                 ct.declaration().name(), fieldPrefix, injectionSite(injectionPoint.declaration())));
     }
@@ -324,13 +310,13 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         // a single SyntheticBean per BeanType qualified with @ConfigProperties suffices
         // (the effective prefix is resolved at runtime by the creator from the IP).
         var registeredConfigProperties = new java.util.HashSet<String>();
-        for (ConfigPropertiesEntry entry : configPropertiesTypes.values()) {
-            String typeStr = entry.type.toString();
+        for (Type configPropertiesType : configPropertiesTypes.values()) {
+            String typeStr = configPropertiesType.toString();
             if (!registeredConfigProperties.add(typeStr)) {
                 continue;
             }
             components.addBean(Object.class)
-                    .type(entry.type)
+                    .type(configPropertiesType)
                     .qualifier(ConfigProperties.class)
                     .scope(Dependent.class)
                     .createWith(ConfigPropertiesSyntheticCreator.class);
@@ -466,7 +452,8 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             return true;
         }
         if (type instanceof ParameterizedType pt) {
-            if (!(pt.genericClass() instanceof ClassType classType)) {
+            ClassType classType = pt.genericClass();
+            if (classType == null) {
                 return false;
             }
             if (!isDeferredOrOptionalWrapperName(classType.declaration().name())) {
@@ -617,7 +604,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         }
     }
 
-    private static Class<?> toRuntimeClass(Type type) {
+    static Class<?> toRuntimeClass(Type type) {
         if (type instanceof jakarta.enterprise.lang.model.types.PrimitiveType pt) {
             return switch (pt.primitiveKind()) {
                 case BOOLEAN -> boolean.class;
@@ -637,8 +624,8 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             Class<?> component = toRuntimeClass(at.componentType());
             return component == null ? null : Array.newInstance(component, 0).getClass();
         }
-        if (type instanceof ParameterizedType pt && pt.genericClass() instanceof ClassType ct) {
-            return loadClass(ct.declaration().name());
+        if (type instanceof ParameterizedType pt && pt.genericClass() != null) {
+            return loadClass(pt.genericClass().declaration().name());
         }
         return null;
     }

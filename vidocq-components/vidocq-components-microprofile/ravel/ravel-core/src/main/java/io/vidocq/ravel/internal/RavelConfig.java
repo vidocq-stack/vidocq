@@ -342,7 +342,7 @@ public final class RavelConfig implements Config, java.io.Serializable {
         return -1;
     }
 
-    /** Whether {@code text} opens a {@code ${} expression at {@code index}. */
+    /** Whether {@code text} opens a <code>${</code> expression at {@code index}. */
     private static boolean startsExpression(String text, int index) {
         return text.charAt(index) == '$' && index + 1 < text.length() && text.charAt(index + 1) == '{';
     }

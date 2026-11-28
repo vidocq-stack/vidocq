@@ -55,7 +55,7 @@ class ConverterDispatchTest {
         assertEquals(42, cfg.getValue("i", Integer.class));
         assertEquals(1234567890123L, cfg.getValue("l", Long.class));
         assertEquals(3.14d, cfg.getValue("d", Double.class));
-        assertEquals(Boolean.TRUE, cfg.getValue("b", Boolean.class));
+        assertEquals(true, cfg.getValue("b", Boolean.class));
         assertEquals('Z', cfg.getValue("c", Character.class));
     }
 

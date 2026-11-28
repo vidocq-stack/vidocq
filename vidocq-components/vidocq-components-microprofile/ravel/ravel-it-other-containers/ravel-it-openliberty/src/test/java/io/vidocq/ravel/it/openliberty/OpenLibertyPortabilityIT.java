@@ -51,7 +51,7 @@ class OpenLibertyPortabilityIT {
 
     @Test
     void configProviderAndConfigBeanAreRavel() throws Exception {
-        String[] answer = get("/config/implementation").split("\\|");
+        String[] answer = get("/config/implementation").split("\\|", -1);
         assertTrue(answer[0].startsWith("io.vidocq.ravel."), answer[0]);
         assertEquals("hello from ravel", answer[1]);
     }
