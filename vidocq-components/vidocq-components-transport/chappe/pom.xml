@@ -78,7 +78,10 @@
             chappe-coverage, built by the quality profile: most tests live in chappe-tests and
             chappe-conformance, so a per-module report would hide what they cover.
         -->
-        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/chappe-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- The component's aggregate report, from a build at the monorepo root, then from a build in this folder
+             (maven.multiModuleProjectDirectory is the nearest .mvn), then the module's own report. The scanner
+             skips a path that does not exist. -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-components/vidocq-components-transport/chappe/chappe-coverage/target/site/jacoco-aggregate/jacoco.xml,${maven.multiModuleProjectDirectory}/chappe-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <!-- The examples have no tests of their own: analysed, but out of the coverage. -->
         <sonar.coverage.exclusions>**/chappe-examples/**</sonar.coverage.exclusions>
         <sonar.exclusions>**/generated/**</sonar.exclusions>

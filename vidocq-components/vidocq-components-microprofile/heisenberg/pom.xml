@@ -105,7 +105,10 @@
             heisenberg-examples stays analysed, out of the coverage figures, and may print to
             System.out (rule java:S106).
         -->
-        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/heisenberg-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- The component's aggregate report, from a build at the monorepo root, then from a build in this folder
+             (maven.multiModuleProjectDirectory is the nearest .mvn), then the module's own report. The scanner
+             skips a path that does not exist. -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-components/vidocq-components-microprofile/heisenberg/heisenberg-coverage/target/site/jacoco-aggregate/jacoco.xml,${maven.multiModuleProjectDirectory}/heisenberg-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.coverage.exclusions>**/heisenberg-examples/**</sonar.coverage.exclusions>
         <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>

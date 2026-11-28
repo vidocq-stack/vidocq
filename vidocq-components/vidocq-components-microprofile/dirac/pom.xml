@@ -95,7 +95,7 @@
             dirac-examples stays analysed, out of the coverage figures, and may print to
             System.out (rule java:S106).
         -->
-        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/dirac-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.coverage.exclusions>**/dirac-examples/**</sonar.coverage.exclusions>
         <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>

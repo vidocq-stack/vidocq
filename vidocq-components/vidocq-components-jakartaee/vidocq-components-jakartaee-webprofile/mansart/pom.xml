@@ -80,7 +80,10 @@
             mansart-transactions-tests, mansart-data-tests and mansart-data-external-it count
             for the code they exercise in the other modules.
         -->
-        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/mansart-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- The component's aggregate report, from a build at the monorepo root, then from a build in this folder
+             (maven.multiModuleProjectDirectory is the nearest .mvn), then the module's own report. The scanner
+             skips a path that does not exist. -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-coverage/target/site/jacoco-aggregate/jacoco.xml,${maven.multiModuleProjectDirectory}/mansart-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 
         <!--
             The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
