@@ -83,7 +83,7 @@ final class ProcessorTestHarness {
         // Effective classpath: java.class.path + URLClassLoader chain + named module layer
         // (covers both classpath and module-path Surefire executions).
         List<File> cpFiles = new ArrayList<>();
-        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
+        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator, -1)) {
             if (!entry.isBlank()) cpFiles.add(new File(entry));
         }
         ClassLoader cl = ProcessorTestHarness.class.getClassLoader();

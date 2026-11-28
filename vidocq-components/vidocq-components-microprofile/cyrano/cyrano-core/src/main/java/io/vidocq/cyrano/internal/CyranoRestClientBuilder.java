@@ -35,6 +35,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -295,6 +296,7 @@ public final class CyranoRestClientBuilder implements RestClientBuilder {
         }
     }
 
+    @Override
     public <T> T build(Class<T> clazz) throws IllegalStateException, RestClientDefinitionException {
         if (baseUri == null) {
             throw new IllegalStateException(
@@ -401,7 +403,8 @@ public final class CyranoRestClientBuilder implements RestClientBuilder {
                                             List<S> out, Set<String> seen) throws IOException {
         URLConnection connection = url.openConnection();
         connection.setUseCaches(false);
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String className = line.split("#", 2)[0].trim();

@@ -114,7 +114,7 @@ public class CyranoRestClientSyntheticCreator implements SyntheticBeanCreator<Ob
             val = lookup.apply(configKey + "/mp-rest/providers");
         }
         if (val.isEmpty() || val.get().isBlank()) return;
-        for (String providerFqn : val.get().split(",")) {
+        for (String providerFqn : val.get().split(",", -1)) {
             String trimmed = providerFqn.trim();
             if (trimmed.isEmpty()) continue;
             try {

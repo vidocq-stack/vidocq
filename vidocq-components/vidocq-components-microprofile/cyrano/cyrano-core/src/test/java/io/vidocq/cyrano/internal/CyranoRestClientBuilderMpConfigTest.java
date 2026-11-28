@@ -31,8 +31,8 @@ import java.net.URI;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Spec MP Rest Client 4.0 §8.1 — {@code microprofile.rest.client.disable.default.mapper}
@@ -68,7 +68,7 @@ class CyranoRestClientBuilderMpConfigTest {
             RestClientBuilder builder = RestClientBuilder.newBuilder()
                     .baseUri(URI.create("http://localhost:9/"));
             builder.build(SimpleApi.class);
-            assertEquals(Boolean.TRUE, builder.getConfiguration().getProperty(KEY),
+            assertTrue(builder.getConfiguration().getProperty(KEY) instanceof Boolean b && b,
                     "build() must resolve the disable-default-mapper key through MP Config");
         } finally {
             ConfigProviderResolver.instance().releaseConfig(config);
@@ -81,9 +81,9 @@ class CyranoRestClientBuilderMpConfigTest {
         try {
             RestClientBuilder builder = RestClientBuilder.newBuilder()
                     .baseUri(URI.create("http://localhost:9/"))
-                    .property(KEY, Boolean.FALSE);
+                    .property(KEY, false);
             builder.build(SimpleApi.class);
-            assertEquals(Boolean.FALSE, builder.getConfiguration().getProperty(KEY),
+            assertTrue(builder.getConfiguration().getProperty(KEY) instanceof Boolean b && !b,
                     "an explicit builder property must win over MP Config");
         } finally {
             ConfigProviderResolver.instance().releaseConfig(config);

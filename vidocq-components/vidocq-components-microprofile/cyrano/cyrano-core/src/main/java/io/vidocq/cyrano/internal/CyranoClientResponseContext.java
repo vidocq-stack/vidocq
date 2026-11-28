@@ -134,7 +134,9 @@ final class CyranoClientResponseContext implements ClientResponseContext {
         String v = getHeaderString("Allow");
         if (v == null) return Set.of();
         Set<String> out = new java.util.LinkedHashSet<>();
-        for (String s : v.split(",")) out.add(s.trim().toUpperCase(Locale.ROOT));
+        for (String s : v.split(",", -1)) {
+            if (!s.isBlank()) out.add(s.trim().toUpperCase(Locale.ROOT)); //an empty entry names no method
+        }
         return out;
     }
     @Override public Date getDate() { return null; }

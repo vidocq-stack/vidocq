@@ -43,7 +43,7 @@ class OpenLibertyPortabilityIT {
 
     @Test
     void injectedRestClientUsesTheProcessorGeneratedProxy() throws Exception {
-        String[] answer = get("/call/injected/liberty").split("\\|");
+        String[] answer = get("/call/injected/liberty").split("\\|", -1);
         assertEquals("hello liberty", answer[0]);
         assertEquals("13", answer[1]);
         assertTrue(answer[2].contains("$$CyranoClient"), answer[2]);
@@ -51,7 +51,7 @@ class OpenLibertyPortabilityIT {
 
     @Test
     void programmaticClientUsesTheRunTimeFallback() throws Exception {
-        String[] answer = get("/call/plain/fallback").split("\\|");
+        String[] answer = get("/call/plain/fallback").split("\\|", -1);
         assertEquals("hello fallback", answer[0]);
         assertFalse(answer[2].contains("$$CyranoClient"), answer[2]);
     }

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
@@ -109,7 +110,7 @@ class CyranoRestClientCdiIntegrationTest {
 
     @BeforeEach
     void startServer() throws Exception {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", TestPort.SERVER_PORT), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), TestPort.SERVER_PORT), 0);
         server.createContext("/ping/", exchange -> {
             String path = exchange.getRequestURI().getPath();           // /ping/Antoine
             String name = path.substring("/ping/".length());

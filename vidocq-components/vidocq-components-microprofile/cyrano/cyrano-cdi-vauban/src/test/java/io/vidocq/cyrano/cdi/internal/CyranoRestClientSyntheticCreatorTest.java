@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -91,7 +92,7 @@ class CyranoRestClientSyntheticCreatorTest {
 
     @BeforeEach
     void startServer() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/echo", exchange -> respond(exchange, 200,
                 exchange.getRequestURI().getQuery() + "|" + exchange.getRequestHeaders().getFirst("X-Provider")));
         server.createContext("/slow", exchange -> {

@@ -164,7 +164,9 @@ final class CyranoClientRequestContext implements ClientRequestContext {
         String accept = getHeaderString("Accept");
         if (accept == null || accept.isEmpty()) return List.of(MediaType.WILDCARD_TYPE);
         List<MediaType> r = new ArrayList<>();
-        for (String s : accept.split(",")) r.add(MediaType.valueOf(s.trim()));
+        for (String s : accept.split(",", -1)) {
+            if (!s.isBlank()) r.add(MediaType.valueOf(s.trim())); //an empty entry names no type
+        }
         return r;
     }
 
@@ -173,7 +175,9 @@ final class CyranoClientRequestContext implements ClientRequestContext {
         String al = getHeaderString("Accept-Language");
         if (al == null || al.isEmpty()) return List.of();
         List<Locale> r = new ArrayList<>();
-        for (String s : al.split(",")) r.add(Locale.forLanguageTag(s.trim()));
+        for (String s : al.split(",", -1)) {
+            if (!s.isBlank()) r.add(Locale.forLanguageTag(s.trim())); //an empty entry names no language
+        }
         return r;
     }
 
@@ -182,7 +186,7 @@ final class CyranoClientRequestContext implements ClientRequestContext {
         String c = getHeaderString("Cookie");
         if (c == null || c.isEmpty()) return Map.of();
         Map<String, Cookie> out = new LinkedHashMap<>();
-        for (String pair : c.split(";")) {
+        for (String pair : c.split(";", -1)) {
             String p = pair.trim();
             int eq = p.indexOf('=');
             if (eq <= 0) continue;

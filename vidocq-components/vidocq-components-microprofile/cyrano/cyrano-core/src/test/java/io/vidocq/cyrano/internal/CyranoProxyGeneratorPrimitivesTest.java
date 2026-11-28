@@ -132,7 +132,8 @@ class CyranoProxyGeneratorPrimitivesTest {
     }
 
     private static <T> T echoProxy(Class<T> iface, EchoHandler handler) {
-        return CyranoProxyGenerator.instantiate(CyranoProxyCache.getOrGenerate(iface).proxyClass(), handler);
+        Class<?> proxyClass = CyranoProxyCache.getOrGenerate(iface).proxyClass();
+        return iface.cast(CyranoProxyGenerator.instantiate(proxyClass, handler));
     }
 
     @Test
@@ -188,7 +189,7 @@ class CyranoProxyGeneratorPrimitivesTest {
             assertEquals(2L, w.longValue(2L));
             assertEquals(3d, w.doubleValue(3d));
             assertEquals(4f, w.floatValue(4f));
-            assertEquals(Boolean.TRUE, w.booleanValue(true));
+            assertTrue(w.booleanValue(true));
             assertEquals((short) 5, w.shortValue((short) 5));
             assertEquals((byte) 6, w.byteValue((byte) 6));
             assertEquals('x', w.charValue("xyz"));

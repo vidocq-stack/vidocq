@@ -82,7 +82,7 @@ public interface ProviderInstantiator {
     }
 
     /**
-     * Instantiator " plain Java" — invokes {@link Class#getDeclaredConstructor()}.
+     * Instantiator " plain Java" — invokes {@link Class#getDeclaredConstructor(Class...)}.
      * Used in pure SE mode (without CDI).
      */
     static ProviderInstantiator defaultInstantiator() {

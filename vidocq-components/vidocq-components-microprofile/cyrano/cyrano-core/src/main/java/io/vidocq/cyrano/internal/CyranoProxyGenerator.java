@@ -215,12 +215,11 @@ public final class CyranoProxyGenerator {
     /**
      * Instantiates a proxy already generated, wired to {@code handler}.
      */
-    @SuppressWarnings("unchecked")
-    public static <T> T instantiate(Class<?> proxyClass, CyranoInvocationHandler handler) {
+    public static Object instantiate(Class<?> proxyClass, CyranoInvocationHandler handler) {
         try {
             var ctor = proxyClass.getDeclaredConstructor(MethodHandle.class, Runnable.class);
             Runnable closer = handler::markClosed;
-            return (T) ctor.newInstance(HANDLER_INVOKE.bindTo(handler), closer);
+            return ctor.newInstance(HANDLER_INVOKE.bindTo(handler), closer);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Failed to instantiate proxy " + proxyClass, e);
         }

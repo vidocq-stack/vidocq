@@ -32,6 +32,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.Closeable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -89,7 +90,7 @@ class CyranoProxyGeneratorTest {
         // Manual handler that captures the index and args without HTTP.
         var capturing = new CapturingHandler();
         var entry = CyranoProxyCache.getOrGenerate(Echo.class);
-        Echo proxy = CyranoProxyGenerator.instantiate(entry.proxyClass(), capturing);
+        Echo proxy = (Echo) CyranoProxyGenerator.instantiate(entry.proxyClass(), capturing);
 
         Object result = proxy.echo("hello");
 
@@ -116,7 +117,7 @@ class CyranoProxyGeneratorTest {
         Class<?> iface = hostInterface(HostModule.named(dir, HOST)
                 .requires("io.vidocq.cyrano.mp.rest.client.api")
                 .opens(HOST_PACKAGE, "io.vidocq.cyrano.core"));
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/ping", ex -> {
             byte[] payload = "pong".getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().add("Content-Type", "text/plain");

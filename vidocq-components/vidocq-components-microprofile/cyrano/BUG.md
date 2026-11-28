@@ -79,6 +79,14 @@ descriptor. Most likely the failure dated from the Maven 4 RC / compiler-plugin 
 back with compiler plugin 3.13 either). Workaround removed; the shared execution in vidocq-parent goes next
 (Vidocq/vidocq-parent#13).
 
+## BUG-20261128-09 — an empty element of a list header becomes an entry
+
+- **Date**: 2026-11-28
+- **Symptom**: `ClientRequestContext.getAcceptableMediaTypes()` and `getAcceptableLanguages()`, and `ClientResponseContext.getAllowedMethods()`, turned an empty element of the `Accept`, `Accept-Language` or `Allow` header into an entry: `Allow: get,, post` gave the methods `GET`, `""` and `POST`; `Accept: text/plain, ,application/json` gave an empty media type. RFC 9110 §5.6.1: a recipient must parse and ignore empty list elements. Found by Error Prone's StringSplitter check (#832).
+- **Repro**: `CyranoClientRequestContextTest.empty_entries_of_accept_headers_name_nothing` and `CyranoClientResponseContextTest.empty_entries_of_the_allow_header_name_no_method`; both failed before the fix.
+- **Cause**: the elements were split on `,` and each one, trimmed, was parsed without checking it was blank (`String.split` only dropped the trailing empty elements).
+- **Status**: FIXED (branch `refactor/cyrano-errorprone`) — the three methods split with `split(",", -1)` and skip the blank elements.
+
 ## BUG-20261102-05 — a hot reload keeps the previous application layers reachable through Cyrano's statics
 
 - **Date**: 2026-11-02

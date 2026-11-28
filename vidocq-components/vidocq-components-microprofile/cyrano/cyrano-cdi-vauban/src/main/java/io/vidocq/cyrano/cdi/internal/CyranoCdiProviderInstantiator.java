@@ -115,6 +115,8 @@ public final class CyranoCdiProviderInstantiator implements ProviderInstantiator
     private final java.util.concurrent.ConcurrentHashMap<BindingsOf, List<InterceptorInvocation>> chains =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    // The bean manager is compared by identity on purpose: a new instance is a new container (a reload).
+    @SuppressWarnings("ReferenceEquality")
     private List<InterceptorInvocation> chainFor(BeanManager bm, BindingsOf call, Annotation[] bindings) {
         if (bm == instancesOf.get()) {
             List<InterceptorInvocation> known = chains.get(call);

@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -56,7 +57,7 @@ class CyranoRestClientInstanceTest {
 
     @BeforeEach
     void startServer() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", TestPort.SERVER_PORT), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), TestPort.SERVER_PORT), 0);
         server.createContext("/ping/", exchange -> {
             byte[] body = ("hello " + exchange.getRequestURI().getPath().substring("/ping/".length()))
                     .getBytes(StandardCharsets.UTF_8);

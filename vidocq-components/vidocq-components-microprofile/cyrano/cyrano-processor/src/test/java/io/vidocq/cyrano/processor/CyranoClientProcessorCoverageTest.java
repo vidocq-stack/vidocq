@@ -183,9 +183,9 @@ class CyranoClientProcessorCoverageTest {
         var invoker = new StubInvoker();
         Object proxy = factory.newProxy(invoker);
 
-        invoker.canned = Boolean.TRUE;
+        invoker.canned = true;
         Object flag = proxy.getClass().getMethod("flag", int.class).invoke(proxy, 7);
-        assertEquals(Boolean.TRUE, flag);
+        assertTrue(flag instanceof Boolean b && b);
         assertArrayEquals(new Object[] { 7 }, invoker.lastArgs, "primitive boxed into args array");
 
         invoker.canned = null;

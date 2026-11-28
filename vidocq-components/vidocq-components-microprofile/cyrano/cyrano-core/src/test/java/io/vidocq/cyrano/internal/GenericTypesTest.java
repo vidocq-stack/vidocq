@@ -42,6 +42,8 @@ class GenericTypesTest {
 
         List<T>[] batches();
 
+        // The shape under test: a type variable only the return type uses.
+        @SuppressWarnings("TypeParameterUnusedInFormals")
         <N extends Number> N number();
     }
 

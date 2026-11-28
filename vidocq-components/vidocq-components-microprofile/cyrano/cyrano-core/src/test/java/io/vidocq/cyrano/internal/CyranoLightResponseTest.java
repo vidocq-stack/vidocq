@@ -35,6 +35,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -62,7 +63,7 @@ class CyranoLightResponseTest {
         @Override
         public Upper readFrom(Class<Upper> type, Type genericType, Annotation[] annotations, MediaType mediaType,
                               MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException {
-            return new Upper(new String(entityStream.readAllBytes(), StandardCharsets.UTF_8).toUpperCase());
+            return new Upper(new String(entityStream.readAllBytes(), StandardCharsets.UTF_8).toUpperCase(Locale.ROOT));
         }
     }
 

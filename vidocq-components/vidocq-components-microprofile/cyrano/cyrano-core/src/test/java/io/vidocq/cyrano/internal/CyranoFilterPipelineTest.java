@@ -32,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -67,7 +68,7 @@ class CyranoFilterPipelineTest {
 
     @BeforeEach
     void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/api/ping", ex -> {
             capturedHeader.set(ex.getRequestHeaders().getFirst("X-Filter"));
             capturedPath.set(ex.getRequestURI().getPath());
@@ -152,15 +153,19 @@ class CyranoFilterPipelineTest {
         List<String> respOrder = new ArrayList<>();
 
         class ReqA implements ClientRequestFilter {
+            @Override
             public void filter(ClientRequestContext ctx) { reqOrder.add("A"); }
         }
         class ReqB implements ClientRequestFilter {
+            @Override
             public void filter(ClientRequestContext ctx) { reqOrder.add("B"); }
         }
         class RespA implements ClientResponseFilter {
+            @Override
             public void filter(ClientRequestContext req, ClientResponseContext resp) { respOrder.add("A"); }
         }
         class RespB implements ClientResponseFilter {
+            @Override
             public void filter(ClientRequestContext req, ClientResponseContext resp) { respOrder.add("B"); }
         }
 

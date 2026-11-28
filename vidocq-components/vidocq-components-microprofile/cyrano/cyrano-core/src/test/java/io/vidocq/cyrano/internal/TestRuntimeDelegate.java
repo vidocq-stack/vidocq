@@ -81,10 +81,11 @@ final class TestRuntimeDelegate extends RuntimeDelegate {
     private static final class MediaTypeDelegate implements HeaderDelegate<MediaType> {
         @Override
         public MediaType fromString(String value) {
-            String[] parts = value.split(";");
+            String[] parts = value.split(";", -1);
             String[] typeAndSubtype = parts[0].trim().split("/", 2);
             Map<String, String> parameters = new LinkedHashMap<>();
             for (int i = 1; i < parts.length; i++) {
+                if (parts[i].isBlank()) continue; //an empty parameter names nothing
                 String[] kv = parts[i].trim().split("=", 2);
                 parameters.put(kv[0].trim(), kv.length > 1 ? kv[1].trim() : "");
             }

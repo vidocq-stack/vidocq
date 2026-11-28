@@ -24,8 +24,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -84,14 +84,14 @@ public final class GenericTypes {
                 boolean changed = false;
                 for (int i = 0; i < args.length; i++) {
                     Type arg = substitute(args[i], bindings);
-                    changed |= arg != args[i];
+                    changed |= !arg.equals(args[i]);
                     args[i] = arg;
                 }
-                yield changed ? new Parameterized((Class<?>) p.getRawType(), p.getOwnerType(), args) : p;
+                yield changed ? new Parameterized((Class<?>) p.getRawType(), p.getOwnerType(), List.of(args)) : p;
             }
             case GenericArrayType a -> {
                 Type component = substitute(a.getGenericComponentType(), bindings);
-                if (component == a.getGenericComponentType()) {
+                if (component.equals(a.getGenericComponentType())) {
                     yield a;
                 }
                 yield component instanceof Class<?> c ? c.arrayType() : new GenericArray(component);
@@ -130,11 +130,11 @@ public final class GenericTypes {
     }
 
     /** A parameterized type whose arguments were substituted; equal to the JDK's own for the same arguments. */
-    private record Parameterized(Class<?> raw, Type owner, Type[] args) implements ParameterizedType {
+    private record Parameterized(Class<?> raw, Type owner, List<Type> args) implements ParameterizedType {
 
         @Override
         public Type[] getActualTypeArguments() {
-            return args.clone();
+            return args.toArray(new Type[0]);
         }
 
         @Override
@@ -150,12 +150,13 @@ public final class GenericTypes {
         @Override
         public boolean equals(Object o) {
             return o instanceof ParameterizedType p && raw.equals(p.getRawType())
-                    && Objects.equals(owner, p.getOwnerType()) && Arrays.equals(args, p.getActualTypeArguments());
+                    && Objects.equals(owner, p.getOwnerType()) && args.equals(List.of(p.getActualTypeArguments()));
         }
 
         @Override
         public int hashCode() {
-            return Arrays.hashCode(args) ^ Objects.hashCode(owner) ^ raw.hashCode();
+            //List.hashCode is Arrays.hashCode of the same elements: equal to the JDK's own hash
+            return args.hashCode() ^ Objects.hashCode(owner) ^ raw.hashCode();
         }
 
         @Override
@@ -166,8 +167,8 @@ public final class GenericTypes {
         @Override
         public String getTypeName() {
             StringBuilder sb = new StringBuilder(raw.getTypeName()).append('<');
-            for (int i = 0; i < args.length; i++) {
-                sb.append(i > 0 ? ", " : "").append(args[i].getTypeName());
+            for (int i = 0; i < args.size(); i++) {
+                sb.append(i > 0 ? ", " : "").append(args.get(i).getTypeName());
             }
             return sb.append('>').toString();
         }

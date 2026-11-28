@@ -84,6 +84,14 @@ class CyranoClientResponseContextTest {
     }
 
     @Test
+    void empty_entries_of_the_allow_header_name_no_method() {
+        StubResponse stub = StubResponse.ofString(200, "x");
+        stub.getStringHeaders().add("Allow", "get,, post,");
+
+        assertEquals(Set.of("GET", "POST"), CyranoClientResponseContext.fromAbort(stub).getAllowedMethods());
+    }
+
+    @Test
     void headers_are_looked_up_case_insensitively() {
         StubResponse stub = StubResponse.ofString(200, "x");
         stub.getStringHeaders().add("Allow", "get, post");
@@ -135,6 +143,11 @@ class CyranoClientResponseContextTest {
         InputStream failing = new InputStream() {
             @Override
             public int read() throws IOException {
+                throw new IOException("closed");
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
                 throw new IOException("closed");
             }
 

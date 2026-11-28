@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.ConnectException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
@@ -104,7 +105,7 @@ class CyranoCallFailureListenerTest {
     @Test
     void a_read_timeout_tells_the_listener() throws IOException {
         CountDownLatch release = new CountDownLatch(1);
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/api/ping", ex -> {
             try {
                 release.await(5, TimeUnit.SECONDS);
@@ -196,7 +197,7 @@ class CyranoCallFailureListenerTest {
     }
 
     private void startPong() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/api/ping", ex -> {
             byte[] b = "pong".getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, b.length);

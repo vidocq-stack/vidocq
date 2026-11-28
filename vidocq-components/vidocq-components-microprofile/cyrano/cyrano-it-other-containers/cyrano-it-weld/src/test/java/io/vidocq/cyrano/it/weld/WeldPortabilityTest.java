@@ -20,6 +20,7 @@
 package io.vidocq.cyrano.it.weld;
 
 import com.sun.net.httpserver.HttpServer;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -49,7 +50,7 @@ class WeldPortabilityTest {
 
     @BeforeAll
     static void start() throws Exception {
-        stub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        stub = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         stub.createContext("/greet/", exchange -> {
             String name = exchange.getRequestURI().getPath().substring("/greet/".length());
             String message = "hello " + name;

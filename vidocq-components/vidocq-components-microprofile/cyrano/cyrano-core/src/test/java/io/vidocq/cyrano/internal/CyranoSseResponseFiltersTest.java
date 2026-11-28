@@ -101,7 +101,7 @@ class CyranoSseResponseFiltersTest {
 
     @BeforeEach
     void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/sse/events", ex -> {
             ex.getResponseHeaders().set("Content-Type", "text/event-stream");
             ex.sendResponseHeaders(200, 0);

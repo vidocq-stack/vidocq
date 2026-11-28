@@ -116,6 +116,8 @@ public final class SseEventPublisher<T> implements Flow.Publisher<T> {
         }
     }
 
+    // The future whenComplete returns is dropped on purpose: the callback handles every outcome of the connection.
+    @SuppressWarnings("FutureReturnValueIgnored")
     private void connect() {
         connection.get().whenComplete((response, failure) -> {
             try {

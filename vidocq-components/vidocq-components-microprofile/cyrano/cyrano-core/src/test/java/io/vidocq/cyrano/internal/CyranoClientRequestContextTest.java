@@ -149,6 +149,15 @@ class CyranoClientRequestContextTest {
     }
 
     @Test
+    void empty_entries_of_accept_headers_name_nothing() {
+        ctx.getHeaders().putSingle(ACCEPT_LANGUAGE, "en-US,, de,");
+        ctx.getHeaders().putSingle("Accept", "text/plain, ,application/json,");
+
+        assertEquals(List.of(Locale.forLanguageTag("en-US"), Locale.GERMAN), ctx.getAcceptableLanguages());
+        assertEquals(List.of(MediaType.TEXT_PLAIN_TYPE, MediaType.APPLICATION_JSON_TYPE), ctx.getAcceptableMediaTypes());
+    }
+
+    @Test
     void acceptable_media_types_default_to_wildcard() {
         assertEquals(List.of(MediaType.WILDCARD_TYPE), ctx.getAcceptableMediaTypes());
         ctx.getHeaders().putSingle("Accept", "");

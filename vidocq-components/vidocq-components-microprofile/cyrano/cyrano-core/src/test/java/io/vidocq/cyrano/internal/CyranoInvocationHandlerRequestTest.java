@@ -57,6 +57,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -564,7 +565,7 @@ class CyranoInvocationHandlerRequestTest {
     @Test
     void writer_interceptors_run_around_the_registered_writer() {
         WriterInterceptor upper = ctx -> {
-            ctx.setEntity(new Payload(((Payload) ctx.getEntity()).value.toUpperCase()));
+            ctx.setEntity(new Payload(((Payload) ctx.getEntity()).value.toUpperCase(Locale.ROOT)));
             ctx.proceed();
         };
         BodyApi client = builder().register(new PayloadWriter()).register(upper).build(BodyApi.class);

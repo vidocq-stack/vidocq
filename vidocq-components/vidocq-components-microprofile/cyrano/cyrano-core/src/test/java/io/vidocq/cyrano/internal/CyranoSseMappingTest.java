@@ -46,6 +46,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
@@ -149,7 +150,7 @@ class CyranoSseMappingTest {
 
     @BeforeEach
     void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         events("/sse/arrays", ": comment only\n\n", "data: [1,2]\n\n");
         events("/sse/values", "data: 7\n\n", "data: \"text\"\n\n");
         events("/sse/readings", "data: {\"temp\":21}\n\n");

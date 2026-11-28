@@ -31,6 +31,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
@@ -56,7 +57,7 @@ class CyranoCdiGeneratedClientTest {
 
     @BeforeEach
     void startServer() throws Exception {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", GeneratedPingApi.PORT), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), GeneratedPingApi.PORT), 0);
         server.createContext("/gping/", exchange -> {
             String name = exchange.getRequestURI().getPath().substring("/gping/".length());
             byte[] body = ("hello " + name).getBytes(StandardCharsets.UTF_8);

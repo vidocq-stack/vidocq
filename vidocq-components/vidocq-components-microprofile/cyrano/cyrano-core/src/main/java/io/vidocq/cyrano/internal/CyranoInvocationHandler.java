@@ -290,7 +290,8 @@ public class CyranoInvocationHandler implements io.vidocq.cyrano.spi.gen.ClientI
                 failure -> notifyFailure(reqCtx, failure));
     }
 
-    private CompletableFuture<Object> invokeAsync(CyranoClientRequestContext reqCtx, RequestSpec spec) {
+    /** The value of the call: the CompletionStage the client method returns. */
+    private CompletionStage<Object> invokeAsync(CyranoClientRequestContext reqCtx, RequestSpec spec) {
         Type asyncGenericType = innerType(spec.genericReturnType());
         Class<?> asyncRawType = rawType(asyncGenericType);
         List<AsyncInvocationInterceptor> asyncInterceptors = newAsyncInterceptors();
@@ -1283,7 +1284,7 @@ public class CyranoInvocationHandler implements io.vidocq.cyrano.spi.gen.ClientI
     }
 
     private static Object jsonValue(jakarta.json.JsonValue value, Class<?> targetType) {
-        if (value == null || value == jakarta.json.JsonValue.NULL) return null;
+        if (value == null || value.getValueType() == jakarta.json.JsonValue.ValueType.NULL) return null;
         if (targetType == String.class) {
             return jsonString(value);
         }
@@ -1294,7 +1295,7 @@ public class CyranoInvocationHandler implements io.vidocq.cyrano.spi.gen.ClientI
             return jsonLong(value);
         }
         if (targetType == boolean.class || targetType == Boolean.class) {
-            return value == jakarta.json.JsonValue.TRUE
+            return value.getValueType() == jakarta.json.JsonValue.ValueType.TRUE
                     || "true".equalsIgnoreCase(value.toString());
         }
         return null;

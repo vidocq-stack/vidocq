@@ -36,6 +36,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -151,7 +152,7 @@ class CyranoSseTransportTest {
 
     @BeforeEach
     void start() throws Exception {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/sse/strings", ex -> {
             lastAcceptHeader.set(ex.getRequestHeaders().getFirst("Accept"));
             ex.getResponseHeaders().set("Content-Type", "text/event-stream");
