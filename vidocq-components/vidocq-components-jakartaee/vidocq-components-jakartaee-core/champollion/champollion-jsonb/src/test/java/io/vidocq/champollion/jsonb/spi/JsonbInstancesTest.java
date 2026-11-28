@@ -22,6 +22,7 @@ package io.vidocq.champollion.jsonb.spi;
 import jakarta.json.bind.JsonbException;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,7 +120,7 @@ class JsonbInstancesTest {
         ClassLoader other = new ClassLoader(null) { };
         Container unrelated = new Container(String.class, "x");
         Thread[] installer = new Thread[1];
-        Thread.State[] seen = new Thread.State[1];
+        boolean[] ended = new boolean[1];
         Container asking = new Container(Plain.class, new Plain());
         JsonbInstances.Source probing = new JsonbInstances.Source() {
             @Override
@@ -129,19 +130,20 @@ class JsonbInstancesTest {
 
             @Override
             public boolean serves(Class<?> type) {
-                // Another container starts while this one is asked: it ends, or it waits for the lock (parked on a
-                // java.util.concurrent lock, so WAITING; BLOCKED was the state on the monitor this lock replaced).
+                // Another container starts while this one is asked. It must end without waiting for this call: if
+                // install took the lock of the sources that sourceFor holds, it could not end before serves returns.
+                // Reading the thread's state instead was flaky: a starting thread can be BLOCKED for a moment on a
+                // monitor of its own (class loading), which looked like waiting for the lock.
                 installer[0] = Thread.ofPlatform().start(() -> {
                     JsonbInstances.install(other, unrelated);
                     JsonbInstances.uninstall(other, unrelated);
                 });
-                Thread.State state = installer[0].getState();
-                while (state != Thread.State.WAITING && state != Thread.State.BLOCKED
-                        && state != Thread.State.TERMINATED) {
-                    Thread.onSpinWait();
-                    state = installer[0].getState();
+                try {
+                    ended[0] = installer[0].join(Duration.ofSeconds(10));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
                 }
-                seen[0] = state;
                 return false;
             }
         };
@@ -154,7 +156,7 @@ class JsonbInstancesTest {
             JsonbInstances.uninstall(loader, probing);
             if (installer[0] != null) installer[0].join();
         }
-        assertEquals(Thread.State.TERMINATED, seen[0], "a container that starts does not wait for serves");
+        assertTrue(ended[0], "a container that starts does not wait for serves");
     }
 
     @Test
