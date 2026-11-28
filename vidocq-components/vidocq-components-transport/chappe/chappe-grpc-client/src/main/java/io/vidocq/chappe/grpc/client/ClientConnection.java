@@ -143,7 +143,9 @@ final class ClientConnection implements Closeable {
         int defaultPort = tls ? 443 : 80;
         int port = target.getPort() >= 0 ? target.getPort() : defaultPort;
         String authority = (host.indexOf(':') >= 0 && !host.startsWith("[") ? "[" + host + "]" : host) + ":" + port;
-        var raw = new Socket();
+        // The TCP socket under both schemes: TLS wraps it in handshake() for https, and an http target asks for
+        // cleartext HTTP/2 with prior knowledge (h2c), as gRPC clients allow for a local or mesh-internal server.
+        var raw = new Socket(); // nosemgrep: java.lang.security.audit.crypto.unencrypted-socket
         ClientConnection connection = null;
         try {
             raw.setTcpNoDelay(true);
