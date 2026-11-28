@@ -207,7 +207,7 @@ class ModelContractTest {
     }
 
     private static boolean isNullOrEmpty(Object value) {
-        return value == null || value instanceof Map<?, ?> map && map.isEmpty();
+        return value == null || (value instanceof Map<?, ?> map && map.isEmpty());
     }
 
     private static Optional<Method> getterOf(Class<?> type, Method setter) {
@@ -274,7 +274,7 @@ class ModelContractTest {
             return TEXT;
         }
         if (raw == Boolean.class) {
-            return Boolean.TRUE;
+            return true;
         }
         if (raw == Integer.class) {
             return 3;

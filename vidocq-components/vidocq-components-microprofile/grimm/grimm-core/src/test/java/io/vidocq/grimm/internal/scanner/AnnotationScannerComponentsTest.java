@@ -234,7 +234,7 @@ class AnnotationScannerComponentsTest {
         assertEquals(LIMIT, limit.getName());
         assertEquals("#/components/parameters/limit", limit.getRef());
         assertEquals("Page size", limit.getDescription());
-        assertEquals(Boolean.TRUE, limit.getRequired());
+        assertEquals(true, limit.getRequired());
         assertNotNull(limit.getSchema());
         assertEquals("parameter", limit.getExtensions().get(X_KIND));
         assertEquals("10", limit.getContent().getMediaType(JSON).getExample());
@@ -260,7 +260,7 @@ class AnnotationScannerComponentsTest {
         assertEquals(4, bodies.size());
         var body = bodies.get("PetBody");
         assertEquals("A pet", body.getDescription());
-        assertEquals(Boolean.TRUE, body.getRequired());
+        assertEquals(true, body.getRequired());
         assertEquals("#/components/requestBodies/pet", body.getRef());
         assertEquals("body", body.getExtensions().get(X_KIND));
         var form = body.getContent().getMediaType("multipart/form-data");
@@ -269,7 +269,7 @@ class AnnotationScannerComponentsTest {
         assertEquals(2, form.getEncoding().size());
         var file = form.getEncoding().get("file");
         assertEquals("image/png", file.getContentType());
-        assertEquals(Boolean.TRUE, file.getExplode());
+        assertEquals(true, file.getExplode());
         assertEquals(3, file.getHeaders().size());
         assertEquals("Rate", file.getHeaders().get(X_RATE).getDescription());
         assertNotNull(file.getHeaders().get(X_RATE).getSchema());
@@ -286,8 +286,8 @@ class AnnotationScannerComponentsTest {
         // @RequestBody.required defaults to true (MP OpenAPI 4.2 javadoc), unlike the OpenAPI default.
         var bodies = components().getRequestBodies();
 
-        assertEquals(Boolean.TRUE, bodies.get("DefaultBody").getRequired());
-        assertEquals(Boolean.FALSE, bodies.get("OptionalBody").getRequired());
+        assertEquals(true, bodies.get("DefaultBody").getRequired());
+        assertEquals(false, bodies.get("OptionalBody").getRequired());
         assertNull(bodies.get(EMPTY_BODY).getRequired());
         assertNull(bodies.get(EMPTY_BODY).getContent());
     }
@@ -300,8 +300,8 @@ class AnnotationScannerComponentsTest {
         var trace = headers.get(X_TRACE);
         assertEquals("#/components/headers/trace", trace.getRef());
         assertEquals("Trace id", trace.getDescription());
-        assertEquals(Boolean.TRUE, trace.getRequired());
-        assertEquals(Boolean.TRUE, trace.getDeprecated());
+        assertEquals(true, trace.getRequired());
+        assertEquals(true, trace.getDeprecated());
         assertNotNull(trace.getSchema());
         assertEquals("header", trace.getExtensions().get(X_KIND));
         assertNull(headers.get("X-Plain").getDescription());

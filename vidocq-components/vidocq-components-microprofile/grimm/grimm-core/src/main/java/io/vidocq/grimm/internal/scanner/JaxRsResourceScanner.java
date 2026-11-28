@@ -1134,7 +1134,7 @@ final class JaxRsResourceScanner {
         if (!urlExpr.isEmpty() && cb.operations().length > 0) {
             var pathItem = OASFactory.createObject(PathItem.class);
             for (CallbackOperation co : cb.operations()) {
-                assignOperation(pathItem, co.method().toUpperCase(), toCallbackOperation(co, returnType));
+                assignOperation(pathItem, co.method().toUpperCase(java.util.Locale.ROOT), toCallbackOperation(co, returnType));
             }
             modelCb.addPathItem(urlExpr, pathItem);
         }

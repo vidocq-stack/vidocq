@@ -62,7 +62,7 @@ class GrimmModelProcessorOracleTest {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         File outputDir = Files.createDirectories(tempDir.resolve("classes-" + System.nanoTime())).toFile();
         List<File> cpFiles = new ArrayList<>();
-        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
+        for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator, -1)) {
             if (!entry.isBlank()) cpFiles.add(new File(entry));
         }
         ClassLoader cl = getClass().getClassLoader();

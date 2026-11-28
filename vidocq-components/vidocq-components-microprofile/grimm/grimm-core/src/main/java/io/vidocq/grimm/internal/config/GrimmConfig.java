@@ -188,7 +188,7 @@ public record GrimmConfig(
     private static Set<String> csvSet(String raw) {
         if (raw == null || raw.isBlank()) return Collections.emptySet();
         Set<String> out = new LinkedHashSet<>();
-        for (String s : raw.split(",")) {
+        for (String s : raw.split(",", -1)) {
             String t = s.trim();
             if (!t.isEmpty()) out.add(t);
         }
@@ -198,7 +198,7 @@ public record GrimmConfig(
     private static List<String> csvList(String raw) {
         if (raw == null || raw.isBlank()) return List.of();
         List<String> out = new java.util.ArrayList<>();
-        for (String s : raw.split(",")) {
+        for (String s : raw.split(",", -1)) {
             String t = s.trim();
             if (!t.isEmpty()) out.add(t);
         }

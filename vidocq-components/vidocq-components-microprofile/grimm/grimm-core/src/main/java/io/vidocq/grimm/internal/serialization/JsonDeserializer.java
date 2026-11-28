@@ -87,8 +87,8 @@ public final class JsonDeserializer {
                 case '{' -> parseObject();
                 case '[' -> parseArray();
                 case '"' -> parseString();
-                case 't' -> parseLiteral("true", Boolean.TRUE);
-                case 'f' -> parseLiteral("false", Boolean.FALSE);
+                case 't' -> parseLiteral("true", true);
+                case 'f' -> parseLiteral("false", false);
                 case 'n' -> parseLiteral("null", null);
                 default -> {
                     if (c == '-' || Character.isDigit(c)) {

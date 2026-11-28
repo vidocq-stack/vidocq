@@ -401,8 +401,8 @@ public final class ModelMerger {
     }
 
     private static boolean isEmpty(Object value) {
-        return value instanceof java.util.Collection<?> collection && collection.isEmpty()
-                || value instanceof Map<?, ?> map && map.isEmpty();
+        return (value instanceof java.util.Collection<?> collection && collection.isEmpty())
+                || (value instanceof Map<?, ?> map && map.isEmpty());
     }
 
     private List<Parameter> mergeParameters(List<Parameter> base, List<Parameter> incoming) {

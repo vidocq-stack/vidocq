@@ -472,11 +472,11 @@ class ModelMergerTest {
         assertEquals(BigDecimal.ONE, merged.getMinimum());
         assertEquals(5, merged.getMaxLength());
         assertEquals("[a-z]+", merged.getPattern());
-        assertEquals(Boolean.TRUE, merged.getReadOnly());
+        assertEquals(true, merged.getReadOnly());
         assertEquals(List.of("abc"), merged.getExamples());
         assertEquals("text/plain", merged.getContentMediaType());
         assertEquals("x", merged.getNot().getPattern());
-        assertEquals(Boolean.FALSE, merged.getAdditionalPropertiesBoolean());
+        assertEquals(false, merged.getAdditionalPropertiesBoolean());
         assertEquals("v", merged.getExtensions().get("x-a"));
     }
 

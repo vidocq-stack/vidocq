@@ -29,7 +29,7 @@ import org.eclipse.microprofile.openapi.annotations.media.PatternProperty;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.media.SchemaProperty;
 
-import java.util.Arrays;
+import java.util.List;
 
 /**
  * The attributes {@code @Schema} and {@code @SchemaProperty} share, read once from either
@@ -47,7 +47,7 @@ record SchemaAttributes(
         String comment,
         String pattern,
         String example,
-        String[] examples,
+        List<String> examples,
         String defaultValue,
         int minLength,
         int maxLength,
@@ -69,27 +69,27 @@ record SchemaAttributes(
         String contentMediaType,
         Class<?> contentSchema,
         String constValue,
-        String[] requiredProperties,
-        String[] enumeration,
-        DependentRequired[] dependentRequired,
-        DependentSchema[] dependentSchemas,
+        List<String> requiredProperties,
+        List<String> enumeration,
+        List<DependentRequired> dependentRequired,
+        List<DependentSchema> dependentSchemas,
         Class<?> additionalProperties,
         ExternalDocumentation externalDocs,
-        Extension[] extensions,
-        Class<?>[] allOf,
-        Class<?>[] anyOf,
-        Class<?>[] oneOf,
+        List<Extension> extensions,
+        List<Class<?>> allOf,
+        List<Class<?>> anyOf,
+        List<Class<?>> oneOf,
         Class<?> not,
         String discriminatorProperty,
-        DiscriminatorMapping[] discriminatorMapping,
+        List<DiscriminatorMapping> discriminatorMapping,
         Class<?> ifSchema,
         Class<?> thenSchema,
         Class<?> elseSchema,
         Class<?> contains,
         int minContains,
         int maxContains,
-        Class<?>[] prefixItems,
-        PatternProperty[] patternProperties,
+        List<Class<?>> prefixItems,
+        List<PatternProperty> patternProperties,
         Class<?> propertyNames) {
 
     /**
@@ -101,7 +101,7 @@ record SchemaAttributes(
     boolean hasContent() {
         return type != SchemaType.DEFAULT
                 || !format.isEmpty() || !title.isEmpty() || !description.isEmpty() || !comment.isEmpty()
-                || !pattern.isEmpty() || !example.isEmpty() || examples.length > 0 || !defaultValue.isEmpty()
+                || !pattern.isEmpty() || !example.isEmpty() || !examples.isEmpty() || !defaultValue.isEmpty()
                 || minLength != 0 || maxLength != Integer.MAX_VALUE
                 || minProperties != 0 || maxProperties != 0
                 || minItems != Integer.MAX_VALUE || maxItems != Integer.MIN_VALUE
@@ -109,68 +109,41 @@ record SchemaAttributes(
                 || exclusiveMinimum || exclusiveMaximum || multipleOf != 0d
                 || deprecated || readOnly || writeOnly || nullable
                 || !contentEncoding.isEmpty() || !contentMediaType.isEmpty() || contentSchema != Void.class
-                || !constValue.isEmpty() || requiredProperties.length > 0 || enumeration.length > 0
-                || dependentRequired.length > 0 || dependentSchemas.length > 0
+                || !constValue.isEmpty() || !requiredProperties.isEmpty() || !enumeration.isEmpty()
+                || !dependentRequired.isEmpty() || !dependentSchemas.isEmpty()
                 || additionalProperties != Void.class || !externalDocs.url().isEmpty()
-                || extensions.length > 0 || allOf.length > 0 || anyOf.length > 0 || oneOf.length > 0
-                || not != Void.class || !discriminatorProperty.isEmpty() || discriminatorMapping.length > 0
+                || !extensions.isEmpty() || !allOf.isEmpty() || !anyOf.isEmpty() || !oneOf.isEmpty()
+                || not != Void.class || !discriminatorProperty.isEmpty() || !discriminatorMapping.isEmpty()
                 || ifSchema != Void.class || thenSchema != Void.class || elseSchema != Void.class
                 || contains != Void.class || minContains != 0 || maxContains != Integer.MAX_VALUE
-                || prefixItems.length > 0 || patternProperties.length > 0 || propertyNames != Void.class;
+                || !prefixItems.isEmpty() || !patternProperties.isEmpty() || propertyNames != Void.class;
     }
 
-    /**
-     * Content-based equality: the array components are compared element by element, not by
-     * reference as the implicit record {@code equals} would do.
-     */
-    @Override
-    public boolean equals(Object other) {
-        return other instanceof SchemaAttributes that && Arrays.deepEquals(components(), that.components());
-    }
-
-    @Override
-    public int hashCode() {
-        return Arrays.deepHashCode(components());
-    }
-
-    @Override
-    public String toString() {
-        return "SchemaAttributes" + Arrays.deepToString(components());
-    }
-
-    private Object[] components() {
-        return new Object[] {type, format, title, description, comment, pattern, example, examples, defaultValue,
-                minLength, maxLength, minProperties, maxProperties, minItems, maxItems, uniqueItems, minimum, maximum,
-                exclusiveMinimum, exclusiveMaximum, multipleOf, deprecated, readOnly, writeOnly, nullable,
-                contentEncoding, contentMediaType, contentSchema, constValue, requiredProperties, enumeration,
-                dependentRequired, dependentSchemas, additionalProperties, externalDocs, extensions, allOf, anyOf,
-                oneOf, not, discriminatorProperty, discriminatorMapping, ifSchema, thenSchema, elseSchema, contains,
-                minContains, maxContains, prefixItems, patternProperties, propertyNames};
-    }
-
+    @SuppressWarnings("deprecation") // example(): deprecated in MP OpenAPI 4, still mapped (spec)
     static SchemaAttributes of(Schema a) {
         return new SchemaAttributes(a.type(), a.format(), a.title(), a.description(), a.comment(), a.pattern(),
-                a.example(), a.examples(), a.defaultValue(), a.minLength(), a.maxLength(), a.minProperties(),
+                a.example(), List.of(a.examples()), a.defaultValue(), a.minLength(), a.maxLength(), a.minProperties(),
                 a.maxProperties(), a.minItems(), a.maxItems(), a.uniqueItems(), a.minimum(), a.maximum(),
                 a.exclusiveMinimum(), a.exclusiveMaximum(), a.multipleOf(), a.deprecated(), a.readOnly(),
                 a.writeOnly(), a.nullable(), a.contentEncoding(), a.contentMediaType(), a.contentSchema(),
-                a.constValue(), a.requiredProperties(), a.enumeration(), a.dependentRequired(),
-                a.dependentSchemas(), a.additionalProperties(), a.externalDocs(), a.extensions(), a.allOf(),
-                a.anyOf(), a.oneOf(), a.not(), a.discriminatorProperty(), a.discriminatorMapping(),
+                a.constValue(), List.of(a.requiredProperties()), List.of(a.enumeration()), List.of(a.dependentRequired()),
+                List.of(a.dependentSchemas()), a.additionalProperties(), a.externalDocs(), List.of(a.extensions()), List.of(a.allOf()),
+                List.of(a.anyOf()), List.of(a.oneOf()), a.not(), a.discriminatorProperty(), List.of(a.discriminatorMapping()),
                 a.ifSchema(), a.thenSchema(), a.elseSchema(), a.contains(), a.minContains(), a.maxContains(),
-                a.prefixItems(), a.patternProperties(), a.propertyNames());
+                List.of(a.prefixItems()), List.of(a.patternProperties()), a.propertyNames());
     }
 
+    @SuppressWarnings("deprecation") // example(): deprecated in MP OpenAPI 4, still mapped (spec)
     static SchemaAttributes of(SchemaProperty a) {
         return new SchemaAttributes(a.type(), a.format(), a.title(), a.description(), a.comment(), a.pattern(),
-                a.example(), a.examples(), a.defaultValue(), a.minLength(), a.maxLength(), a.minProperties(),
+                a.example(), List.of(a.examples()), a.defaultValue(), a.minLength(), a.maxLength(), a.minProperties(),
                 a.maxProperties(), a.minItems(), a.maxItems(), a.uniqueItems(), a.minimum(), a.maximum(),
                 a.exclusiveMinimum(), a.exclusiveMaximum(), a.multipleOf(), a.deprecated(), a.readOnly(),
                 a.writeOnly(), a.nullable(), a.contentEncoding(), a.contentMediaType(), a.contentSchema(),
-                a.constValue(), a.requiredProperties(), a.enumeration(), a.dependentRequired(),
-                a.dependentSchemas(), a.additionalProperties(), a.externalDocs(), a.extensions(), a.allOf(),
-                a.anyOf(), a.oneOf(), a.not(), a.discriminatorProperty(), a.discriminatorMapping(),
+                a.constValue(), List.of(a.requiredProperties()), List.of(a.enumeration()), List.of(a.dependentRequired()),
+                List.of(a.dependentSchemas()), a.additionalProperties(), a.externalDocs(), List.of(a.extensions()), List.of(a.allOf()),
+                List.of(a.anyOf()), List.of(a.oneOf()), a.not(), a.discriminatorProperty(), List.of(a.discriminatorMapping()),
                 a.ifSchema(), a.thenSchema(), a.elseSchema(), a.contains(), a.minContains(), a.maxContains(),
-                a.prefixItems(), a.patternProperties(), a.propertyNames());
+                List.of(a.prefixItems()), List.of(a.patternProperties()), a.propertyNames());
     }
 }

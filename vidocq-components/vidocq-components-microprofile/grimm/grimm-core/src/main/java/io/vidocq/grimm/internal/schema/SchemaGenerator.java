@@ -22,6 +22,7 @@ package io.vidocq.grimm.internal.schema;
 import io.vidocq.grimm.internal.scanner.AnnotationModelMappings;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
 import org.eclipse.microprofile.openapi.models.media.Discriminator;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 
@@ -545,7 +546,7 @@ public final class SchemaGenerator {
         if (!ann.externalDocs().url().isEmpty()) {
             base.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(ann.externalDocs()));
         }
-        AnnotationModelMappings.applyExtensions(base, ann.extensions());
+        AnnotationModelMappings.applyExtensions(base, ann.extensions().toArray(new Extension[0]));
     }
 
     private void applyType(Schema base, SchemaAttributes ann) {
@@ -570,9 +571,9 @@ public final class SchemaGenerator {
             base.setExample(ann.example());
             base.setExamples(List.of(ann.example()));
         }
-        if (ann.examples().length > 0) {
+        if (!ann.examples().isEmpty()) {
             // Same clause as constValue: literal when the type is STRING, JSON otherwise.
-            List<Object> examples = new ArrayList<>(ann.examples().length);
+            List<Object> examples = new ArrayList<>(ann.examples().size());
             for (String raw : ann.examples()) {
                 examples.add(constValueOf(base, raw));
             }
@@ -622,7 +623,7 @@ public final class SchemaGenerator {
     }
 
     private void applyRequiredProperties(Schema base, SchemaAttributes ann) {
-        if (ann.requiredProperties().length > 0) {
+        if (!ann.requiredProperties().isEmpty()) {
             List<String> mergedRequired = base.getRequired() == null
                     ? new ArrayList<>()
                     : new ArrayList<>(base.getRequired());
@@ -638,14 +639,14 @@ public final class SchemaGenerator {
     }
 
     private void applyCombinators(Schema base, SchemaAttributes ann) {
-        if (ann.enumeration().length > 0) {
-            List<Object> values = new ArrayList<>(ann.enumeration().length);
-            Collections.addAll(values, ann.enumeration());
+        if (!ann.enumeration().isEmpty()) {
+            List<Object> values = new ArrayList<>(ann.enumeration().size());
+            values.addAll(ann.enumeration());
             base.setEnumeration(values);
         }
-        if (ann.allOf().length > 0) base.setAllOf(schemasOfClasses(ann.allOf()));
-        if (ann.anyOf().length > 0) base.setAnyOf(schemasOfClasses(ann.anyOf()));
-        if (ann.oneOf().length > 0) base.setOneOf(schemasOfClasses(ann.oneOf()));
+        if (!ann.allOf().isEmpty()) base.setAllOf(schemasOfClasses(ann.allOf()));
+        if (!ann.anyOf().isEmpty()) base.setAnyOf(schemasOfClasses(ann.anyOf()));
+        if (!ann.oneOf().isEmpty()) base.setOneOf(schemasOfClasses(ann.oneOf()));
         if (ann.not() != Void.class) base.setNot(schemaOfClass(ann.not()));
         applyDiscriminator(base, ann);
         if (ann.ifSchema() != Void.class) base.setIfSchema(schemaOfClass(ann.ifSchema()));
@@ -657,12 +658,12 @@ public final class SchemaGenerator {
         if (ann.contains() != Void.class) base.setContains(schemaOfClass(ann.contains()));
         if (ann.minContains() > 0) base.setMinContains(ann.minContains());
         if (ann.maxContains() != Integer.MAX_VALUE) base.setMaxContains(ann.maxContains());
-        if (ann.prefixItems().length > 0) base.setPrefixItems(schemasOfClasses(ann.prefixItems()));
+        if (!ann.prefixItems().isEmpty()) base.setPrefixItems(schemasOfClasses(ann.prefixItems()));
         if (ann.propertyNames() != Void.class) base.setPropertyNames(schemaOfClass(ann.propertyNames()));
     }
 
     private void applyPatternProperties(Schema base, SchemaAttributes ann) {
-        if (ann.patternProperties().length > 0) {
+        if (!ann.patternProperties().isEmpty()) {
             Map<String, Schema> patternProperties = base.getPatternProperties() == null
                     ? new LinkedHashMap<>()
                     : new LinkedHashMap<>(base.getPatternProperties());
@@ -677,7 +678,7 @@ public final class SchemaGenerator {
     }
 
     private void applyDependentRequired(Schema base, SchemaAttributes ann) {
-        if (ann.dependentRequired().length > 0) {
+        if (!ann.dependentRequired().isEmpty()) {
             Map<String, List<String>> dependentRequired = base.getDependentRequired() == null
                     ? new LinkedHashMap<>()
                     : new LinkedHashMap<>(base.getDependentRequired());
@@ -692,7 +693,7 @@ public final class SchemaGenerator {
     }
 
     private void applyDependentSchemas(Schema base, SchemaAttributes ann) {
-        if (ann.dependentSchemas().length > 0) {
+        if (!ann.dependentSchemas().isEmpty()) {
             Map<String, Schema> dependentSchemas = base.getDependentSchemas() == null
                     ? new LinkedHashMap<>()
                     : new LinkedHashMap<>(base.getDependentSchemas());
@@ -718,7 +719,7 @@ public final class SchemaGenerator {
     }
 
     private void applyDiscriminator(Schema base, SchemaAttributes ann) {
-        if (ann.discriminatorProperty().isEmpty() && ann.discriminatorMapping().length == 0) {
+        if (ann.discriminatorProperty().isEmpty() && ann.discriminatorMapping().isEmpty()) {
             return;
         }
         Discriminator discriminator = base.getDiscriminator() == null
@@ -741,8 +742,8 @@ public final class SchemaGenerator {
         base.setDiscriminator(discriminator);
     }
 
-    private List<Schema> schemasOfClasses(Class<?>[] classes) {
-        List<Schema> schemas = new ArrayList<>(classes.length);
+    private List<Schema> schemasOfClasses(List<Class<?>> classes) {
+        List<Schema> schemas = new ArrayList<>(classes.size());
         for (Class<?> c : classes) {
             schemas.add(schemaOfClass(c));
         }

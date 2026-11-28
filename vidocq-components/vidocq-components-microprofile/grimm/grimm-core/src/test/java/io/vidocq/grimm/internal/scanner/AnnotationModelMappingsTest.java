@@ -102,7 +102,7 @@ class AnnotationModelMappingsTest {
                 () -> assertEquals(1.0, AnnotationModelMappings.parseJsonValue("1.0")),
                 () -> assertEquals(List.of(1.0), AnnotationModelMappings.parseJsonValue("[1.0]")),
                 () -> assertEquals(117L, AnnotationModelMappings.parseJsonValue("117")),
-                () -> assertEquals(Boolean.TRUE, AnnotationModelMappings.parseJsonValue("true")));
+                () -> assertEquals(true, AnnotationModelMappings.parseJsonValue("true")));
     }
 
     @Test

@@ -89,6 +89,8 @@ class OpenApiValueMapperBeanTest {
 
     /** A getter that fails: the serializer reports it instead of writing a partial document. */
     public static final class FailingBean {
+        // The serializer calls this getter by reflection: it must stay callable, so no @DoNotCall.
+        @SuppressWarnings("DoNotCallSuggester")
         public String getBroken() {
             throw new IllegalStateException("broken");
         }

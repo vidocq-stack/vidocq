@@ -59,6 +59,7 @@ import org.eclipse.microprofile.openapi.models.PathItem;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -135,7 +136,7 @@ class JaxRsResourceScannerTest {
 
         var idParam = op.getParameters().stream().filter(p -> "id".equals(p.getName())).findFirst().orElseThrow();
         assertEquals(org.eclipse.microprofile.openapi.models.parameters.Parameter.In.PATH, idParam.getIn());
-        assertEquals(Boolean.TRUE, idParam.getRequired());
+        assertEquals(true, idParam.getRequired());
 
         var qParam = op.getParameters().stream().filter(p -> "q".equals(p.getName())).findFirst().orElseThrow();
         assertEquals(org.eclipse.microprofile.openapi.models.parameters.Parameter.In.QUERY, qParam.getIn());
@@ -189,7 +190,7 @@ class JaxRsResourceScannerTest {
         var op = model.getPaths().getPathItem("/explicit-body").getPOST();
         assertNotNull(op.getRequestBody());
         assertEquals("Payload for creation", op.getRequestBody().getDescription());
-        assertEquals(Boolean.TRUE, op.getRequestBody().getRequired());
+        assertEquals(true, op.getRequestBody().getRequired());
     }
 
     @Test
@@ -228,6 +229,22 @@ class JaxRsResourceScannerTest {
         assertNotNull(op.getCallbacks().get("event"));
     }
 
+    /** BUG-20261128-50: the callback method was upper-cased in the default locale, so {@code options} was lost in Turkish. */
+    @Test
+    void callbackOperationMethodIgnoresTheDefaultLocale() {
+        Locale before = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            OpenAPI model = new AnnotationScanner(ScanConfig.defaultConfig())
+                    .scanClasses(List.of(OptionsCallbackResource.class));
+
+            var callback = model.getPaths().getPathItem("/subscribe").getPOST().getCallbacks().get("event");
+            assertNotNull(callback.getPathItem("{$request.body#/url}").getOPTIONS());
+        } finally {
+            Locale.setDefault(before);
+        }
+    }
+
     @Test
     void operationServersIncludeServerVariables() {
         // Spec §3.5: @Server variables are part of the operation-level server object.
@@ -251,7 +268,7 @@ class JaxRsResourceScannerTest {
         OpenAPI model = scanner.scanClasses(List.of(DeprecatedTaggedResource.class));
 
         var op = model.getPaths().getPathItem("/deprecated").getGET();
-        assertEquals(Boolean.TRUE, op.getDeprecated());
+        assertEquals(true, op.getDeprecated());
         assertTrue(op.getTags() != null && op.getTags().contains("legacy"));
     }
 
@@ -406,7 +423,7 @@ class JaxRsResourceScannerTest {
         var parameter = op.getParameters().stream().filter(p -> "test".equals(p.getName())).findFirst().orElseThrow();
         assertNotNull(parameter.getSchema());
         assertEquals(Integer.valueOf(6), parameter.getSchema().getMaxLength());
-        assertEquals(Boolean.TRUE, parameter.getRequired());
+        assertEquals(true, parameter.getRequired());
     }
 
     // A @Schema that sets one attribute only must reach the generated schema, whichever attribute.
@@ -445,7 +462,7 @@ class JaxRsResourceScannerTest {
     void parameterSchemaWithOnlyReadOnlyIsMapped() {
         var schema = schemaOnlyParameter("/schema-only/read-only", "r").getSchema();
 
-        assertEquals(Boolean.TRUE, schema.getReadOnly());
+        assertEquals(true, schema.getReadOnly());
     }
 
     @Test
@@ -743,6 +760,15 @@ class JaxRsResourceScannerTest {
         @Callback(name = "event", callbackUrlExpression = "{$request.body#/url}",
                 operations = @org.eclipse.microprofile.openapi.annotations.callbacks.CallbackOperation(
                         method = "POST", summary = "Event"))
+        public Object subscribe(Payload p) { return null; }
+    }
+
+    @Path("/subscribe")
+    static class OptionsCallbackResource {
+        @POST
+        @Callback(name = "event", callbackUrlExpression = "{$request.body#/url}",
+                operations = @org.eclipse.microprofile.openapi.annotations.callbacks.CallbackOperation(
+                        method = "options", summary = "Event"))
         public Object subscribe(Payload p) { return null; }
     }
 

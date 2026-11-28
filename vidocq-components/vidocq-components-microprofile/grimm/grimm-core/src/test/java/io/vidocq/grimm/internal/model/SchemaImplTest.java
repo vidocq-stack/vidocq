@@ -201,13 +201,14 @@ class SchemaImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation") // getAdditionalPropertiesBoolean: the form under test
     void additionalPropertiesIsReadAsASchema() {
         Schema s = OASFactory.createSchema().additionalPropertiesBoolean(Boolean.TRUE);
         Schema value = assertInstanceOf(Schema.class, s.getAll().get("additionalProperties"));
-        assertEquals(Boolean.TRUE, value.getBooleanSchema());
+        assertEquals(true, value.getBooleanSchema());
 
-        s.set("additionalProperties", Boolean.FALSE);
-        assertEquals(Boolean.FALSE, s.getAdditionalPropertiesBoolean());
+        s.set("additionalProperties", false);
+        assertEquals(false, s.getAdditionalPropertiesBoolean());
         assertTrue(s.getExtensions().isEmpty());
     }
 
@@ -219,8 +220,8 @@ class SchemaImplTest {
         Schema copy = OASFactory.createSchema();
         copy.setAll(s.getAll());
 
-        assertEquals(Boolean.FALSE, copy.getAdditionalPropertiesBoolean());
-        assertEquals(Boolean.FALSE, copy.getAdditionalPropertiesSchema().getBooleanSchema());
+        assertEquals(false, copy.getAdditionalPropertiesBoolean());
+        assertEquals(false, copy.getAdditionalPropertiesSchema().getBooleanSchema());
         assertEquals(json(s), json(copy));
     }
 
@@ -348,7 +349,7 @@ class SchemaImplTest {
             return 1;
         }
         if (type == Boolean.class) {
-            return Boolean.TRUE;
+            return true;
         }
         if (type == Object.class) {
             return "o";

@@ -248,7 +248,7 @@ class StaticDocumentMappingTest {
         assertEquals("s", get.getSummary());
         assertEquals("d", get.getDescription());
         assertEquals(List.of("pets"), get.getTags());
-        assertEquals(Boolean.TRUE, get.getDeprecated());
+        assertEquals(true, get.getDeprecated());
         assertEquals("https://op", get.getExternalDocs().getUrl());
         assertEquals("https://op", get.getServers().get(0).getUrl());
         assertEquals(List.of("read"), get.getSecurity().get(0).getScheme("oauth"));
@@ -261,13 +261,13 @@ class StaticDocumentMappingTest {
         Parameter limit = parameters.get(0);
 
         assertEquals(Parameter.In.QUERY, limit.getIn());
-        assertEquals(Boolean.FALSE, limit.getRequired());
+        assertEquals(false, limit.getRequired());
         assertEquals("max", limit.getDescription());
-        assertEquals(Boolean.TRUE, limit.getDeprecated());
-        assertEquals(Boolean.TRUE, limit.getAllowEmptyValue());
+        assertEquals(true, limit.getDeprecated());
+        assertEquals(true, limit.getAllowEmptyValue());
         assertEquals(Parameter.Style.FORM, limit.getStyle());
-        assertEquals(Boolean.TRUE, limit.getExplode());
-        assertEquals(Boolean.FALSE, limit.getAllowReserved());
+        assertEquals(true, limit.getExplode());
+        assertEquals(false, limit.getAllowReserved());
         assertNotNull(limit.getSchema());
         assertEquals(5L, limit.getExample());
         assertEquals(5L, limit.getExamples().get("five").getValue());
@@ -290,7 +290,7 @@ class StaticDocumentMappingTest {
         Encoding file = json.getEncoding().get("file");
 
         assertEquals("body", body.getDescription());
-        assertEquals(Boolean.TRUE, body.getRequired());
+        assertEquals(true, body.getRequired());
         assertEquals(Map.of("x-rb", 1L), body.getExtensions());
         assertEquals(Map.of(JSON_MEDIA, json), body.getContent().getMediaTypes());
         assertEquals("#/components/schemas/Pet", json.getSchema().getRef());
@@ -300,8 +300,8 @@ class StaticDocumentMappingTest {
         assertEquals("image/png", file.getContentType());
         assertEquals("rate", file.getHeaders().get("X-Rate").getDescription());
         assertEquals(Encoding.Style.FORM, file.getStyle());
-        assertEquals(Boolean.TRUE, file.getExplode());
-        assertEquals(Boolean.TRUE, file.getAllowReserved());
+        assertEquals(true, file.getExplode());
+        assertEquals(true, file.getAllowReserved());
         assertEquals(Map.of("x-e", 1L), file.getExtensions());
         assertEquals(Arrays.asList(Encoding.Style.SPACE_DELIMITED, Encoding.Style.PIPE_DELIMITED,
                         Encoding.Style.DEEP_OBJECT, null, null),
@@ -322,10 +322,10 @@ class StaticDocumentMappingTest {
         assertNotNull(ok.getContent().getMediaType(JSON_MEDIA));
         assertEquals(3, ok.getHeaders().size());
         assertEquals("hd", header.getDescription());
-        assertEquals(Boolean.TRUE, header.getRequired());
-        assertEquals(Boolean.FALSE, header.getDeprecated());
+        assertEquals(true, header.getRequired());
+        assertEquals(false, header.getDeprecated());
         assertEquals(Header.Style.SIMPLE, header.getStyle());
-        assertEquals(Boolean.FALSE, header.getExplode());
+        assertEquals(false, header.getExplode());
         assertEquals("x", header.getExample());
         assertEquals("x", header.getExamples().get("ex").getValue());
         assertNotNull(header.getSchema());

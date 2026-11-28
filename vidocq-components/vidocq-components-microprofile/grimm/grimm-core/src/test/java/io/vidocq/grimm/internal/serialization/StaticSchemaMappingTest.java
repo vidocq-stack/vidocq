@@ -64,7 +64,7 @@ class StaticSchemaMappingTest {
         assertNotNull(schema.getElseSchema());
         assertNotNull(schema.getContains());
         assertNotNull(schema.getPropertyNames());
-        assertEquals(Boolean.FALSE, schema.getUnevaluatedItems().getBooleanSchema());
+        assertEquals(false, schema.getUnevaluatedItems().getBooleanSchema());
         assertNotNull(schema.getUnevaluatedProperties());
         assertNotNull(schema.getContentSchema());
         assertEquals(1, schema.getAllOf().size());
@@ -102,14 +102,14 @@ class StaticSchemaMappingTest {
         assertEquals(2, schema.getMinProperties());
         assertEquals(2, schema.getMaxContains());
         assertEquals(1, schema.getMinContains());
-        assertEquals(Boolean.TRUE, schema.getUniqueItems());
+        assertEquals(true, schema.getUniqueItems());
         assertEquals(Map.of("a", List.of("b")), schema.getDependentRequired());
         assertEquals("base64", schema.getContentEncoding());
         assertEquals("image/png", schema.getContentMediaType());
         assertEquals("c", schema.getConstValue());
         assertEquals("^a", schema.getPattern());
-        assertEquals(Boolean.FALSE, schema.getReadOnly());
-        assertEquals(Boolean.TRUE, schema.getWriteOnly());
+        assertEquals(false, schema.getReadOnly());
+        assertEquals(true, schema.getWriteOnly());
         assertEquals(List.of("x"), schema.getExamples());
         assertEquals("https://dialect", schema.getSchemaDialect());
         assertEquals("note", schema.getComment());
@@ -182,15 +182,15 @@ class StaticSchemaMappingTest {
 
     @Test
     void additionalPropertiesNullableAndBooleans() {
-        assertEquals(Boolean.FALSE,
+        assertEquals(false,
                 schema("{\"additionalProperties\": false}").getAdditionalPropertiesSchema().getBooleanSchema());
         assertNotNull(schema("{\"additionalProperties\": " + STRING_SCHEMA + "}").getAdditionalPropertiesSchema());
         assertEquals(List.of(Schema.SchemaType.STRING, Schema.SchemaType.NULL),
                 schema("{\"type\": \"string\", \"nullable\": true}").getType());
         assertEquals(List.of(Schema.SchemaType.STRING), schema("{\"type\": \"string\", \"nullable\": false}").getType());
-        assertEquals(Boolean.TRUE, schema("{\"deprecated\": \"true\"}").getDeprecated());
+        assertEquals(true, schema("{\"deprecated\": \"true\"}").getDeprecated());
         assertNull(schema("{\"readOnly\": null}").getReadOnly());
-        assertEquals(Boolean.TRUE, OpenApiModelMapper.toSchema(true).getBooleanSchema());
+        assertEquals(true, OpenApiModelMapper.toSchema(true).getBooleanSchema());
         assertNull(OpenApiModelMapper.toSchema("not a schema"));
     }
 
@@ -210,8 +210,8 @@ class StaticSchemaMappingTest {
         assertEquals("pet", xml.getName());
         assertEquals("https://ns", xml.getNamespace());
         assertEquals("p", xml.getPrefix());
-        assertEquals(Boolean.TRUE, xml.getAttribute());
-        assertEquals(Boolean.FALSE, xml.getWrapped());
+        assertEquals(true, xml.getAttribute());
+        assertEquals(false, xml.getWrapped());
         assertEquals(Map.of("x-xml", 1L), xml.getExtensions());
         assertEquals("https://schema-docs", schema.getExternalDocs().getUrl());
     }

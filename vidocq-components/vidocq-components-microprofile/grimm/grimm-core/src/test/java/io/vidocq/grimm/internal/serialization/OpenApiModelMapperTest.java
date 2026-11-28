@@ -176,7 +176,7 @@ class OpenApiModelMapperTest {
         assertEquals(2, s.getMinLength());
         assertEquals(5, s.getMaxItems());
         assertEquals(1, s.getMinItems());
-        assertEquals(Boolean.TRUE, s.getUniqueItems());
+        assertEquals(true, s.getUniqueItems());
         assertEquals(9, s.getMaxProperties());
         assertEquals(3, s.getMinProperties());
         assertEquals(4, s.getMaxContains());
@@ -195,7 +195,7 @@ class OpenApiModelMapperTest {
         assertEquals(List.of(Schema.SchemaType.INTEGER), s.getContains().getType());
         assertEquals("^[a-z]+$", s.getPropertyNames().getPattern());
         assertEquals(List.of(Schema.SchemaType.STRING), s.getUnevaluatedItems().getType());
-        assertEquals(Boolean.FALSE, s.getUnevaluatedProperties().getBooleanSchema());
+        assertEquals(false, s.getUnevaluatedProperties().getBooleanSchema());
         assertEquals(List.of(Schema.SchemaType.STRING), s.getContentSchema().getType());
         assertEquals(List.of(Schema.SchemaType.STRING), s.getAdditionalPropertiesSchema().getType());
     }
@@ -221,7 +221,7 @@ class OpenApiModelMapperTest {
         assertEquals("kind", s.getDiscriminator().getPropertyName());
         assertEquals(Map.of("cat", "#/components/schemas/Cat"), s.getDiscriminator().getMapping());
         assertEquals("all", s.getXml().getName());
-        assertEquals(Boolean.TRUE, s.getXml().getWrapped());
+        assertEquals(true, s.getXml().getWrapped());
         assertEquals(Map.of("x-xml", "x"), s.getXml().getExtensions());
         assertEquals("https://example.com/docs", s.getExternalDocs().getUrl());
         assertEquals("docs", s.getExternalDocs().getDescription());
@@ -250,9 +250,9 @@ class OpenApiModelMapperTest {
         Schema s = schema(doc, "B");
 
         assertTrue(s.getExtensions().isEmpty(), s.getExtensions()::toString);
-        assertEquals(Boolean.FALSE, s.getNot().getBooleanSchema());
-        assertEquals(Boolean.TRUE, s.getItems().getBooleanSchema());
-        assertEquals(Boolean.TRUE, s.getProperties().get("free").getBooleanSchema());
+        assertEquals(false, s.getNot().getBooleanSchema());
+        assertEquals(true, s.getItems().getBooleanSchema());
+        assertEquals(true, s.getProperties().get("free").getBooleanSchema());
 
         String out = new JsonSerializer().serialize(doc);
         assertTrue(out.contains("\"not\":false"), out);
@@ -511,7 +511,7 @@ class OpenApiModelMapperTest {
                 """;
         Header header = new YamlDeserializer().deserialize(yaml).getComponents().getHeaders().get("Rate");
         assertEquals(Header.Style.SIMPLE, header.getStyle());
-        assertEquals(Boolean.TRUE, header.getExplode());
+        assertEquals(true, header.getExplode());
         assertEquals(List.of(Schema.SchemaType.STRING),
                 header.getContent().getMediaType("application/json").getSchema().getType());
         assertFalse(header.hasExtension("style"));
@@ -594,10 +594,10 @@ class OpenApiModelMapperTest {
 
         assertAll(
                 () -> assertEquals(Parameter.Style.FORM, q.getStyle()),
-                () -> assertEquals(Boolean.FALSE, q.getExplode()),
-                () -> assertEquals(Boolean.TRUE, q.getAllowReserved()),
-                () -> assertEquals(Boolean.TRUE, q.getDeprecated()),
-                () -> assertEquals(Boolean.TRUE, q.getAllowEmptyValue()),
+                () -> assertEquals(false, q.getExplode()),
+                () -> assertEquals(true, q.getAllowReserved()),
+                () -> assertEquals(true, q.getDeprecated()),
+                () -> assertEquals(true, q.getAllowEmptyValue()),
                 () -> assertEquals("ex", q.getExample()),
                 () -> assertEquals("v1", q.getExamples().get("e1").getValue()),
                 () -> assertEquals(List.of(Schema.SchemaType.STRING),

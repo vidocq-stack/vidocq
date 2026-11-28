@@ -165,8 +165,8 @@ class YamlDeserializerTest {
 
         assertTrue(map.containsKey("n1"));
         assertNull(map.get("n2"));
-        assertEquals(Boolean.TRUE, map.get("t"));
-        assertEquals(Boolean.FALSE, map.get("f"));
+        assertEquals(true, map.get("t"));
+        assertEquals(false, map.get("f"));
         assertEquals(12L, map.get("i"));
         assertEquals(new BigInteger("123456789012345678901"), map.get("big"));
         assertEquals(15L, map.get("oct"));

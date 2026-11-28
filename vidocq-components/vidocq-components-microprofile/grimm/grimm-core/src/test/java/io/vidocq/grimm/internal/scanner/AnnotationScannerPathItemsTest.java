@@ -45,6 +45,7 @@ import org.eclipse.microprofile.openapi.models.Operation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -160,7 +161,7 @@ class AnnotationScannerPathItemsTest {
         var petId = item.getParameters().get(0);
         assertEquals("petId", petId.getName());
         assertEquals(org.eclipse.microprofile.openapi.models.parameters.Parameter.In.PATH, petId.getIn());
-        assertEquals(Boolean.TRUE, petId.getRequired());
+        assertEquals(true, petId.getRequired());
         assertEquals("Pet id", petId.getDescription());
         assertNotNull(petId.getSchema());
         assertEquals("item-parameter", petId.getExtensions().get(X_PART));
@@ -177,7 +178,7 @@ class AnnotationScannerPathItemsTest {
         assertEquals("getPet", get.getOperationId());
         assertEquals("Get", get.getSummary());
         assertEquals("Gets a pet", get.getDescription());
-        assertEquals(Boolean.TRUE, get.getDeprecated());
+        assertEquals(true, get.getDeprecated());
         assertEquals("https://example.com/get", get.getExternalDocs().getUrl());
         assertEquals("operation", get.getExtensions().get(X_PART));
         assertEquals(List.of("pets", "plainTag", "refTag"), get.getTags());
@@ -203,7 +204,7 @@ class AnnotationScannerPathItemsTest {
         assertEquals(2, get.getParameters().size());
         var q = get.getParameters().get(0);
         assertEquals(org.eclipse.microprofile.openapi.models.parameters.Parameter.In.QUERY, q.getIn());
-        assertEquals(Boolean.TRUE, q.getRequired());
+        assertEquals(true, q.getRequired());
         assertEquals("Query", q.getDescription());
         assertNotNull(q.getSchema());
         assertEquals("parameter", q.getExtensions().get(X_PART));
@@ -227,7 +228,7 @@ class AnnotationScannerPathItemsTest {
         var body = get.getRequestBody();
         assertEquals("#/components/requestBodies/pet", body.getRef());
         assertEquals("Body", body.getDescription());
-        assertEquals(Boolean.TRUE, body.getRequired());
+        assertEquals(true, body.getRequired());
         assertEquals("body", body.getExtensions().get(X_PART));
         assertNotNull(body.getContent().getMediaType("application/json").getSchema());
         assertNull(body.getContent().getMediaType("*/*").getSchema());
@@ -241,10 +242,10 @@ class AnnotationScannerPathItemsTest {
     void requestBodyIsCreatedFromAnySignificantAttribute() {
         var item = components().getPathItems().get(ITEM);
 
-        assertEquals(Boolean.TRUE, item.getPOST().getRequestBody().getRequired());
+        assertEquals(true, item.getPOST().getRequestBody().getRequired());
         assertNotNull(item.getPOST().getRequestBody().getContent().getMediaType("text/plain"));
         assertEquals("Put body", item.getPUT().getRequestBody().getDescription());
-        assertEquals(Boolean.TRUE, item.getPUT().getRequestBody().getRequired());
+        assertEquals(true, item.getPUT().getRequestBody().getRequired());
     }
 
     @Test
@@ -288,6 +289,21 @@ class AnnotationScannerPathItemsTest {
         assertNotNull(item.getOPTIONS());
         assertNotNull(item.getHEAD());
         assertNotNull(item.getTRACE());
+    }
+
+    /** BUG-20261128-50: the HTTP method was upper-cased in the default locale, so {@code options} was lost in Turkish. */
+    @Test
+    void everyHttpMethodIsAssignedWhateverTheDefaultLocale() {
+        Locale before = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            var item = components().getPathItems().get(ITEM);
+
+            assertEquals(8, item.getOperations().size());
+            assertNotNull(item.getOPTIONS());
+        } finally {
+            Locale.setDefault(before);
+        }
     }
 
     @Test

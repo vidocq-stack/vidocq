@@ -164,7 +164,7 @@ class JaxRsResourceScannerRequestBodyTest {
         var body = bodyOf(scan(BodiesResource.class), "/bodies/schema");
 
         assertNotNull(body.getContent().getMediaType(JSON).getSchema());
-        assertEquals(Boolean.TRUE, body.getRequired());
+        assertEquals(true, body.getRequired());
     }
 
     @Test
@@ -173,7 +173,7 @@ class JaxRsResourceScannerRequestBodyTest {
         var explicit = bodyOf(model, "/bodies/explicit");
 
         assertEquals("A pet", explicit.getDescription());
-        assertEquals(Boolean.TRUE, explicit.getRequired());
+        assertEquals(true, explicit.getRequired());
         assertEquals("#/components/requestBodies/Pet", explicit.getRef());
         var any = explicit.getContent().getMediaType("*/*");
         assertNotNull(any.getExamples().get("rex"));
@@ -189,11 +189,11 @@ class JaxRsResourceScannerRequestBodyTest {
         OpenAPI model = scan(BodiesResource.class);
 
         var optional = bodyOf(model, "/bodies/optional");
-        assertEquals(Boolean.FALSE, optional.getRequired());
+        assertEquals(false, optional.getRequired());
         assertEquals("Optional body", optional.getDescription());
 
         var methodLevel = bodyOf(model, "/bodies/method-level");
-        assertEquals(Boolean.TRUE, methodLevel.getRequired());
+        assertEquals(true, methodLevel.getRequired());
         assertNotNull(methodLevel.getContent().getMediaType(JSON).getSchema());
     }
 
@@ -233,8 +233,8 @@ class JaxRsResourceScannerRequestBodyTest {
         assertEquals(java.util.Set.of("file", "meta"), mediaType.getEncoding().keySet());
         var file = mediaType.getEncoding().get("file");
         assertEquals("image/png", file.getContentType());
-        assertEquals(Boolean.TRUE, file.getExplode());
-        assertEquals(Boolean.TRUE, file.getAllowReserved());
+        assertEquals(true, file.getExplode());
+        assertEquals(true, file.getAllowReserved());
         assertEquals(org.eclipse.microprofile.openapi.models.media.Encoding.Style.SPACE_DELIMITED, file.getStyle());
         assertEquals(java.util.Set.of(X_RATE, "Trace", "Plain"), file.getHeaders().keySet());
         assertEquals("Rate", file.getHeaders().get(X_RATE).getDescription());

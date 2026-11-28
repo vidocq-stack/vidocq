@@ -66,6 +66,11 @@ class StaticFileReaderSourcesTest {
                 public int read() throws IOException {
                     throw new IOException("disk error");
                 }
+
+                @Override
+                public int read(byte[] buffer, int offset, int length) throws IOException {
+                    throw new IOException("disk error");
+                }
             };
         }
     }

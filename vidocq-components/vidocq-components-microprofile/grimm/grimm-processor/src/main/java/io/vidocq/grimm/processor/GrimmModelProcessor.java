@@ -123,13 +123,14 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         ClassLoader previous = thread.getContextClassLoader();
         thread.setContextClassLoader(GrimmModelProcessor.class.getClassLoader());
         try {
-            return processRound(roundEnv);
+            processRound(roundEnv);
         } finally {
             thread.setContextClassLoader(previous);
         }
+        return false;
     }
 
-    private boolean processRound(RoundEnvironment roundEnv) {
+    private void processRound(RoundEnvironment roundEnv) {
         TypeElement pathAnnotation = processingEnv.getElementUtils().getTypeElement("jakarta.ws.rs.Path");
         if (pathAnnotation != null) {
             for (Element e : roundEnv.getElementsAnnotatedWith(pathAnnotation)) {
@@ -144,7 +145,6 @@ public final class GrimmModelProcessor extends AbstractProcessor {
             writeDefinitionsFile();
             summarizeSkippedClasses();
         }
-        return false;
     }
 
     /** The companion of {@code type}, or the reason the run-time scan describes it instead. */

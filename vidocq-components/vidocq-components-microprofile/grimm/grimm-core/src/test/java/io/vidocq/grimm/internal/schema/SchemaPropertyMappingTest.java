@@ -91,8 +91,8 @@ class SchemaPropertyMappingTest {
                 () -> assertEquals(new BigDecimal("0"), age.getMinimum()),
                 () -> assertEquals(new BigDecimal("150"), age.getExclusiveMaximum()),
                 () -> assertEquals(BigDecimal.valueOf(1d), age.getMultipleOf()),
-                () -> assertEquals(Boolean.TRUE, age.getDeprecated()),
-                () -> assertEquals(Boolean.TRUE, age.getReadOnly()),
+                () -> assertEquals(true, age.getDeprecated()),
+                () -> assertEquals(true, age.getReadOnly()),
                 () -> assertEquals("1", age.getDefaultValue()));
     }
 
@@ -107,7 +107,7 @@ class SchemaPropertyMappingTest {
                 () -> assertEquals("[A-Z]+", code.getPattern()),
                 () -> assertEquals(List.of("AB", "CD"), code.getEnumeration()),
                 () -> assertTrue(code.getType().contains(org.eclipse.microprofile.openapi.models.media.Schema.SchemaType.NULL)),
-                () -> assertEquals(Boolean.TRUE, code.getWriteOnly()));
+                () -> assertEquals(true, code.getWriteOnly()));
     }
 
     @Test
@@ -120,7 +120,7 @@ class SchemaPropertyMappingTest {
         assertAll(
                 () -> assertEquals(Integer.valueOf(1), tags.getMinItems()),
                 () -> assertEquals(Integer.valueOf(3), tags.getMaxItems()),
-                () -> assertEquals(Boolean.TRUE, tags.getUniqueItems()),
+                () -> assertEquals(true, tags.getUniqueItems()),
                 () -> assertEquals(Integer.valueOf(1), meta.getMinProperties()),
                 () -> assertEquals(Integer.valueOf(4), meta.getMaxProperties()),
                 () -> assertEquals(List.of("a", "b"), meta.getRequired()));

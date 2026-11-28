@@ -1003,7 +1003,7 @@ public final class AnnotationScanner {
     private void assignPathItemOperation(PathItem pathItem,
                                          String method,
                                          org.eclipse.microprofile.openapi.models.Operation operation) {
-        switch (method.toUpperCase()) {
+        switch (method.toUpperCase(java.util.Locale.ROOT)) {
             case "GET" -> pathItem.setGET(operation);
             case "PUT" -> pathItem.setPUT(operation);
             case "POST" -> pathItem.setPOST(operation);

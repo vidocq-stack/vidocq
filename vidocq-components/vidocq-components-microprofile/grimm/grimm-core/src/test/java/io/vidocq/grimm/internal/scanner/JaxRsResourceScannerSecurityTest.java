@@ -40,8 +40,6 @@ import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
 import org.eclipse.microprofile.openapi.annotations.servers.Server;
 import org.eclipse.microprofile.openapi.annotations.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
-import org.eclipse.microprofile.openapi.models.security.SecurityScheme.In;
-import org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -116,14 +114,19 @@ class JaxRsResourceScannerSecurityTest {
 
         assertEquals(Set.of(API_KEY, COOKIE_KEY, BEARER, "oidc", "tls", SHARED, OAUTH, NO_FLOWS),
                 schemes.keySet());
-        assertEquals(In.QUERY, schemes.get(API_KEY).getIn());
+        assertEquals(org.eclipse.microprofile.openapi.models.security.SecurityScheme.In.QUERY,
+                schemes.get(API_KEY).getIn());
         assertEquals("Key in the query", schemes.get(API_KEY).getDescription());
-        assertEquals(In.COOKIE, schemes.get(COOKIE_KEY).getIn());
-        assertEquals(Type.HTTP, schemes.get(BEARER).getType());
+        assertEquals(org.eclipse.microprofile.openapi.models.security.SecurityScheme.In.COOKIE,
+                schemes.get(COOKIE_KEY).getIn());
+        assertEquals(org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type.HTTP,
+                schemes.get(BEARER).getType());
         assertEquals("JWT", schemes.get(BEARER).getBearerFormat());
-        assertEquals(Type.OPENIDCONNECT, schemes.get("oidc").getType());
+        assertEquals(org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type.OPENIDCONNECT,
+                schemes.get("oidc").getType());
         assertTrue(schemes.get("oidc").getOpenIdConnectUrl().endsWith("openid-configuration"));
-        assertEquals(Type.MUTUALTLS, schemes.get("tls").getType());
+        assertEquals(org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type.MUTUALTLS,
+                schemes.get("tls").getType());
         assertEquals("#/components/securitySchemes/Shared", schemes.get(SHARED).getRef());
         assertNull(schemes.get(NO_FLOWS).getFlows());
 

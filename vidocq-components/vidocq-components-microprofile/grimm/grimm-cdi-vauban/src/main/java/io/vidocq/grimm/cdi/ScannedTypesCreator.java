@@ -83,7 +83,7 @@ public class ScannedTypesCreator implements SyntheticBeanCreator<ScannedTypes> {
             while (lists.hasMoreElements()) {
                 try (var in = lists.nextElement().openStream()) {
                     for (String line : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
-                            .split("\\R")) {
+                            .split("\\R", -1)) {
                         addListed(line.strip(), loader, classes);
                     }
                 }

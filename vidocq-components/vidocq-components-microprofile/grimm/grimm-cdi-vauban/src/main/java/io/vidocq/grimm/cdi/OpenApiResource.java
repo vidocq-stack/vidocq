@@ -114,6 +114,9 @@ public class OpenApiResource {
     private final AtomicReference<Serialized> json = new AtomicReference<>();
     private final AtomicReference<Serialized> yaml = new AtomicReference<>();
 
+    // Identity on purpose: the cache holds the very document instance it serialized; a reload builds a new instance,
+    // and a deep equals over the whole model would cost what the cache saves.
+    @SuppressWarnings("ReferenceEquality")
     private static RenderedDocument rendered(AtomicReference<Serialized> slot, OpenAPI document,
                                              Function<OpenAPI, String> serializer, String mediaType) {
         Serialized last = slot.get();

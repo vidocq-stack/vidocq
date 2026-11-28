@@ -114,7 +114,7 @@ class JaxRsResourceScannerResponsesTest {
         var responses = op.getResponses();
 
         assertEquals(Set.of(OK, DEFAULT_CODE, "401", "500"), responses.getAPIResponses().keySet());
-        assertEquals(Boolean.TRUE, op.getDeprecated());
+        assertEquals(true, op.getDeprecated());
         assertEquals("#/components/responses/Default", responses.getDefaultValue().getRef());
         var ok = responses.getAPIResponse(OK);
         assertNotNull(ok.getContent().getMediaType(JSON).getSchema());
@@ -160,8 +160,8 @@ class JaxRsResourceScannerResponsesTest {
 
         assertEquals(Set.of(X_RATE, "Trace"), ok.getHeaders().keySet());
         var rate = ok.getHeaders().get(X_RATE);
-        assertEquals(Boolean.TRUE, rate.getRequired());
-        assertEquals(Boolean.TRUE, rate.getDeprecated());
+        assertEquals(true, rate.getRequired());
+        assertEquals(true, rate.getDeprecated());
         assertNotNull(rate.getSchema());
         assertEquals("#/components/headers/Trace", ok.getHeaders().get("Trace").getRef());
 

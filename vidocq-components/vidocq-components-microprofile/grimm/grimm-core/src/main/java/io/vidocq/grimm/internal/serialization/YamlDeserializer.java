@@ -59,8 +59,8 @@ public final class YamlDeserializer {
     private static Object parseScalar(String raw) {
         return switch (raw) {
             case "null", "Null", "NULL", "~" -> null;
-            case "true", "True", "TRUE" -> Boolean.TRUE;
-            case "false", "False", "FALSE" -> Boolean.FALSE;
+            case "true", "True", "TRUE" -> true;
+            case "false", "False", "FALSE" -> false;
             default -> parseQuotedOrNumber(raw);
         };
     }

@@ -229,15 +229,16 @@ class SchemaGeneratorTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation") // getAdditionalPropertiesBoolean: the form under test
     void generate_mapsSchemaAdditionalPropertiesAndExtensions() {
         generator.generate(AdditionalPropertiesFixture.class);
         var body = registry.snapshot().get("AdditionalPropertiesFixture");
 
         var metadata = body.getProperties().get("metadata");
-        assertEquals(Boolean.TRUE, metadata.getAdditionalPropertiesBoolean());
+        assertEquals(true, metadata.getAdditionalPropertiesBoolean());
 
         var strict = body.getProperties().get("strict");
-        assertEquals(Boolean.FALSE, strict.getAdditionalPropertiesBoolean());
+        assertEquals(false, strict.getAdditionalPropertiesBoolean());
 
         var typed = body.getProperties().get("typed");
         assertNotNull(typed.getAdditionalPropertiesSchema());
@@ -282,7 +283,7 @@ class SchemaGeneratorTest {
         assertAll(
                 () -> assertEquals(Map.of("a", 1L, "b", List.of(1L, 2L)), properties.get("object").getConstValue()),
                 () -> assertEquals(List.of("x", "y"), properties.get("array").getConstValue()),
-                () -> assertEquals(Boolean.TRUE, properties.get("flag").getConstValue()),
+                () -> assertEquals(true, properties.get("flag").getConstValue()),
                 () -> assertEquals(5L, properties.get("number").getConstValue()),
                 () -> assertEquals("5", properties.get("text").getConstValue(), "a String field is a STRING schema"),
                 () -> assertEquals("true", properties.get("forcedString").getConstValue(), "type = STRING"));

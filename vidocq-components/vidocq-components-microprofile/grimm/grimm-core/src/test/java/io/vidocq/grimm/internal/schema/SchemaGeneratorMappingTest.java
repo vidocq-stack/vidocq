@@ -346,8 +346,8 @@ class SchemaGeneratorMappingTest {
 
     @Test
     void booleanImplementationsGiveBooleanSchemas() throws Exception {
-        assertEquals(Boolean.TRUE, site("anything").getBooleanSchema());
-        assertEquals(Boolean.FALSE, site("nothing").getBooleanSchema());
+        assertEquals(true, site("anything").getBooleanSchema());
+        assertEquals(false, site("nothing").getBooleanSchema());
     }
 
     @Test
@@ -386,10 +386,10 @@ class SchemaGeneratorMappingTest {
         assertEquals(5, s.getMaxProperties());
         assertEquals(2, s.getMinItems());
         assertEquals(4, s.getMaxItems());
-        assertEquals(Boolean.TRUE, s.getUniqueItems());
-        assertEquals(Boolean.TRUE, s.getDeprecated());
-        assertEquals(Boolean.TRUE, s.getReadOnly());
-        assertEquals(Boolean.TRUE, s.getWriteOnly());
+        assertEquals(true, s.getUniqueItems());
+        assertEquals(true, s.getDeprecated());
+        assertEquals(true, s.getReadOnly());
+        assertEquals(true, s.getWriteOnly());
         assertEquals("base64", s.getContentEncoding());
         assertEquals("image/png", s.getContentMediaType());
     }
@@ -428,10 +428,10 @@ class SchemaGeneratorMappingTest {
     void compositionKeywordsReferenceTheNamedClasses() throws Exception {
         var s = site("composition");
         assertEquals(REF_PREFIX + PET, s.getContentSchema().getRef());
-        assertEquals(Boolean.FALSE, s.getNot().getBooleanSchema());
+        assertEquals(false, s.getNot().getBooleanSchema());
         assertEquals(1, s.getAllOf().size());
         assertEquals(REF_PREFIX + "Owner", s.getAnyOf().get(1).getRef());
-        assertEquals(Boolean.TRUE, s.getOneOf().get(0).getBooleanSchema());
+        assertEquals(true, s.getOneOf().get(0).getBooleanSchema());
     }
 
     @Test
@@ -439,7 +439,7 @@ class SchemaGeneratorMappingTest {
         var s = site("conditional");
         assertEquals(REF_PREFIX + PET, s.getIfSchema().getRef());
         assertEquals(REF_PREFIX + "Owner", s.getThenSchema().getRef());
-        assertEquals(Boolean.TRUE, s.getElseSchema().getBooleanSchema());
+        assertEquals(true, s.getElseSchema().getBooleanSchema());
         assertEquals(List.of(STRING), s.getContains().getType());
         assertEquals(1, s.getMinContains());
         assertEquals(3, s.getMaxContains());
@@ -459,8 +459,8 @@ class SchemaGeneratorMappingTest {
 
     @Test
     void additionalPropertiesBooleanOrSchema() throws Exception {
-        assertEquals(Boolean.TRUE, site("openMap").getAdditionalPropertiesSchema().getBooleanSchema());
-        assertEquals(Boolean.FALSE, site("closedMap").getAdditionalPropertiesSchema().getBooleanSchema());
+        assertEquals(true, site("openMap").getAdditionalPropertiesSchema().getBooleanSchema());
+        assertEquals(false, site("closedMap").getAdditionalPropertiesSchema().getBooleanSchema());
         assertEquals("int32", site("typedMap").getAdditionalPropertiesSchema().getFormat());
     }
 

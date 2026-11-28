@@ -50,7 +50,7 @@ class OpenApiValueMapperTest {
         Map<String, Object> payload = (Map<String, Object>) ((Map<?, ?>) ((Map<?, ?>) root.get("components")).get("schemas")).get("Payload");
 
         assertNotNull(payload);
-        assertEquals(Boolean.TRUE, payload.get("additionalProperties"));
+        assertEquals(true, payload.get("additionalProperties"));
     }
 
     /**

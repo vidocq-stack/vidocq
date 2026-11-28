@@ -638,3 +638,16 @@ Track reproducible bugs with:
   (`TCK_LOCAL_REPOSITORY` moves the first): it installs and resolves there first, and only reads `~/.m2`.
   `.tck-repository/` is git-ignored. Docs: `tck.adoc`, `grimm-tck/README.md`.
 - **Regression test**: none (standalone runner POM); `zsh -n` passes.
+
+## BUG-20261128-50 — an `options` operation is lost when the default locale is Turkish
+- **Date**: 2026-11-28 — **Status**: FIXED (Vidocq/vidocq#832, Error Prone `StringCaseLocaleUsage`)
+- **Symptom**: with a Turkish default locale (`-Duser.language=tr`), a `@PathItemOperation(method = "options")` of a
+  `@Components.pathItems` entry or of a `@Webhook`, and a `@CallbackOperation(method = "options")`, are missing from the
+  document; the other methods are kept.
+- **Minimal repro**: `AnnotationScannerPathItemsTest.everyHttpMethodIsAssignedWhateverTheDefaultLocale` and
+  `JaxRsResourceScannerTest.callbackOperationMethodIgnoresTheDefaultLocale` set the default locale to `tr-TR`: 7
+  operations out of 8, and no `OPTIONS` on the callback, before the fix.
+- **Root cause**: `AnnotationScanner.assignPathItemOperation` and `JaxRsResourceScanner` (callback operations)
+  upper-cased the method with `String.toUpperCase()`, in the default locale: in Turkish `i` becomes the dotted `İ`, so
+  `options` became `OPTİONS`, which matches no HTTP method.
+- **Fix**: both upper-case with `Locale.ROOT`.

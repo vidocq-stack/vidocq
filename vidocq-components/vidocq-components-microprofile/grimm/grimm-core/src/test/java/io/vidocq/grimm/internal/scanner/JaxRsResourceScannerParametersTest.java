@@ -111,19 +111,19 @@ class JaxRsResourceScannerParametersTest {
         var trace = params.get(TRACE);
         assertEquals(In.HEADER, trace.getIn());
         assertEquals("Trace id", trace.getDescription());
-        assertEquals(Boolean.TRUE, trace.getRequired());
-        assertEquals(Boolean.TRUE, trace.getDeprecated());
-        assertEquals(Boolean.TRUE, trace.getAllowEmptyValue());
+        assertEquals(true, trace.getRequired());
+        assertEquals(true, trace.getDeprecated());
+        assertEquals(true, trace.getAllowEmptyValue());
         assertEquals("abc", trace.getExample());
 
         assertEquals(Style.FORM, params.get("page").getStyle());
         assertEquals(In.PATH, params.get("id").getIn());
-        assertEquals(Boolean.TRUE, params.get("id").getRequired());
+        assertEquals(true, params.get("id").getRequired());
         assertEquals(In.COOKIE, params.get(SESSION).getIn());
         assertEquals(Style.PIPEDELIMITED, params.get("tags").getStyle());
         assertEquals(In.COOKIE, params.get(RENAMED).getIn());
         // Bean Validation §5.3: @NotNull makes the parameter required.
-        assertEquals(Boolean.TRUE, params.get(X_REQUIRED).getRequired());
+        assertEquals(true, params.get(X_REQUIRED).getRequired());
         assertNotNull(params.get("tags").getSchema());
     }
 
@@ -150,7 +150,7 @@ class JaxRsResourceScannerParametersTest {
         assertEquals(Style.SIMPLE, params.get("s").getStyle());
         assertEquals(Style.SPACEDELIMITED, params.get("sp").getStyle());
         assertEquals(Style.DEEPOBJECT, params.get("d").getStyle());
-        assertEquals(Boolean.TRUE, params.get("m").getRequired());
+        assertEquals(true, params.get("m").getRequired());
         assertNull(params.get("noIn").getIn());
         assertNull(params.get("noIn").getStyle());
     }
