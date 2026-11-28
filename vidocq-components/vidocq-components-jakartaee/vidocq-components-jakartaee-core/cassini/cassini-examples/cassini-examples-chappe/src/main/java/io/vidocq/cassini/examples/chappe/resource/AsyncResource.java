@@ -46,13 +46,14 @@ import java.util.concurrent.atomic.AtomicReference;
 public class AsyncResource {
 
     // --- Test/observability hooks (same pattern as TodoResource.reset()) ---
-    public record Events(CountDownLatch disconnected, CountDownLatch completed) {}
+    /** {@code suspended}: the suspending method registered its callbacks; the other two, as named. */
+    public record Events(CountDownLatch suspended, CountDownLatch disconnected, CountDownLatch completed) {}
 
     private static final AtomicReference<Events> EVENTS =
-            new AtomicReference<>(new Events(new CountDownLatch(1), new CountDownLatch(1)));
+            new AtomicReference<>(new Events(new CountDownLatch(1), new CountDownLatch(1), new CountDownLatch(1)));
 
     public static Events reset() {
-        Events fresh = new Events(new CountDownLatch(1), new CountDownLatch(1));
+        Events fresh = new Events(new CountDownLatch(1), new CountDownLatch(1), new CountDownLatch(1));
         EVENTS.set(fresh);
         return fresh;
     }
@@ -78,6 +79,7 @@ public class AsyncResource {
         ar.setTimeout(10, TimeUnit.SECONDS);
         ar.register((ConnectionCallback) disconnected -> EVENTS.get().disconnected().countDown());
         ar.register((CompletionCallback) t -> EVENTS.get().completed().countDown());
+        EVENTS.get().suspended().countDown();
     }
 
     // --- Suspended-load bench support ---

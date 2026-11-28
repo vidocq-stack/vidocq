@@ -1232,3 +1232,22 @@ The 500 is empty, and the log line names the exception's class only, with a mess
   suppressed. No new public type.
 - **Regression tests**: `CallFailureListenerTest` (5 tests); Humboldt's `FailedClientCallSpanTest` drives the client
   with the Telemetry filters.
+
+## BUG-20261128-10 — `AsyncDisconnectTest` fails when the client closes before the resource registered its callbacks
+
+- **Date**: 2026-11-28 (pull request build of Vidocq/vidocq#849, run 6265)
+- **Status**: FIXED in the test (refactor/cassini-errorprone); the runtime behaviour is unchanged and open to question
+- **Symptom**: `connectionCallbackFiresWhenClientDisconnectsWhileSuspended` failed once on a loaded CI runner
+  (`ConnectionCallback.onDisconnect should fire when the client closes ==> expected: <true> but was: <false>`), while
+  the log shows the disconnect detected (`IOException: Client disconnected` from `Invoker.prepareAsyncResponse`). It
+  passes in about 0.5 s on an idle machine.
+- **Minimal repro**: a client that sends `GET /async/suspend` and closes its socket before `AsyncResource.suspend`
+  ran `ar.register(ConnectionCallback)`. The test slept 400 ms between the two, and the first request of the test class
+  can take longer than that on a slow runner.
+- **Cause**: `Invoker.prepareAsyncResponse` arms the disconnect watch before the resource method runs. A disconnect
+  seen before the method registers its `ConnectionCallback` fires the callbacks registered so far, none, then releases
+  the response. A callback registered after that never runs. Jakarta REST does not say whether it should.
+- **Fix**: `AsyncResource.Events` gains a `suspended` latch, counted down once `suspend` has registered its
+  callbacks. The test waits on it, up to 10 s, before it closes the socket, instead of sleeping 400 ms. Firing a
+  `ConnectionCallback` registered after the disconnect would be a runtime change; it is left to a decision of its own.
+- **Regression test**: the same test, 15 runs in a row locally without a failure.

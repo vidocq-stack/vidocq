@@ -77,7 +77,9 @@ class AsyncDisconnectTest {
             socket.getOutputStream().write(
                     "GET /async/suspend HTTP/1.1\r\nHost: x\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
             socket.getOutputStream().flush();
-            Thread.sleep(400); // let the request suspend and the probe arm
+            // Close only once the callbacks are registered: a disconnect seen before they are has no
+            // ConnectionCallback to fire (BUG-20261128-10).
+            assertTrue(events.suspended().await(10, TimeUnit.SECONDS), "the request never reached the resource");
         } // client gone
 
         assertTrue(events.disconnected().await(3, TimeUnit.SECONDS),
