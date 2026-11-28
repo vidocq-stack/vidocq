@@ -166,7 +166,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
             getLog().info("Vidocq - vidocq:generate already ran in this build of the project, skipping this execution");
             return;
         }
-        project.setContextValue(DONE, Boolean.TRUE);
+        project.setContextValue(DONE, true);
         generate();
         freezeExtensions();
         // Last, once the index is final, on every path that did not fail: the stamp records that index, and the

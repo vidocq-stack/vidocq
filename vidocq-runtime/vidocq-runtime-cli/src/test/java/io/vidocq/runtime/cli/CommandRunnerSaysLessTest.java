@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -96,7 +97,7 @@ class CommandRunnerSaysLessTest {
         assertTrue(out.indexOf("rest-cassini") > out.indexOf("Jakarta EE")
                 && out.indexOf("rest-cassini") < out.indexOf("MicroProfile"), out);
         assertTrue(out.contains("health-knock"), out);
-        assertFalse(out.toLowerCase().contains("offline"), out);
+        assertFalse(out.toLowerCase(Locale.ROOT).contains("offline"), out);
         assertFalse(out.contains("registry"), out);
     }
 

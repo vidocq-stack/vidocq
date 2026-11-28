@@ -871,6 +871,7 @@ public class VidocqDevMojo extends AbstractMojo {
      * Ctrl+C) is never taken for the application's own.
      */
     // package-private for the unit test.
+    @SuppressWarnings("FutureReturnValueIgnored") // the chain only runs a callback when the child exits
     static void endSessionWhenTheApplicationStops(CompletableFuture<Integer> exit, BooleanSupplier stoppedByHost,
             Runnable endSession, Consumer<String> info) {
         exit.thenAccept(code -> {
@@ -1166,7 +1167,7 @@ public class VidocqDevMojo extends AbstractMojo {
     /** Comma-separated directories, relative to {@code projectDir}; blanks skipped. Shared with {@code vidocq:test}. */
     static List<Path> parseDirs(Path projectDir, String csv) {
         List<Path> result = new ArrayList<>();
-        for (String s : csv.split(",")) {
+        for (String s : csv.split(",", -1)) {
             String trimmed = s.trim();
             if (!trimmed.isEmpty()) {
                 result.add(projectDir.resolve(trimmed));
@@ -1437,7 +1438,7 @@ public class VidocqDevMojo extends AbstractMojo {
         Map<String, String> props = new LinkedHashMap<>();
         props.put("vidocq.profile", profile);
         if (extraSystemProperties != null && !extraSystemProperties.isBlank()) {
-            for (String pair : extraSystemProperties.split(",")) {
+            for (String pair : extraSystemProperties.split(",", -1)) {
                 int eq = pair.indexOf('=');
                 if (eq <= 0) {
                     continue;

@@ -182,7 +182,7 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
     /** True when a (non-commented) line of {@code source} is the given directive, modulo whitespace. */
     static boolean alreadyDeclared(String source, String directive) {
         String needle = normalize(directive);
-        for (String raw : source.split("\\R")) {
+        for (String raw : source.split("\\R", -1)) {
             if (normalize(stripLineComment(raw)).equals(needle)) {
                 return true;
             }

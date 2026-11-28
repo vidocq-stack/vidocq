@@ -664,6 +664,7 @@ public final class CommandRunner {
      * reads, after the update itself, off a terminal, for a CLI that install.sh or 'vidocq update' did not install,
      * or within a day of the last check.
      */
+    @SuppressWarnings("SystemConsoleNull") // still null when the JVM has no console: its Javadoc says "if any"
     static UpdateNotice updateNotice(Command command) {
         if (command instanceof Command.Version || command instanceof Command.Completion
                 || command instanceof Command.CompletionSetup || command instanceof Command.Update

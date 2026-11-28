@@ -28,6 +28,7 @@ import java.lang.classfile.ClassFile;
 import java.lang.constant.ClassDesc;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -63,7 +64,7 @@ class IbarraPagePrecompilationTest {
         var errors = new java.io.ByteArrayOutputStream();
         int status = javax.tools.ToolProvider.getSystemJavaCompiler().run(null, null, errors,
                 "--module-path", join(modulePath()), "-d", classes().toString(), source.resolve("module-info.java").toString());
-        assertEquals(0, status, errors.toString());
+        assertEquals(0, status, errors.toString(StandardCharsets.UTF_8));
     }
 
     private void resource(String path, String text) throws Exception {
@@ -199,7 +200,7 @@ class IbarraPagePrecompilationTest {
     /** The explicit modules of the test class path the pages compile against. */
     private static List<Path> modulePath() throws Exception {
         var jars = new ArrayList<Path>();
-        for (String item : System.getProperty("java.class.path").split(File.pathSeparator)) {
+        for (String item : System.getProperty("java.class.path").split(File.pathSeparator, -1)) {
             if (!item.endsWith(".jar")) continue;
             try (var jar = new JarFile(item)) {
                 if (jar.getJarEntry("module-info.class") != null) jars.add(Path.of(item));

@@ -50,7 +50,7 @@ final class PeanoAccessorRegistration {
     }
 
     /** The providers the fragments of {@code fragments} name, each checked against the compiled classes. */
-    private static TreeSet<String> readProviders(Path classes,Path fragments) throws IOException {
+    private static SortedSet<String> readProviders(Path classes,Path fragments) throws IOException {
         var generated=new TreeSet<String>();
         try (var files=Files.list(fragments)) {
             for (Path file:files.filter(Files::isRegularFile).filter(p->p.toString().endsWith(".txt")).sorted().toList()) {

@@ -143,8 +143,8 @@ public record BuildIdentity(String version, String commit, String branch, Boolea
     /** One {@code key=value} line, the value escaped as {@code java.util.Properties} reads it (ISO-8859-1). */
     private static void line(StringBuilder out, String key, String value) {
         out.append(key).append('=');
-        for (char c : value.toCharArray()) {
-            appendEscaped(out, c);
+        for (int i = 0; i < value.length(); i++) {
+            appendEscaped(out, value.charAt(i));
         }
         out.append('\n');
     }

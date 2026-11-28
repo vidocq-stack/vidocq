@@ -187,6 +187,7 @@ final class AttributedProcessors implements AutoCloseable {
         }
 
         @Override
+        @SuppressWarnings("DoNotClaimAnnotations") // a wrapper: it answers what the brick's own processor answers
         public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
             try {
                 return delegate.process(annotations, round);

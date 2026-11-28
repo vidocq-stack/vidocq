@@ -461,9 +461,15 @@ class KeyDoctorTest {
     @Test
     void theConfigIsReadTheWayTheRuntimeReadsIt() throws IOException {
         Path project = Files.createDirectories(dir.resolve("app"));
-        write(project, "src/main/resources/vidocq.properties", String.join("\n",
-                "# a comment", "shop.port = 8080", "shop.escaped=x\\,y", "shop.dollar=\\\\${x}",
-                "shop.long=a,\\", "    b", "shop.empty=", ""));
+        write(project, "src/main/resources/vidocq.properties", """
+                # a comment
+                shop.port = 8080
+                shop.escaped=x\\,y
+                shop.dollar=\\\\${x}
+                shop.long=a,\\
+                    b
+                shop.empty=
+                """);
 
         Map<String, String> config = KeyDoctor.read(project, List.of()).config();
 
@@ -484,8 +490,12 @@ class KeyDoctorTest {
         Path project = Files.createDirectories(dir.resolve("app"));
         write(project, "src/main/resources/vidocq.properties",
                 "vidocq.sample.port=eighty\nvidocq.sample.mode=fast\nvidocq.sample.free=${X}\n");
-        Path jar = jar("sample.jar", WRITTEN, String.join("\n", "format=1", "vidocq.sample.port|type=int",
-                "vidocq.sample.mode|values=fast,safe", "vidocq.sample.free|type=int", ""));
+        Path jar = jar("sample.jar", WRITTEN, """
+                format=1
+                vidocq.sample.port|type=int
+                vidocq.sample.mode|values=fast,safe
+                vidocq.sample.free|type=int
+                """);
 
         List<Diagnostic> diagnostics = KeyDoctor.check(KeyDoctor.read(project, List.of(jar)));
 

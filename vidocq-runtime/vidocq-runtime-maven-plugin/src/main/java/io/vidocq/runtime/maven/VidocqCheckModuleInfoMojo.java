@@ -150,8 +150,8 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
 
     /** Whether the goal runs under {@code vidocq dev}: its recompile sets {@code property}, a direct run has the goal. */
     static boolean underDev(List<String> goals, boolean property) {
-        return property || goals.stream().anyMatch(goal -> goal.equals("vidocq:dev") || goal.endsWith(":dev")
-                && goal.contains("vidocq-runtime-maven-plugin"));
+        return property || goals.stream().anyMatch(goal -> goal.equals("vidocq:dev") || (goal.endsWith(":dev")
+                && goal.contains("vidocq-runtime-maven-plugin")));
     }
 
     /**

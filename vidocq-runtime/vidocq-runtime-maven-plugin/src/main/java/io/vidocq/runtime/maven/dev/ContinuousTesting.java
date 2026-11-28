@@ -375,6 +375,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
      * closes} the launcher: the tests' own dev services stop after the last run; idempotent.
      */
     @Override
+    @SuppressWarnings("ReferenceEquality") // the worker thread itself, by identity
     public void close() {
         Launched running;
         Thread thread;
@@ -435,7 +436,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     /** Waits for the next run; {@code null} once closed, or when the worker is interrupted. */
     private Taken take() {
         synchronized (lock) {
-            while ((pending == null || held && !pending.change()) && !closed) {
+            while ((pending == null || (held && !pending.change())) && !closed) {
                 try {
                     lock.wait();
                 } catch (InterruptedException _) {
@@ -458,6 +459,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
      *
      * @return {@code false} when the worker was interrupted and must stop
      */
+    @SuppressWarnings("ReferenceEquality") // the run this worker set as waiting, by identity
     private boolean runTaken(Taken taken) {
         Pending next = taken.next();
         try {

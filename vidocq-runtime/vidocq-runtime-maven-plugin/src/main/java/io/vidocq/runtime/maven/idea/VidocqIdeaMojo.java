@@ -350,6 +350,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
      * port) unchanged; {@link #pinHint} uses it to tell whether a user-owned file differs only by its JDK.
      * {@code application} is {@code null} for the JUnit template, which belongs to no application.
      */
+    // onDisk is the file's bytes as read; equals, hashCode and toString below compare them by content.
+    @SuppressWarnings("ArrayRecordComponent")
     record Target(IdeaApplication application, String shownPath, Path file, String body, byte[] onDisk,
                           State state, UnaryOperator<String> withJre) {
 

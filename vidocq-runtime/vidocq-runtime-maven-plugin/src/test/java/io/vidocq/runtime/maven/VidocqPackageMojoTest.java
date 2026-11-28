@@ -37,6 +37,7 @@ import java.lang.constant.ClassDesc;
 import java.lang.constant.ModuleDesc;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
@@ -115,7 +116,7 @@ class VidocqPackageMojoTest {
         run.environment().remove("JAVA_HOME");
         run.environment().put("JAVA_OPTS", "-Xmx1g -Dlibrary.max=3");
         Process process = run.start();
-        String out = new String(process.getInputStream().readAllBytes());
+        String out = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertEquals(0, process.waitFor(), out);
 
         assertTrue(out.startsWith("[-Xmx512m]\n[-Xmx1g]\n[-Dlibrary.max=3]\n"), out);
@@ -668,7 +669,7 @@ class VidocqPackageMojoTest {
         ProcessBuilder launcher = new ProcessBuilder("sh", bin.resolve("app.sh").toString()).redirectErrorStream(true);
         launcher.environment().put("JAVA_HOME", jdk.toString());
         Process p = launcher.start();
-        String out = new String(p.getInputStream().readAllBytes());
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
 
         assertEquals(1, p.waitFor(), out);
         assertTrue(out.contains("needs Java 25") && out.contains("Java 21") && out.contains(jdk.toString()), out);
@@ -684,7 +685,7 @@ class VidocqPackageMojoTest {
         ProcessBuilder launcher = new ProcessBuilder("sh", bin.resolve("app.sh").toString()).redirectErrorStream(true);
         launcher.environment().put("JAVA_HOME", jdk.toString());
         Process p = launcher.start();
-        String out = new String(p.getInputStream().readAllBytes());
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
 
         assertEquals(0, p.waitFor(), out);
         assertTrue(out.contains("RAN"), out);

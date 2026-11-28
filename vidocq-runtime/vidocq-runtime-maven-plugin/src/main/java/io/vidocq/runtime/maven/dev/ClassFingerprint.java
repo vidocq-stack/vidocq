@@ -647,7 +647,7 @@ final class ClassFingerprint {
 
     /** The code of a method: instructions with resolved operands, labels numbered in order, the debug tables. */
     private static String code(CodeModel code) {
-        Map<Label, Integer> labels = new IdentityHashMap<>();
+        IdentityHashMap<Label, Integer> labels = new IdentityHashMap<>();
         for (CodeElement element : code) {
             if (element instanceof LabelTarget target) {
                 labels.putIfAbsent(target.label(), labels.size());

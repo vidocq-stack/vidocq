@@ -25,7 +25,6 @@ import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.project.MavenProject;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,9 +58,6 @@ import java.util.stream.Stream;
       defaultPhase = LifecyclePhase.PACKAGE,
       requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class VidocqJpackageMojo extends AbstractMojo {
-
-    @Parameter(defaultValue = "${project}", readonly = true, required = true)
-    private MavenProject project;
 
     /** The application's Java module. */
     @Parameter(property = "vidocq.mainModule")
@@ -226,7 +222,8 @@ public class VidocqJpackageMojo extends AbstractMojo {
         if (dash > 0) s = s.substring(0, dash);
         // Keep only numbers and points.
         StringBuilder out = new StringBuilder();
-        for (char c : s.toCharArray()) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
             if (Character.isDigit(c) || c == '.') out.append(c);
         }
         String cleaned = out.toString();

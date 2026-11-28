@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -54,7 +55,7 @@ class DependencyCodegenCacheTest {
     void putThenGetGivesTheSameFiles() throws IOException {
         DependencyCodegenCache cache = new DependencyCodegenCache(tmp.resolve("cache"));
         var output = new DependencyCodegen.Output(
-                Map.of("a/B.class", new byte[] {1, 2, 3}, "META-INF/services/x", "y".getBytes()),
+                Map.of("a/B.class", new byte[] {1, 2, 3}, "META-INF/services/x", "y".getBytes(StandardCharsets.UTF_8)),
                 List.of("warn one", "warn two"));
         assertTrue(cache.get("k").isEmpty());
         cache.put("k", output);

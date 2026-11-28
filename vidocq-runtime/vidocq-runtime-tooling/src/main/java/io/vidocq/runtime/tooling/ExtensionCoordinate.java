@@ -43,7 +43,7 @@ public record ExtensionCoordinate(String groupId, String artifactId) {
         if (gav == null) {
             throw new IllegalArgumentException("coordinate must not be null");
         }
-        String[] parts = gav.split(":");
+        String[] parts = gav.split(":", -1);
         if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
             throw new IllegalArgumentException(
                     "Expected 'groupId:artifactId', got: " + gav);

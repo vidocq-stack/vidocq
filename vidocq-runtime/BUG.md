@@ -5,6 +5,19 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261128-03 — `vidocq dev` does not watch a file whose extension is in capitals under a Turkish locale
+
+- **Date**: 2026-11-28
+- **Status**: FIXED in the pull request that adds this entry (Vidocq/vidocq#832, Error Prone's StringCaseLocaleUsage)
+- **Module**: `vidocq-runtime-maven-plugin` (`SourceWatcher.isWatchedExtension`)
+- **Symptom**: with a Turkish default locale (`tr-TR`), a change to `application.PROPERTIES` is not seen by
+  `vidocq dev`: no recompile, no reload. `Main.JAVA` is seen, since its extension has no `I`.
+- **Repro**: `SourceWatcherTest.an_extension_in_capitals_is_watched_in_a_turkish_locale`: under `tr-TR`,
+  `isWatchedExtension("application.PROPERTIES")` returned `false`.
+- **Cause**: the extension was lowered with `toLowerCase()`, which follows the default locale: in Turkish a
+  capital `I` lowers to a dotless `ı`, so `.PROPERTIES` became `.propertıes`, not in the watched set.
+- **Fix**: `toLowerCase(Locale.ROOT)`.
+
 ## BUG-20261127-09 — `vidocq dev` stops with a `FindException` after `vidocq extension add`
 
 - **Date**: 2026-11-27

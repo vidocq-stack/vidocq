@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -69,14 +70,15 @@ class VidocqGenerateDependencyCodegenTest {
     private static DependencyCodegenHints hints(String name) {
         // The class-bytes hint is the annotation's descriptor: the fixture jars hold fixture.Marked itself, and a hint
         // that prefixes one of a jar's own classes would not count there.
-        return new DependencyCodegenHints(name, List.of("META-INF/fixture/" + name.toLowerCase()),
+        return new DependencyCodegenHints(name, List.of("META-INF/fixture/" + name.toLowerCase(Locale.ROOT)),
                 List.of("Lfixture/Marked;"),
-                List.of("META-INF/fixture/" + name.toLowerCase() + "-done"), List.of("META-INF/fixture/a.list"));
+                List.of("META-INF/fixture/" + name.toLowerCase(Locale.ROOT) + "-done"),
+                List.of("META-INF/fixture/a.list"));
     }
 
     /** A brick named {@code name} selecting the jars that hold {@code META-INF/fixture/<name>}, run by {@code processor}. */
     private Brick brick(String name, String processor) throws IOException {
-        return new Brick(hints(name), "io.vidocq:" + name.toLowerCase() + "-codegen:1.0",
+        return new Brick(hints(name), "io.vidocq:" + name.toLowerCase(Locale.ROOT) + "-codegen:1.0",
                 List.of(DepgenFixtures.processorJar(dir.resolve("bricks"), processor)));
     }
 
@@ -84,7 +86,8 @@ class VidocqGenerateDependencyCodegenTest {
     private Brick fakeBrick(String name) throws IOException {
         Path processor = dir.resolve(name + "-codegen-1.0.jar");
         Files.writeString(processor, name);
-        return new Brick(hints(name), "io.vidocq:" + name.toLowerCase() + "-codegen:1.0", List.of(processor));
+        return new Brick(hints(name), "io.vidocq:" + name.toLowerCase(Locale.ROOT) + "-codegen:1.0",
+                List.of(processor));
     }
 
     private static byte[] classBytes(String binaryName) {

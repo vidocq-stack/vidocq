@@ -65,7 +65,7 @@ public final class UpdateNotice {
      */
     public static boolean due(UnaryOperator<String> env, boolean terminal, Path stamp, Instant now) {
         String optOut = env.apply(OPT_OUT);
-        if (!terminal || optOut != null && !optOut.isBlank()) {
+        if (!terminal || (optOut != null && !optOut.isBlank())) {
             return false;
         }
         try {

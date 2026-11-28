@@ -91,7 +91,7 @@ public final class KnownExtensions {
 
     private static List<String> csv(String value) {
         List<String> out = new ArrayList<>();
-        for (String token : value.split(",")) {
+        for (String token : value.split(",", -1)) {
             if (!token.isBlank()) {
                 out.add(token.strip());
             }

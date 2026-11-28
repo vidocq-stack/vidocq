@@ -30,10 +30,12 @@ public enum DockerKind {
     /** The distribution in a JDK base: no jlink image, so an application with an encrypted jar can build it. */
     JDK(List.of("package", "vidocq:docker"));
 
+    // goals is an unmodifiable List.copyOf: Error Prone only knows Guava's immutable collections as immutable.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final List<String> goals;
 
     DockerKind(List<String> goals) {
-        this.goals = goals;
+        this.goals = List.copyOf(goals);
     }
 
     /** The Maven phases and goals that build this kind, in order. */

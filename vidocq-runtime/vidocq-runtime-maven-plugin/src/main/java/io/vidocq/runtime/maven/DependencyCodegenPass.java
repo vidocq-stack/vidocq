@@ -164,6 +164,7 @@ final class DependencyCodegenPass {
     }
 
     /** What the bricks decide for {@code dep}, or {@code null} when none of them wants or skips it. */
+    @SuppressWarnings("ReferenceEquality") // a match names the brick's own hints instance: identity
     private static Selection selection(List<Brick> bricks, List<DependencyCodegenHints> hints,
                                        ScanSelection.Dependency dep, Path memo, boolean store) throws IOException {
         var decision = memo == null ? DependencyCodegenSelection.decide(dep.jar(), hints)
@@ -338,6 +339,7 @@ final class DependencyCodegenPass {
     }
 
     /** Runs the processors of the selection's bricks over the classes they hint, and caches the output. */
+    @SuppressWarnings("ReferenceEquality") // a match names the brick's own hints instance: identity
     private DependencyCodegen.Output generateAndCache(Selection selection, List<Path> classpath, int release,
                                                       String key) throws DependencyCodegen.Failure, IOException {
         ScanSelection.Dependency dep = selection.dependency();

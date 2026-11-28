@@ -206,7 +206,7 @@ public final class KeyDoctor {
         // A fact of a later format is a mistake in a file of the project, and expected in a jar.
         List<Problem> wrong = facts.catalog().problems().stream()
                 .filter(problem -> problem.kind() == Problem.Kind.WRONG || facts.own().contains(problem.origin()))
-                .sorted(Comparator.comparing(Problem::origin).thenComparing(Problem::line))
+                .sorted(Comparator.comparing(Problem::origin).thenComparingInt(Problem::line))
                 .toList();
         if (!wrong.isEmpty()) {
             return shown(DESCRIPTIONS_CHECK, wrong.stream()

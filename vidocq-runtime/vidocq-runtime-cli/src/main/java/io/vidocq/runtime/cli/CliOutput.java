@@ -19,14 +19,25 @@
  */
 package io.vidocq.runtime.cli;
 
+import java.io.Console;
+
 /**
  * Thin ANSI output helper. Degrades gracefully when NO_COLOR is set or
  * stdout is not a real terminal (e.g. CI pipes).
  */
 public final class CliOutput {
 
-    private static final boolean ANSI =
-            System.getenv("NO_COLOR") == null && System.console() != null;
+    private static final boolean ANSI = System.getenv("NO_COLOR") == null && onATerminal();
+
+    /**
+     * Whether the CLI writes to a terminal. Since JDK 22 {@link System#console()} returns a {@code Console} even when
+     * the output is a pipe, so its {@code isTerminal()} decides; it still returns {@code null} when the JVM has none.
+     */
+    @SuppressWarnings("SystemConsoleNull")
+    private static boolean onATerminal() {
+        Console console = System.console();
+        return console != null && console.isTerminal();
+    }
 
     private static final String RESET  = "\033[0m";
     private static final String BOLD   = "\033[1m";

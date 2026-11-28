@@ -51,12 +51,14 @@ public enum BuildType {
 
     private final String token;
     private final String label;
+    // goals is an unmodifiable List.copyOf: Error Prone only knows Guava's immutable collections as immutable.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final List<String> goals;
 
     BuildType(String token, String label, List<String> goals) {
         this.token = token;
         this.label = label;
-        this.goals = goals;
+        this.goals = List.copyOf(goals);
     }
 
     /** The sub-command token typed on the CLI (e.g. {@code jlink}). */

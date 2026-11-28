@@ -63,7 +63,7 @@ class BuildIdentityTest {
         assertEquals(COMMIT, identity.commit());
         assertEquals("9beafc47", identity.abbreviatedCommit());
         assertEquals("main", identity.branch());
-        assertEquals(Boolean.TRUE, identity.dirty());
+        assertEquals(true, identity.dirty());
         assertEquals(COMMITTED, identity.committedAt());
         assertEquals("""
                 git.branch=main
@@ -154,7 +154,7 @@ class BuildIdentityTest {
 
         assertEquals("1.0.0-SNAPSHOT", read.version());
         assertEquals("9beafc47", read.commit());
-        assertEquals(Boolean.FALSE, read.dirty());
+        assertEquals(false, read.dirty());
         assertEquals(BUILT, read.builtAt());
         assertEquals(COMMITTED, read.committedAt());
     }

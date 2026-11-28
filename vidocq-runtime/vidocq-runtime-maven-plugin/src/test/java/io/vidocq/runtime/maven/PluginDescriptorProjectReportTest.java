@@ -73,12 +73,12 @@ class PluginDescriptorProjectReportTest {
             "doctor:verbose=vidocq.doctor.verbose,fix=vidocq.doctor.fix:runtimeVersion",
             "list-extensions:available=vidocq.extensions.available"})
     void theParametersAreTheFieldsAndReadTheDocumentedProperties(String spec) throws Exception {
-        String[] parts = spec.split(":");
+        String[] parts = spec.split(":", -1);
         Element mojo = mojo(parts[0]);
         Class<?> implementation = Class.forName(text(mojo, "implementation"));
         Map<String, String> flags = new LinkedHashMap<>();
-        for (String flag : parts[1].split(",")) {
-            flags.put(flag.split("=")[0], flag.split("=")[1]);
+        for (String flag : parts[1].split(",", -1)) {
+            flags.put(flag.split("=", -1)[0], flag.split("=", -1)[1]);
         }
         List<String> readOnly = parts.length > 2 ? List.of(parts[2].split(",")) : List.of();
         Map<String, String> parameters = new LinkedHashMap<>();

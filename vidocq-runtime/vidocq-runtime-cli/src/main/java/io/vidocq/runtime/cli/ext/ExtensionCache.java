@@ -181,7 +181,7 @@ public final class ExtensionCache {
         int keyFiles = -1;
         List<Path> described = new ArrayList<>();
         try {
-            for (String line : text.split("\\R")) {
+            for (String line : text.split("\\R", -1)) {
                 int eq = line.indexOf('=');
                 if (line.isBlank()) {
                     continue;
@@ -257,7 +257,7 @@ public final class ExtensionCache {
         if (dir == null || !a.artifactId().equals(name(dir))) {
             return null;
         }
-        String[] group = a.groupId().split("\\.");
+        String[] group = a.groupId().split("\\.", -1);
         boolean matches = true;
         for (int i = group.length - 1; i >= 0 && matches; i--) {
             dir = dir.getParent();

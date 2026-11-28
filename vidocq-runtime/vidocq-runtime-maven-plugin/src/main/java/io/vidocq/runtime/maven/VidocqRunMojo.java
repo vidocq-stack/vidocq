@@ -460,7 +460,7 @@ public class VidocqRunMojo extends AbstractMojo {
     private Map<String, String> buildSystemProperties() {
         Map<String, String> properties = new LinkedHashMap<>();
         if (extraSystemProperties != null && !extraSystemProperties.isBlank()) {
-            for (String pair : extraSystemProperties.split(",")) {
+            for (String pair : extraSystemProperties.split(",", -1)) {
                 int equals = pair.indexOf('=');
                 if (equals > 0) {
                     properties.put(pair.substring(0, equals).strip(), pair.substring(equals + 1).strip());

@@ -95,19 +95,19 @@ public final class ModuleInfoEditor {
         String body = split(source).rest();
         List<String> removed = new ArrayList<>();
         List<String> handWritten = new ArrayList<>();
-        for (String line : source.split(LINE_ENDS)) {
+        for (String line : source.split(LINE_ENDS, -1)) {
             String stripped = line.strip();
             if (code(stripped).startsWith(OPENS)) {
                 removed.add(stripped);
             }
         }
         StringBuilder kept = new StringBuilder();
-        for (String line : body.split(LINE_ENDS)) {
+        for (String line : body.split(LINE_ENDS, -1)) {
             String stripped = line.strip();
             String code = code(stripped);
             if (code.startsWith(OPENS)) {
                 if (!stripped.contains(MARKER_PREFIX)) {
-                    handWritten.add(SPACES.split(code)[1]);
+                    handWritten.add(SPACES.split(code, -1)[1]);
                 }
             } else {
                 kept.append(line);
@@ -220,7 +220,7 @@ public final class ModuleInfoEditor {
         String requiresModule = module == null ? null : normalize("requires " + module);
         StringBuilder out = new StringBuilder();
         boolean changed = false;
-        for (String line : source.split(LINE_ENDS)) {
+        for (String line : source.split(LINE_ENDS, -1)) {
             String code = line.contains("//") ? line.substring(0, line.indexOf("//")) : line;
             boolean marked = line.stripTrailing().endsWith(marker);
             boolean ofModule = requiresModule != null
@@ -260,7 +260,7 @@ public final class ModuleInfoEditor {
         List<String> reflection = new ArrayList<>();
         List<String> kept = new ArrayList<>();
         boolean underHeader = false;
-        for (String line : source.split(LINE_ENDS)) {
+        for (String line : source.split(LINE_ENDS, -1)) {
             String stripped = line.strip();
             if (stripped.equals(REFLECTION_HEADER) || stripped.equals(LEGACY_COMPLETE_HEADER)) {
                 if (!kept.isEmpty() && kept.getLast().isBlank()) {
@@ -320,7 +320,7 @@ public final class ModuleInfoEditor {
     private static int afterLastExtensionLine(String source) {
         int at = -1;
         int offset = 0;
-        for (String line : source.split(LINE_ENDS)) {
+        for (String line : source.split(LINE_ENDS, -1)) {
             offset += line.length();
             if (line.contains(MARKER_PREFIX)) {
                 at = offset;
@@ -340,9 +340,9 @@ public final class ModuleInfoEditor {
     /** The directives a source declares, normalized. */
     private static List<String> declared(String source) {
         List<String> declared = new ArrayList<>();
-        for (String line : source.split("\n")) {
+        for (String line : source.split("\n", -1)) {
             String code = line.contains("//") ? line.substring(0, line.indexOf("//")) : line;
-            for (String statement : code.split(";")) {
+            for (String statement : code.split(";", -1)) {
                 String normalized = normalize(statement);
                 if (normalized.startsWith("requires ") || normalized.startsWith(OPENS)
                         || normalized.startsWith("exports ")) {

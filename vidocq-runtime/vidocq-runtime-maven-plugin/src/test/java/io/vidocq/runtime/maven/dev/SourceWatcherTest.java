@@ -32,6 +32,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -82,6 +83,19 @@ class SourceWatcherTest {
             t.join(TimeUnit.SECONDS.toMillis(15));
             assertFalse(t.isAlive(), "watcher should have returned by now");
             assertTrue(changed.get(), "awaitChange should report a change");
+        }
+    }
+
+    /** BUG-20261128-03: an extension in capitals is watched whatever the default locale, Turkish included. */
+    @Test
+    void an_extension_in_capitals_is_watched_in_a_turkish_locale() {
+        Locale before = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            assertTrue(SourceWatcher.isWatchedExtension("application.PROPERTIES"));
+            assertTrue(SourceWatcher.isWatchedExtension("Main.JAVA"));
+        } finally {
+            Locale.setDefault(before);
         }
     }
 

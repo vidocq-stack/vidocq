@@ -47,7 +47,7 @@ public final class PomUpgradeTarget {
                                            String snapshots) {
         boolean snapshot = current.endsWith("-SNAPSHOT");
         boolean releases = channel == UpdatePlan.Channel.RELEASE
-                || channel == UpdatePlan.Channel.INSTALLED && !snapshot;
+                || (channel == UpdatePlan.Channel.INSTALLED && !snapshot);
         Optional<String> latest = releases
                 ? UpdatePlan.latestRelease(fetch, central)
                 : UpdatePlan.highestSnapshot(fetch, snapshots);

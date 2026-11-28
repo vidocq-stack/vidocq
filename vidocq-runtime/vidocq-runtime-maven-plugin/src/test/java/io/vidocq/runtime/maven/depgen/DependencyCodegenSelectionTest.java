@@ -35,6 +35,7 @@ import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DependencyCodegenSelectionTest {
@@ -182,7 +183,8 @@ class DependencyCodegenSelectionTest {
         assertEquals(1, entries(memo), "one entry per (jar, hints)");
         assertEquals(searched, first);
         assertEquals(searched, second, "the memo gives back the bricks' own hints, the reasons and the signature");
-        assertTrue(second.matches().getFirst().brick() == FOY && second.skips().getFirst().brick() == OTHER);
+        assertSame(FOY, second.matches().getFirst().brick());
+        assertSame(OTHER, second.skips().getFirst().brick());
     }
 
     @Test

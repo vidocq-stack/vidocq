@@ -39,6 +39,8 @@ class ExtensionCoordinateTest {
         assertThrows(IllegalArgumentException.class, () -> ExtensionCoordinate.parse("no-colon"));
         assertThrows(IllegalArgumentException.class, () -> ExtensionCoordinate.parse("a:b:c"));
         assertThrows(IllegalArgumentException.class, () -> ExtensionCoordinate.parse(":b"));
+        assertThrows(IllegalArgumentException.class, () -> ExtensionCoordinate.parse("a:b:"),
+                "a trailing colon is a third, empty part, not a groupId:artifactId");
     }
 
     @Test

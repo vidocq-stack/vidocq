@@ -70,6 +70,7 @@ final class CreatePrompts {
     }
 
     /** A console prompter, or {@code null} when the CLI does not run on one. */
+    @SuppressWarnings("SystemConsoleNull") // still null when the JVM has no console: its Javadoc says "if any"
     static Prompter console() {
         Console console = System.console();
         if (console == null || !console.isTerminal()) {

@@ -247,8 +247,8 @@ final class StagedProxyLinks {
     private List<String> entriesOf(Path jar, String root) throws IOException {
         List<String> found = new ArrayList<>();
         for (String entry : entries(jar)) {
-            if (entry.equals(root) || entry.startsWith(VERSIONS) && entry.endsWith("/" + root)
-                    && entry.indexOf('/', VERSIONS.length()) == entry.length() - root.length() - 1) {
+            if (entry.equals(root) || (entry.startsWith(VERSIONS) && entry.endsWith("/" + root)
+                    && entry.indexOf('/', VERSIONS.length()) == entry.length() - root.length() - 1)) {
                 found.add(entry);
             }
         }

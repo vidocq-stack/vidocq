@@ -246,7 +246,7 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
 
     private static List<String> values(String raw) {
         List<String> values = new ArrayList<>();
-        for (String value : raw.split(",")) {
+        for (String value : raw.split(",", -1)) {
             if (!value.isBlank()) {
                 values.add(value.strip());
             }

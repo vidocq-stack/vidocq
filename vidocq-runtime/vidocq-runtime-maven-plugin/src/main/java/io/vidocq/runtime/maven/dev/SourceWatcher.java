@@ -37,6 +37,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -359,7 +360,7 @@ final class SourceWatcher implements AutoCloseable {
     private void drainKey(WatchKey key, Touched touched) {
         Path parent = (Path) key.watchable();
         for (WatchEvent<?> event : key.pollEvents()) {
-            if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+            if (StandardWatchEventKinds.OVERFLOW.equals(event.kind())) {
                 touched.main = true;
                 touched.test = !testRoots.isEmpty();
             } else if (event.context() instanceof Path child) {
@@ -376,7 +377,7 @@ final class SourceWatcher implements AutoCloseable {
     private void noteEvent(Path parent, Path child, WatchEvent.Kind<?> kind, Touched touched) {
         Path resolved = parent.resolve(child);
         if (Files.isDirectory(resolved)
-                && kind == StandardWatchEventKinds.ENTRY_CREATE
+                && StandardWatchEventKinds.ENTRY_CREATE.equals(kind)
                 && !registered.contains(resolved)) {
             try {
                 registerRecursive(resolved);
@@ -482,7 +483,7 @@ final class SourceWatcher implements AutoCloseable {
         if (dot < 0) {
             return false;
         }
-        return WATCHED_EXTENSIONS.contains(name.substring(dot).toLowerCase());
+        return WATCHED_EXTENSIONS.contains(name.substring(dot).toLowerCase(Locale.ROOT));
     }
 
     @Override

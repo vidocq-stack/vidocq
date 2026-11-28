@@ -200,7 +200,7 @@ class RunConfigurationRendererTest {
         assertFalse(file.contains("\r"), "LF only");
         assertFalse(file.contains("<?xml"), "no XML declaration");
         assertFalse(file.endsWith("\n"), "nothing after the root element");
-        assertTrue(file.split("\n")[1].startsWith("<component"), "the body follows the marker line");
+        assertTrue(file.split("\n", -1)[1].startsWith("<component"), "the body follows the marker line");
     }
 
     @Test

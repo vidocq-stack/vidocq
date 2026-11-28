@@ -540,7 +540,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         String jdepsOutput = stdout.toString(StandardCharsets.UTF_8).trim();
         Set<String> all = new LinkedHashSet<>(userModules);
         if (!jdepsOutput.isEmpty()) {
-            for (String m : jdepsOutput.split(",")) {
+            for (String m : jdepsOutput.split(",", -1)) {
                 String t = m.trim();
                 if (!t.isEmpty()) all.add(t);
             }
@@ -564,7 +564,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
             }
         }
         if (configured != null) {
-            for (String m : configured.split(",")) {
+            for (String m : configured.split(",", -1)) {
                 if (!m.isBlank()) {
                     extra.add(m.strip());
                 }

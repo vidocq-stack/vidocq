@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -230,7 +231,7 @@ public final class ChildJvm {
 
     private static String resolveJavaBin() {
         String home = System.getProperty("java.home");
-        boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
         return home + "/bin/" + (windows ? "java.exe" : "java");
     }
 }

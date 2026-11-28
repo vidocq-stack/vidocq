@@ -105,6 +105,7 @@ public final class RunGoals {
      * @deprecated {@link #run(boolean, int, Path, boolean)}, the same goals
      */
     @Deprecated(since = "0.4.1", forRemoval = true)
+    @SuppressWarnings("InlineMeSuggester") // @InlineMe would add Error Prone's annotations to what the CLI ships
     public static List<String> start(boolean portExplicit, int port, Path configFile, boolean debug) {
         return run(portExplicit, port, configFile, debug);
     }

@@ -874,6 +874,6 @@ public final class CliParser {
 
     private static void unknownOpt(String flag, String cmd) {
         throw new CliException(
-                "Unknown option '" + flag + "' for '" + cmd + "'. Run 'vidocq help " + cmd.split(" ")[0] + "'.");
+                "Unknown option '" + flag + "' for '" + cmd + "'. Run 'vidocq help " + cmd.split(" ", -1)[0] + "'.");
     }
 }

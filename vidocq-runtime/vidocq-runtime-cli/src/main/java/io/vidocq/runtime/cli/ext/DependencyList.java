@@ -65,7 +65,7 @@ public final class DependencyList {
     /** Parses the content of the file written by {@link #command(String, Path)}. */
     public static List<ResolvedArtifact> parse(String output) {
         List<ResolvedArtifact> result = new ArrayList<>();
-        for (String raw : output.split("\\R")) {
+        for (String raw : output.split("\\R", -1)) {
             String line = ANSI.matcher(raw).replaceAll("").strip();
             int module = line.indexOf(MODULE_SUFFIX);
             if (module >= 0) {

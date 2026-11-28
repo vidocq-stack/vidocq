@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,11 +100,12 @@ class StagedProvidesTest {
         Path jar = stage.resolve("acme-tool.jar");
         byte[] descriptor = Files.readAllBytes(classes.resolve("module-info.class"));
         try (var out = new JarOutputStream(Files.newOutputStream(jar))) {
-            entry(out, "META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nMulti-Release: true\n".getBytes());
+            entry(out, "META-INF/MANIFEST.MF",
+                    "Manifest-Version: 1.0\nMulti-Release: true\n".getBytes(StandardCharsets.UTF_8));
             entry(out, "module-info.class", descriptor);
             entry(out, "META-INF/versions/11/module-info.class", descriptor);
             entry(out, "acme/tool/Tool.class", Files.readAllBytes(classes.resolve("acme/tool/Tool.class")));
-            entry(out, "META-INF/services/" + SERVICE, "acme.tool.Tool\n".getBytes());
+            entry(out, "META-INF/services/" + SERVICE, "acme.tool.Tool\n".getBytes(StandardCharsets.UTF_8));
         }
 
         StagedProvides.promote(stage);

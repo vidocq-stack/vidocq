@@ -144,7 +144,7 @@ public final class ReflectedPackages {
             String[] next = queue.poll();
             ClassModel model = application.get(next[0]);
             boolean entity = ENTITY.equals(next[1]);
-            if (model == null || entity && modelled.contains(next[0]) || bound.contains(next[0]) && !entity
+            if (model == null || (entity && modelled.contains(next[0])) || (bound.contains(next[0]) && !entity)
                     || !seen.add(next[0])) {
                 continue;
             }
@@ -275,7 +275,8 @@ public final class ReflectedPackages {
         descriptor.exports().stream().filter(e -> !e.isQualified()).forEach(e -> exported.add(e.source()));
         List<String> missing = new ArrayList<>();
         for (String pkg : reached.reasons().keySet()) {
-            boolean satisfied = opened.contains(pkg) || exported.contains(pkg) && !reached.needsOpens().contains(pkg);
+            boolean satisfied = opened.contains(pkg)
+                    || (exported.contains(pkg) && !reached.needsOpens().contains(pkg));
             if (!satisfied) {
                 missing.add(pkg);
             }

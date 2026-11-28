@@ -345,7 +345,7 @@ public final class ProjectScaffolder {
      * (BUG-20261006-02). A version that does not start with {@code <major>.<minor>} is taken as a recent one.
      */
     static boolean parentPinsItsVersion(String parentVersion) {
-        String[] parts = parentVersion.split("[.-]");
+        String[] parts = parentVersion.split("[.-]", -1);
         try {
             int major = Integer.parseInt(parts[0]);
             int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
@@ -711,7 +711,7 @@ public final class ProjectScaffolder {
      * "shop" → "ShopApp" (BUG-20261024-09).
      */
     static String appClassName(String name) {
-        String[] parts = name.split("[-_]");
+        String[] parts = name.split("[-_]", -1);
         var sb = new StringBuilder();
         for (String p : parts) {
             if (!p.isEmpty()) {

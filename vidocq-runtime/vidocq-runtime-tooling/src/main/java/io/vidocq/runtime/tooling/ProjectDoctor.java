@@ -569,7 +569,7 @@ public final class ProjectDoctor {
     }
 
     private static int[] numbers(String version) {
-        String[] parts = version.split("-", 2)[0].split("\\.");
+        String[] parts = version.split("-", 2)[0].split("\\.", -1);
         int[] numbers = new int[3];
         for (int i = 0; i < Math.min(3, parts.length); i++) {
             try {

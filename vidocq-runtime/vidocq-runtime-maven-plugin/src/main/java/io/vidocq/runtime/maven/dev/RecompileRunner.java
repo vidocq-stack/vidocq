@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Drives an out-of-process {@code mvn process-classes} run, used by
@@ -114,7 +115,7 @@ public final class RecompileRunner {
      * </ol>
      */
     static String detectMavenExecutable(Path projectDir) {
-        boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
         String wrapperName = windows ? "mvnw.cmd" : "mvnw";
         for (Path dir = projectDir; dir != null; dir = dir.getParent()) {
             Path wrapper = dir.resolve(wrapperName);

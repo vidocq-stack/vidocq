@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -56,7 +57,7 @@ class DependencyCodegenTest {
     /** A brick whose processor is the fixture {@code fixture.proc.<processor>}, compiled from the test resources. */
     private Brick brick(String name, String processor) throws IOException {
         return new Brick(new DependencyCodegenHints(name, List.of(), List.of(), List.of(), List.of()),
-                "io.vidocq:" + name.toLowerCase() + "-codegen:1.0",
+                "io.vidocq:" + name.toLowerCase(Locale.ROOT) + "-codegen:1.0",
                 List.of(DepgenFixtures.processorJar(dir, processor)));
     }
 

@@ -99,7 +99,7 @@ public final class DevServiceWiring {
 
         static Optional<Driver> of(String id) {
             return KnownExtensions.devServiceDriver(id).map(gav -> {
-                String[] parts = gav.split(":");
+                String[] parts = gav.split(":", -1);
                 if (parts.length != 3) {
                     throw new IllegalStateException(id + ": devservice.driver is not groupId:artifactId:version");
                 }

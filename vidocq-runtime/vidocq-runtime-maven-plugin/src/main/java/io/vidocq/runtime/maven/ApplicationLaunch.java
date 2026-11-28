@@ -369,7 +369,7 @@ public final class ApplicationLaunch {
             return null;
         }
         // The first element is the project; the last is the artifact itself; its dependent is just before.
-        String[] parent = trail.get(trail.size() - 2).split(":");
+        String[] parent = trail.get(trail.size() - 2).split(":", -1);
         return parent.length < 2 ? null : moduleByCoordinates.get(parent[0] + ":" + parent[1]);
     }
 

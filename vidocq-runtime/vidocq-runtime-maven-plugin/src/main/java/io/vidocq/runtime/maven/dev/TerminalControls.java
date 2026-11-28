@@ -63,6 +63,7 @@ final class TerminalControls implements Runnable {
      * a {@code Console} even when standard input is a pipe (CI, an IDE's run window), so its {@code isTerminal()}
      * decides.
      */
+    @SuppressWarnings("SystemConsoleNull") // still null when the JVM has no console: its Javadoc says "if any"
     static boolean attached() {
         Console console = System.console();
         return console != null && console.isTerminal();

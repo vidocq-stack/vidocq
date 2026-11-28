@@ -126,7 +126,7 @@ final class DependencyBricks {
     static UnaryOperator<Set<String>> modulesOfPackages(Collection<Path> dependencies, Consumer<String> warn) {
         Map<String, String> owners = new HashMap<>();
         for (Path entry : dependencies) {
-            boolean module = Files.isRegularFile(entry) && entry.getFileName().toString().endsWith(".jar")
+            boolean module = (Files.isRegularFile(entry) && entry.getFileName().toString().endsWith(".jar"))
                     || Files.isRegularFile(entry.resolve(EnrichedJars.MODULE_INFO));
             if (!module) {
                 continue;
