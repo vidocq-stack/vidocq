@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * ({@code SpanExporter}, {@code MetricExporter}, {@code LogRecordExporter})
  * and delegate {@code export(...)} to {@link #addAll(Collection)}.</p>
  *
- * <p>Intentionally, {@link #shutdown()} does NOT clear {@link #collected} —
+ * <p>Intentionally, {@link #shutdownBase()} does NOT clear {@link #collected} —
  * tests that inspect the exporter via try-with-resources on the provider can
  * therefore read the drained data after {@code close()}. Use
  * {@link #reset()} to clear it explicitly.</p>

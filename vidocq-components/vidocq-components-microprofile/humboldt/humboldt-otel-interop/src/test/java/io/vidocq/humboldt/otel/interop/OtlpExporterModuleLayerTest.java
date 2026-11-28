@@ -417,6 +417,8 @@ class OtlpExporterModuleLayerTest {
         }
     }
 
+    // Identity on purpose: a throwable that is its own cause ends the chain.
+    @SuppressWarnings("ReferenceEquality")
     private static String causes(Throwable t) {
         StringBuilder sb = new StringBuilder(String.valueOf(t));
         for (Throwable c = t == null ? null : t.getCause(); c != null && c != c.getCause(); c = c.getCause()) {
@@ -516,7 +518,7 @@ class OtlpExporterModuleLayerTest {
             } catch (InvocationTargetException e) {
                 throw new AssertionError(what + " failed on the module path: " + causes(e.getCause()), e.getCause());
             } catch (ReflectiveOperationException e) {
-                throw new AssertionError(e);
+                throw new LinkageError(e.getMessage(), e);
             } finally {
                 thread.setContextClassLoader(previous);
             }

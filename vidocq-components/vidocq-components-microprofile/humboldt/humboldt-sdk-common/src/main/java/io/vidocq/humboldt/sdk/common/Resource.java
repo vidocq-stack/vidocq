@@ -87,7 +87,7 @@ public final class Resource {
      * @return a new immutable resource
      */
     public Resource merge(Resource other) {
-        if (other == null || other.attributes.isEmpty() && other.schemaUrl == null) {
+        if (other == null || (other.attributes.isEmpty() && other.schemaUrl == null)) {
             return this;
         }
         Attributes merged = this.attributes.toBuilder()

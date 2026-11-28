@@ -34,6 +34,8 @@ public final class SdkLongHistogram implements LongHistogram {
     @Override public void record(long value) { record(value, Attributes.empty()); }
 
     @Override
+    // A histogram records doubles: a long beyond 2^53 loses precision; accepted, as in the OpenTelemetry SDK.
+    @SuppressWarnings("LongDoubleConversion")
     public void record(long value, Attributes attributes) {
         if (value < 0L) return; // OTel alignment: reject negatives for histograms
         aggregator.recordDouble(value, attributes != null ? attributes : Attributes.empty());

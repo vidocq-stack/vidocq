@@ -76,6 +76,8 @@ final class ClientCallFailureListener implements Consumer<Throwable> {
         }
     }
 
+    // Identity on purpose: a throwable that is its own cause ends the unwrapping.
+    @SuppressWarnings("ReferenceEquality")
     private static Throwable unwrap(Throwable failure) {
         Throwable t = failure == null ? new IllegalStateException("REST client call failed") : failure;
         while ((t instanceof ProcessingException || t instanceof CompletionException

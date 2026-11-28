@@ -227,7 +227,7 @@ final class OtlpProtoSchema {
                     value instanceof JsonString s ? Long.parseLong(s.getString()) : ((JsonNumber) value).longValue();
             case FLOAT, DOUBLE ->
                     value instanceof JsonString s ? Double.parseDouble(s.getString()) : ((JsonNumber) value).doubleValue();
-            case BOOL -> value == JsonValue.TRUE;
+            case BOOL -> value.getValueType() == JsonValue.ValueType.TRUE;
             case STRING, BYTES -> ((JsonString) value).getString();
             default -> throw new AssertionError("no OTLP field has the type " + field.type());
         };

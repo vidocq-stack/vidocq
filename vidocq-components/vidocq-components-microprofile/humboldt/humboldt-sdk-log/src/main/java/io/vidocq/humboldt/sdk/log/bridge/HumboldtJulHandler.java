@@ -140,6 +140,9 @@ public final class HumboldtJulHandler extends Handler {
      * {@code LoggingLogRecordExporter} to produce readable lines such as
      * {@code "... INFO ..."}, {@code "... WARN ..."}.
      */
+    // Identity on purpose: the standard levels are singletons, and a custom level keeps its own name even when its
+    // value is the one of a standard level (Level.equals compares the values).
+    @SuppressWarnings("ReferenceEquality")
     static String severityText(Level level) {
         if (level == null) return "INFO";
         if (level == Level.SEVERE) return "ERROR";

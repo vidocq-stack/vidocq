@@ -237,7 +237,7 @@ class SdkSpanTest {
         assertEquals(3, data.attributes().size());
         assertEquals(2L, data.attributes().get(AttributeKey.longKey("l")));
         assertEquals(1.5, data.attributes().get(AttributeKey.doubleKey("d")));
-        assertEquals(Boolean.TRUE, data.attributes().get(AttributeKey.booleanKey("b")));
+        assertEquals(true, data.attributes().get(AttributeKey.booleanKey("b")));
         assertTrue(data.startEpochNanos() > 0);
     }
 

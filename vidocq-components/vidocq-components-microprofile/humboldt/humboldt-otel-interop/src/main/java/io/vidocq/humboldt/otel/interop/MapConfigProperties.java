@@ -119,7 +119,7 @@ public final class MapConfigProperties implements ConfigProperties {
         String v = getString(name);
         if (v == null || v.isEmpty()) return Map.of();
         Map<String, String> out = new LinkedHashMap<>();
-        for (String pair : v.split(",")) {
+        for (String pair : v.split(",", -1)) {
             int idx = pair.indexOf('=');
             if (idx > 0) {
                 out.put(pair.substring(0, idx).trim(), pair.substring(idx + 1).trim());

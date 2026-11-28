@@ -257,6 +257,8 @@ class HumboldtClientTracingTest {
     }
 
     @Test
+    // The scope is left open on purpose: the response filter under test closes it.
+    @SuppressWarnings("MustBeClosedChecker")
     void response_filter_still_closes_a_scope_found_in_the_request_properties() {
         Map<String, Object> props = new HashMap<>();
         Span span = provider.get("test").spanBuilder("held").startSpan();

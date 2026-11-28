@@ -140,7 +140,8 @@ final class JaxRsFakes {
         Object handle(Method m, Object[] args);
     }
 
-    @SuppressWarnings("unchecked")
+    // ReferenceEquality: a fake is equal to itself only, as Object.equals.
+    @SuppressWarnings({"unchecked", "ReferenceEquality"})
     static <T> T proxy(Class<T> type, Handler handler) {
         return (T) Proxy.newProxyInstance(JaxRsFakes.class.getClassLoader(), new Class<?>[]{type},
                 (p, m, args) -> {

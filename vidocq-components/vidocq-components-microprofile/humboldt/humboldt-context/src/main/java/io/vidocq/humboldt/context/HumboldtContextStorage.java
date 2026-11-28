@@ -83,6 +83,8 @@ public final class HumboldtContextStorage implements ContextStorage {
     }
 
     @Override
+    // Identity on purpose: attaching the very context already current is a no-op; an equal one is not.
+    @SuppressWarnings("ReferenceEquality")
     public Scope attach(Context toAttach) {
         if (toAttach == null) {
             return Scope.noop();
@@ -143,6 +145,8 @@ public final class HumboldtContextStorage implements ContextStorage {
             }
         }
 
+        // Identity on purpose: the scope must find the very context it attached, and root is a singleton.
+        @SuppressWarnings("ReferenceEquality")
         private static void detach(Context expected, Context previous) {
             Context actual = THREAD_LOCAL.get();
             if (actual != expected) {

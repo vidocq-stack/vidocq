@@ -147,7 +147,7 @@ class MapConfigPropertiesModuleLayerTest {
         try {
             return method.invoke(target);
         } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
+            throw new LinkageError(e.getMessage(), e);
         }
     }
 

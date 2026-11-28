@@ -122,6 +122,8 @@ public class HumboldtServerResponseFilter implements ContainerResponseFilter {
         requestContext.removeProperty(HumboldtServerRequestFilter.URL_SCHEME_PROPERTY);
     }
 
+    // Identity on purpose: the cached histogram belongs to the very OpenTelemetry instance that is global now.
+    @SuppressWarnings("ReferenceEquality")
     private DoubleHistogram histogram() {
         OpenTelemetry otel = GlobalOpenTelemetry.get();
         Duration current = duration.get();

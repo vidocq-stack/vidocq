@@ -105,7 +105,7 @@ class HumboldtAutoConfigureExportersTest {
                     if (name.equals("content-length")) length = Integer.parseInt(value);
                 }
                 in.readNBytes(length);
-                String path = requestLine.split(" ")[1];
+                String path = requestLine.split(" ", -1)[1];
                 if (contentType != null) contentTypes.put(path, contentType);
                 requests.add(path + " x-team=" + team);
                 out.write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.US_ASCII));

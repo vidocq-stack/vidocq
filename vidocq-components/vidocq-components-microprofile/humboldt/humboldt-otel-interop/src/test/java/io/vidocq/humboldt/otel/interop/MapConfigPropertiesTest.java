@@ -49,7 +49,7 @@ class MapConfigPropertiesTest {
     @Test
     void typed_getters_parse_the_values() {
         assertEquals("text", config.getString("s"));
-        assertEquals(Boolean.TRUE, config.getBoolean("b"));
+        assertEquals(true, config.getBoolean("b"));
         assertEquals(42, config.getInt("i"));
         assertEquals(9_000_000_000L, config.getLong("l"));
         assertEquals(2.5, config.getDouble("d"));

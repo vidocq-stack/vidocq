@@ -153,7 +153,8 @@ class WithSpanInterceptorAttributesTest {
     void other_throwables_are_wrapped_in_an_undeclared_throwable_exception() {
         OddThrowable odd = new OddThrowable();
         TestInvocationContext ctx = new TestInvocationContext(method(FAILS), new Object[0], () -> {
-            throw WithSpanInterceptorAttributesTest.<RuntimeException>sneaky(odd);
+            WithSpanInterceptorAttributesTest.<RuntimeException>sneakyThrow(odd);
+            return null;
         });
         UndeclaredThrowableException thrown =
                 assertThrows(UndeclaredThrowableException.class, () -> interceptor.aroundInvoke(ctx));
@@ -170,7 +171,7 @@ class WithSpanInterceptorAttributesTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Throwable> T sneaky(Throwable t) throws T {
+    private static <T extends Throwable> void sneakyThrow(Throwable t) throws T {
         throw (T) t;
     }
 

@@ -118,6 +118,8 @@ class HumboldtContextStorageTest {
     }
 
     /** Closes the outer scope while an inner one that is never closed is still attached; returns what was logged. */
+    // The inner scope is left open on purpose: it is the out-of-order case under test.
+    @SuppressWarnings("MustBeClosedChecker")
     private static List<Entry> outOfOrderClose(boolean debug) {
         List<Entry> logged = new ArrayList<>();
         System.Logger recording = new System.Logger() {
@@ -133,9 +135,9 @@ class HumboldtContextStorageTest {
         System.Logger previousLogger = HumboldtContextStorage.useLogger(recording);
         boolean previousDebug = HumboldtContextStorage.debug(debug);
         try {
-            Scope outer = Context.root().with(KEY, "outer").makeCurrent();
-            Context.root().with(KEY, "inner").makeCurrent(); // never closed, as after a call that got no response
-            outer.close();
+            try (var _ = Context.root().with(KEY, "outer").makeCurrent()) {
+                Context.root().with(KEY, "inner").makeCurrent(); // never closed, as after a call that got no response
+            }
         } finally {
             HumboldtContextStorage.debug(previousDebug);
             HumboldtContextStorage.useLogger(previousLogger);
@@ -202,9 +204,9 @@ class HumboldtContextStorageTest {
     @Test
     void close_is_idempotent() {
         Context ctx = Context.root().with(KEY, "x");
-        Scope scope = ctx.makeCurrent();
-        scope.close();
-        scope.close(); // must not fail or double-pop
+        try (Scope scope = ctx.makeCurrent()) {
+            scope.close();
+        } // try-with-resources closes it a second time: must not fail or double-pop
         assertNull(Context.current().get(KEY));
     }
 }

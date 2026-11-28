@@ -212,6 +212,8 @@ public final class OtelSpiAutoConfiguration {
      * the W3C default) and returns new ContextPropagators if the chain transformed it, {@code spiPropagators}
      * otherwise.
      */
+    // Identity on purpose: a customizer chain that returns the very same propagator changed nothing.
+    @SuppressWarnings("ReferenceEquality")
     private static ContextPropagators customizePropagators(CollectingAutoConfigurationCustomizer autoCustomizer,
             ContextPropagators spiPropagators, Map<String, String> props) {
         TextMapPropagator basePropagator = spiPropagators != null
@@ -288,7 +290,7 @@ public final class OtelSpiAutoConfiguration {
 
         // Split the list of names (CSV, spaces tolerated)
         List<String> names = new ArrayList<>();
-        for (String name : configured.split(",")) {
+        for (String name : configured.split(",", -1)) {
             String trimmed = name.trim();
             if (!trimmed.isEmpty()) names.add(trimmed);
         }

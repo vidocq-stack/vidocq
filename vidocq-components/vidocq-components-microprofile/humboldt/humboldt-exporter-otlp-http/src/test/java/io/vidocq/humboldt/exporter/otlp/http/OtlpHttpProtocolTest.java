@@ -43,6 +43,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,7 @@ class OtlpHttpProtocolTest {
 
     @BeforeEach
     void startCollector() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             contentTypes.put(path, String.valueOf(exchange.getRequestHeaders().getFirst("Content-Type")));

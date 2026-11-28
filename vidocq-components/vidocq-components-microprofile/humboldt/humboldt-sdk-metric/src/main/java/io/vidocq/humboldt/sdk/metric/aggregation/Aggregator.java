@@ -37,6 +37,8 @@ import java.util.List;
 public interface Aggregator<P extends PointData> {
 
     /** Records a long value with its associated attributes. */
+    // A long beyond 2^53 loses precision as a double; accepted, as in the OpenTelemetry SDK.
+    @SuppressWarnings("LongDoubleConversion")
     default void recordLong(long value, Attributes attributes) {
         recordDouble(value, attributes);
     }

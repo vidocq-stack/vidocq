@@ -55,7 +55,7 @@ class OpenLibertyPortabilityIT {
         String traceparent = get("/traced/call");
 
         // W3C Trace Context: 00-<trace id>-<parent span id>-<flags>
-        String[] parts = traceparent.split("-");
+        String[] parts = traceparent.split("-", -1);
         assertEquals(4, parts.length, "no traceparent reached the callee: " + traceparent);
         String traceId = parts[1];
         List<String> spans = spans();

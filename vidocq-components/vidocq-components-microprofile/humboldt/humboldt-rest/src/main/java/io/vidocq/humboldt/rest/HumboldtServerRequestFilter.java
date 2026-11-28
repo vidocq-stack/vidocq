@@ -52,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *   <li>{@code http.request.method} — GET/POST/...</li>
  *   <li>{@code http.route} — parameterized template (e.g. {@code /users/{id}}),
- *       rebuilt from {@link UriInfo#getMatchedTemplates()} and the base path</li>
+ *       rebuilt from the matched resource class and method ({@link ResourceInfo}) and the base path</li>
  *   <li>{@code url.path} — full path including the context root, without query string</li>
  *   <li>{@code url.query} — query string without the leading {@code ?} (if present)</li>
  *   <li>{@code url.scheme} — http/https</li>
@@ -113,7 +113,7 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         // without MP Telemetry bootstrap, or tooling that does not configure the runtime).
         OpenTelemetry otel = GlobalOpenTelemetry.get();
         TextMapPropagator propagator = otel.getPropagators().getTextMapPropagator();
-        if (propagator == TextMapPropagator.noop()) {
+        if (isNoop(propagator)) {
             propagator = W3CPropagators.textMap();
         }
         Context parent = propagator.extract(Context.current(), requestContext, HEADER_GETTER);
@@ -155,6 +155,8 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         // even when the client sent a `baggage:` header (see BaggageTest which POSTs to the
         // /baggage endpoint with header baggage=user=naruto and expects the resource to read
         // baggage.getEntryValue("user") == "naruto").
+        // Closed by HumboldtServerResponseFilter, which finds it in the request properties.
+        @SuppressWarnings("MustBeClosedChecker")
         Scope scope = parent.with(span).makeCurrent();
         requestContext.setProperty(SPAN_PROPERTY, span);
         requestContext.setProperty(SCOPE_PROPERTY, scope);
@@ -185,6 +187,12 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
      * @return the templated route, or {@code null} if no resource was matched
      *         (pre-matching filter or 404 error).
      */
+    // Identity on purpose: the no-op propagator is a singleton, which an equal custom propagator is not.
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean isNoop(TextMapPropagator propagator) {
+        return propagator == TextMapPropagator.noop();
+    }
+
     private static String buildRoute(UriInfo uriInfo, ResourceInfo resourceInfo) {
         if (resourceInfo == null) return null;
         Class<?> resourceClass = resourceInfo.getResourceClass();

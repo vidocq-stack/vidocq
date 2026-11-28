@@ -335,7 +335,7 @@ public final class HumboldtAutoConfigure {
         AttributesBuilder attrs = Attributes.builder();
         attrs.put(stringKey("service.name"), env.getOrDefault("OTEL_SERVICE_NAME", "humboldt"));
         env.get("OTEL_RESOURCE_ATTRIBUTES").ifPresent(raw -> {
-            for (String pair : raw.split(",")) {
+            for (String pair : raw.split(",", -1)) {
                 int idx = pair.indexOf('=');
                 if (idx > 0) {
                     String k = pair.substring(0, idx).trim();
