@@ -169,6 +169,7 @@ class FallbackResolverTest {
             return "unreachable";
         }
 
+        @SuppressWarnings("UnusedMethod") // named by @Fallback(fallbackMethod), called by reflection
         private String recover(String value) {
             return "method:" + value;
         }

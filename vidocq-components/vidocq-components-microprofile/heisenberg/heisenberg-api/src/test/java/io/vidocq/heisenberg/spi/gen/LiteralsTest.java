@@ -26,6 +26,7 @@ import org.eclipse.microprofile.faulttolerance.Fallback;
 import org.eclipse.microprofile.faulttolerance.Retry;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,6 +86,28 @@ class LiteralsTest {
                 array(IOException.class), array()));
         assertTrue(literal.toString().contains("fallbackMethod=recover"), literal.toString());
         assertEquals(Fallback.class, literal.annotationType());
+    }
+
+    @Test
+    void theArrayMembersOfALiteralAreCopiedOnRead() {
+        Retry retry = retry(IOException.class);
+        CircuitBreaker breaker = new Literals.CircuitBreakerLiteral(array(IllegalStateException.class),
+                array(IOException.class), 5_000L, ChronoUnit.MILLIS, 20, 0.25, 1);
+        Fallback fallback = new Literals.FallbackLiteral(Fallback.DEFAULT.class, "recover", array(IOException.class),
+                array(IllegalStateException.class));
+
+        retry.retryOn()[0] = Error.class;
+        breaker.failOn()[0] = Error.class;
+        breaker.skipOn()[0] = Error.class;
+        fallback.applyOn()[0] = Error.class;
+        fallback.skipOn()[0] = Error.class;
+
+        assertEquals(retry(IOException.class), retry, "an annotation member is a copy: writing it changes nothing");
+        assertArrayEquals(array(), retry.abortOn());
+        assertArrayEquals(array(IllegalStateException.class), breaker.failOn());
+        assertArrayEquals(array(IOException.class), breaker.skipOn());
+        assertArrayEquals(array(IOException.class), fallback.applyOn());
+        assertArrayEquals(array(IllegalStateException.class), fallback.skipOn());
     }
 
     @Test

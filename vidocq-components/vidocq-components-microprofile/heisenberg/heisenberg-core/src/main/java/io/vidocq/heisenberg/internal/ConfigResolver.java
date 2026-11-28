@@ -272,6 +272,8 @@ public final class ConfigResolver {
     private static final java.util.concurrent.atomic.AtomicReference<InterceptorSettings> INTERCEPTOR_SETTINGS =
             new java.util.concurrent.atomic.AtomicReference<>();
 
+    // The Config is compared by identity on purpose: a new instance is a new configuration.
+    @SuppressWarnings("ReferenceEquality")
     private static InterceptorSettings interceptorSettings() {
         Config config = loadConfig();
         int generation = GENERATION.get();
@@ -386,8 +388,7 @@ public final class ConfigResolver {
     private static java.util.Optional<Boolean> getBooleanByName(
             Config config, Method method, Class<?> beanClass, Class<? extends Annotation> annotationType, String annotationName, String parameter) {
         return getValueByName(config, method, beanClass, annotationType, annotationName, parameter, String.class).map(value -> {
-            String trimmed = value.trim().toLowerCase();
-            return "true".equals(trimmed);
+            return "true".equalsIgnoreCase(value.trim());
         });
     }
 
@@ -453,7 +454,7 @@ public final class ConfigResolver {
             String parameter
     ) {
         return getValue(config, method, beanClass, annotationType, parameter, String.class).map(value -> {
-            String[] classNames = value.split(",");
+            String[] classNames = value.split(",", -1);
             List<Class<? extends Throwable>> resolved = new ArrayList<>();
             for (String className : classNames) {
                 String trimmed = className.trim();

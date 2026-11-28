@@ -47,6 +47,7 @@ abstract class DelegatingFtMetricsRecorder implements FtMetricsRecorder {
      * Whether this recorder publishes anything. Public, so that a call through the client proxy
      * reaches the contextual instance.
      */
+    @SuppressWarnings("ReferenceEquality") // NOOP is the sentinel of "no recorder"
     public boolean active() {
         return delegate != FtMetricsRecorder.NOOP;
     }

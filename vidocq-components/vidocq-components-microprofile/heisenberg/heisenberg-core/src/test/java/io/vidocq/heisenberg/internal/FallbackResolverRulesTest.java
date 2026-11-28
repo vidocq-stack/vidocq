@@ -83,7 +83,7 @@ class FallbackResolverRulesTest {
 
         IOException thrown = assertThrows(IOException.class, () -> resolve(service, guarded, null));
 
-        assertSame(ThrowingService.CHECKED, thrown);
+        assertSame(service.checked, thrown);
     }
 
     @Test
@@ -93,7 +93,7 @@ class FallbackResolverRulesTest {
 
         StackOverflowError thrown = assertThrows(StackOverflowError.class, () -> resolve(service, guarded, null));
 
-        assertSame(ThrowingService.ERROR, thrown);
+        assertSame(service.error, thrown);
     }
 
     @Test
@@ -103,7 +103,7 @@ class FallbackResolverRulesTest {
 
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> resolve(service, guarded, null));
 
-        assertSame(ThrowingService.THROWABLE, thrown.getCause());
+        assertSame(service.throwable, thrown.getCause());
     }
 
     // ------------------------------------------------------------------
@@ -305,9 +305,9 @@ class FallbackResolverRulesTest {
     // ------------------------------------------------------------------
 
     static class ThrowingService {
-        static final IOException CHECKED = new IOException("checked");
-        static final StackOverflowError ERROR = new StackOverflowError("error");
-        static final Throwable THROWABLE = new Throwable("throwable");
+        final IOException checked = new IOException("checked");
+        final StackOverflowError error = new StackOverflowError("error");
+        final Throwable throwable = new Throwable("throwable");
 
         @Fallback(fallbackMethod = "checkedRecover")
         String checked() {
@@ -315,7 +315,7 @@ class FallbackResolverRulesTest {
         }
 
         String checkedRecover() throws IOException {
-            throw CHECKED;
+            throw checked;
         }
 
         @Fallback(fallbackMethod = "errorRecover")
@@ -324,7 +324,7 @@ class FallbackResolverRulesTest {
         }
 
         String errorRecover() {
-            throw ERROR;
+            throw error;
         }
 
         @Fallback(fallbackMethod = "throwableRecover")
@@ -333,7 +333,7 @@ class FallbackResolverRulesTest {
         }
 
         String throwableRecover() throws Throwable {
-            throw THROWABLE;
+            throw throwable;
         }
     }
 
@@ -621,7 +621,7 @@ class FallbackResolverRulesTest {
                 case "aLong" -> 2L;
                 case "aDouble" -> 3.0d;
                 case "aFloat" -> 4.0f;
-                case "aBoolean" -> Boolean.TRUE;
+                case "aBoolean" -> true;
                 case "aShort" -> (short) 5;
                 case "aByte" -> (byte) 6;
                 case "aChar" -> 'c';

@@ -31,6 +31,7 @@ public class FallbackService {
     }
 
     // Private: the fallback is resolved without Vauban's module lookups.
+    @SuppressWarnings("UnusedMethod") // named by @Fallback(fallbackMethod), called by reflection
     private String recover(String name) {
         return "fallback for " + name;
     }

@@ -70,6 +70,8 @@ record MethodPolicies(
     };
 
     /** The policies of {@code method} on {@code beanClass} under the current configuration. */
+    // The Config is compared by identity on purpose: a new instance is a new configuration.
+    @SuppressWarnings("ReferenceEquality")
     static MethodPolicies of(Method method, Class<?> beanClass) {
         Config config = ConfigResolver.currentConfig();
         int generation = ConfigResolver.generation();

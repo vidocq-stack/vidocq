@@ -37,6 +37,8 @@ import java.util.Objects;
  * @param failOn                 exceptions that increment failures (default Throwable.class)
  * @param skipOn                 ignored exceptions (takes precedence over failOn)
  */
+// Arrays copied on construction, compared, hashed and printed by content; the engines read them on every call
+@SuppressWarnings("ArrayRecordComponent")
 public record CircuitBreakerConfig(
         int requestVolumeThreshold,
         double failureRatio,

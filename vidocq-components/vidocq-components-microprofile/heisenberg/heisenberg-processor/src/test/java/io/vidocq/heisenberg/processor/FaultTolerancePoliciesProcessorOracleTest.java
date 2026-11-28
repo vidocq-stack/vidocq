@@ -162,7 +162,7 @@ class FaultTolerancePoliciesProcessorOracleTest {
             sources.add(file.toFile());
         }
         List<File> classPath = new ArrayList<>();
-        for (String entry : System.getProperty("java.class.path").split(File.pathSeparator)) {
+        for (String entry : System.getProperty("java.class.path").split(File.pathSeparator, -1)) {
             if (!entry.isBlank()) classPath.add(new File(entry));
         }
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();

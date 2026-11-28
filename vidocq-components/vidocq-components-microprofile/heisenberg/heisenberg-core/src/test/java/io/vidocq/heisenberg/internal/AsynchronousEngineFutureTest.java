@@ -52,6 +52,7 @@ class AsynchronousEngineFutureTest {
     }
 
     @Test
+    @SuppressWarnings("FutureReturnValueIgnored") // the invocation returns a future as its value: the case under test
     void nestedFutureValueCompletesTheStage() throws Exception {
         CompletableFuture<Object> future = AsynchronousEngine
                 .executeAsync(() -> CompletableFuture.completedFuture("nested"), THREAD).toCompletableFuture();
@@ -60,6 +61,7 @@ class AsynchronousEngineFutureTest {
     }
 
     @Test
+    @SuppressWarnings("FutureReturnValueIgnored") // the invocation returns a future as its value: the case under test
     void nestedFutureFailureIsUnwrapped() {
         IOException cause = new IOException("nested failure");
         CompletableFuture<Object> future = AsynchronousEngine

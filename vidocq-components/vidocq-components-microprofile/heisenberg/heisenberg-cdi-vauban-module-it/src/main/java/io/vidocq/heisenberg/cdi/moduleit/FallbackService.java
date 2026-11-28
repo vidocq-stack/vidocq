@@ -43,6 +43,7 @@ public class FallbackService {
         throw new IllegalStateException("boom");
     }
 
+    @SuppressWarnings("UnusedMethod") // named by @Fallback(fallbackMethod), called by reflection
     private String privateRecovery(String name) {
         return "private fallback for " + name;
     }

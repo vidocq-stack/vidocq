@@ -35,6 +35,8 @@ import org.eclipse.microprofile.faulttolerance.FallbackHandler;
  * @param fallbackMethod name of the effective fallbackMethod (annotation or config override)
  * @param fallbackHandlerClass type of the effective FallbackHandler (annotation or config override)
  */
+// Arrays copied on construction, compared, hashed and printed by content; the engines read them on every call
+@SuppressWarnings("ArrayRecordComponent")
 public record FallbackConfig(
         Class<? extends Throwable>[] applyOn,
         Class<? extends Throwable>[] skipOn,

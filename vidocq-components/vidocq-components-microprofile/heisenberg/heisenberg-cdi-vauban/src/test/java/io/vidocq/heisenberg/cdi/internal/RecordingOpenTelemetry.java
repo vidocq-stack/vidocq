@@ -88,7 +88,7 @@ final class RecordingOpenTelemetry {
                 (self, method, args) -> handle(self, type, instrument, method, args)));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "ReferenceEquality"}) // equals of the proxy is identity, as its hashCode
     private Object handle(Object self, Class<?> type, String instrument, Method method, Object[] args) {
         switch (method.getName()) {
             case "toString":

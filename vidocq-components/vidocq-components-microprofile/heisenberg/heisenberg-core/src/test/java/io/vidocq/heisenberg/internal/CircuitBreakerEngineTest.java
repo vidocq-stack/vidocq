@@ -124,7 +124,6 @@ class CircuitBreakerEngineTest {
         private CircuitBreakerState state = CircuitBreakerState.CLOSED;
         private long openedAtNanos = 0;
         private int halfOpenSuccesses = 0;
-        private int failures = 0;
 
         @Override
         public CircuitBreakerState getState(String bc, String mn) { return state; }
@@ -134,7 +133,7 @@ class CircuitBreakerEngineTest {
 
         @Override
         public void recordFailure(String bc, String mn) {
-            failures++;
+            //the engine decides from its own window: the count is not read
         }
 
         @Override
@@ -146,7 +145,6 @@ class CircuitBreakerEngineTest {
         @Override
         public void setClosed(String bc, String mn) {
             state = CircuitBreakerState.CLOSED;
-            failures = 0;
             halfOpenSuccesses = 0;
         }
 

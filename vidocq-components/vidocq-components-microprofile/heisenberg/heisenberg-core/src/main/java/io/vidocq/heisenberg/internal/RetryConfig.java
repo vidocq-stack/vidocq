@@ -24,6 +24,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Objects;
 
+// Arrays copied on construction, compared, hashed and printed by content; the engines read them on every call
+@SuppressWarnings("ArrayRecordComponent")
 public record RetryConfig(
         int maxRetries,
         long delay,

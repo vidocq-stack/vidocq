@@ -60,6 +60,7 @@ class MetricsRecordersTest {
         final List<String> calls = new CopyOnWriteArrayList<>();
         final FtMetricsRecorder recorder;
 
+        @SuppressWarnings("ReferenceEquality") // equals of the proxy is identity, as its hashCode
         Recording(boolean failing) {
             recorder = (FtMetricsRecorder) Proxy.newProxyInstance(FtMetricsRecorder.class.getClassLoader(),
                     new Class<?>[]{FtMetricsRecorder.class}, (self, method, args) -> {
@@ -136,6 +137,7 @@ class MetricsRecordersTest {
     }
 
     @Test
+    @SuppressWarnings("UnnecessaryAssignment") // the test injects by hand, without a container
     void diracRecorderDelegatesToTheBaseRegistry() throws NoSuchMethodException {
         RecordingMetricRegistry registry = new RecordingMetricRegistry();
         DiracFtMetricsRecorder recorder = new DiracFtMetricsRecorder();
@@ -150,6 +152,7 @@ class MetricsRecordersTest {
     }
 
     @Test
+    @SuppressWarnings("UnnecessaryAssignment") // the test injects by hand, without a container
     void diracRecorderWithoutARegistryStaysInactive() {
         DiracFtMetricsRecorder recorder = new DiracFtMetricsRecorder();
         recorder.baseRegistry = new FixedInstance(null).instance();

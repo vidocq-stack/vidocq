@@ -37,7 +37,7 @@ final class FixedInstance {
         this.value = value;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "ReferenceEquality"}) // equals of the proxy is identity, as its hashCode
     <T> Instance<T> instance() {
         return (Instance<T>) Proxy.newProxyInstance(Instance.class.getClassLoader(),
                 new Class<?>[]{Instance.class}, (self, method, args) -> switch (method.getName()) {

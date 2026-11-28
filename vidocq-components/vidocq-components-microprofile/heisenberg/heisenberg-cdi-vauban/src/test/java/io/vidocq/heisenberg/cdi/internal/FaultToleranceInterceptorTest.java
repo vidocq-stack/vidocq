@@ -76,6 +76,7 @@ class FaultToleranceInterceptorTest {
      * is the value the TCK configures.
      */
     @Test
+    @SuppressWarnings("UnnecessaryAssignment") // the test injects by hand, without a container
     void appliesThePoliciesUnderTheConfiguredPriority() throws Exception {
         FlakyService target = new FlakyService();
         FakeInvocationContext context = new FakeInvocationContext(target, FlakyService.class.getMethod("call"),

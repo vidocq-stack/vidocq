@@ -355,8 +355,17 @@ final class DiracFtMetrics implements FtMetricsRecorder {
         private volatile long stateEnteredAt = System.nanoTime();
         private final long[] accNanos = new long[3];
 
+        /** The slot of {@code state} in {@link #accNanos}, independent of the declaration order of the enum. */
+        private static int slot(FtMetricsRecorder.CBState state) {
+            return switch (state) {
+                case CLOSED -> 0;
+                case OPEN -> 1;
+                case HALF_OPEN -> 2;
+            };
+        }
+
         synchronized long nanos(FtMetricsRecorder.CBState queryState) {
-            long acc = accNanos[queryState.ordinal()];
+            long acc = accNanos[slot(queryState)];
             if (currentState == queryState) {
                 acc += System.nanoTime() - stateEnteredAt;
             }
@@ -366,7 +375,7 @@ final class DiracFtMetrics implements FtMetricsRecorder {
         synchronized void transition(FtMetricsRecorder.CBState newState) {
             if (newState == currentState) return;
             long now = System.nanoTime();
-            accNanos[currentState.ordinal()] += now - stateEnteredAt;
+            accNanos[slot(currentState)] += now - stateEnteredAt;
             currentState = newState;
             stateEnteredAt = now;
         }

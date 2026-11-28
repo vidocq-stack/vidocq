@@ -36,8 +36,8 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
  * values, instead of reading them by reflection. Each is a record whose components are the annotation's members, so
  * its accessors implement them.
  *
- * <p>Heisenberg only reads their members. Those with array members compare and print them by content, as an
- * annotation does.</p>
+ * <p>Heisenberg only reads their members. Those with array members compare and print them by content, and return
+ * a copy of them, as an annotation does.</p>
  */
 public final class Literals {
 
@@ -46,7 +46,9 @@ public final class Literals {
 
     /** Equality of two member values, arrays by content, as {@link Annotation#equals} compares them. */
     private static boolean same(Object left, Object right) {
-        return left instanceof Object[] a && right instanceof Object[] b ? Arrays.equals(a, b) : Objects.equals(left, right);
+        return (left instanceof Object[] a && right instanceof Object[] b)
+                ? Arrays.equals(a, b)
+                : Objects.equals(left, right);
     }
 
     /** A hash of member values, arrays by content. */
@@ -67,6 +69,8 @@ public final class Literals {
     }
 
     /** A {@link Retry}. */
+    // Array members, as an annotation has them: compared, hashed and printed by content, and copied on read
+    @SuppressWarnings({"ArrayRecordComponent", "ImmutableAnnotationChecker"})
     public record RetryLiteral(int maxRetries, long delay, ChronoUnit delayUnit, long maxDuration,
                                ChronoUnit durationUnit, long jitter, ChronoUnit jitterDelayUnit,
                                Class<? extends Throwable>[] retryOn, Class<? extends Throwable>[] abortOn)
@@ -74,6 +78,16 @@ public final class Literals {
         @Override
         public Class<? extends Annotation> annotationType() {
             return Retry.class;
+        }
+
+        @Override
+        public Class<? extends Throwable>[] retryOn() {
+            return retryOn.clone();
+        }
+
+        @Override
+        public Class<? extends Throwable>[] abortOn() {
+            return abortOn.clone();
         }
 
         @Override
@@ -107,12 +121,24 @@ public final class Literals {
     }
 
     /** A {@link CircuitBreaker}. */
+    // Array members, as an annotation has them: compared, hashed and printed by content, and copied on read
+    @SuppressWarnings({"ArrayRecordComponent", "ImmutableAnnotationChecker"})
     public record CircuitBreakerLiteral(Class<? extends Throwable>[] failOn, Class<? extends Throwable>[] skipOn,
                                         long delay, ChronoUnit delayUnit, int requestVolumeThreshold,
                                         double failureRatio, int successThreshold) implements CircuitBreaker {
         @Override
         public Class<? extends Annotation> annotationType() {
             return CircuitBreaker.class;
+        }
+
+        @Override
+        public Class<? extends Throwable>[] failOn() {
+            return failOn.clone();
+        }
+
+        @Override
+        public Class<? extends Throwable>[] skipOn() {
+            return skipOn.clone();
         }
 
         @Override
@@ -145,12 +171,24 @@ public final class Literals {
     }
 
     /** A {@link Fallback}. */
+    // Array members, as an annotation has them: compared, hashed and printed by content, and copied on read
+    @SuppressWarnings({"ArrayRecordComponent", "ImmutableAnnotationChecker"})
     public record FallbackLiteral(Class<? extends FallbackHandler<?>> value, String fallbackMethod,
                                   Class<? extends Throwable>[] applyOn, Class<? extends Throwable>[] skipOn)
             implements Fallback {
         @Override
         public Class<? extends Annotation> annotationType() {
             return Fallback.class;
+        }
+
+        @Override
+        public Class<? extends Throwable>[] applyOn() {
+            return applyOn.clone();
+        }
+
+        @Override
+        public Class<? extends Throwable>[] skipOn() {
+            return skipOn.clone();
         }
 
         @Override

@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
  */
 class FailuresTest {
 
-    private static final Throwable ODD = new Throwable("neither an exception nor an error");
+    private final Throwable odd = new Throwable("neither an exception nor an error");
 
     /** Throws a checked {@link Throwable} that an {@code Invocation} cannot declare. */
     @SuppressWarnings("unchecked")
@@ -59,7 +59,7 @@ class FailuresTest {
 
     @Test
     void otherThrowablesAreWrapped() {
-        assertSame(ODD, Failures.asException(ODD).getCause());
+        assertSame(odd, Failures.asException(odd).getCause());
     }
 
     @Test
@@ -69,9 +69,9 @@ class FailuresTest {
                 0, ChronoUnit.MILLIS, new Class[]{Throwable.class}, new Class[0]);
 
         UndeclaredThrowableException thrown = assertThrows(UndeclaredThrowableException.class,
-                () -> RetryEngine.execute(() -> sneakyThrow(ODD), retryNothing));
+                () -> RetryEngine.execute(() -> sneakyThrow(odd), retryNothing));
 
-        assertSame(ODD, thrown.getCause());
+        assertSame(odd, thrown.getCause());
     }
 
     @Test
@@ -79,9 +79,9 @@ class FailuresTest {
         TimeoutConfig generous = new TimeoutConfig(10, ChronoUnit.SECONDS);
 
         UndeclaredThrowableException thrown = assertThrows(UndeclaredThrowableException.class,
-                () -> TimeoutEngine.execute(() -> sneakyThrow(ODD), generous));
+                () -> TimeoutEngine.execute(() -> sneakyThrow(odd), generous));
 
-        assertSame(ODD, thrown.getCause());
+        assertSame(odd, thrown.getCause());
     }
 
     @Test
@@ -90,23 +90,29 @@ class FailuresTest {
         Method guarded = OddFallbackBean.class.getMethod("guarded");
         FallbackConfig config = new FallbackConfig(new Class[]{Throwable.class}, new Class[0], "recover", null);
         FallbackResolver resolver = new FallbackResolver();
-        OddFallbackBean bean = new OddFallbackBean();
+        OddFallbackBean bean = new OddFallbackBean(odd);
         IOException failure = new IOException("guarded failed");
 
         UndeclaredThrowableException thrown = assertThrows(UndeclaredThrowableException.class,
                 () -> resolver.resolve(config, bean, guarded, null, failure));
 
-        assertSame(ODD, thrown.getCause());
+        assertSame(odd, thrown.getCause());
     }
 
     /** A bean whose fallback method fails with a {@link Throwable} it does not declare. */
     public static class OddFallbackBean {
+        private final Throwable failure;
+
+        OddFallbackBean(Throwable failure) {
+            this.failure = failure;
+        }
+
         public String guarded() throws IOException {
             throw new IOException("guarded");
         }
 
         public String recover() {
-            return (String) sneakyThrow(ODD);
+            return (String) sneakyThrow(failure);
         }
     }
 }
