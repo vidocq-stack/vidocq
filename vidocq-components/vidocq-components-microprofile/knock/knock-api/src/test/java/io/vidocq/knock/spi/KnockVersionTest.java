@@ -84,6 +84,11 @@ class KnockVersionTest {
             }
 
             @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                throw new IOException("unreadable");
+            }
+
+            @Override
             public void close() {
                 closed[0] = true;
             }
