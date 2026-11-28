@@ -101,6 +101,8 @@ public final class JwksKeyResolver implements KeyResolver {
         }
     }
 
+    // Identity on purpose: a snapshot other than the very stale one means another thread has refreshed.
+    @SuppressWarnings("ReferenceEquality")
     private Snapshot refresh(Snapshot stale) throws JwtValidationException {
         lock.lock();
         try {

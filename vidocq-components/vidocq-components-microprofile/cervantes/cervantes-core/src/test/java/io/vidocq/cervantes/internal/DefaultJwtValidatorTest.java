@@ -30,6 +30,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.time.Clock;
 import java.time.Duration;
@@ -180,8 +181,8 @@ class DefaultJwtValidatorTest {
     @Test
     void unsupportedAlgorithm_isRejected() {
         //alg "none" (unsigned token) must be refused
-        String h = TestJwts.B64URL.encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes());
-        String p = TestJwts.B64URL.encodeToString("{\"sub\":\"x\"}".getBytes());
+        String h = TestJwts.B64URL.encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+        String p = TestJwts.B64URL.encodeToString("{\"sub\":\"x\"}".getBytes(StandardCharsets.UTF_8));
         String token = h + "." + p + "."; // empty signature
         assertThrows(JwtValidationException.class, () -> rsaValidator().validate(token));
     }

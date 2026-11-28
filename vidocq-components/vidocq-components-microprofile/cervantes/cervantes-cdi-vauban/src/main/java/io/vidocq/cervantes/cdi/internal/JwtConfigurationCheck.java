@@ -102,7 +102,7 @@ public class JwtConfigurationCheck {
      */
     static boolean isConfigImplementationAvailable(Supplier<ConfigProviderResolver> resolver, ClassLoader loader) {
         try {
-            resolver.get();
+            var _ = resolver.get(); // throws IllegalStateException without a Config implementation
             return true;
         } catch (IllegalStateException e) {
             if (ServiceLoader.load(ConfigProviderResolver.class, loader).findFirst().isEmpty()) {

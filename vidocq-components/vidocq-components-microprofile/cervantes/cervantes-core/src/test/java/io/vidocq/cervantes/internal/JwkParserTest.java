@@ -68,10 +68,10 @@ class JwkParserTest {
         KeyPair rsa = TestJwts.rsaKeyPair();
         //JWKS with a "sig" RSA key, an "enc" key and an unknown kty: only the first left.
         String jwksJson = "{\"keys\":["
-                + new String(TestJwks.jwk("rsa-1", rsa.getPublic()).toString().getBytes())
+                + TestJwks.jwk("rsa-1", rsa.getPublic()).toString()
                 + ",{\"kty\":\"oct\",\"kid\":\"hmac\",\"k\":\"AAAA\"}"
                 + "]}";
-        Jwks jwks = JwkParser.parse(jwksJson.getBytes());
+        Jwks jwks = JwkParser.parse(jwksJson.getBytes(StandardCharsets.UTF_8));
         assertEquals(1, jwks.byKid().size());
         assertTrue(jwks.byKid().containsKey("rsa-1"));
     }

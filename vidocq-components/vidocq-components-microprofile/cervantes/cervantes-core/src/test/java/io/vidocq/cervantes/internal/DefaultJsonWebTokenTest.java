@@ -109,8 +109,8 @@ class DefaultJsonWebTokenTest {
         assertEquals("text", jwt.getClaim("s"));
         assertEquals(42L, (Long) jwt.getClaim("i"));
         assertEquals(1.5, (Double) jwt.getClaim("d"));
-        assertEquals(Boolean.TRUE, jwt.getClaim("t"));
-        assertEquals(Boolean.FALSE, jwt.getClaim("f"));
+        assertEquals(true, jwt.<Boolean>getClaim("t"));
+        assertEquals(false, jwt.<Boolean>getClaim("f"));
         assertEquals(address, jwt.getClaim("o"));
         assertNull(jwt.getClaim("n"));
         assertNull(jwt.getClaim("absent"));

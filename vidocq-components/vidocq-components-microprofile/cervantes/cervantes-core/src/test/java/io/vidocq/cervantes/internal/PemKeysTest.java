@@ -23,6 +23,7 @@ import io.vidocq.cervantes.api.JwtValidationException;
 import io.vidocq.cervantes.api.SignatureAlgorithm;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
@@ -41,7 +42,7 @@ class PemKeysTest {
 
     private static String pem(PublicKey key) {
         return "-----BEGIN PUBLIC KEY-----\n"
-                + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(key.getEncoded())
+                + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8)).encodeToString(key.getEncoded())
                 + "\n-----END PUBLIC KEY-----\n";
     }
 

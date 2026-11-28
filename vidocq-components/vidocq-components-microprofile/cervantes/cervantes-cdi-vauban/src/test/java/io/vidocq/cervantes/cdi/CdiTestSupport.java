@@ -60,7 +60,7 @@ public final class CdiTestSupport {
         KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
         g.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
         return "-----BEGIN PUBLIC KEY-----\n"
-                + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(g.generateKeyPair().getPublic().getEncoded())
+                + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8)).encodeToString(g.generateKeyPair().getPublic().getEncoded())
                 + "\n-----END PUBLIC KEY-----\n";
     }
 

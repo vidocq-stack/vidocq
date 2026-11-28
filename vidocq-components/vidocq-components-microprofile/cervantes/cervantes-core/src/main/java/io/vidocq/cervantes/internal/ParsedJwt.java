@@ -37,6 +37,9 @@ import java.util.Objects;
  * @param signature decoded signature (base64url), raw form (JOSE {@code R‖S} for ECDSA)
  * @param rawToken     the original compact JWT
  */
+// ArrayRecordComponent: the signature APIs take byte arrays, and equals, hashCode and toString below read them by
+// content.
+@SuppressWarnings("ArrayRecordComponent")
 record ParsedJwt(JsonObject header, JsonObject claims, byte[] signingInput, byte[] signature, String rawToken) {
 
     @Override

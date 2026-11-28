@@ -43,7 +43,7 @@ class EcdsaSignaturesTest {
     @ParameterizedTest
     @ValueSource(strings = {"secp256r1:SHA256withECDSA:32", "secp384r1:SHA384withECDSA:48", "secp521r1:SHA512withECDSA:66"})
     void jcaSignature_roundTripsThroughJose(String spec) throws Exception {
-        String[] parts = spec.split(":");
+        String[] parts = spec.split(":", -1);
         int n = Integer.parseInt(parts[2]);
         KeyPair pair = TestJwts.ecKeyPair(parts[0]);
         Signature signer = Signature.getInstance(parts[1]);

@@ -142,8 +142,8 @@ class ClaimResolverTest {
         assertEquals(1_700_000_000L, resolve("iatPrimitive"));
         assertEquals(3, resolve(COUNT));
         assertEquals(3, resolve("countPrimitive"));
-        assertEquals(Boolean.TRUE, resolve("active"));
-        assertEquals(Boolean.TRUE, resolve("activePrimitive"));
+        assertEquals(true, resolve("active"));
+        assertEquals(true, resolve("activePrimitive"));
         assertEquals(0.5, resolve("ratio"));
         assertEquals(3.0, resolve("countAsDouble"));
         assertEquals("3", resolve("countAsString"));
@@ -256,7 +256,8 @@ class ClaimResolverTest {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
+        // TypeParameterUnusedInFormals: the signature is the one of the MicroProfile JWT JsonWebToken API.
+        @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
         public <T> T getClaim(String claimName) {
             return (T) claims.get(claimName);
         }

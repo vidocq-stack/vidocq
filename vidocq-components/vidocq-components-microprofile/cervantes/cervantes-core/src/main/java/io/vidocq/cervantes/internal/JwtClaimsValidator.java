@@ -55,7 +55,7 @@ final class JwtClaimsValidator {
 
     /** {@code exp}, {@code iat} and {@code nbf} (RFC 7519 §4.1.4-6), then the token age (MP JWT §9.2.1). */
     private static void validateTimes(JsonObject claims, JwtConfig config, long now) throws JwtValidationException {
-        long skew = config.clockSkew().getSeconds();
+        long skew = config.clockSkew().toSeconds();
 
         JsonNumber exp = numberOrNull(claims, "exp");
         if (exp == null) {

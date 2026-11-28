@@ -64,6 +64,8 @@ public final class DefaultJsonWebToken implements JsonWebToken {
         return new DefaultJsonWebToken(ANONYMOUS_PAYLOAD, null);
     }
 
+    // Identity on purpose: the anonymous token carries the ANONYMOUS_PAYLOAD sentinel itself, not an equal payload.
+    @SuppressWarnings("ReferenceEquality")
     private boolean isAnonymous() {
         return payload == ANONYMOUS_PAYLOAD && rawToken == null;
     }
@@ -103,7 +105,8 @@ public final class DefaultJsonWebToken implements JsonWebToken {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    // TypeParameterUnusedInFormals: the signature is the one of the MicroProfile JWT JsonWebToken API.
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     public <T> T getClaim(String claimName) {
         if (isAnonymous()) {
             return null;
@@ -146,8 +149,8 @@ public final class DefaultJsonWebToken implements JsonWebToken {
                 JsonNumber n = (JsonNumber) v;
                 yield n.isIntegral() ? (Object) n.longValue() : (Object) n.doubleValue();
             }
-            case TRUE -> Boolean.TRUE;
-            case FALSE -> Boolean.FALSE;
+            case TRUE -> true;
+            case FALSE -> false;
             //objects and tables: exposed as is (JsonObject/JsonArray), in accordance with JWT MP usage
             default -> v;
         };
