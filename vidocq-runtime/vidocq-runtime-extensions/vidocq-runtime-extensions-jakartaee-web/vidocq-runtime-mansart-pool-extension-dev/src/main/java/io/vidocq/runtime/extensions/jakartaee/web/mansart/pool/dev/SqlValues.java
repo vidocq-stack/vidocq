@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.function.IntFunction;
 
 /**
@@ -67,7 +68,9 @@ final class SqlValues {
                  Types.CLOB, Types.NCLOB -> text(results, column);
             default -> null;
         };
-        if (streamed != null) {
+        // Not "streamed != null": Opengrep's eqeq rule propagates the null of the default branch and reads
+        // "null != null"; not "instanceof Streamed" either, which Error Prone reports as a disguised null check.
+        if (Objects.nonNull(streamed)) {
             return streamed.value();
         }
         Object value = results.getObject(column);
