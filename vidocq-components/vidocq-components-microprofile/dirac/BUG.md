@@ -6,6 +6,34 @@ minimal repro, cause hypothesis, status.
 
 ---
 
+## BUG-20261128-04 — `GET /metrics/APPLICATION` answers 404 in a Turkish locale
+
+- **Opening date**: 2026-11-28
+- **Status**: FIXED (Vidocq/vidocq#832, Error Prone cleanup of Dirac)
+
+### Symptom
+
+The `/metrics/{scope}` endpoints accept the scope in any case. With a Turkish default locale (`tr-TR`),
+`/metrics/APPLICATION` and `/metrics/APPLICATION/{name}` answered 404 instead of the application registry.
+
+### Minimal repro
+
+`MetricsResourceTest.formatScopeIgnoresTheCaseOfTheScopeInATurkishLocale`: default locale `tr-TR`,
+`formatScope("APPLICATION", null)` returned `null`.
+
+### Cause
+
+`MetricsResource.registryForScope` lower-cased the scope with `String.toLowerCase()`, in the default locale: in
+Turkish, `I` becomes the dotless `ı`, and `applıcatıon` matches no scope. Found by Error Prone's
+`StringCaseLocaleUsage`.
+
+### Fix
+
+`toLowerCase(Locale.ROOT)`. The same change in `DistributionConfig.parseTimerBucketToNanos` fixes no visible bug
+(no unit suffix holds an `i`).
+
+---
+
 ## BUG-20261123-57 — The TCK and jlink smoke scripts install the branch into the shared `~/.m2`
 
 - **Opening date**: 2026-11-23

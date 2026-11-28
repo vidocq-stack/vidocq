@@ -53,14 +53,14 @@ class CompanionEquivalenceTest {
     private static Set<String> canonMetrics(Set<DiracExtension.PreRegisteredMetric> metrics) {
         return metrics.stream()
                 .map(m -> m.metadata().getName() + "|" + m.metadata().getDescription()
-                        + "|" + m.metadata().getUnit() + "|" + canonTags(m.tags()) + "|" + m.scope())
+                        + "|" + m.metadata().getUnit() + "|" + canonTags(m.tagArray()) + "|" + m.scope())
                 .collect(Collectors.toSet());
     }
 
     private static Set<String> canonGauges(Set<DiracExtension.ResolvedGauge> gauges) {
         return gauges.stream()
                 .map(g -> g.metricID().getName() + "|" + g.metadata().getDescription()
-                        + "|" + g.metadata().getUnit() + "|" + canonTags(g.tags())
+                        + "|" + g.metadata().getUnit() + "|" + canonTags(g.tagArray())
                         + "|" + g.scope() + "|static=" + g.staticMethod())
                 .collect(Collectors.toSet());
     }

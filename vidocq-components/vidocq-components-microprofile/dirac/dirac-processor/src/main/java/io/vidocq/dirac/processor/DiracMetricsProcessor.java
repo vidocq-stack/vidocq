@@ -241,7 +241,7 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
                                         TypeElement type) {
         var elements = processingEnv.getElementUtils();
         for (ExecutableElement candidate : candidates) {
-            if (candidate != method && elements.overrides(candidate, method, type)) {
+            if (!candidate.equals(method) && elements.overrides(candidate, method, type)) {
                 return true;
             }
         }

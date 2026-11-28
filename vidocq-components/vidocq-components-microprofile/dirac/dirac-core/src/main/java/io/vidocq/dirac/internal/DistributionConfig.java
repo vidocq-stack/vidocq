@@ -22,6 +22,7 @@ package io.vidocq.dirac.internal;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Enumeration;
 import java.util.Properties;
 import java.util.function.ToDoubleFunction;
@@ -79,7 +80,7 @@ final class DistributionConfig {
     }
 
     private static double parseTimerBucketToNanos(String token) {
-        var normalized = token.trim().toLowerCase();
+        var normalized = token.trim().toLowerCase(Locale.ROOT);
         if (normalized.isEmpty()) {
             return Double.NaN;
         }
@@ -157,7 +158,7 @@ final class DistributionConfig {
         String bestValue = null;
         int bestScore = -1;
 
-        for (var entry : source.split(";")) {
+        for (var entry : source.split(";", -1)) {
             var separator = entry.indexOf('=');
             if (separator <= 0) {
                 continue;

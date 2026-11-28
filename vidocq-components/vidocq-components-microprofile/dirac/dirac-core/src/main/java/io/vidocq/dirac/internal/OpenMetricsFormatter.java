@@ -118,6 +118,15 @@ public final class OpenMetricsFormatter {
         appendSample(builder, secondsName + "_sum", metricId, Map.of(), nanosToSeconds(timer.getElapsedTime().toNanos()));
     }
 
+    /** A count or a sum of longs is written as the long itself: a double would round it above 2^53. */
+    private static void appendSample(StringBuilder builder,
+                                     String sampleName,
+                                     MetricID metricId,
+                                     Map<String, String> extraLabels,
+                                     long value) {
+        builder.append(sampleName).append(renderLabels(metricId, extraLabels)).append(' ').append(value).append('\n');
+    }
+
     private static void appendSample(StringBuilder builder,
                                      String sampleName,
                                      MetricID metricId,
@@ -214,6 +223,10 @@ public final class OpenMetricsFormatter {
             return number.doubleValue();
         }
         throw new IllegalArgumentException("Gauge value must be a Number but was " + value.getClass().getName());
+    }
+
+    private static double nanosToSeconds(long nanos) {
+        return nanos / 1_000_000_000d;
     }
 
     private static double nanosToSeconds(double nanos) {

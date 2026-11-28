@@ -246,6 +246,8 @@ class GaugeBeanLookupCdiIntegrationTest {
         }
     }
 
+    // Identity on purpose: a throwable that is its own cause ends the chain.
+    @SuppressWarnings("ReferenceEquality")
     private static Throwable rootCause(Throwable failure) {
         Throwable cause = failure;
         while (cause.getCause() != null && cause.getCause() != cause) {

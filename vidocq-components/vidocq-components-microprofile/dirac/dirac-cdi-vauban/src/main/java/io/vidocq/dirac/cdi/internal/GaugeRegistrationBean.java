@@ -213,7 +213,7 @@ public class GaugeRegistrationBean {
     private static Type typeOfClass(Bean<?> bean, Class<?> beanClass) {
         for (Type type : bean.getTypes()) {
             if (type == beanClass
-                    || type instanceof ParameterizedType parameterized && parameterized.getRawType() == beanClass) {
+                    || (type instanceof ParameterizedType parameterized && parameterized.getRawType() == beanClass)) {
                 return type;
             }
         }

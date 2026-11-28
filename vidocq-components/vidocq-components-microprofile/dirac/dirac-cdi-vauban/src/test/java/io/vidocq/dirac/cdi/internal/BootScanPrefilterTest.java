@@ -154,20 +154,20 @@ class BootScanPrefilterTest {
                         MethodInheritingService.class, DefaultCountedContract.class, DefaultContractService.class)
                 .initialize()) {
 
-            assertEquals(Boolean.FALSE, Probe.DECISIONS.get(PlainService.class.getName()));
-            assertEquals(Boolean.FALSE, Probe.DECISIONS.get(MetricRegistryProducerBean.class.getName()));
-            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(GaugedService.class.getName()));
-            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(FlaggedService.class.getName()));
-            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(InheritingService.class.getName()),
+            assertEquals(false, Probe.DECISIONS.get(PlainService.class.getName()));
+            assertEquals(false, Probe.DECISIONS.get(MetricRegistryProducerBean.class.getName()));
+            assertEquals(true, Probe.DECISIONS.get(GaugedService.class.getName()));
+            assertEquals(true, Probe.DECISIONS.get(FlaggedService.class.getName()));
+            assertEquals(true, Probe.DECISIONS.get(InheritingService.class.getName()),
                     "an undescribed superclass may carry an inherited metric");
-            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(ConstructorCountedService.class.getName()));
-            assertEquals(Boolean.FALSE, Probe.DECISIONS.get(ContractService.class.getName()),
+            assertEquals(true, Probe.DECISIONS.get(ConstructorCountedService.class.getName()));
+            assertEquals(false, Probe.DECISIONS.get(ContractService.class.getName()),
                     "a metric an interface method names is not the bean's: nothing to scan (DRC-019)");
-            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(MethodInheritingService.class.getName()),
+            assertEquals(true, Probe.DECISIONS.get(MethodInheritingService.class.getName()),
                     "a metric on an inherited method");
-            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(DefaultContractService.class.getName()),
+            assertEquals(true, Probe.DECISIONS.get(DefaultContractService.class.getName()),
                     "a metric on an inherited default method (DRC-012)");
-            assertEquals(Boolean.FALSE, Probe.DECISIONS.get(DefaultCountedContract.class.getName()),
+            assertEquals(false, Probe.DECISIONS.get(DefaultCountedContract.class.getName()),
                     "an interface is not a bean (DRC-012)");
             var registry = container.select(MetricRegistryProducerBean.class).get().applicationRegistry();
             assertNotNull(registry.getGauge(new MetricID("prefilter.gauge")));

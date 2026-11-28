@@ -148,6 +148,10 @@ public final class JsonMetricsFormatter {
         return Double.NaN;
     }
 
+    private static double nanosToSeconds(long nanos) {
+        return nanos / 1_000_000_000d;
+    }
+
     private static double nanosToSeconds(double nanos) {
         return nanos / 1_000_000_000d;
     }

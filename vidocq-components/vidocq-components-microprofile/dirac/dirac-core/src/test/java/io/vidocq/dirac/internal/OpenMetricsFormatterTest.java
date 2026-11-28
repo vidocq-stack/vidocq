@@ -35,6 +35,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OpenMetricsFormatterTest {
 
     @Test
+    void writesACountAboveTwoToThe53rdExactly() {
+        var registry = new MetricRegistryImpl(MetricRegistry.APPLICATION_SCOPE);
+        // 2^53 + 1 has no double: written through a double, it became 9007199254740992.
+        registry.counter("events").inc(9_007_199_254_740_993L);
+
+        var output = new OpenMetricsFormatter().format(registry);
+
+        assertTrue(output.contains("events_total 9007199254740993"), output);
+    }
+
+    @Test
     void formatsCounterGaugeHistogramAndTimer() {
         var registry = new MetricRegistryImpl(MetricRegistry.APPLICATION_SCOPE);
 
@@ -52,8 +63,8 @@ class OpenMetricsFormatterTest {
         histogram.update(200);
 
         var timer = registry.timer("request.latency", new Tag("route", "/health"));
-        timer.update(Duration.ofNanos(1_000_000));
-        timer.update(Duration.ofNanos(2_000_000));
+        timer.update(Duration.ofMillis(1));
+        timer.update(Duration.ofMillis(2));
 
         var output = new OpenMetricsFormatter().format(registry);
 

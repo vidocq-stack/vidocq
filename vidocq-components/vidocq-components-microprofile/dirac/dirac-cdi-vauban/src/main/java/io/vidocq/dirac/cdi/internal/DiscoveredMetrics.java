@@ -33,6 +33,7 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -98,8 +99,9 @@ public final class DiscoveredMetrics {
         if (otherClass.isAssignableFrom(keptClass)) {
             return other;
         }
-        var read = keptClass.getName().compareTo(otherClass.getName()) <= 0 ? kept : other;
-        var notRead = read == kept ? other : kept;
+        boolean keptIsRead = keptClass.getName().compareTo(otherClass.getName()) <= 0;
+        var read = keptIsRead ? kept : other;
+        var notRead = keptIsRead ? other : kept;
         if (warned.add(read.scope() + '\u0000' + read.metricID() + '\u0000' + notRead.beanClass().getName())) {
             LOG.log(System.Logger.Level.WARNING, "The gauge {0} is carried by two unrelated beans, {1} and {2}: it"
                             + " is read on {1} only. Give each bean a gauge name of its own.",
@@ -179,7 +181,7 @@ public final class DiscoveredMetrics {
                             .withDescription(gauge.description())
                             .withUnit(gauge.unit())
                             .build(),
-                    tags,
+                    List.of(tags),
                     DiracExtension.normalizeScope(gauge.scope()),
                     gauge.invoker()));
         }
@@ -192,7 +194,7 @@ public final class DiscoveredMetrics {
                         .withDescription(spec.description())
                         .withUnit(spec.unit())
                         .build(),
-                DiracExtension.parseTags(spec.tags().toArray(new String[0])),
+                List.of(DiracExtension.parseTags(spec.tags().toArray(new String[0]))),
                 DiracExtension.normalizeScope(spec.scope()));
     }
 
@@ -435,7 +437,7 @@ public final class DiscoveredMetrics {
         var metadata = Metadata.builder()
                 .withName(metricName).withDescription(metric.description()).withUnit(metric.unit()).build();
         return new DiracExtension.PreRegisteredMetric(metadata,
-                DiracExtension.parseTags(metric.tags().toArray(String[]::new)),
+                List.of(DiracExtension.parseTags(metric.tags().toArray(String[]::new))),
                 DiracExtension.normalizeScope(metric.scope()));
     }
 
@@ -446,9 +448,9 @@ public final class DiscoveredMetrics {
             var metric = toGaugeMetric(resolved, beanResolver);
 
             if (registry instanceof MetricRegistryImpl implementation) {
-                implementation.register(resolved.metadata(), metric, resolved.tags());
+                implementation.register(resolved.metadata(), metric, resolved.tagArray());
             } else {
-                registry.gauge(resolved.metadata(), metric::getValue, resolved.tags());
+                registry.gauge(resolved.metadata(), metric::getValue, resolved.tagArray());
             }
         }
     }
@@ -460,9 +462,9 @@ public final class DiscoveredMetrics {
             var targetRegistry = registries.registry(resolved.scope());
             var metric = toGaugeMetric(resolved, beanResolver);
             if (targetRegistry instanceof MetricRegistryImpl implementation) {
-                implementation.register(resolved.metadata(), metric, resolved.tags());
+                implementation.register(resolved.metadata(), metric, resolved.tagArray());
             } else {
-                targetRegistry.gauge(resolved.metadata(), metric::getValue, resolved.tags());
+                targetRegistry.gauge(resolved.metadata(), metric::getValue, resolved.tagArray());
             }
         }
     }
@@ -470,14 +472,14 @@ public final class DiscoveredMetrics {
     void registerTimers(MetricRegistryProducerBean registries) {
         Objects.requireNonNull(registries, REGISTRIES_REQUIRED);
         for (var resolved : timers) {
-            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.tags());
+            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.tagArray());
         }
     }
 
     void registerCounters(MetricRegistryProducerBean registries) {
         Objects.requireNonNull(registries, REGISTRIES_REQUIRED);
         for (var resolved : counters) {
-            registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.tags());
+            registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.tagArray());
         }
     }
 

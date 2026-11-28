@@ -44,7 +44,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -243,7 +242,7 @@ public class DiracExtension implements BuildCompatibleExtension {
                         .withDescription(gauge.description())
                         .withUnit(gauge.unit())
                         .build(),
-                tags,
+                List.of(tags),
                 normalizeScope(gauge.scope()),
                 null
         );
@@ -258,7 +257,7 @@ public class DiracExtension implements BuildCompatibleExtension {
                 .withDescription(metric.description())
                 .withUnit(metric.unit())
                 .build();
-        return new PreRegisteredMetric(metadata, parsedTags, normalizeScope(metric.scope()));
+        return new PreRegisteredMetric(metadata, List.of(parsedTags), normalizeScope(metric.scope()));
     }
 
     static String resolveClassLevelConstructorMetricName(Class<?> beanClass, Timed timed) {
@@ -420,37 +419,18 @@ public class DiracExtension implements BuildCompatibleExtension {
                          boolean staticMethod,
                          MetricID metricID,
                          Metadata metadata,
-                         Tag[] tags,
+                         List<Tag> tags,
                          String scope,
                          Function<Object, Number> invoker) {
 
-        // Records compare arrays by identity: the tags are compared by content so that the
-        // same gauge discovered twice is kept once in the DiscoveredMetrics sets (DRC-007).
-        @Override
-        public boolean equals(Object other) {
-            return other instanceof ResolvedGauge(var otherBeanClass, var otherHandle, var otherStatic,
-                    var otherId, var otherMetadata, var otherTags, var otherScope, var otherInvoker)
-                    && staticMethod == otherStatic
-                    && beanClass == otherBeanClass
-                    && Objects.equals(methodHandle, otherHandle)
-                    && Objects.equals(metricID, otherId)
-                    && Objects.equals(metadata, otherMetadata)
-                    && Arrays.equals(tags, otherTags)
-                    && Objects.equals(scope, otherScope)
-                    && Objects.equals(invoker, otherInvoker);
+        // A list, not an array: the same gauge discovered twice is equal, and kept once in the DiscoveredMetrics
+        // sets (DRC-007).
+        ResolvedGauge {
+            tags = List.copyOf(tags);
         }
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(beanClass, methodHandle, staticMethod, metricID, metadata,
-                    Arrays.hashCode(tags), scope, invoker);
-        }
-
-        @Override
-        public String toString() {
-            return "ResolvedGauge[beanClass=" + beanClass + ", staticMethod=" + staticMethod
-                    + ", metricID=" + metricID + ", metadata=" + metadata
-                    + ", tags=" + Arrays.toString(tags) + ", scope=" + scope + "]";
+        Tag[] tagArray() {
+            return tags.toArray(Tag[]::new);
         }
     }
 
@@ -469,26 +449,15 @@ public class DiracExtension implements BuildCompatibleExtension {
         }
     }
 
-    record PreRegisteredMetric(Metadata metadata, Tag[] tags, String scope) {
+    record PreRegisteredMetric(Metadata metadata, List<Tag> tags, String scope) {
 
-        // Tags compared by content: the same metric discovered twice is kept once (DRC-007).
-        @Override
-        public boolean equals(Object other) {
-            return other instanceof PreRegisteredMetric(var otherMetadata, var otherTags, var otherScope)
-                    && Objects.equals(metadata, otherMetadata)
-                    && Arrays.equals(tags, otherTags)
-                    && Objects.equals(scope, otherScope);
+        // A list, not an array: the same metric discovered twice is equal, and kept once (DRC-007).
+        PreRegisteredMetric {
+            tags = List.copyOf(tags);
         }
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(metadata, Arrays.hashCode(tags), scope);
-        }
-
-        @Override
-        public String toString() {
-            return "PreRegisteredMetric[metadata=" + metadata + ", tags=" + Arrays.toString(tags)
-                    + ", scope=" + scope + "]";
+        Tag[] tagArray() {
+            return tags.toArray(Tag[]::new);
         }
     }
 }

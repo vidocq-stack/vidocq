@@ -131,8 +131,8 @@ class JsonMetricsFormatterTest {
     void formatsTimerWithCountElapsedTimeAndPercentiles() {
         var registry = new MetricRegistryImpl(MetricRegistry.APPLICATION_SCOPE);
         var timer = registry.timer("request.latency");
-        timer.update(Duration.ofNanos(1_000_000));
-        timer.update(Duration.ofNanos(2_000_000));
+        timer.update(Duration.ofMillis(1));
+        timer.update(Duration.ofMillis(2));
 
         var output = new JsonMetricsFormatter().format(registry);
 

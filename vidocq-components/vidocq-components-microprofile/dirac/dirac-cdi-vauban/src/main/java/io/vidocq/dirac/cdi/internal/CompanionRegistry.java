@@ -104,6 +104,8 @@ final class CompanionRegistry {
      * per source. Only the few sources of the last deployment are kept, so a reloaded application releases the previous
      * ones (a {@code WeakHashMap} would not: its values reach their own class loader).
      */
+    // Identity on purpose: a source is a module layer or a class loader, and the index belongs to that very one.
+    @SuppressWarnings("ReferenceEquality")
     static Map<Class<?>, MetricsCompanion> indexOf(Object source,
                                                            java.util.function.Supplier<Iterable<MetricsCompanion>> provided) {
         synchronized (INDEXES) {

@@ -36,6 +36,7 @@ import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.annotation.RegistryScope;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * REST /metrics endpoint — MicroProfile Metrics 5.1.1 §2.3.
@@ -182,7 +183,7 @@ public class MetricsResource {
         if (scope == null) {
             return null;
         }
-        return switch (scope.toLowerCase()) {
+        return switch (scope.toLowerCase(Locale.ROOT)) {
             case "application" -> appRegistry;
             case "base" -> baseRegistry;
             case "vendor" -> vendorRegistry;

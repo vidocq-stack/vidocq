@@ -294,17 +294,17 @@ class DiracExtensionTest {
     @Test
     void preRegisteredMetricComparesTagContents() {
         var metadata = Metadata.builder().withName("m").build();
-        var first = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "v")}, "application");
-        var same = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "v")}, "application");
-        var otherTags = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "w")}, "application");
-        var otherScope = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "v")}, "vendor");
+        var first = new DiracExtension.PreRegisteredMetric(metadata, List.of(new Tag("k", "v")), "application");
+        var same = new DiracExtension.PreRegisteredMetric(metadata, List.of(new Tag("k", "v")), "application");
+        var otherTags = new DiracExtension.PreRegisteredMetric(metadata, List.of(new Tag("k", "w")), "application");
+        var otherScope = new DiracExtension.PreRegisteredMetric(metadata, List.of(new Tag("k", "v")), "vendor");
 
         assertEquals(first, same);
         assertEquals(first.hashCode(), same.hashCode());
         assertNotEquals(first, otherTags);
         assertNotEquals(first, otherScope);
         assertNotEquals(first, new DiracExtension.PreRegisteredMetric(Metadata.builder().withName("n").build(),
-                new Tag[]{new Tag("k", "v")}, "application"));
+                List.of(new Tag("k", "v")), "application"));
         assertNotEquals(first, (Object) "m");
         assertTrue(first.toString().contains("tags=[Tag{k=v}]"), first.toString());
     }
@@ -315,15 +315,15 @@ class DiracExtensionTest {
         Function<Object, Number> invoker = bean -> 1;
         var id = new MetricID("g", new Tag("k", "v"));
         var first = new DiracExtension.ResolvedGauge(Object.class, null, true, id, metadata,
-                new Tag[]{new Tag("k", "v")}, "application", invoker);
+                List.of(new Tag("k", "v")), "application", invoker);
         var same = new DiracExtension.ResolvedGauge(Object.class, null, true, id, metadata,
-                new Tag[]{new Tag("k", "v")}, "application", invoker);
+                List.of(new Tag("k", "v")), "application", invoker);
         var otherTags = new DiracExtension.ResolvedGauge(Object.class, null, true, id, metadata,
-                new Tag[]{new Tag("k", "w")}, "application", invoker);
+                List.of(new Tag("k", "w")), "application", invoker);
         var otherBean = new DiracExtension.ResolvedGauge(String.class, null, true, id, metadata,
-                new Tag[]{new Tag("k", "v")}, "application", invoker);
+                List.of(new Tag("k", "v")), "application", invoker);
         var instanceGauge = new DiracExtension.ResolvedGauge(Object.class, null, false, id, metadata,
-                new Tag[]{new Tag("k", "v")}, "application", invoker);
+                List.of(new Tag("k", "v")), "application", invoker);
 
         assertEquals(first, same);
         assertEquals(first.hashCode(), same.hashCode());
@@ -342,7 +342,7 @@ class DiracExtensionTest {
     private static DiracExtension.ResolvedGauge gauge(MethodHandle handle, MetricID id, Metadata metadata,
                                                       String scope, Function<Object, Number> invoker) {
         return new DiracExtension.ResolvedGauge(Object.class, handle, true, id, metadata,
-                new Tag[]{new Tag("k", "v")}, scope, invoker);
+                List.of(new Tag("k", "v")), scope, invoker);
     }
 
     static class TimedCountedService {

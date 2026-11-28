@@ -40,7 +40,7 @@ final class CapturedLog extends Handler implements AutoCloseable {
     }
 
     List<LogRecord> warnings() {
-        return records.stream().filter(r -> r.getLevel() == Level.WARNING).toList();
+        return records.stream().filter(r -> Level.WARNING.equals(r.getLevel())).toList();
     }
 
     @Override

@@ -26,6 +26,8 @@ import org.eclipse.microprofile.metrics.Tag;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -115,6 +117,21 @@ class MetricsResourceTest {
     void formatScopeVendorReturnsMetrics() {
         var fmt = resource.formatScope("vendor", null);
         assertNotNull(fmt);
+    }
+
+    @Test
+    void formatScopeIgnoresTheCaseOfTheScopeInATurkishLocale() {
+        // BUG-20261128-04: the scope was lower-cased in the default locale, and "APPLICATION" became "applıcatıon".
+        appRegistry.counter("hits").inc(1);
+        Locale previous = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            var fmt = resource.formatScope("APPLICATION", null);
+            assertNotNull(fmt);
+            assertTrue(fmt.body().contains("hits_total 1"), "body: " + fmt.body());
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 
     @Test
