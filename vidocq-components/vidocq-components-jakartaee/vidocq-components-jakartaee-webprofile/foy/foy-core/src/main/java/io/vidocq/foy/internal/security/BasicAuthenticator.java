@@ -85,6 +85,8 @@ public final class BasicAuthenticator implements Authenticator {
         res.sendError(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
     }
 
+    // ArrayRecordComponent: the password stays a char[] so that it can be cleared; the record is never compared.
+    @SuppressWarnings("ArrayRecordComponent")
     record UserPassword(String user, char[] password) {}
 
     /** The user and password of a Basic header, or {@code null} when anything is off. */

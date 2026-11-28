@@ -51,7 +51,7 @@ public final class IncludedResponse extends HttpServletResponseWrapper {
         var thread = Thread.currentThread();
         while (true) {
             var operation = forwardOperation.get();
-            if (operation != null && operation.owner() != thread)
+            if (operation != null && !thread.equals(operation.owner()))
                 throw new IllegalStateException("Concurrent forwarded response operations require application coordination");
             var next = new ForwardOperation(thread, operation == null ? 1 : Math.incrementExact(operation.depth()));
             if (forwardOperation.compareAndSet(operation, next)) return;
@@ -60,7 +60,7 @@ public final class IncludedResponse extends HttpServletResponseWrapper {
     public void endJspForwardOperation() {
         while (true) {
             var operation = forwardOperation.get();
-            if (operation == null || operation.owner() != Thread.currentThread())
+            if (operation == null || !Thread.currentThread().equals(operation.owner()))
                 throw new IllegalStateException("Forward response operation is not owned by this thread");
             var next = operation.depth() == 1 ? null : new ForwardOperation(operation.owner(), operation.depth() - 1);
             if (forwardOperation.compareAndSet(operation, next)) return;
@@ -68,7 +68,7 @@ public final class IncludedResponse extends HttpServletResponseWrapper {
     }
     private boolean forwarding() {
         var operation = forwardOperation.get();
-        return operation != null && operation.owner() == Thread.currentThread();
+        return operation != null && Thread.currentThread().equals(operation.owner());
     }
 
     @Override public void setStatus(int sc) { if (forwarding()) super.setStatus(sc); }

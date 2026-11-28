@@ -53,6 +53,8 @@ import javax.security.auth.x500.X500Principal;
  */
 public final class InMemoryIdentityStore implements IdentityStore {
 
+    // ArrayRecordComponent: the salt and digest go to MessageDigest as bytes; the record is never compared.
+    @SuppressWarnings("ArrayRecordComponent")
     private record User(Identity identity, byte[] salt, byte[] digest) {}
 
     private static final SecureRandom RANDOM = new SecureRandom();

@@ -106,7 +106,8 @@ class FoyChappeWithoutCdiTest {
     private static List<Path> modulesWithoutCdi() {
         String classPath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
         List<Path> kept = new ArrayList<>();
-        for (String entry : classPath.split(File.pathSeparator)) {
+        for (String entry : classPath.split(File.pathSeparator, -1)) {
+            if (entry.isEmpty()) continue;
             Path path = Path.of(entry);
             boolean candidate = Files.isDirectory(path)
                     ? Files.exists(path.resolve("module-info.class"))
